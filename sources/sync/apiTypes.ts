@@ -154,6 +154,7 @@ export const ApiUpdateSchema = z.discriminatedUnion('t', [
     ApiUpdateSessionStateSchema,
     ApiUpdateAccountSchema,
     ApiUpdateMachineStateSchema,
+    ApiNewMachineSchema,
     ApiNewArtifactSchema,
     ApiUpdateArtifactSchema,
     ApiDeleteArtifactSchema,
@@ -161,6 +162,21 @@ export const ApiUpdateSchema = z.discriminatedUnion('t', [
     ApiNewFeedPostSchema,
     ApiKvBatchUpdateSchema
 ]);
+
+export const ApiNewMachineSchema = z.object({
+    t: z.literal('new-machine'),
+    machineId: z.string(),
+    seq: z.number(),
+    metadata: z.string(),
+    metadataVersion: z.number(),
+    daemonState: z.string().nullable(),
+    daemonStateVersion: z.number(),
+    dataEncryptionKey: z.string().nullable(),
+    active: z.boolean(),
+    activeAt: z.number(),
+    createdAt: z.number(),
+    updatedAt: z.number()
+});
 
 export type ApiUpdateNewMessage = z.infer<typeof ApiUpdateNewMessageSchema>;
 export type ApiRelationshipUpdated = z.infer<typeof ApiRelationshipUpdatedSchema>;
