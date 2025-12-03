@@ -16,12 +16,13 @@ export type Option = {
     title: string;
 };
 
-export const MarkdownView = React.memo((props: { 
+export const MarkdownView = React.memo((props: {
     markdown: string;
     onOptionPress?: (option: Option) => void;
+    textColor?: string;
 }) => {
     const blocks = React.useMemo(() => parseMarkdown(props.markdown), [props.markdown]);
-    
+
     // Backwards compatibility: The original version just returned the view, wrapping the list of blocks.
     // It made each of the individual text elements selectable. When we enable the markdownCopyV2 feature,
     // we disable the selectable property on individual text segments on mobile only. Instead, the long press
@@ -45,19 +46,19 @@ export const MarkdownView = React.memo((props: {
             <View>
                 {blocks.map((block, index) => {
                     if (block.type === 'text') {
-                        return <RenderTextBlock spans={block.content} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} />;
+                        return <RenderTextBlock spans={block.content} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} textColor={props.textColor} />;
                     } else if (block.type === 'header') {
-                        return <RenderHeaderBlock level={block.level} spans={block.content} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} />;
+                        return <RenderHeaderBlock level={block.level} spans={block.content} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} textColor={props.textColor} />;
                     } else if (block.type === 'horizontal-rule') {
                         return <View style={style.horizontalRule} key={index} />;
                     } else if (block.type === 'list') {
-                        return <RenderListBlock items={block.items} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} />;
+                        return <RenderListBlock items={block.items} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} textColor={props.textColor} />;
                     } else if (block.type === 'numbered-list') {
-                        return <RenderNumberedListBlock items={block.items} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} />;
+                        return <RenderNumberedListBlock items={block.items} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} textColor={props.textColor} />;
                     } else if (block.type === 'code-block') {
                         return <RenderCodeBlock content={block.content} language={block.language} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} />;
                     } else if (block.type === 'options') {
-                        return <RenderOptionsBlock items={block.items} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} onOptionPress={props.onOptionPress} />;
+                        return <RenderOptionsBlock items={block.items} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} onOptionPress={props.onOptionPress} textColor={props.textColor} />;
                     } else {
                         return null;
                     }
@@ -69,26 +70,27 @@ export const MarkdownView = React.memo((props: {
     if (!markdownCopyV2) {
         return renderContent();
     }
-    
+
     if (Platform.OS === 'web') {
         return renderContent();
     }
-    
+
     return <Pressable onLongPress={handleLongPress} delayLongPress={500}>{renderContent()}</Pressable>;
 });
 
-function RenderTextBlock(props: { spans: MarkdownSpan[], first: boolean, last: boolean, selectable: boolean }) {
-    return <Text selectable={props.selectable} style={[style.text, props.first && style.first, props.last && style.last]}><RenderSpans spans={props.spans} baseStyle={style.text} /></Text>;
+function RenderTextBlock(props: { spans: MarkdownSpan[], first: boolean, last: boolean, selectable: boolean, textColor?: string }) {
+    const textStyle = [style.text, props.first && style.first, props.last && style.last, props.textColor && { color: props.textColor }];
+    return <Text selectable={props.selectable} style={textStyle}><RenderSpans spans={props.spans} baseStyle={textStyle} /></Text>;
 }
 
-function RenderHeaderBlock(props: { level: 1 | 2 | 3 | 4 | 5 | 6, spans: MarkdownSpan[], first: boolean, last: boolean, selectable: boolean }) {
+function RenderHeaderBlock(props: { level: 1 | 2 | 3 | 4 | 5 | 6, spans: MarkdownSpan[], first: boolean, last: boolean, selectable: boolean, textColor?: string }) {
     const s = (style as any)[`header${props.level}`];
-    const headerStyle = [style.header, s, props.first && style.first, props.last && style.last];
+    const headerStyle = [style.header, s, props.first && style.first, props.last && style.last, props.textColor && { color: props.textColor }];
     return <Text selectable={props.selectable} style={headerStyle}><RenderSpans spans={props.spans} baseStyle={headerStyle} /></Text>;
 }
 
-function RenderListBlock(props: { items: MarkdownSpan[][], first: boolean, last: boolean, selectable: boolean }) {
-    const listStyle = [style.text, style.list];
+function RenderListBlock(props: { items: MarkdownSpan[][], first: boolean, last: boolean, selectable: boolean, textColor?: string }) {
+    const listStyle = [style.text, style.list, props.textColor && { color: props.textColor }];
     return (
         <View style={{ flexDirection: 'column', marginBottom: 8, gap: 1 }}>
             {props.items.map((item, index) => (
@@ -98,8 +100,8 @@ function RenderListBlock(props: { items: MarkdownSpan[][], first: boolean, last:
     );
 }
 
-function RenderNumberedListBlock(props: { items: { number: number, spans: MarkdownSpan[] }[], first: boolean, last: boolean, selectable: boolean }) {
-    const listStyle = [style.text, style.list];
+function RenderNumberedListBlock(props: { items: { number: number, spans: MarkdownSpan[] }[], first: boolean, last: boolean, selectable: boolean, textColor?: string }) {
+    const listStyle = [style.text, style.list, props.textColor && { color: props.textColor }];
     return (
         <View style={{ flexDirection: 'column', marginBottom: 8, gap: 1 }}>
             {props.items.map((item, index) => (
@@ -119,9 +121,9 @@ function RenderCodeBlock(props: { content: string, language: string | null, firs
                 contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
                 showsHorizontalScrollIndicator={false}
             >
-                <SimpleSyntaxHighlighter 
-                    code={props.content} 
-                    language={props.language} 
+                <SimpleSyntaxHighlighter
+                    code={props.content}
+                    language={props.language}
                     selectable={props.selectable}
                 />
             </ScrollView>
@@ -129,33 +131,34 @@ function RenderCodeBlock(props: { content: string, language: string | null, firs
     );
 }
 
-function RenderOptionsBlock(props: { 
-    items: string[], 
-    first: boolean, 
-    last: boolean, 
+function RenderOptionsBlock(props: {
+    items: string[],
+    first: boolean,
+    last: boolean,
     selectable: boolean,
-    onOptionPress?: (option: Option) => void 
+    onOptionPress?: (option: Option) => void,
+    textColor?: string
 }) {
     return (
         <View style={[style.optionsContainer, props.first && style.first, props.last && style.last]}>
             {props.items.map((item, index) => {
                 if (props.onOptionPress) {
                     return (
-                        <Pressable 
-                            key={index} 
+                        <Pressable
+                            key={index}
                             style={({ pressed }) => [
                                 style.optionItem,
                                 pressed && style.optionItemPressed
                             ]}
                             onPress={() => props.onOptionPress?.({ title: item })}
                         >
-                            <Text selectable={props.selectable} style={style.optionText}>{item}</Text>
+                            <Text selectable={props.selectable} style={[style.optionText, props.textColor && { color: props.textColor }]}>{item}</Text>
                         </Pressable>
                     );
                 } else {
                     return (
                         <View key={index} style={style.optionItem}>
-                            <Text selectable={props.selectable} style={style.optionText}>{item}</Text>
+                            <Text selectable={props.selectable} style={[style.optionText, props.textColor && { color: props.textColor }]}>{item}</Text>
                         </View>
                     );
                 }

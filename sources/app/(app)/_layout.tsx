@@ -341,6 +341,28 @@ export default function RootLayout() {
                     headerBackTitle: t('common.back'),
                 }}
             />
+            <Stack.Screen
+                name="teams/index"
+                options={{
+                    headerShown: true,
+                    headerTitle: 'Teams',
+                    headerBackTitle: t('common.back'),
+                }}
+            />
+            <Stack.Screen
+                name="teams/new"
+                options={{
+                    headerShown: true,
+                    headerTitle: 'New Team',
+                    headerBackTitle: t('common.cancel'),
+                }}
+            />
+            <Stack.Screen
+                name="teams/[id]"
+                options={{
+                    headerShown: false,
+                }}
+            />
         </Stack>
     );
 }

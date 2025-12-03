@@ -20,27 +20,52 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
     const checkScannerPermissions = useCheckScannerPermissions();
 
     const processAuthUrl = React.useCallback(async (url: string) => {
+        console.log('[AUTH] 🔍 Processing auth URL:', url);
+
         if (!url.startsWith('happy:///account?')) {
+            console.log('[AUTH] ❌ Invalid URL format - does not start with "happy:///account?"');
+            console.log('[AUTH] URL received:', url);
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
         }
-        
+
         setIsLoading(true);
         try {
             const tail = url.slice('happy:///account?'.length);
+            console.log('[AUTH] 📊 URL tail (base64url publicKey):', tail.substring(0, 20) + '...');
+
             const publicKey = decodeBase64(tail, 'base64url');
-            const response = encryptBox(decodeBase64(auth.credentials!.secret, 'base64url'), publicKey);
-            await authAccountApprove(auth.credentials!.token, publicKey, response);
-            
+            console.log('[AUTH] 🔑 Decoded publicKey length:', publicKey.length);
+            console.log('[AUTH] 🔑 PublicKey first 10 bytes:', Array.from(publicKey.slice(0, 10)));
+
+            if (!auth.credentials?.secret) {
+                console.log('[AUTH] ❌ No auth credentials available');
+                throw new Error('No auth credentials');
+            }
+
+            const mySecret = decodeBase64(auth.credentials.secret, 'base64url');
+            console.log('[AUTH] 🔐 My secret length:', mySecret.length);
+
+            const response = encryptBox(mySecret, publicKey);
+            console.log('[AUTH] 🔒 Encrypted response length:', response.length);
+
+            console.log('[AUTH] 📤 Sending approval to server...');
+            await authAccountApprove(auth.credentials.token, publicKey, response);
+
+            console.log('[AUTH] ✅ Device linked successfully!');
             Modal.alert(t('common.success'), t('modals.deviceLinkedSuccessfully'), [
-                { 
-                    text: t('common.ok'), 
+                {
+                    text: t('common.ok'),
                     onPress: () => options?.onSuccess?.()
                 }
             ]);
             return true;
         } catch (e) {
-            console.error(e);
+            console.error('[AUTH] ❌ Failed to link device:', e);
+            if (e instanceof Error) {
+                console.error('[AUTH] Error message:', e.message);
+                console.error('[AUTH] Error stack:', e.stack);
+            }
             Modal.alert(t('common.error'), t('modals.failedToLinkDevice'), [{ text: t('common.ok') }]);
             options?.onError?.(e);
             return false;

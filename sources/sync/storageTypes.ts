@@ -21,7 +21,8 @@ export const MetadataSchema = z.object({
     homeDir: z.string().optional(), // User's home directory on the machine
     happyHomeDir: z.string().optional(), // Happy configuration directory 
     hostPid: z.number().optional(), // Process ID of the session
-    flavor: z.string().nullish() // Session flavor/variant identifier
+    flavor: z.string().nullish(), // Session flavor/variant identifier
+    role: z.string().optional() // Agent role in team
 });
 
 export type Metadata = z.infer<typeof MetadataSchema>;

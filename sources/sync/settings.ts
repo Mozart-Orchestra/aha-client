@@ -60,7 +60,7 @@ export const settingsDefaults: Settings = {
     analyticsOptOut: false,
     experiments: false,
     alwaysShowContextSize: false,
-    avatarStyle: 'brutalist',
+    avatarStyle: 'gradient',
     showFlavorIcons: false,
     compactSessionView: false,
     hideInactiveSessions: false,

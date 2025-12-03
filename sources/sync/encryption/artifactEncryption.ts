@@ -5,18 +5,18 @@ import * as Random from 'expo-crypto';
 
 export class ArtifactEncryption {
     private encryptor: AES256Encryption;
-    
+
     constructor(dataEncryptionKey: Uint8Array) {
         this.encryptor = new AES256Encryption(dataEncryptionKey);
     }
-    
+
     /**
      * Generate a new data encryption key for an artifact
      */
     static generateDataEncryptionKey(): Uint8Array {
         return Random.getRandomBytes(32);  // 256 bits for AES-256
     }
-    
+
     /**
      * Encrypt artifact header
      */
@@ -24,7 +24,7 @@ export class ArtifactEncryption {
         const encrypted = await this.encryptor.encrypt([header]);
         return encodeBase64(encrypted[0], 'base64');
     }
-    
+
     /**
      * Decrypt artifact header
      */
@@ -41,14 +41,17 @@ export class ArtifactEncryption {
                 return null;
             }
             return {
-                title: typeof header.title === 'string' ? header.title : null
+                title: typeof header.title === 'string' ? header.title : null,
+                type: header.type,
+                sessions: header.sessions,
+                draft: header.draft
             };
         } catch (error) {
             console.error('Failed to decrypt artifact header:', error);
             return null;
         }
     }
-    
+
     /**
      * Encrypt artifact body
      */
@@ -56,7 +59,7 @@ export class ArtifactEncryption {
         const encrypted = await this.encryptor.encrypt([body]);
         return encodeBase64(encrypted[0], 'base64');
     }
-    
+
     /**
      * Decrypt artifact body
      */

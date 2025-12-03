@@ -21,6 +21,7 @@ import { createWorktree } from '@/utils/createWorktree';
 import { getTempData, type NewSessionData } from '@/utils/tempDataStore';
 import { linkTaskToSession } from '@/-zen/model/taskSessionLink';
 import { PermissionMode, ModelMode } from '@/components/PermissionModeSelector';
+import { getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 
 // Simple temporary state for passing selections back from picker screens
 let onMachineSelected: (machineId: string) => void = () => { };
@@ -33,57 +34,6 @@ export const callbacks = {
         onPathSelected(path);
     }
 }
-
-// Helper function to get the most recent path for a machine from settings or sessions
-const getRecentPathForMachine = (machineId: string | null, recentPaths: Array<{ machineId: string; path: string }>): string => {
-    if (!machineId) return '/home/';
-
-    // First check recent paths from settings
-    const recentPath = recentPaths.find(rp => rp.machineId === machineId);
-    if (recentPath) {
-        return recentPath.path;
-    }
-
-    // Fallback to session history
-    const machine = storage.getState().machines[machineId];
-    const defaultPath = machine?.metadata?.homeDir || '/home/';
-
-    const sessions = Object.values(storage.getState().sessions);
-    const pathsWithTimestamps: Array<{ path: string; timestamp: number }> = [];
-    const pathSet = new Set<string>();
-
-    sessions.forEach(session => {
-        if (session.metadata?.machineId === machineId && session.metadata?.path) {
-            const path = session.metadata.path;
-            if (!pathSet.has(path)) {
-                pathSet.add(path);
-                pathsWithTimestamps.push({
-                    path,
-                    timestamp: session.updatedAt || session.createdAt
-                });
-            }
-        }
-    });
-
-    // Sort by most recent first
-    pathsWithTimestamps.sort((a, b) => b.timestamp - a.timestamp);
-
-    return pathsWithTimestamps[0]?.path || defaultPath;
-};
-
-// Helper function to update recent machine paths
-const updateRecentMachinePaths = (
-    currentPaths: Array<{ machineId: string; path: string }>,
-    machineId: string,
-    path: string
-): Array<{ machineId: string; path: string }> => {
-    // Remove any existing entry for this machine
-    const filtered = currentPaths.filter(rp => rp.machineId !== machineId);
-    // Add new entry at the beginning
-    const updated = [{ machineId, path }, ...filtered];
-    // Keep only the last 10 entries
-    return updated.slice(0, 10);
-};
 
 function NewSessionScreen() {
     const { theme } = useUnistyles();

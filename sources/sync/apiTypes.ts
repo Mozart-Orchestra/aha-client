@@ -147,22 +147,6 @@ export const ApiKvBatchUpdateSchema = z.object({
     }))
 });
 
-export const ApiUpdateSchema = z.discriminatedUnion('t', [
-    ApiUpdateNewMessageSchema,
-    ApiUpdateNewSessionSchema,
-    ApiDeleteSessionSchema,
-    ApiUpdateSessionStateSchema,
-    ApiUpdateAccountSchema,
-    ApiUpdateMachineStateSchema,
-    ApiNewMachineSchema,
-    ApiNewArtifactSchema,
-    ApiUpdateArtifactSchema,
-    ApiDeleteArtifactSchema,
-    ApiRelationshipUpdatedSchema,
-    ApiNewFeedPostSchema,
-    ApiKvBatchUpdateSchema
-]);
-
 export const ApiNewMachineSchema = z.object({
     t: z.literal('new-machine'),
     machineId: z.string(),
@@ -177,6 +161,31 @@ export const ApiNewMachineSchema = z.object({
     createdAt: z.number(),
     updatedAt: z.number()
 });
+
+export const ApiUpdateTeamMessageSchema = z.object({
+    t: z.literal('team-message'),
+    teamId: z.string(),
+    message: z.any()
+});
+
+export const ApiUpdateSchema = z.discriminatedUnion('t', [
+    ApiUpdateNewMessageSchema,
+    ApiUpdateNewSessionSchema,
+    ApiDeleteSessionSchema,
+    ApiUpdateSessionStateSchema,
+    ApiUpdateAccountSchema,
+    ApiUpdateMachineStateSchema,
+    ApiNewMachineSchema,
+    ApiNewArtifactSchema,
+    ApiUpdateArtifactSchema,
+    ApiDeleteArtifactSchema,
+    ApiRelationshipUpdatedSchema,
+    ApiNewFeedPostSchema,
+    ApiKvBatchUpdateSchema,
+    ApiUpdateTeamMessageSchema
+]);
+
+
 
 export type ApiUpdateNewMessage = z.infer<typeof ApiUpdateNewMessageSchema>;
 export type ApiRelationshipUpdated = z.infer<typeof ApiRelationshipUpdatedSchema>;

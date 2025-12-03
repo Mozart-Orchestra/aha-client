@@ -1,5 +1,5 @@
 /**
- * English translations for the Happy app
+ * English translations for the Kanban app
  * Values can be:
  * - String constants for static text
  * - Functions with typed object parameters for dynamic text
@@ -112,7 +112,7 @@ export const en = {
         developer: 'Developer',
         developerTools: 'Developer Tools',
         about: 'About',
-        aboutFooter: 'Happy Coder is a Codex and Claude Code mobile client. It\'s fully end-to-end encrypted and your account is stored only on your device. Not affiliated with Anthropic.',
+        aboutFooter: 'Kanban Coder is a Codex and Claude Code mobile client. It\'s fully end-to-end encrypted and your account is stored only on your device. Not affiliated with Anthropic.',
         whatsNew: 'What\'s New',
         whatsNewSubtitle: 'See the latest updates and improvements',
         reportIssue: 'Report an Issue',
@@ -144,7 +144,7 @@ export const en = {
         themeDescription: 'Choose your preferred color scheme',
         themeOptions: {
             adaptive: 'Adaptive',
-            light: 'Light', 
+            light: 'Light',
             dark: 'Dark',
         },
         themeDescriptions: {
@@ -231,7 +231,7 @@ export const en = {
             `Retry in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`,
         errorWithCode: ({ message, code }: { message: string; code: number | string }) =>
             `${message} (Error ${code})`,
-        disconnectServiceFailed: ({ service }: { service: string }) => 
+        disconnectServiceFailed: ({ service }: { service: string }) =>
             `Failed to disconnect ${service}`,
         connectServiceFailed: ({ service }: { service: string }) =>
             `Failed to connect ${service}. Please try again.`,
@@ -246,7 +246,7 @@ export const en = {
     newSession: {
         // Used by new-session screen and launch flows
         title: 'Start New Session',
-        noMachinesFound: 'No machines found. Start a Happy session on your computer first.',
+        noMachinesFound: 'No machines found. Start a Kanban session on your computer first.',
         allMachinesOffline: 'All machines appear offline',
         machineDetails: 'View machine details →',
         directoryDoesNotExist: 'Directory Not Found',
@@ -297,7 +297,7 @@ export const en = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Server Configuration',
         enterServerUrl: 'Please enter a server URL',
-        notValidHappyServer: 'Not a valid Happy Server',
+        notValidHappyServer: 'Not a valid Kanban Server',
         changeServer: 'Change Server',
         continueWithServer: 'Continue with this server?',
         resetToDefault: 'Reset to Default',
@@ -317,9 +317,9 @@ export const en = {
         killSessionConfirm: 'Are you sure you want to terminate this session?',
         archiveSession: 'Archive Session',
         archiveSessionConfirm: 'Are you sure you want to archive this session?',
-        happySessionIdCopied: 'Happy Session ID copied to clipboard',
-        failedToCopySessionId: 'Failed to copy Happy Session ID',
-        happySessionId: 'Happy Session ID',
+        happySessionIdCopied: 'Kanban Session ID copied to clipboard',
+        failedToCopySessionId: 'Failed to copy Kanban Session ID',
+        happySessionId: 'Kanban Session ID',
         claudeCodeSessionId: 'Claude Code Session ID',
         claudeCodeSessionIdCopied: 'Claude Code Session ID copied to clipboard',
         aiProvider: 'AI Provider',
@@ -342,7 +342,7 @@ export const en = {
         path: 'Path',
         operatingSystem: 'Operating System',
         processId: 'Process ID',
-        happyHome: 'Happy Home',
+        happyHome: 'Kanban Home',
         copyMetadata: 'Copy Metadata',
         agentState: 'Agent State',
         controlledByUser: 'Controlled by User',
@@ -354,21 +354,21 @@ export const en = {
         cliVersionOutdated: 'CLI Update Required',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Version ${currentVersion} installed. Update to ${requiredVersion} or later`,
-        updateCliInstructions: 'Please run npm install -g happy-coder@latest',
+        updateCliInstructions: 'Please run npm install -g kanban-coder@latest',
         deleteSession: 'Delete Session',
         deleteSessionSubtitle: 'Permanently remove this session',
         deleteSessionConfirm: 'Delete Session Permanently?',
         deleteSessionWarning: 'This action cannot be undone. All messages and data associated with this session will be permanently deleted.',
         failedToDeleteSession: 'Failed to delete session',
         sessionDeleted: 'Session deleted successfully',
-        
+
     },
 
     components: {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
             readyToCode: 'Ready to code?',
-            installCli: 'Install the Happy CLI',
+            installCli: 'Install the Kanban CLI',
             runIt: 'Run it',
             scanQrCode: 'Scan the QR code',
             openCamera: 'Open Camera',
@@ -435,7 +435,7 @@ export const en = {
     },
 
     sidebar: {
-        sessionsTitle: 'Happy',
+        sessionsTitle: 'Kanban',
     },
 
     toolView: {
@@ -616,7 +616,7 @@ export const en = {
         invalidConnectionLink: 'Invalid Connection Link',
         invalidConnectionLinkDescription: 'The connection link is missing or invalid. Please check the URL and try again.',
         connectTerminal: 'Connect Terminal',
-        terminalRequestDescription: 'A terminal is requesting to connect to your Happy Coder account. This will allow the terminal to send and receive messages securely.',
+        terminalRequestDescription: 'A terminal is requesting to connect to your Kanban Coder account. This will allow the terminal to send and receive messages securely.',
         connectionDetails: 'Connection Details',
         publicKey: 'Public Key',
         encryption: 'Encryption',
@@ -644,9 +644,9 @@ export const en = {
         developerModeDisabled: 'Developer mode disabled',
         disconnectGithub: 'Disconnect GitHub',
         disconnectGithubConfirm: 'Are you sure you want to disconnect your GitHub account?',
-        disconnectService: ({ service }: { service: string }) => 
+        disconnectService: ({ service }: { service: string }) =>
             `Disconnect ${service}`,
-        disconnectServiceConfirm: ({ service }: { service: string }) => 
+        disconnectServiceConfirm: ({ service }: { service: string }) =>
             `Are you sure you want to disconnect ${service} from your account?`,
         disconnect: 'Disconnect',
         failedToConnectTerminal: 'Failed to connect terminal',
@@ -658,7 +658,7 @@ export const en = {
     navigation: {
         // Navigation titles and screen headers
         connectTerminal: 'Connect Terminal',
-        linkNewDevice: 'Link New Device', 
+        linkNewDevice: 'Link New Device',
         restoreWithSecretKey: 'Restore with Secret Key',
         whatsNew: "What's New",
         friends: 'Friends',
@@ -689,7 +689,7 @@ export const en = {
     machine: {
         launchNewSessionInDirectory: 'Launch New Session in Directory',
         offlineUnableToSpawn: 'Launcher disabled while machine is offline',
-        offlineHelp: '• Make sure your computer is online\n• Run `happy daemon status` to diagnose\n• Are you running the latest CLI version? Upgrade with `npm install -g happy-coder@latest`',
+        offlineHelp: '• Make sure your computer is online\n• Run `kanban daemon status` to diagnose\n• Are you running the latest CLI version? Upgrade with `npm install -g kanban-coder@latest`',
         daemon: 'Daemon',
         status: 'Status',
         stopDaemon: 'Stop Daemon',
@@ -858,16 +858,16 @@ export type Translations = typeof en;
  */
 export type TranslationStructure = {
     readonly [K in keyof Translations]: {
-        readonly [P in keyof Translations[K]]: Translations[K][P] extends string 
-            ? string 
-            : Translations[K][P] extends (...args: any[]) => string 
-                ? Translations[K][P] 
-                : Translations[K][P] extends object
-                    ? {
-                        readonly [Q in keyof Translations[K][P]]: Translations[K][P][Q] extends string
-                            ? string
-                            : Translations[K][P][Q]
-                      }
-                    : Translations[K][P]
+        readonly [P in keyof Translations[K]]: Translations[K][P] extends string
+        ? string
+        : Translations[K][P] extends (...args: any[]) => string
+        ? Translations[K][P]
+        : Translations[K][P] extends object
+        ? {
+            readonly [Q in keyof Translations[K][P]]: Translations[K][P][Q] extends string
+            ? string
+            : Translations[K][P][Q]
+        }
+        : Translations[K][P]
     }
 };

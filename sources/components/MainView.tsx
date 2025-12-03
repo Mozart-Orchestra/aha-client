@@ -15,6 +15,7 @@ import { SettingsViewWrapper } from './SettingsViewWrapper';
 import { SessionsListWrapper } from './SessionsListWrapper';
 import { useSettings } from '@/sync/storage';
 import { ZenHome } from '@/-zen/ZenHome';
+import TeamsScreen from '@/app/(app)/teams/index';
 
 interface MainViewProps {
     variant: 'phone' | 'sidebar';
@@ -96,6 +97,8 @@ export const MainView = React.memo(({ variant }: MainViewProps) => {
                 return <ZenHome />;
             case 'inbox':
                 return <InboxView />;
+            case 'teams':
+                return <TeamsScreen />;
             case 'settings':
                 return <SettingsViewWrapper />;
             case 'sessions':

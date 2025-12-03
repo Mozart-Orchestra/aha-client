@@ -1,0 +1,543 @@
+import React from 'react';
+import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
+import { Text } from '@/components/StyledText';
+import { useLocalSearchParams, Stack } from 'expo-router';
+import { useArtifact, useAllSessions } from '@/sync/storage';
+import { sync } from '@/sync/sync';
+import { StyleSheet, useUnistyles } from 'react-native-unistyles';
+import { Ionicons } from '@expo/vector-icons';
+import { Modal } from '@/modal';
+import {
+    KanbanBoard,
+    KanbanTask,
+    DEFAULT_TEAM_ROLES,
+    DEFAULT_TEAM_AGREEMENTS,
+    DEFAULT_KANBAN_BOARD
+} from '@/sync/kanbanTypes';
+import { useDesktopBridge } from '@/desktop/useDesktopBridge';
+import TeamChatRoom from '@/components/TeamChatRoom';
+
+const stylesheet = StyleSheet.create((theme) => ({
+    container: {
+        flex: 1,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    header: {
+        padding: 16,
+        backgroundColor: theme.colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    title: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+        marginBottom: 4,
+    },
+    subtitle: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+    },
+    boardContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        padding: 16,
+    },
+    column: {
+        flex: 1,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 12,
+        marginHorizontal: 6,
+        padding: 12,
+        minWidth: 250,
+    },
+    columnHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    columnTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    taskCount: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        backgroundColor: theme.colors.groupped.background,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+    },
+    taskCard: {
+        backgroundColor: theme.colors.groupped.background,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    taskTitle: {
+        fontSize: 14,
+        color: theme.colors.text,
+        marginBottom: 4,
+    },
+    taskAssignee: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        fontStyle: 'italic',
+    },
+    addTaskButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 8,
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        borderRadius: 8,
+        borderStyle: 'dashed',
+    },
+    addTaskText: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+        marginLeft: 4,
+    },
+    scrollContent: {
+        paddingBottom: 48
+    },
+    section: {
+        marginTop: 16,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 12,
+        marginHorizontal: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.text,
+        marginBottom: 12,
+    },
+    memberCard: {
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+    },
+    memberFirst: {
+        borderTopWidth: 0,
+        paddingTop: 4,
+    },
+    memberName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    memberMeta: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        marginTop: 4,
+    },
+    pill: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        backgroundColor: theme.colors.groupped.background,
+        marginTop: 8,
+    },
+    pillText: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: theme.colors.textSecondary,
+    },
+    roleCard: {
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+        paddingTop: 16,
+        marginTop: 16,
+    },
+    roleTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    roleSummary: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        marginTop: 6,
+        lineHeight: 20,
+    },
+    metaLabel: {
+        marginTop: 12,
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    bulletItem: {
+        fontSize: 13,
+        color: theme.colors.text,
+        marginTop: 6,
+        lineHeight: 18,
+    },
+    agreementsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    agreementCard: {
+        flex: 1,
+        minWidth: 150,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        borderRadius: 10,
+        padding: 12,
+        marginTop: 12,
+    },
+    agreementTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 6,
+    },
+    agreementText: {
+        fontSize: 13,
+        color: theme.colors.text,
+        lineHeight: 18,
+    },
+    emptyState: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        fontStyle: 'italic',
+    },
+}));
+
+export default function TeamDashboardScreen() {
+    const { id } = useLocalSearchParams();
+    const { theme } = useUnistyles();
+    const styles = stylesheet;
+    const artifact = useArtifact(id as string);
+    const allSessions = useAllSessions();
+    const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info'>('chat');
+    const [isLoading, setIsLoading] = React.useState(false);
+    const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
+    const roomId = (id as string) || undefined;
+    const desktopRoom = React.useMemo(() => {
+        if (!roomId || !collaborationState) return null;
+        return collaborationState.rooms.find((room: any) => room.id === roomId) ?? null;
+    }, [collaborationState, roomId]);
+    const desktopBoard = React.useMemo<KanbanBoard | null>(() => {
+        if (!roomId || !collaborationState) return null;
+        return collaborationState.boards.find((entry: any) => entry.roomId === roomId)?.board ?? DEFAULT_KANBAN_BOARD;
+    }, [collaborationState, roomId]);
+
+    React.useEffect(() => {
+        if (desktopBridge) {
+            return;
+        }
+        if (artifact && artifact.body === undefined && !isLoading) {
+            setIsLoading(true);
+            sync.fetchArtifactWithBody(artifact.id)
+                .finally(() => setIsLoading(false));
+        }
+    }, [artifact, isLoading, desktopBridge]);
+
+    const kanbanData: KanbanBoard = React.useMemo(() => {
+        if (desktopBridge) {
+            return desktopBoard || DEFAULT_KANBAN_BOARD;
+        }
+        if (!artifact?.body) return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
+        try {
+            const parsed = JSON.parse(artifact.body);
+            if (!parsed.columns || parsed.columns.length === 0) {
+                return { ...parsed, columns: DEFAULT_KANBAN_BOARD.columns };
+            }
+            return parsed;
+        } catch (e) {
+            console.error('Failed to parse kanban data', e);
+            return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
+        }
+    }, [artifact?.body, desktopBoard, desktopBridge]);
+
+    const handleAddTask = async (status: string) => {
+        const title = await Modal.prompt('New Task', 'Enter task title');
+        if (!title) return;
+
+        if (desktopBridge && roomId) {
+            await desktopBridge.createTask({
+                roomId,
+                title,
+                status
+            });
+            return;
+        }
+
+        if (!artifact) {
+            return;
+        }
+
+        const newTask: KanbanTask = {
+            id: Math.random().toString(36).substr(2, 9),
+            title,
+            status: status,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+
+        const newData: KanbanBoard = {
+            ...kanbanData,
+            tasks: [...kanbanData.tasks, newTask]
+        };
+
+        await sync.updateArtifact(
+            artifact.id,
+            artifact.title,
+            JSON.stringify(newData, null, 2),
+            artifact.sessions,
+            artifact.draft,
+            artifact.type
+        );
+    };
+
+    const handleMoveTask = async (task: KanbanTask) => {
+        const nextStatus = {
+            'todo': 'in-progress',
+            'in-progress': 'done',
+            'done': 'todo'
+        }[task.status] || 'todo';
+
+        if (desktopBridge && roomId) {
+            await desktopBridge.updateTask(task.id, { status: nextStatus });
+            return;
+        }
+
+        const updatedTasks = kanbanData.tasks.map(t =>
+            t.id === task.id ? { ...t, status: nextStatus, updatedAt: Date.now() } : t
+        );
+
+        const newData: KanbanBoard = {
+            ...kanbanData,
+            tasks: updatedTasks
+        };
+
+        await sync.updateArtifact(
+            artifact!.id,
+            artifact!.title,
+            JSON.stringify(newData, null, 2),
+            artifact!.sessions,
+            artifact!.draft,
+            artifact!.type
+        );
+    };
+
+    const sessionLookup = React.useMemo(() => {
+        const map = new Map<string, (typeof allSessions)[number]>();
+        for (const session of allSessions) {
+            map.set(session.id, session);
+        }
+        return map;
+    }, [allSessions]);
+
+    const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
+    const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
+
+    const roster = React.useMemo(() => {
+        const members = kanbanData.team?.members ?? [];
+        const assignedIds = new Set(members.map(m => m.sessionId));
+
+        const memberMap = new Map(members.map(m => [m.sessionId, m]));
+        const allSessionIds = Array.from(new Set([...(artifact?.sessions ?? []), ...assignedIds]));
+
+        return allSessionIds.map((sessionId, index) => {
+            const member = memberMap.get(sessionId) || {
+                sessionId,
+                roleId: '',
+                displayName: undefined,
+                focusAreas: []
+            };
+
+            const session = sessionLookup.get(sessionId);
+            const effectiveRoleId = member.roleId || session?.metadata?.role;
+
+            const role = roleDefinitions.find((entry) =>
+                entry.id === effectiveRoleId ||
+                entry.title.toLowerCase() === effectiveRoleId?.toLowerCase()
+            );
+
+            // Find tasks assigned to this member
+            const tasks = kanbanData.tasks.filter(t => t.assigneeId === sessionId);
+
+            return { member, session, role, index, tasks };
+        });
+    }, [kanbanData.team?.members, artifact?.sessions, sessionLookup, roleDefinitions, kanbanData.tasks]);
+
+    const timelineEvents = React.useMemo(() => {
+        return [...kanbanData.tasks]
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map(task => {
+                const assignee = roster.find(r => r.member.sessionId === task.assigneeId);
+                return { task, assignee };
+            });
+    }, [kanbanData.tasks, roster]);
+
+    if (desktopBridge && !desktopRoom) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" />
+            </View>
+        );
+    }
+
+    if (!desktopBridge && !artifact) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" />
+            </View>
+        );
+    }
+
+    const renderKanban = () => (
+        <ScrollView horizontal style={{ flex: 1 }}>
+            <View style={styles.boardContainer}>
+                {kanbanData.columns.map(column => (
+                    <View key={column.id} style={styles.column}>
+                        <View style={styles.columnHeader}>
+                            <Text style={styles.columnTitle}>{column.title}</Text>
+                            <Text style={styles.taskCount}>
+                                {kanbanData.tasks.filter(t => t.status === column.id).length}
+                            </Text>
+                        </View>
+
+                        <ScrollView>
+                            {kanbanData.tasks
+                                .filter(t => t.status === column.id)
+                                .map(task => (
+                                    <Pressable
+                                        key={task.id}
+                                        style={styles.taskCard}
+                                        onPress={() => handleMoveTask(task)}
+                                    >
+                                        <Text style={styles.taskTitle}>{task.title}</Text>
+                                        {task.assigneeId && (
+                                            <Text style={styles.taskAssignee}>@{task.assigneeId}</Text>
+                                        )}
+                                    </Pressable>
+                                ))}
+
+                            <Pressable
+                                style={styles.addTaskButton}
+                                onPress={() => handleAddTask(column.id)}
+                            >
+                                <Ionicons name="add" size={16} color={theme.colors.textSecondary} />
+                                <Text style={styles.addTaskText}>Add Task</Text>
+                            </Pressable>
+                        </ScrollView>
+                    </View>
+                ))}
+            </View>
+        </ScrollView>
+    );
+
+    const renderInfo = () => (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Team Information</Text>
+                <View style={styles.roleCard}>
+                    <Text style={styles.roleTitle}>Goal</Text>
+                    <Text style={styles.roleSummary}>
+                        {(kanbanData.team as any)?.goal || (kanbanData.team as any)?.mission || 'No goal set'}
+                    </Text>
+                </View>
+
+                <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Agreements</Text>
+                <View style={styles.roleCard}>
+                    <Text style={styles.roleTitle}>Status Updates</Text>
+                    <Text style={styles.roleSummary}>{agreements.statusUpdates}</Text>
+                </View>
+                <View style={styles.roleCard}>
+                    <Text style={styles.roleTitle}>Handoffs</Text>
+                    <Text style={styles.roleSummary}>{agreements.handoffs}</Text>
+                </View>
+                <View style={styles.roleCard}>
+                    <Text style={styles.roleTitle}>Escalation</Text>
+                    <Text style={styles.roleSummary}>{agreements.escalation}</Text>
+                </View>
+                <View style={styles.roleCard}>
+                    <Text style={styles.roleTitle}>Definition of Done</Text>
+                    <Text style={styles.roleSummary}>{agreements.definitionOfDone}</Text>
+                </View>
+            </View>
+        </ScrollView>
+    );
+
+    const renderChat = () => (
+        <View style={{ flex: 1 }}>
+            <TeamChatRoom
+                teamId={id as string}
+                teamName={artifact?.title || desktopRoom?.name || 'Team'}
+                mySessionId={sync.anonID}
+                myRole="user"
+                members={roster}
+            />
+        </View>
+    );
+
+    return (
+        <>
+            <Stack.Screen
+                options={{
+                    headerShown: true,
+                    headerTitle: (desktopBridge ? desktopRoom?.name : artifact?.title) || 'Team Dashboard',
+                }}
+            />
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
+                        {(['chat', 'board', 'info'] as const).map((tab) => (
+                            <Pressable
+                                key={tab}
+                                onPress={() => setActiveTab(tab)}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 8,
+                                    alignItems: 'center',
+                                    borderRadius: 8,
+                                    backgroundColor: activeTab === tab ? theme.colors.surface : 'transparent',
+                                    shadowColor: activeTab === tab ? '#000' : 'transparent',
+                                    shadowOffset: { width: 0, height: 1 },
+                                    shadowOpacity: activeTab === tab ? 0.1 : 0,
+                                    shadowRadius: 2,
+                                }}
+                            >
+                                <Text style={{
+                                    fontSize: 14,
+                                    fontWeight: '600',
+                                    color: activeTab === tab ? theme.colors.text : theme.colors.textSecondary,
+                                    textTransform: 'capitalize'
+                                }}>
+                                    {tab}
+                                </Text>
+                            </Pressable>
+                        ))}
+                    </View>
+                </View>
+
+                {activeTab === 'chat' && renderChat()}
+                {activeTab === 'board' && renderKanban()}
+                {activeTab === 'info' && renderInfo()}
+            </View>
+        </>
+    );
+}

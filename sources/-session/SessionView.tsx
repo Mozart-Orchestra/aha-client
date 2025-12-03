@@ -31,7 +31,7 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnistyles } from 'react-native-unistyles';
 
-export const SessionView = React.memo((props: { id: string }) => {
+export const SessionView = React.memo((props: { id: string, teamName?: string, roleName?: string }) => {
     const sessionId = props.id;
     const router = useRouter();
     const session = useSession(sessionId);
@@ -70,16 +70,29 @@ export const SessionView = React.memo((props: { id: string }) => {
 
         // Normal state - show session info
         const isConnected = session.presence === 'online';
+
+        let subtitle = session.metadata?.path ? formatPathRelativeToHome(session.metadata.path, session.metadata?.homeDir) : undefined;
+
+        // Append Team and Role info if available
+        if (props.teamName || props.roleName) {
+            const contextInfo = [props.teamName, props.roleName].filter(Boolean).join(' • ');
+            if (subtitle) {
+                subtitle = `${contextInfo} | ${subtitle}`;
+            } else {
+                subtitle = contextInfo;
+            }
+        }
+
         return {
             title: getSessionName(session),
-            subtitle: session.metadata?.path ? formatPathRelativeToHome(session.metadata.path, session.metadata?.homeDir) : undefined,
+            subtitle: subtitle,
             avatarId: getSessionAvatarId(session),
             onAvatarPress: () => router.push(`/session/${sessionId}/info`),
             isConnected: isConnected,
             flavor: session.metadata?.flavor || null,
             tintColor: isConnected ? '#000' : '#8E8E93'
         };
-    }, [session, isDataReady, sessionId, router]);
+    }, [session, isDataReady, sessionId, router, props.teamName, props.roleName]);
 
     return (
         <>

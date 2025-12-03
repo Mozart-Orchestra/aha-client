@@ -21,31 +21,58 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     const checkScannerPermissions = useCheckScannerPermissions();
 
     const processAuthUrl = React.useCallback(async (url: string) => {
+        console.log('[TERMINAL AUTH] 🔍 Processing terminal auth URL:', url);
+
         if (!url.startsWith('happy://terminal?')) {
+            console.log('[TERMINAL AUTH] ❌ Invalid URL format - does not start with "happy://terminal?"');
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
         }
-        
+
         setIsLoading(true);
         try {
             const tail = url.slice('happy://terminal?'.length);
+            console.log('[TERMINAL AUTH] 📊 URL tail (base64url publicKey):', tail.substring(0, 20) + '...');
+
             const publicKey = decodeBase64(tail, 'base64url');
-            const responseV1 = encryptBox(decodeBase64(auth.credentials!.secret, 'base64url'), publicKey);
+            console.log('[TERMINAL AUTH] 🔑 Decoded publicKey length:', publicKey.length);
+
+            if (!auth.credentials?.secret) {
+                console.log('[TERMINAL AUTH] ❌ No auth credentials available');
+                throw new Error('No auth credentials');
+            }
+
+            const mySecret = decodeBase64(auth.credentials.secret, 'base64url');
+            console.log('[TERMINAL AUTH] 🔐 My secret length:', mySecret.length);
+
+            // V1 Response
+            const responseV1 = encryptBox(mySecret, publicKey);
+            console.log('[TERMINAL AUTH] 🔒 Encrypted V1 response length:', responseV1.length);
+
+            // V2 Response
             let responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
             responseV2Bundle[0] = 0;
             responseV2Bundle.set(sync.encryption.contentDataKey, 1);
             const responseV2 = encryptBox(responseV2Bundle, publicKey);
-            await authApprove(auth.credentials!.token, publicKey, responseV1, responseV2);
-            
+            console.log('[TERMINAL AUTH] 🔒 Encrypted V2 response length:', responseV2.length);
+
+            console.log('[TERMINAL AUTH] 📤 Sending approval to server...');
+            await authApprove(auth.credentials.token, publicKey, responseV1, responseV2);
+
+            console.log('[TERMINAL AUTH] ✅ Terminal connected successfully!');
             Modal.alert(t('common.success'), t('modals.terminalConnectedSuccessfully'), [
-                { 
-                    text: t('common.ok'), 
+                {
+                    text: t('common.ok'),
                     onPress: () => options?.onSuccess?.()
                 }
             ]);
             return true;
         } catch (e) {
-            console.error(e);
+            console.error('[TERMINAL AUTH] ❌ Failed to connect terminal:', e);
+            if (e instanceof Error) {
+                console.error('[TERMINAL AUTH] Error message:', e.message);
+                console.error('[TERMINAL AUTH] Error stack:', e.stack);
+            }
             Modal.alert(t('common.error'), t('modals.failedToConnectTerminal'), [{ text: t('common.ok') }]);
             options?.onError?.(e);
             return false;

@@ -138,6 +138,7 @@ interface StorageState {
     // Feed methods
     applyFeedItems: (items: FeedItem[]) => void;
     clearFeed: () => void;
+    updateSessionMetadata: (sessionId: string, metadata: any, version: number) => void;
 }
 
 // Helper function to build unified list view data from sessions and machines
@@ -798,6 +799,24 @@ export const storage = create<StorageState>()((set, get) => {
         getProjects: () => projectManager.getProjects(),
         getProject: (projectId: string) => projectManager.getProject(projectId),
         getProjectForSession: (sessionId: string) => projectManager.getProjectForSession(sessionId),
+        updateSessionMetadata: (sessionId: string, metadata: any, version: number) => set((state) => {
+            const session = state.sessions[sessionId];
+            if (!session) return state;
+
+            const updatedSessions = {
+                ...state.sessions,
+                [sessionId]: {
+                    ...session,
+                    metadata,
+                    metadataVersion: version
+                }
+            };
+
+            return {
+                ...state,
+                sessions: updatedSessions
+            };
+        }),
         getProjectSessions: (projectId: string) => projectManager.getProjectSessions(projectId),
         // Project git status methods
         getProjectGitStatus: (projectId: string) => projectManager.getProjectGitStatus(projectId),
@@ -844,7 +863,7 @@ export const storage = create<StorageState>()((set, get) => {
                 mergedArtifacts[artifact.id] = artifact;
             });
             console.log(`🗂️ Storage.applyArtifacts: Total artifacts after merge: ${Object.keys(mergedArtifacts).length}`);
-            
+
             return {
                 ...state,
                 artifacts: mergedArtifacts
@@ -855,7 +874,7 @@ export const storage = create<StorageState>()((set, get) => {
                 ...state.artifacts,
                 [artifact.id]: artifact
             };
-            
+
             return {
                 ...state,
                 artifacts: updatedArtifacts
@@ -866,7 +885,7 @@ export const storage = create<StorageState>()((set, get) => {
                 ...state.artifacts,
                 [artifact.id]: artifact
             };
-            
+
             return {
                 ...state,
                 artifacts: updatedArtifacts
@@ -874,7 +893,7 @@ export const storage = create<StorageState>()((set, get) => {
         }),
         deleteArtifact: (artifactId: string) => set((state) => {
             const { [artifactId]: _, ...remainingArtifacts } = state.artifacts;
-            
+
             return {
                 ...state,
                 artifacts: remainingArtifacts
@@ -883,25 +902,25 @@ export const storage = create<StorageState>()((set, get) => {
         deleteSession: (sessionId: string) => set((state) => {
             // Remove session from sessions
             const { [sessionId]: deletedSession, ...remainingSessions } = state.sessions;
-            
+
             // Remove session messages if they exist
             const { [sessionId]: deletedMessages, ...remainingSessionMessages } = state.sessionMessages;
-            
+
             // Remove session git status if it exists
             const { [sessionId]: deletedGitStatus, ...remainingGitStatus } = state.sessionGitStatus;
-            
+
             // Clear drafts and permission modes from persistent storage
             const drafts = loadSessionDrafts();
             delete drafts[sessionId];
             saveSessionDrafts(drafts);
-            
+
             const modes = loadSessionPermissionModes();
             delete modes[sessionId];
             saveSessionPermissionModes(modes);
-            
+
             // Rebuild sessionListViewData without the deleted session
             const sessionListViewData = buildSessionListViewData(remainingSessions);
-            
+
             return {
                 ...state,
                 sessions: remainingSessions,
@@ -925,14 +944,14 @@ export const storage = create<StorageState>()((set, get) => {
         applyRelationshipUpdate: (event: RelationshipUpdatedEvent) => set((state) => {
             const { fromUserId, toUserId, status, action, fromUser, toUser } = event;
             const currentUserId = state.profile.id;
-            
+
             // Update friends cache
             const updatedFriends = { ...state.friends };
-            
+
             // Determine which user profile to update based on perspective
             const otherUserId = fromUserId === currentUserId ? toUserId : fromUserId;
             const otherUser = fromUserId === currentUserId ? toUser : fromUser;
-            
+
             if (action === 'deleted' || status === 'none') {
                 // Remove from friends if deleted or status is none
                 delete updatedFriends[otherUserId];
@@ -940,7 +959,7 @@ export const storage = create<StorageState>()((set, get) => {
                 // Update or add the user profile with current status
                 updatedFriends[otherUserId] = otherUser;
             }
-            
+
             return {
                 ...state,
                 friends: updatedFriends
@@ -964,7 +983,7 @@ export const storage = create<StorageState>()((set, get) => {
         assumeUsers: async (userIds: string[]) => {
             // This will be implemented in sync.ts as it needs access to credentials
             // Just a placeholder here for the interface
-            const { sync } = await import('./sync');
+            const { sync } = await import('@/sync/sync');
             return sync.assumeUsers(userIds);
         },
         // Feed methods
@@ -1093,7 +1112,8 @@ export function useLocalSettings(): LocalSettings {
 export function useAllMachines(): Machine[] {
     return storage(useShallow((state) => {
         if (!state.isDataReady) return [];
-        return (Object.values(state.machines).sort((a, b) => b.createdAt - a.createdAt)).filter((v) => v.active);
+        // Keep offline machines visible so UI can show status/CTA guidance
+        return Object.values(state.machines).sort((a, b) => b.createdAt - a.createdAt);
     }));
 }
 

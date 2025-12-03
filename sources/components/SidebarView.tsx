@@ -197,7 +197,7 @@ export const SidebarView = React.memo(() => {
                                 hitSlop={15}
                             >
                                 <Image
-                                    source={require('@/assets/images/brutalist/Brutalism 3.png')}
+                                    source={require('@/assets/images/brutalist/Brutalism_3.png')}
                                     contentFit="contain"
                                     style={[{ width: 32, height: 32 }]}
                                     tintColor={theme.colors.header.tint}
@@ -210,7 +210,7 @@ export const SidebarView = React.memo(() => {
                             style={styles.notificationButton}
                         >
                             <Image
-                                source={require('@/assets/images/brutalist/Brutalism 27.png')}
+                                source={require('@/assets/images/brutalist/Brutalism_27.png')}
                                 contentFit="contain"
                                 style={[{ width: 32, height: 32 }]}
                                 tintColor={theme.colors.header.tint}
@@ -231,7 +231,7 @@ export const SidebarView = React.memo(() => {
                             hitSlop={15}
                         >
                             <Image
-                                source={require('@/assets/images/brutalist/Brutalism 9.png')}
+                                source={require('@/assets/images/brutalist/Brutalism_9.png')}
                                 contentFit="contain"
                                 style={[{ width: 32, height: 32 }]}
                                 tintColor={theme.colors.header.tint}

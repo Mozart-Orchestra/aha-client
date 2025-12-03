@@ -102,6 +102,12 @@ const rawAgentRecordSchema = z.discriminatedUnion('type', [z.object({
             callId: z.string(),
             output: z.any(),
             id: z.string()
+        }),
+        z.object({
+            type: z.literal('token_count'),
+            id: z.string().optional(),
+            info: z.any(),
+            rate_limits: z.any().optional()
         })
     ])
 })]);
@@ -346,6 +352,9 @@ export function normalizeRawMessage(id: string, localId: string | null, createdA
             };
         }
         if (raw.content.type === 'codex') {
+            if (raw.content.data.type === 'token_count') {
+                return null;
+            }
             if (raw.content.data.type === 'message') {
                 // Cast codex messages to agent text messages
                 return {
@@ -419,6 +428,7 @@ export function normalizeRawMessage(id: string, localId: string | null, createdA
                     meta: raw.meta
                 } satisfies NormalizedMessage;
             }
+
         }
     }
     return null;

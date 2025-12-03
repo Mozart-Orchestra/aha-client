@@ -18,6 +18,7 @@ export interface Artifact {
  */
 export interface ArtifactHeader {
     title: string | null;
+    type?: 'note' | 'team' | 'kanban'; // Type of the artifact
     sessions?: string[];  // Optional array of session IDs linked to this artifact
     draft?: boolean;      // Optional draft flag - hides artifact from visible list when true
 }
@@ -35,6 +36,7 @@ export interface ArtifactBody {
 export interface DecryptedArtifact {
     id: string;
     title: string | null;
+    type?: 'note' | 'team' | 'kanban';
     sessions?: string[];  // Optional array of session IDs linked to this artifact
     draft?: boolean;      // Optional draft flag - hides artifact from visible list when true
     body?: string | null;  // Only loaded when viewing full artifact
@@ -69,7 +71,7 @@ export interface ArtifactUpdateRequest {
 /**
  * Response from update operation
  */
-export type ArtifactUpdateResponse = 
+export type ArtifactUpdateResponse =
     | {
         success: true;
         headerVersion?: number;
