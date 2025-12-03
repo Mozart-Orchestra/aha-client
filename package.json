@@ -16,7 +16,8 @@
     "ota:production": "npx eas-cli@latest workflow:run ota.yaml",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package",
-    "generate-theme": "tsx sources/theme.gen.ts"
+    "generate-theme": "tsx sources/theme.gen.ts",
+    "prerecommit": "yarn typecheck"
   },
   "jest": {
     "preset": "jest-expo"

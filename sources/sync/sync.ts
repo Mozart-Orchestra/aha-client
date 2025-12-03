@@ -2328,9 +2328,13 @@ class Sync {
 
             // 优先使用 request 中的 fromSessionId/Role，否则使用 fallback
             const fromSessionId = request.fromSessionId || (mySession && typeof mySession !== 'string' ? mySession.id : 'unknown');
-            const fromRole = request.fromRole || (mySession && typeof mySession !== 'string' ? mySession.metadata?.role : undefined);
-            const fromDisplayName = request.fromDisplayName || (mySession && typeof mySession !== 'string' ?
-                (mySession.metadata?.name || mySession.metadata?.path) : undefined);
+
+            // Re-resolve mySession based on fromSessionId if possible to get correct metadata
+            const sendingSession = sessions.find(s => typeof s !== 'string' && s.id === fromSessionId) || mySession;
+
+            const fromRole = request.fromRole || (sendingSession && typeof sendingSession !== 'string' ? sendingSession.metadata?.role : undefined);
+            const fromDisplayName = request.fromDisplayName || (sendingSession && typeof sendingSession !== 'string' ?
+                (sendingSession.metadata?.name || sendingSession.metadata?.path) : undefined);
 
             const message: import('@/sync/teamMessageTypes').TeamMessage = {
                 id: randomUUID(),

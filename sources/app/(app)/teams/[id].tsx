@@ -2,7 +2,7 @@ import React from 'react';
 import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { Text } from '@/components/StyledText';
 import { useLocalSearchParams, Stack } from 'expo-router';
-import { useArtifact, useAllSessions } from '@/sync/storage';
+import { useArtifact, useAllSessions, useProfile } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,7 @@ import {
     DEFAULT_KANBAN_BOARD
 } from '@/sync/kanbanTypes';
 import { useDesktopBridge } from '@/desktop/useDesktopBridge';
+import { getDisplayName } from '@/sync/profile';
 import TeamChatRoom from '@/components/TeamChatRoom';
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -230,6 +231,7 @@ export default function TeamDashboardScreen() {
     const styles = stylesheet;
     const artifact = useArtifact(id as string);
     const allSessions = useAllSessions();
+    const profile = useProfile();
     const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info'>('chat');
     const [isLoading, setIsLoading] = React.useState(false);
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
@@ -242,6 +244,12 @@ export default function TeamDashboardScreen() {
         if (!roomId || !collaborationState) return null;
         return collaborationState.boards.find((entry: any) => entry.roomId === roomId)?.board ?? DEFAULT_KANBAN_BOARD;
     }, [collaborationState, roomId]);
+
+    // Get user's display name for chat
+    const myDisplayName = React.useMemo(() => {
+        const displayName = getDisplayName(profile);
+        return displayName || sync.anonID; // Fallback to session ID if no display name
+    }, [profile]);
 
     React.useEffect(() => {
         if (desktopBridge) {
@@ -313,8 +321,8 @@ export default function TeamDashboardScreen() {
 
     const handleMoveTask = async (task: KanbanTask) => {
         const nextStatus = {
-            'todo': 'in-progress',
-            'in-progress': 'done',
+            'todo': 'in_progress',
+            'in_progress': 'done',
             'done': 'todo'
         }[task.status] || 'todo';
 
@@ -361,14 +369,21 @@ export default function TeamDashboardScreen() {
         const allSessionIds = Array.from(new Set([...(artifact?.sessions ?? []), ...assignedIds]));
 
         return allSessionIds.map((sessionId, index) => {
-            const member = memberMap.get(sessionId) || {
+            const session = sessionLookup.get(sessionId);
+            const existingMember = memberMap.get(sessionId);
+
+            // Create member with proper displayName for mentions functionality
+            const member = existingMember || {
                 sessionId,
                 roleId: '',
-                displayName: undefined,
+                displayName: session?.metadata?.name || session?.metadata?.host || sessionId,
                 focusAreas: []
             };
 
-            const session = sessionLookup.get(sessionId);
+            // Ensure displayName is set for mentions functionality
+            if (!member.displayName) {
+                member.displayName = session?.metadata?.name || session?.metadata?.host || sessionId;
+            }
             const effectiveRoleId = member.roleId || session?.metadata?.role;
 
             const role = roleDefinitions.find((entry) =>
@@ -489,6 +504,7 @@ export default function TeamDashboardScreen() {
                 teamName={artifact?.title || desktopRoom?.name || 'Team'}
                 mySessionId={sync.anonID}
                 myRole="user"
+                myDisplayName={myDisplayName}
                 members={roster}
             />
         </View>

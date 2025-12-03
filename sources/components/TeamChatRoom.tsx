@@ -294,6 +294,7 @@ interface TeamChatRoomProps {
     teamName: string;
     mySessionId?: string;
     myRole?: string;
+    myDisplayName?: string;
     members?: Array<{
         member: { sessionId: string; displayName?: string; roleId?: string };
         session?: { active: boolean; updatedAt: number };
@@ -301,7 +302,7 @@ interface TeamChatRoomProps {
     }>;
 }
 
-export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, members = [] }: TeamChatRoomProps) {
+export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, myDisplayName, members = [] }: TeamChatRoomProps) {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const scrollViewRef = React.useRef<ScrollView>(null);
@@ -508,6 +509,10 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, me
             setIsSending(true);
             const mentions = extractMentions(content);
 
+            // Resolve display name
+            const myMember = members.find(m => m.member.sessionId === mySessionId);
+            const myDisplayName = myMember?.member.displayName || myMember?.role?.title || 'User';
+
             const request: SendTeamMessageRequest = {
                 teamId,
                 content,
@@ -515,6 +520,7 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, me
                 mentions: mentions.length > 0 ? mentions : undefined,
                 fromSessionId: mySessionId,
                 fromRole: myRole,
+                fromDisplayName: myDisplayName
             };
 
             await sync.sendTeamMessage(request);
@@ -529,7 +535,14 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, me
     const extractMentions = (text: string): string[] => {
         const mentionRegex = /@([a-zA-Z0-9-]+)/g;
         const matches = [...text.matchAll(mentionRegex)];
-        return matches.map(m => m[1]);
+        return matches.map(m => {
+            const name = m[1].toLowerCase();
+            const member = members.find(mem =>
+                (mem.member.displayName && mem.member.displayName.toLowerCase() === name) ||
+                (mem.member.roleId && mem.member.roleId.toLowerCase() === name)
+            );
+            return member ? member.member.sessionId : null;
+        }).filter(id => id !== null) as string[];
     };
 
     if (isLoading) {
