@@ -542,18 +542,32 @@ export default function TeamDashboardScreen() {
         </ScrollView>
     );
 
-    const renderChat = () => (
-        <View style={{ flex: 1 }}>
-            <TeamChatRoom
-                teamId={teamId}
-                teamName={artifact?.title || desktopRoom?.name || 'Team'}
-                mySessionId={sync.anonID}
-                myRole="user"
-                myDisplayName={myDisplayName}
-                members={roster}
-            />
-        </View>
-    );
+    const renderChat = () => {
+        // Try to find current user's session in roster
+        // Look for a session that doesn't have an agent role (agents have roles like 'master', 'builder', etc.)
+        const myMember = roster.find(r => {
+            const session = r.session;
+            if (!session) return false;
+            const role = session.metadata?.role;
+            // Sessions without a role or with 'user' role are likely user sessions
+            return !role || role === 'user';
+        });
+
+        const mySessionId = myMember?.member.sessionId;
+
+        return (
+            <View style={{ flex: 1 }}>
+                <TeamChatRoom
+                    teamId={teamId}
+                    teamName={artifact?.title || desktopRoom?.name || 'Team'}
+                    mySessionId={mySessionId}
+                    myRole="user"
+                    myDisplayName={myDisplayName}
+                    members={roster}
+                />
+            </View>
+        );
+    };
 
     return (
         <>
