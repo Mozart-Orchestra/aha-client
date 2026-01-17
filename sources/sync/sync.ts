@@ -585,8 +585,7 @@ class Sync {
             log.log('📦 fetchArtifactsList: Fetching artifacts from server');
             const artifacts = await fetchArtifacts(this.credentials);
             log.log(`📦 fetchArtifactsList: Received ${artifacts.length} artifacts from server`);
-            console.log(`📦 fetchArtifactsList: Server returned ${artifacts.length} artifacts:`, artifacts.map(a => ({ id: a.id, createdAt: a.createdAt })));
-            const decryptedArtifacts: DecryptedArtifact[] = [];
+            let decryptedArtifacts: DecryptedArtifact[] = [];
             const invalidArtifactIds: string[] = [];
 
             for (const artifact of artifacts) {
@@ -607,7 +606,7 @@ class Sync {
                     // Decrypt header
                     const header = await artifactEncryption.decryptHeader(artifact.header);
 
-                    decryptedArtifacts.push({
+                    const decryptedArtifact = {
                         id: artifact.id,
                         title: header?.title || null,
                         type: header?.type,          // Include type from header
@@ -620,17 +619,18 @@ class Sync {
                         createdAt: artifact.createdAt,
                         updatedAt: artifact.updatedAt,
                         isDecrypted: !!header,
-                    });
+                    };
+
+                    decryptedArtifacts.push(decryptedArtifact);
                 } catch (err) {
                     console.error(`Failed to decrypt artifact ${artifact.id}:`, err);
-                    console.log(`🗑️ Artifact ${artifact.id} appears to be encrypted with old/invalid key, marking for deletion`);
                     invalidArtifactIds.push(artifact.id);
                 }
             }
 
             // Clean up invalid artifacts from server and local storage
             if (invalidArtifactIds.length > 0) {
-                console.log(`🗑️ Deleting ${invalidArtifactIds.length} invalid artifacts from server and local storage...`);
+                log.log(`Deleting ${invalidArtifactIds.length} invalid artifacts`);
 
                 // Remove from local storage first
                 for (const artifactId of invalidArtifactIds) {
@@ -649,6 +649,64 @@ class Sync {
             }
 
             log.log(`📦 fetchArtifactsList: Successfully decrypted ${decryptedArtifacts.length} artifacts (deleted ${invalidArtifactIds.length} invalid)`);
+
+            // MIGRATION: Fix artifacts with undefined type by checking their body content
+            // This is a one-time fix for artifacts created before the type field was properly saved
+            const artifactsNeedingTypeFix = decryptedArtifacts.filter(a => !a.type);
+            if (artifactsNeedingTypeFix.length > 0) {
+                log.log(`[Migration] Found ${artifactsNeedingTypeFix.length} artifacts without type, migrating...`);
+
+                const fixedArtifacts = new Map<string, DecryptedArtifact>();
+                let migratedCount = 0;
+
+                for (const artifact of artifactsNeedingTypeFix) {
+                    try {
+                        // Heuristic: If artifact has sessions array, likely a team
+                        const likelyTeam = artifact.sessions && artifact.sessions.length >= 1;
+
+                        // Fetch the full artifact with body
+                        const fullArtifact = await this.fetchArtifactWithBody(artifact.id);
+                        if (fullArtifact && fullArtifact.body) {
+                            try {
+                                const bodyData = JSON.parse(fullArtifact.body);
+                                if (bodyData.team && Array.isArray(bodyData.team.members)) {
+                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
+                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
+                                    migratedCount++;
+                                } else if (likelyTeam) {
+                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
+                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
+                                    migratedCount++;
+                                }
+                            } catch (parseError) {
+                                // Fallback to heuristic if body parsing fails
+                                if (likelyTeam) {
+                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
+                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
+                                    migratedCount++;
+                                }
+                            }
+                        } else if (likelyTeam) {
+                            // No body but has sessions - likely a team
+                            const minimalTeam = { ...artifact, type: 'team' as const };
+                            fixedArtifacts.set(artifact.id, minimalTeam);
+                            await this.updateArtifact(artifact.id, artifact.title, artifact.body || null, artifact.sessions, artifact.draft, 'team');
+                            migratedCount++;
+                        }
+                    } catch (error) {
+                        console.error(`[Migration] Failed to migrate artifact ${artifact.id}:`, error);
+                    }
+                }
+
+                // Update the decryptedArtifacts array with the fixed artifacts
+                decryptedArtifacts = decryptedArtifacts.map(artifact => {
+                    const fixedArtifact = fixedArtifacts.get(artifact.id);
+                    return fixedArtifact || artifact;
+                });
+
+                log.log(`[Migration] Successfully migrated ${migratedCount} artifacts`);
+            }
+
             storage.getState().applyArtifacts(decryptedArtifacts);
             log.log('📦 fetchArtifactsList: Artifacts applied to storage');
         } catch (error) {
@@ -2074,6 +2132,9 @@ class Sync {
                 const decryptedArtifact: DecryptedArtifact = {
                     id: artifactId,
                     title: header?.title || null,
+                    type: header?.type,
+                    sessions: header?.sessions,
+                    draft: header?.draft,
                     body: decryptedBody,
                     headerVersion: artifactUpdate.headerVersion,
                     bodyVersion: artifactUpdate.bodyVersion,
@@ -2125,6 +2186,7 @@ class Sync {
                 if (artifactUpdate.header) {
                     const header = await artifactEncryption.decryptHeader(artifactUpdate.header.value);
                     updatedArtifact.title = header?.title || null;
+                    updatedArtifact.type = header?.type;
                     updatedArtifact.sessions = header?.sessions;
                     updatedArtifact.draft = header?.draft;
                     updatedArtifact.headerVersion = artifactUpdate.header.version;
@@ -2375,28 +2437,11 @@ class Sync {
 
             // 获取当前 session 信息
             const sessions = storage.getState().sessionsData || [];
-            const mySession = sessions.find(s => typeof s !== 'string');
-            const fallbackSession = mySession && typeof mySession !== 'string' ? mySession : undefined;
-
-            // Use fallback session ID if fromSessionId is undefined
-            // Server requires fromSessionId to be present, but fromRole determines message intent
-            // If no fallback session, use the first session from the team (for user messages)
-            let fromSessionId = request.fromSessionId ?? fallbackSession?.id;
-            if (!fromSessionId && request.teamId) {
-                // Get team artifact to find a member session
-                const teamArtifact = storage.getState().artifacts[request.teamId];
-                if (teamArtifact?.sessions && teamArtifact.sessions.length > 0) {
-                    fromSessionId = teamArtifact.sessions[0];
-                    console.log(`[sendTeamMessage] Using first team member session ${fromSessionId} for user message`);
-                }
-            }
-            if (!fromSessionId) {
-                throw new Error('Cannot send team message: no valid session ID available');
-            }
+            const fromSessionId = request.fromSessionId;
 
             // Resolve session metadata only when we have a session ID
             const sendingSession = fromSessionId
-                ? sessions.find(s => typeof s !== 'string' && s.id === fromSessionId) || fallbackSession
+                ? sessions.find((s): s is import('@/sync/storageTypes').Session => typeof s !== 'string' && s.id === fromSessionId)
                 : undefined;
 
             const fromRole = request.fromRole ?? (sendingSession?.metadata?.role);
@@ -2405,14 +2450,14 @@ class Sync {
             const message: import('@/sync/teamMessageTypes').TeamMessage = {
                 id: randomUUID(),
                 teamId: request.teamId,
-                fromSessionId,
-                fromRole,
-                fromDisplayName,
+                ...(fromSessionId ? { fromSessionId } : {}),
+                ...(fromRole ? { fromRole } : {}),
+                ...(fromDisplayName ? { fromDisplayName } : {}),
                 content: request.content,
                 type: request.type || 'chat',
-                mentions: request.mentions,
+                ...(request.mentions ? { mentions: request.mentions } : {}),
                 timestamp: Date.now(),
-                metadata: request.metadata
+                ...(request.metadata ? { metadata: request.metadata } : {})
             };
 
             const response = await apiSocket.request(`/v1/teams/${request.teamId}/messages`, {

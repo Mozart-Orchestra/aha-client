@@ -254,12 +254,10 @@ export const storage = create<StorageState>()((set, get) => {
             validArtifacts[id] = artifact;
         } else {
             cleanedCount++;
-            console.log(`🗑️ Cleaned up corrupted artifact ${id} (type: undefined)`);
         }
     });
 
     if (cleanedCount > 0) {
-        console.log(`🧹 Cleaned up ${cleanedCount} corrupted artifacts from local storage`);
         saveArtifacts(validArtifacts);
     }
 
@@ -877,13 +875,10 @@ export const storage = create<StorageState>()((set, get) => {
         }),
         // Artifact methods
         applyArtifacts: (artifacts: DecryptedArtifact[]) => set((state) => {
-            console.log(`🗂️ Storage.applyArtifacts: Applying ${artifacts.length} artifacts`);
             const mergedArtifacts = { ...state.artifacts };
             artifacts.forEach(artifact => {
                 mergedArtifacts[artifact.id] = artifact;
             });
-            const teamCount = Object.values(mergedArtifacts).filter((a: any) => a.type === 'team').length;
-            console.log(`🗂️ Storage.applyArtifacts: Total artifacts after merge: ${Object.keys(mergedArtifacts).length}, teams: ${teamCount}`);
 
             // Persist artifacts to storage
             saveArtifacts(mergedArtifacts);
@@ -898,8 +893,6 @@ export const storage = create<StorageState>()((set, get) => {
                 ...state.artifacts,
                 [artifact.id]: artifact
             };
-            console.log(`📝 addArtifact: Adding artifact ${artifact.id} (type: ${artifact.type}, title: ${artifact.title})`);
-            console.log(`📝 addArtifact: Total artifacts before: ${Object.keys(state.artifacts).length}, after: ${Object.keys(updatedArtifacts).length}`);
 
             // Persist artifacts to storage
             saveArtifacts(updatedArtifacts);

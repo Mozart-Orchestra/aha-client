@@ -616,7 +616,7 @@ export default function NewTeamScreen() {
                     ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
                 ];
 
-                await sync.updateArtifact(artifactId, null, updatedBody, allMemberIds);
+                await sync.updateArtifact(artifactId, null, updatedBody, allMemberIds, false, 'team');
 
                 // Update metadata for manual members only (running sessions)
                 if (manualMembers.length > 0) {
