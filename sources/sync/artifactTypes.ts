@@ -18,7 +18,7 @@ export interface Artifact {
  */
 export interface ArtifactHeader {
     title: string | null;
-    type?: 'note' | 'team' | 'kanban'; // Type of the artifact
+    type?: 'note' | 'team' | 'kanban'; // Optional artifact type
     sessions?: string[];  // Optional array of session IDs linked to this artifact
     draft?: boolean;      // Optional draft flag - hides artifact from visible list when true
 }
@@ -71,7 +71,7 @@ export interface ArtifactUpdateRequest {
 /**
  * Response from update operation
  */
-export type ArtifactUpdateResponse =
+export type ArtifactUpdateResponse = 
     | {
         success: true;
         headerVersion?: number;

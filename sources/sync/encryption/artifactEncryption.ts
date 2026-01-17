@@ -24,7 +24,7 @@ export class ArtifactEncryption {
         const encrypted = await this.encryptor.encrypt([header]);
         return encodeBase64(encrypted[0], 'base64');
     }
-
+    
     /**
      * Decrypt artifact header
      */
@@ -59,7 +59,7 @@ export class ArtifactEncryption {
         const encrypted = await this.encryptor.encrypt([body]);
         return encodeBase64(encrypted[0], 'base64');
     }
-
+    
     /**
      * Decrypt artifact body
      */
@@ -74,19 +74,16 @@ export class ArtifactEncryption {
             };
         };
 
-        // Try encrypted format first
         try {
             const decrypted = await this.encryptor.decrypt([decoded]);
             const parsed = parseBody(decrypted[0]);
             if (parsed) {
                 return parsed;
             }
-        } catch (decryptError) {
-            // Decryption failed, will try plaintext fallback for legacy data
+        } catch {
+            // Ignore decryption failures; plaintext fallback will handle team artifacts.
         }
 
-        // Fallback to plaintext for legacy artifacts (temporary migration support)
-        // TODO: Remove this fallback after all artifacts have been migrated
         try {
             const plainText = new TextDecoder().decode(decoded);
             const parsedJson = JSON.parse(plainText);
@@ -94,8 +91,8 @@ export class ArtifactEncryption {
             if (parsed) {
                 return parsed;
             }
-        } catch (parseError) {
-            // Neither encrypted nor plaintext format worked
+        } catch {
+            // Ignore plaintext parse errors and fall through to null.
         }
 
         console.error('Failed to decrypt or parse artifact body');

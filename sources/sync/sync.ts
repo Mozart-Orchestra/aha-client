@@ -8,7 +8,6 @@ import { ApiEphemeralUpdateSchema, ApiMessage, ApiUpdateContainerSchema } from '
 import type { ApiEphemeralActivityUpdate } from './apiTypes';
 import { Session, Machine } from './storageTypes';
 import { InvalidateSync } from '@/utils/sync';
-import { SessionEncryption } from './encryption/sessionEncryption';
 import { ActivityUpdateAccumulator } from './reducer/activityUpdateAccumulator';
 import { randomUUID } from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
@@ -32,7 +31,7 @@ import { voiceHooks } from '@/realtime/hooks/voiceHooks';
 import { Message } from './typesMessage';
 import { EncryptionCache } from './encryption/encryptionCache';
 import { systemPrompt } from './prompt/systemPrompt';
-import { fetchArtifact, fetchArtifacts, createArtifact, updateArtifact, deleteArtifact } from './apiArtifacts';
+import { fetchArtifact, fetchArtifacts, createArtifact, updateArtifact } from './apiArtifacts';
 import { DecryptedArtifact, Artifact, ArtifactCreateRequest, ArtifactUpdateRequest } from './artifactTypes';
 import { ArtifactEncryption } from './encryption/artifactEncryption';
 import { getFriendsList, getUserProfile } from './apiFriends';
@@ -68,10 +67,6 @@ class Sync {
     private activityAccumulator: ActivityUpdateAccumulator;
     private pendingSettings: Partial<Settings> = loadPendingSettings();
     revenueCatInitialized = false;
-
-    // Team messaging
-    private teamMessagesCache = new Map<string, import('@/sync/teamMessageTypes').TeamMessage[]>();
-    private teamMessageSubscriptions = new Map<string, Set<(message: import('@/sync/teamMessageTypes').TeamMessage) => void>>();
 
     // Generic locking mechanism
     private recalculationLockCount = 0;
@@ -585,8 +580,7 @@ class Sync {
             log.log('📦 fetchArtifactsList: Fetching artifacts from server');
             const artifacts = await fetchArtifacts(this.credentials);
             log.log(`📦 fetchArtifactsList: Received ${artifacts.length} artifacts from server`);
-            let decryptedArtifacts: DecryptedArtifact[] = [];
-            const invalidArtifactIds: string[] = [];
+            const decryptedArtifacts: DecryptedArtifact[] = [];
 
             for (const artifact of artifacts) {
                 try {
@@ -606,10 +600,10 @@ class Sync {
                     // Decrypt header
                     const header = await artifactEncryption.decryptHeader(artifact.header);
 
-                    const decryptedArtifact = {
+                    decryptedArtifacts.push({
                         id: artifact.id,
                         title: header?.title || null,
-                        type: header?.type,          // Include type from header
+                        type: header?.type,
                         sessions: header?.sessions,  // Include sessions from header
                         draft: header?.draft,        // Include draft flag from header
                         body: undefined, // Body not loaded in list
@@ -619,94 +613,24 @@ class Sync {
                         createdAt: artifact.createdAt,
                         updatedAt: artifact.updatedAt,
                         isDecrypted: !!header,
-                    };
-
-                    decryptedArtifacts.push(decryptedArtifact);
+                    });
                 } catch (err) {
                     console.error(`Failed to decrypt artifact ${artifact.id}:`, err);
-                    invalidArtifactIds.push(artifact.id);
+                    // Add with decryption failed flag
+                    decryptedArtifacts.push({
+                        id: artifact.id,
+                        title: null,
+                        body: undefined,
+                        headerVersion: artifact.headerVersion,
+                        seq: artifact.seq,
+                        createdAt: artifact.createdAt,
+                        updatedAt: artifact.updatedAt,
+                        isDecrypted: false,
+                    });
                 }
             }
 
-            // Clean up invalid artifacts from server and local storage
-            if (invalidArtifactIds.length > 0) {
-                log.log(`Deleting ${invalidArtifactIds.length} invalid artifacts`);
-
-                // Remove from local storage first
-                for (const artifactId of invalidArtifactIds) {
-                    storage.getState().deleteArtifact(artifactId);
-                }
-
-                // Then delete from server
-                for (const artifactId of invalidArtifactIds) {
-                    try {
-                        await deleteArtifact(this.credentials, artifactId);
-                        console.log(`✅ Deleted invalid artifact ${artifactId} from server`);
-                    } catch (deleteErr) {
-                        console.error(`Failed to delete invalid artifact ${artifactId}:`, deleteErr);
-                    }
-                }
-            }
-
-            log.log(`📦 fetchArtifactsList: Successfully decrypted ${decryptedArtifacts.length} artifacts (deleted ${invalidArtifactIds.length} invalid)`);
-
-            // MIGRATION: Fix artifacts with undefined type by checking their body content
-            // This is a one-time fix for artifacts created before the type field was properly saved
-            const artifactsNeedingTypeFix = decryptedArtifacts.filter(a => !a.type);
-            if (artifactsNeedingTypeFix.length > 0) {
-                log.log(`[Migration] Found ${artifactsNeedingTypeFix.length} artifacts without type, migrating...`);
-
-                const fixedArtifacts = new Map<string, DecryptedArtifact>();
-                let migratedCount = 0;
-
-                for (const artifact of artifactsNeedingTypeFix) {
-                    try {
-                        // Heuristic: If artifact has sessions array, likely a team
-                        const likelyTeam = artifact.sessions && artifact.sessions.length >= 1;
-
-                        // Fetch the full artifact with body
-                        const fullArtifact = await this.fetchArtifactWithBody(artifact.id);
-                        if (fullArtifact && fullArtifact.body) {
-                            try {
-                                const bodyData = JSON.parse(fullArtifact.body);
-                                if (bodyData.team && Array.isArray(bodyData.team.members)) {
-                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
-                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
-                                    migratedCount++;
-                                } else if (likelyTeam) {
-                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
-                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
-                                    migratedCount++;
-                                }
-                            } catch (parseError) {
-                                // Fallback to heuristic if body parsing fails
-                                if (likelyTeam) {
-                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
-                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
-                                    migratedCount++;
-                                }
-                            }
-                        } else if (likelyTeam) {
-                            // No body but has sessions - likely a team
-                            const minimalTeam = { ...artifact, type: 'team' as const };
-                            fixedArtifacts.set(artifact.id, minimalTeam);
-                            await this.updateArtifact(artifact.id, artifact.title, artifact.body || null, artifact.sessions, artifact.draft, 'team');
-                            migratedCount++;
-                        }
-                    } catch (error) {
-                        console.error(`[Migration] Failed to migrate artifact ${artifact.id}:`, error);
-                    }
-                }
-
-                // Update the decryptedArtifacts array with the fixed artifacts
-                decryptedArtifacts = decryptedArtifacts.map(artifact => {
-                    const fixedArtifact = fixedArtifacts.get(artifact.id);
-                    return fixedArtifact || artifact;
-                });
-
-                log.log(`[Migration] Successfully migrated ${migratedCount} artifacts`);
-            }
-
+            log.log(`📦 fetchArtifactsList: Successfully decrypted ${decryptedArtifacts.length} artifacts`);
             storage.getState().applyArtifacts(decryptedArtifacts);
             log.log('📦 fetchArtifactsList: Artifacts applied to storage');
         } catch (error) {
@@ -739,10 +663,10 @@ class Sync {
             const header = await artifactEncryption.decryptHeader(artifact.header);
             const body = artifact.body ? await artifactEncryption.decryptBody(artifact.body) : null;
 
-            const decryptedArtifact = {
+            return {
                 id: artifact.id,
                 title: header?.title || null,
-                type: header?.type,          // Include type from header
+                type: header?.type,
                 sessions: header?.sessions,  // Include sessions from header
                 draft: header?.draft,        // Include draft flag from header
                 body: body?.body || null,
@@ -753,11 +677,6 @@ class Sync {
                 updatedAt: artifact.updatedAt,
                 isDecrypted: !!header,
             };
-
-            // Apply to storage to ensure UI updates and prevent infinite loops
-            storage.getState().applyArtifacts([decryptedArtifact]);
-
-            return decryptedArtifact;
         } catch (error) {
             console.error(`Failed to fetch artifact ${artifactId}:`, error);
             return null;
@@ -791,21 +710,9 @@ class Sync {
             // Create artifact encryption instance
             const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
 
-            // Encrypt header
+            // Encrypt header and body
             const encryptedHeader = await artifactEncryption.encryptHeader({ title, sessions, draft, type });
-
-            // For team artifacts, store body as base64-encoded plaintext (no encryption)
-            // This allows Happy-CLI to read team context without shared encryption keys
-            let encryptedBody: string;
-            if (type === 'team') {
-                // Store as plaintext JSON (base64 encoded)
-                const plainBody = JSON.stringify({ body });
-                encryptedBody = encodeBase64(new TextEncoder().encode(plainBody), 'base64');
-                console.log('📝 Creating team artifact with plaintext body for cross-client access');
-            } else {
-                // Normal encryption for non-team artifacts
-                encryptedBody = await artifactEncryption.encryptBody({ body });
-            }
+            const encryptedBody = await artifactEncryption.encryptBody({ body });
 
             // Create the request
             const request: ArtifactCreateRequest = {
@@ -835,8 +742,6 @@ class Sync {
             };
 
             storage.getState().addArtifact(decryptedArtifact);
-            console.log(`✅ Created artifact ${artifactId} with type: ${type}, title: ${title}`);
-            console.log(`📦 Total artifacts in storage: ${Object.keys(storage.getState().artifacts).length}`);
 
             return artifactId;
         } catch (error) {
@@ -896,7 +801,8 @@ class Sync {
             // Check if header needs updating (title, sessions, or draft changed)
             if (title !== currentArtifact.title ||
                 JSON.stringify(sessions) !== JSON.stringify(currentArtifact.sessions) ||
-                draft !== currentArtifact.draft) {
+                draft !== currentArtifact.draft ||
+                type !== currentArtifact.type) {
                 const encryptedHeader = await artifactEncryption.encryptHeader({
                     title,
                     sessions,
@@ -909,14 +815,7 @@ class Sync {
 
             // Only update body if it changed
             if (body !== currentArtifact.body) {
-                // For team artifacts, store body as base64-encoded plaintext (no encryption)
-                let encryptedBody: string;
-                if (type === 'team' || currentArtifact.type === 'team') {
-                    const plainBody = JSON.stringify({ body });
-                    encryptedBody = encodeBase64(new TextEncoder().encode(plainBody), 'base64');
-                } else {
-                    encryptedBody = await artifactEncryption.encryptBody({ body });
-                }
+                const encryptedBody = await artifactEncryption.encryptBody({ body });
                 updateRequest.body = encryptedBody;
                 updateRequest.expectedBodyVersion = bodyVersion;
             }
@@ -932,63 +831,16 @@ class Sync {
             if (!response.success) {
                 // Handle version mismatch
                 if (response.error === 'version-mismatch') {
-                    console.log('🔄 Version mismatch detected, retrying update...');
-
-                    // Fetch latest artifact data
-                    const latestArtifact = await this.fetchArtifactWithBody(artifactId);
-                    if (!latestArtifact) {
-                        throw new Error('Failed to fetch latest artifact for retry');
-                    }
-
-                    // Update local state with latest data
-                    storage.getState().updateArtifact(latestArtifact);
-
-                    // Retry update with new versions
-                    // Note: In a real collaborative app, we should merge changes here.
-                    // For now, we'll retry the update with the new expected versions.
-                    // This effectively implements "last write wins" but ensures we're building on the latest version.
-
-                    const retryRequest: ArtifactUpdateRequest = {};
-
-                    if (updateRequest.header) {
-                        retryRequest.header = updateRequest.header;
-                        retryRequest.expectedHeaderVersion = latestArtifact.headerVersion;
-                    }
-
-                    if (updateRequest.body) {
-                        retryRequest.body = updateRequest.body;
-                        retryRequest.expectedBodyVersion = latestArtifact.bodyVersion;
-                    }
-
-                    const retryResponse = await updateArtifact(this.credentials, artifactId, retryRequest);
-
-                    if (!retryResponse.success) {
-                        throw new Error('Failed to update artifact after retry: ' + retryResponse.error);
-                    }
-
-                    // Update local storage with retry response versions
-                    const finalArtifact: DecryptedArtifact = {
-                        ...latestArtifact,
-                        title,
-                        type,
-                        sessions,
-                        draft,
-                        body,
-                        headerVersion: retryResponse.headerVersion !== undefined ? retryResponse.headerVersion : latestArtifact.headerVersion,
-                        bodyVersion: retryResponse.bodyVersion !== undefined ? retryResponse.bodyVersion : latestArtifact.bodyVersion,
-                        updatedAt: Date.now(),
-                    };
-                    storage.getState().updateArtifact(finalArtifact);
-                    return;
+                    throw new Error('Artifact was modified by another client. Please refresh and try again.');
                 }
-                throw new Error('Failed to update artifact: ' + response.error);
+                throw new Error('Failed to update artifact');
             }
 
             // Update local storage
             const updatedArtifact: DecryptedArtifact = {
                 ...currentArtifact,
                 title,
-                type,
+                type: type ?? currentArtifact.type,
                 sessions,
                 draft,
                 body,
@@ -1000,20 +852,6 @@ class Sync {
             storage.getState().updateArtifact(updatedArtifact);
         } catch (error) {
             console.error('Failed to update artifact:', error);
-            throw error;
-        }
-    }
-
-    public async deleteArtifact(artifactId: string): Promise<void> {
-        if (!this.credentials) {
-            throw new Error('Not authenticated');
-        }
-
-        try {
-            await deleteArtifact(this.credentials, artifactId);
-            storage.getState().deleteArtifact(artifactId);
-        } catch (error) {
-            console.error('Failed to delete artifact:', error);
             throw error;
         }
     }
@@ -1457,58 +1295,6 @@ class Sync {
         storage.getState().applyProfile(parsedProfile);
     }
 
-    public async updateSessionMetadata(sessionId: string, metadata: any): Promise<void> {
-        if (!this.credentials) return;
-
-        try {
-            // Get session encryption
-            const sessionEncryption = this.encryption.getSessionEncryption(sessionId);
-            if (!sessionEncryption) {
-                throw new Error('Session encryption not found');
-            }
-
-            // Get current session to get version
-            const session = storage.getState().sessions[sessionId];
-            if (!session) {
-                throw new Error('Session not found');
-            }
-
-            // Encrypt metadata
-            const encryptedMetadata = await sessionEncryption.encryptMetadata(metadata);
-
-            // Send update to server
-            const API_ENDPOINT = getServerUrl();
-            const response = await fetch(`${API_ENDPOINT}/v1/sessions/${sessionId}/metadata`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.credentials.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    metadata: encryptedMetadata,
-                    expectedVersion: session.metadataVersion
-                })
-            });
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    console.warn(`Session ${sessionId} not found on server (404). Deleting locally.`);
-                    storage.getState().deleteSession(sessionId);
-                    return;
-                }
-                throw new Error(`Failed to update session metadata: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            // Update local storage
-            storage.getState().updateSessionMetadata(sessionId, metadata, data.version);
-        } catch (error) {
-            console.error('Failed to update session metadata:', error);
-            throw error;
-        }
-    }
-
     private fetchNativeUpdate = async () => {
         try {
             // Skip in development
@@ -1698,7 +1484,8 @@ class Sync {
         }
 
         // Get push token
-        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+        const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+
         const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
         log.log('tokenData: ' + JSON.stringify(tokenData));
 
@@ -1710,122 +1497,6 @@ class Sync {
             log.log('Failed to register push token: ' + JSON.stringify(error));
         }
     }
-
-    public async createSession(tag: string, metadata: any): Promise<string> {
-        if (!this.credentials) {
-            throw new Error('Not authenticated');
-        }
-
-        try {
-            // Generate session ID locally
-            const sessionId = this.encryption.generateId();
-
-            // Generate data encryption key
-            const dataEncryptionKey = ArtifactEncryption.generateDataEncryptionKey();
-
-            // Encrypt the data encryption key with user's key
-            const encryptedKey = await this.encryption.encryptEncryptionKey(dataEncryptionKey);
-
-            // Create encryptor for the session
-            const encryptor = await this.encryption.openEncryption(dataEncryptionKey);
-
-            // Create temporary SessionEncryption to encrypt metadata
-            const sessionEncryption = new SessionEncryption(sessionId, encryptor, this.encryptionCache);
-
-            // Encrypt metadata
-            const encryptedMetadata = await sessionEncryption.encryptMetadata(metadata);
-
-            // Send to server
-            const API_ENDPOINT = getServerUrl();
-            const response = await fetch(`${API_ENDPOINT}/v1/sessions`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.credentials.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    tag,
-                    metadata: encryptedMetadata,
-                    dataEncryptionKey: encodeBase64(encryptedKey, 'base64')
-                })
-            });
-
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`Failed to create session: ${response.status} - ${text}`);
-            }
-
-            const data = await response.json();
-            const session = data.session;
-
-            // Initialize session encryption in main encryption instance
-            const sessionKeys = new Map<string, Uint8Array | null>();
-            sessionKeys.set(session.id, dataEncryptionKey);
-            await this.encryption.initializeSessions(sessionKeys);
-
-            // Add to local storage
-            const processedSession = {
-                id: session.id,
-                seq: session.seq,
-                createdAt: session.createdAt,
-                updatedAt: session.updatedAt,
-                active: session.active,
-                activeAt: session.activeAt,
-                metadata: metadata,
-                metadataVersion: session.metadataVersion,
-                agentState: session.agentState,
-                agentStateVersion: session.agentStateVersion,
-                thinking: false,
-                thinkingAt: 0
-            };
-
-            this.applySessions([processedSession]);
-
-            return session.id;
-        } catch (error) {
-            console.error('Failed to create session:', error);
-            throw error;
-        }
-    }
-
-    public async spawnSessionOnMachine(machineId: string, params: {
-        sessionId?: string;
-        directory: string;
-        agent: 'claude' | 'codex';
-        token?: string;
-        sessionTag?: string;
-        teamId?: string;
-        role?: string;
-        sessionName?: string;
-        sessionPath?: string;
-    }): Promise<string | null> {
-        try {
-            const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-happy-session', {
-                ...params,
-                machineId,
-                approvedNewDirectoryCreation: true,
-                teamId: params.teamId,
-                role: params.role,
-                sessionName: params.sessionName,
-                sessionPath: params.sessionPath
-            });
-            const sessionId = result?.sessionId || (result?.type === 'success' ? result?.sessionId : null);
-            if (result?.type === 'requestToApproveDirectoryCreation') {
-                console.warn(`Directory creation approval required for: ${result.directory}`);
-            }
-            if (sessionId) {
-                log.log(`Spawned session ${sessionId} on machine ${machineId}`);
-                return sessionId;
-            }
-            log.log(`Spawn request completed on machine ${machineId} (no sessionId returned)`);
-            return null;
-        } catch (error) {
-            console.error(`Failed to spawn session on machine ${machineId}:`, error);
-            throw error;
-        }
-    }
-
-
 
     private subscribeToUpdates = () => {
         // Subscribe to message updates
@@ -1857,13 +1528,7 @@ class Sync {
 
     private handleUpdate = async (update: unknown) => {
         console.log('🔄 Sync: handleUpdate called with:', JSON.stringify(update).substring(0, 300));
-        let validatedUpdate;
-        try {
-            validatedUpdate = ApiUpdateContainerSchema.safeParse(update);
-        } catch (error) {
-            console.error('❌ Sync: Schema validation crashed:', error);
-            return;
-        }
+        const validatedUpdate = ApiUpdateContainerSchema.safeParse(update);
         if (!validatedUpdate.success) {
             console.log('❌ Sync: Invalid update received:', validatedUpdate.error);
             console.error('❌ Sync: Invalid update data:', update);
@@ -1919,27 +1584,6 @@ class Sync {
 
             // Ping session
             this.onSessionVisible(updateData.body.sid);
-
-        } else if (updateData.body.t === 'team-message') {
-            const { teamId, message } = updateData.body;
-            console.log(`🔄 Sync: Received team message for team ${teamId}: ${message.id}`);
-
-            // Update cache
-            const currentMessages = this.teamMessagesCache.get(teamId) || [];
-            // Check for duplicates
-            const isDuplicate = currentMessages.find(m => m.id === message.id);
-
-            if (!isDuplicate) {
-                this.teamMessagesCache.set(teamId, [...currentMessages, message as any]);
-
-                // Only notify subscribers for new messages
-                const subscribers = this.teamMessageSubscriptions.get(teamId);
-                if (subscribers) {
-                    subscribers.forEach(callback => callback(message as any));
-                }
-            } else {
-                console.log(`🔄 Sync: Duplicate message ${message.id}, skipping notification`);
-            }
 
         } else if (updateData.body.t === 'new-session') {
             log.log('🆕 New session update received');
@@ -2132,9 +1776,6 @@ class Sync {
                 const decryptedArtifact: DecryptedArtifact = {
                     id: artifactId,
                     title: header?.title || null,
-                    type: header?.type,
-                    sessions: header?.sessions,
-                    draft: header?.draft,
                     body: decryptedBody,
                     headerVersion: artifactUpdate.headerVersion,
                     bodyVersion: artifactUpdate.bodyVersion,
@@ -2186,7 +1827,6 @@ class Sync {
                 if (artifactUpdate.header) {
                     const header = await artifactEncryption.decryptHeader(artifactUpdate.header.value);
                     updatedArtifact.title = header?.title || null;
-                    updatedArtifact.type = header?.type;
                     updatedArtifact.sessions = header?.sessions;
                     updatedArtifact.draft = header?.draft;
                     updatedArtifact.headerVersion = artifactUpdate.header.version;
@@ -2379,140 +2019,6 @@ class Sync {
                 voiceHooks.onSessionOnline(s.id, s.metadata ?? undefined);
             }
         }
-    }
-
-    //
-    // Team Messaging
-    //
-
-    /**
-     * 获取团队消息列表
-     */
-    async getTeamMessages(teamId: string): Promise<import('@/sync/teamMessageTypes').TeamMessageListResponse> {
-        // 先检查缓存
-        const cached = this.teamMessagesCache.get(teamId);
-        if (cached) {
-            return {
-                messages: cached,
-                hasMore: false
-            };
-        }
-
-        try {
-            // 从服务器获取（临时实现：从 artifact body 中读取）
-            const serverUrl = getServerUrl();
-            const response = await apiSocket.request(`/v1/teams/${teamId}/messages`);
-
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`Failed to fetch team messages: ${response.status} - ${text}`);
-            }
-
-            const data = await response.json();
-            const messages = data.messages || [];
-
-            // 缓存消息
-            this.teamMessagesCache.set(teamId, messages);
-
-            return {
-                messages,
-                hasMore: false
-            };
-        } catch (error) {
-            console.error('Failed to fetch team messages:', error);
-            // 返回空列表而不是抛出错误
-            return {
-                messages: [],
-                hasMore: false
-            };
-        }
-    }
-
-    /**
-     * 发送团队消息
-     */
-    async sendTeamMessage(request: import('@/sync/teamMessageTypes').SendTeamMessageRequest): Promise<void> {
-        try {
-            const serverUrl = getServerUrl();
-
-            // 获取当前 session 信息
-            const sessions = storage.getState().sessionsData || [];
-            const fromSessionId = request.fromSessionId;
-
-            // Resolve session metadata only when we have a session ID
-            const sendingSession = fromSessionId
-                ? sessions.find((s): s is import('@/sync/storageTypes').Session => typeof s !== 'string' && s.id === fromSessionId)
-                : undefined;
-
-            const fromRole = request.fromRole ?? (sendingSession?.metadata?.role);
-            const fromDisplayName = request.fromDisplayName ?? (sendingSession?.metadata?.name || sendingSession?.metadata?.path);
-
-            const message: import('@/sync/teamMessageTypes').TeamMessage = {
-                id: randomUUID(),
-                teamId: request.teamId,
-                ...(fromSessionId ? { fromSessionId } : {}),
-                ...(fromRole ? { fromRole } : {}),
-                ...(fromDisplayName ? { fromDisplayName } : {}),
-                content: request.content,
-                type: request.type || 'chat',
-                ...(request.mentions ? { mentions: request.mentions } : {}),
-                timestamp: Date.now(),
-                ...(request.metadata ? { metadata: request.metadata } : {})
-            };
-
-            const response = await apiSocket.request(`/v1/teams/${request.teamId}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(message)
-            });
-
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`Failed to send team message: ${response.status} - ${text}`);
-            }
-
-            // 立即更新本地缓存
-            const cached = this.teamMessagesCache.get(request.teamId) || [];
-            this.teamMessagesCache.set(request.teamId, [...cached, message]);
-
-            // 触发本地订阅者
-            const subscribers = this.teamMessageSubscriptions.get(request.teamId);
-            if (subscribers) {
-                subscribers.forEach(callback => callback(message));
-            }
-        } catch (error) {
-            console.error('Failed to send team message:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * 订阅团队消息
-     */
-    subscribeToTeamMessages(
-        teamId: string,
-        callback: (message: import('@/sync/teamMessageTypes').TeamMessage) => void
-    ): () => void {
-        let subscribers = this.teamMessageSubscriptions.get(teamId);
-        if (!subscribers) {
-            subscribers = new Set();
-            this.teamMessageSubscriptions.set(teamId, subscribers);
-        }
-
-        subscribers.add(callback);
-
-        // 返回取消订阅函数
-        return () => {
-            const subs = this.teamMessageSubscriptions.get(teamId);
-            if (subs) {
-                subs.delete(callback);
-                if (subs.size === 0) {
-                    this.teamMessageSubscriptions.delete(teamId);
-                }
-            }
-        };
     }
 }
 

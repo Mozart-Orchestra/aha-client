@@ -162,12 +162,6 @@ export const ApiNewMachineSchema = z.object({
     updatedAt: z.number()
 });
 
-export const ApiUpdateTeamMessageSchema = z.object({
-    t: z.literal('team-message'),
-    teamId: z.string(),
-    message: z.any()
-});
-
 export const ApiUpdateSchema = z.discriminatedUnion('t', [
     ApiUpdateNewMessageSchema,
     ApiUpdateNewSessionSchema,
@@ -181,11 +175,8 @@ export const ApiUpdateSchema = z.discriminatedUnion('t', [
     ApiDeleteArtifactSchema,
     ApiRelationshipUpdatedSchema,
     ApiNewFeedPostSchema,
-    ApiKvBatchUpdateSchema,
-    ApiUpdateTeamMessageSchema
+    ApiKvBatchUpdateSchema
 ]);
-
-
 
 export type ApiUpdateNewMessage = z.infer<typeof ApiUpdateNewMessageSchema>;
 export type ApiRelationshipUpdated = z.infer<typeof ApiRelationshipUpdatedSchema>;

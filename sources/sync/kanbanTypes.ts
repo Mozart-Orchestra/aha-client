@@ -1,11 +1,8 @@
 import {
     TEAM_ROLE_LIBRARY,
     DEFAULT_TEAM_AGREEMENTS as SHARED_TEAM_AGREEMENTS,
-    DEFAULT_KANBAN_BOARD as SHARED_KANBAN_BOARD,
-    DEFAULT_STATUS_PROPAGATION as SHARED_STATUS_PROPAGATION,
-    DEFAULT_NESTED_TASK_SETTINGS as SHARED_NESTED_TASK_SETTINGS
+    DEFAULT_KANBAN_BOARD as SHARED_KANBAN_BOARD
 } from '@happy/shared-team-config';
-import type { SharedNestedTaskSettings, SharedStatusPropagation } from '@happy/shared-team-config';
 
 export interface KanbanColumn {
     id: string;
@@ -33,51 +30,25 @@ export interface TaskBlocker {
 }
 
 // 状态传播配置
-export type StatusPropagation = SharedStatusPropagation;
-
-export type NestedTaskSettings = SharedNestedTaskSettings;
+export interface StatusPropagation {
+    autoCompleteParent: boolean;      // 所有子任务 done → 父任务 review
+    blockParentOnBlocked: boolean;    // 子任务 blocked → 父任务标记
+    cascadeDeleteSubtasks: boolean;   // 父任务删除 → 子任务级联删除
+}
 
 export const DEFAULT_STATUS_PROPAGATION: StatusPropagation = {
-    ...(SHARED_STATUS_PROPAGATION ?? {
-        autoCompleteParent: true,
-        blockParentOnBlocked: true,
-        cascadeDeleteSubtasks: false
-    })
+    autoCompleteParent: true,
+    blockParentOnBlocked: true,
+    cascadeDeleteSubtasks: false
 };
-
-const DEFAULT_EXECUTION_SETTINGS: NestedTaskSettings['execution'] = {
-    ...(SHARED_NESTED_TASK_SETTINGS?.execution ?? {
-        requirePlan: true,
-        autoLinkSessions: true,
-        broadcastStatus: true
-    })
-};
-
-const DEFAULT_NESTED_TASK_SETTINGS: NestedTaskSettings = {
-    maxDepth: SHARED_NESTED_TASK_SETTINGS?.maxDepth ?? 3,
-    statusPropagation: { ...DEFAULT_STATUS_PROPAGATION },
-    execution: { ...DEFAULT_EXECUTION_SETTINGS }
-};
-
-const cloneNestedTaskSettings = (settings?: NestedTaskSettings): NestedTaskSettings | undefined => {
-    if (!settings) return undefined;
-    return {
-        ...settings,
-        statusPropagation: { ...settings.statusPropagation },
-        execution: { ...settings.execution }
-    };
-};
-
-const cloneNestedTaskSettingsOrDefault = (settings?: NestedTaskSettings): NestedTaskSettings =>
-    cloneNestedTaskSettings(settings) ?? cloneNestedTaskSettings(DEFAULT_NESTED_TASK_SETTINGS)!;
 
 export interface KanbanTask {
     id: string;
     title: string;
     description?: string;
-    status: string; // Should match a column id
-    assigneeId?: string | null; // Session ID of the assigned agent
-    reporterId?: string; // Session ID of the creator
+    status: string;
+    assigneeId?: string | null;
+    reporterId?: string;
     priority?: 'low' | 'medium' | 'high' | 'urgent';
     createdAt: number;
     updatedAt: number;
@@ -101,8 +72,6 @@ export interface KanbanTask {
 export interface KanbanBoard {
     columns: KanbanColumn[];
     tasks: KanbanTask[];
-    roomId?: string;
-    taskSettings?: NestedTaskSettings;
     team?: KanbanTeam;
 }
 
@@ -127,8 +96,6 @@ export interface KanbanTeamRole {
         watchers?: string[];
         accessLevel?: 'read-only' | 'full-access';
         disallowedTools?: string[];
-        coordinationMode?: 'strong' | 'weak';
-        taskSettings?: NestedTaskSettings;
     };
 }
 
@@ -156,8 +123,7 @@ const cloneRole = (role: (typeof TEAM_ROLE_LIBRARY)[number]): KanbanTeamRole => 
     policy: role.policy ? {
         ...role.policy,
         watchers: role.policy.watchers ? [...role.policy.watchers] : undefined,
-        disallowedTools: role.policy.disallowedTools ? [...role.policy.disallowedTools] : undefined,
-        taskSettings: cloneNestedTaskSettings(role.policy.taskSettings)
+        disallowedTools: role.policy.disallowedTools ? [...role.policy.disallowedTools] : undefined
     } : undefined
 });
 
@@ -168,11 +134,8 @@ export const DEFAULT_TEAM_AGREEMENTS: KanbanTeamAgreement = {
 };
 
 export const DEFAULT_KANBAN_BOARD: KanbanBoard = {
-    columns: SHARED_KANBAN_BOARD.columns.map((column): KanbanColumn => ({ ...column })),
+    columns: SHARED_KANBAN_BOARD.columns.map(column => ({ ...column })),
     tasks: [],
-    taskSettings: cloneNestedTaskSettingsOrDefault(
-        ('taskSettings' in SHARED_KANBAN_BOARD ? SHARED_KANBAN_BOARD.taskSettings : undefined)
-    ),
     team: {
         members: [],
         roles: DEFAULT_TEAM_ROLES.map(cloneRole),

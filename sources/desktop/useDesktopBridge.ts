@@ -88,8 +88,6 @@ export interface HappyDesktopBridge {
         title?: string;
         args?: string[];
         env?: Record<string, string>;
-        cwd?: string;
-        cliPath?: string;
     }): Promise<string>;
     stopAgentSession(sessionId: string): Promise<boolean>;
     sendAgentInput(sessionId: string, chunk: string): Promise<void>;

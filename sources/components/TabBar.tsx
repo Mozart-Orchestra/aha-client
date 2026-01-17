@@ -16,11 +16,6 @@ interface TabBarProps {
     onTabPress: (tab: TabType) => void;
     inboxBadgeCount?: number;
 }
-// ... (styles remain the same)
-
-// ... inside TabBar component
-// Add regular tabs
-
 
 const styles = StyleSheet.create((theme) => ({
     outerContainer: {
@@ -94,21 +89,20 @@ export const TabBar = React.memo(({ activeTab, onTabPress, inboxBadgeCount = 0 }
 
     const tabs: { key: TabType; icon: any; label: string }[] = React.useMemo(() => {
         const baseTabs: { key: TabType; icon: any; label: string }[] = [];
-
+        
         // Add Zen tab first if experiments are enabled
         if (settings.experiments) {
-            baseTabs.push({ key: 'zen', icon: require('@/assets/images/brutalist/Brutalism_3.png'), label: 'Zen' });
+            baseTabs.push({ key: 'zen', icon: require('@/assets/images/brutalist/Brutalism 3.png'), label: 'Zen' });
         }
-
-        // Add regular tabs
+        
         // Add regular tabs
         baseTabs.push(
-            { key: 'inbox', icon: require('@/assets/images/brutalist/Brutalism_27.png'), label: t('tabs.inbox') },
-            { key: 'sessions', icon: require('@/assets/images/brutalist/Brutalism_15.png'), label: t('tabs.sessions') },
-            { key: 'teams', icon: require('@/assets/images/brutalist/Brutalism_5.png'), label: 'Teams' },
-            { key: 'settings', icon: require('@/assets/images/brutalist/Brutalism_9.png'), label: t('tabs.settings') },
+            { key: 'inbox', icon: require('@/assets/images/brutalist/Brutalism 27.png'), label: t('tabs.inbox') },
+            { key: 'sessions', icon: require('@/assets/images/brutalist/Brutalism 15.png'), label: t('tabs.sessions') },
+            { key: 'teams', icon: require('@/assets/images/brutalist/Brutalism 5.png'), label: 'Teams' },
+            { key: 'settings', icon: require('@/assets/images/brutalist/Brutalism 9.png'), label: t('tabs.settings') },
         );
-
+        
         return baseTabs;
     }, [settings.experiments]);
 
@@ -117,7 +111,7 @@ export const TabBar = React.memo(({ activeTab, onTabPress, inboxBadgeCount = 0 }
             <View style={styles.innerContainer}>
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.key;
-
+                    
                     return (
                         <Pressable
                             key={tab.key}
