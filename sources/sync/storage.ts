@@ -259,7 +259,6 @@ export const storage = create<StorageState>()((set, get) => {
 
     if (cleanedCount > 0) {
         saveArtifacts(validArtifacts);
-        // console.log(`🧹 Storage: Cleaned up ${cleanedCount} artifacts with missing type`);
     }
 
     let artifacts = validArtifacts;

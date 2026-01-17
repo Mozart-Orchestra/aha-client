@@ -39,9 +39,29 @@ export interface SharedKanbanBoard {
   };
 }
 
+export interface SharedStatusPropagation {
+  autoCompleteParent: boolean;
+  blockParentOnBlocked: boolean;
+  cascadeDeleteSubtasks: boolean;
+}
+
+export interface SharedExecutionSettings {
+  requirePlan: boolean;
+  autoLinkSessions: boolean;
+  broadcastStatus: boolean;
+}
+
+export interface SharedNestedTaskSettings {
+  maxDepth: number;
+  statusPropagation: SharedStatusPropagation;
+  execution: SharedExecutionSettings;
+}
+
 export const READ_ONLY_TOOLS: string[];
 export const TEAM_ROLE_LIBRARY: SharedTeamRole[];
 export const TEAM_ROLE_MAP: Record<string, SharedTeamRole>;
 export const DEFAULT_TEAM_AGREEMENTS: SharedTeamAgreements;
 export const DEFAULT_KANBAN_COLUMNS: SharedKanbanColumn[];
 export const DEFAULT_KANBAN_BOARD: SharedKanbanBoard;
+export const DEFAULT_NESTED_TASK_SETTINGS: SharedNestedTaskSettings;
+export const DEFAULT_STATUS_PROPAGATION: SharedStatusPropagation;

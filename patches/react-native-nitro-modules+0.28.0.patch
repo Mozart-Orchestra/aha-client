@@ -5,7 +5,7 @@ index 5ef7987..be310b4 100644
 @@ -52,4 +52,9 @@
  #define SWIFT_NONCOPYABLE
  #endif
-
+ 
 +// Nullability annotations used by generated bridges
 +#ifndef NON_NULL
 +#define NON_NULL _Nonnull
