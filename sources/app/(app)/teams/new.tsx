@@ -427,6 +427,7 @@ export default function NewTeamScreen() {
             const resolvedAgentBinary = agentBinary.trim();
             const machineIdForSpawn = selectedMachineId;
             const hasRequestedSpawns = Object.values(roleCounts).some(c => c > 0);
+            let roomIdForNavigation: string | null = null;
 
             let agentType: 'claude' | 'codex' = 'claude';
             if (resolvedAgentBinary && resolvedAgentBinary.toLowerCase().includes('codex')) {
@@ -488,12 +489,14 @@ export default function NewTeamScreen() {
                     }
                 });
 
+                roomIdForNavigation = room.id;
+
                 // Spawn agents
                 for (const [roleId, count] of Object.entries(roleCounts)) {
                     for (let i = 0; i < count; i++) {
                         try {
                             const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
-                            await desktopBridge.startAgentSession({
+                            const sessionId = await desktopBridge.startAgentSession({
                                 roomId: room.id,
                                 title: agentTitle,
                                 env: {
@@ -504,19 +507,23 @@ export default function NewTeamScreen() {
                                 cwd: resolvedCwd || undefined,
                                 cliPath: resolvedAgentBinary || undefined
                             });
+                            if (sessionId) {
+                                spawnedMembers.push({
+                                    sessionId,
+                                    roleId,
+                                    displayName: agentTitle
+                                });
+                            }
                         } catch (e) {
                             console.error(`Failed to spawn agent ${roleId}:`, e);
                         }
                     }
                 }
-
-                router.replace(`/teams/${room.id}`);
-                return;
             }
 
             // === Standard Flow (No Bridge / Mobile) ===
 
-            if (hasRequestedSpawns) {
+            if (!desktopBridge && hasRequestedSpawns) {
                 const targetMachine = machineIdForSpawn ? storage.getState().machines[machineIdForSpawn] : null;
                 for (const [roleId, count] of Object.entries(roleCounts)) {
                     for (let i = 0; i < count; i++) {
@@ -571,6 +578,9 @@ export default function NewTeamScreen() {
                 };
             }
             board.team.members = [...manualMembers, ...spawnedMembers];
+            if (roomIdForNavigation) {
+                board.roomId = roomIdForNavigation;
+            }
 
             if (target.trim()) {
                 board.tasks.push({
@@ -584,11 +594,15 @@ export default function NewTeamScreen() {
             }
 
             const initialBody = JSON.stringify(board, null, 2);
+            const allMemberIds = [
+                ...manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0),
+                ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
+            ];
 
             const artifactId = await sync.createArtifact(
                 title.trim(),
                 initialBody,
-                [...Array.from(selectedSessions), ...spawnedMembers.map(m => m.sessionId)],
+                allMemberIds,
                 false,
                 'team'
             );
@@ -609,6 +623,7 @@ export default function NewTeamScreen() {
             }
 
             for (const member of spawnedMembers) {
+                if (!member.sessionId) continue;
                 try {
                     await sync.updateSessionMetadata(member.sessionId, {
                         name: member.displayName,
@@ -633,7 +648,11 @@ export default function NewTeamScreen() {
                 sync.applySettings({ recentMachinePaths: updatedPaths });
             }
 
-            router.replace(`/teams/${artifactId}`);
+            if (roomIdForNavigation) {
+                router.replace(`/teams/${artifactId}?roomId=${roomIdForNavigation}` as any);
+            } else {
+                router.replace(`/teams/${artifactId}` as any);
+            }
         } catch (err) {
             console.error('Failed to create team:', err);
             await Modal.alert(
