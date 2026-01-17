@@ -866,6 +866,9 @@ export const storage = create<StorageState>()((set, get) => {
             const teamCount = Object.values(mergedArtifacts).filter((a: any) => a.type === 'team').length;
             console.log(`🗂️ Storage.applyArtifacts: Total artifacts after merge: ${Object.keys(mergedArtifacts).length}, teams: ${teamCount}`);
 
+            // Persist artifacts to storage
+            saveArtifacts(mergedArtifacts);
+
             return {
                 ...state,
                 artifacts: mergedArtifacts
@@ -879,6 +882,9 @@ export const storage = create<StorageState>()((set, get) => {
             console.log(`📝 addArtifact: Adding artifact ${artifact.id} (type: ${artifact.type}, title: ${artifact.title})`);
             console.log(`📝 addArtifact: Total artifacts before: ${Object.keys(state.artifacts).length}, after: ${Object.keys(updatedArtifacts).length}`);
 
+            // Persist artifacts to storage
+            saveArtifacts(updatedArtifacts);
+
             return {
                 ...state,
                 artifacts: updatedArtifacts
@@ -890,6 +896,9 @@ export const storage = create<StorageState>()((set, get) => {
                 [artifact.id]: artifact
             };
 
+            // Persist artifacts to storage
+            saveArtifacts(updatedArtifacts);
+
             return {
                 ...state,
                 artifacts: updatedArtifacts
@@ -897,6 +906,9 @@ export const storage = create<StorageState>()((set, get) => {
         }),
         deleteArtifact: (artifactId: string) => set((state) => {
             const { [artifactId]: _, ...remainingArtifacts } = state.artifacts;
+
+            // Persist artifacts to storage
+            saveArtifacts(remainingArtifacts);
 
             return {
                 ...state,
