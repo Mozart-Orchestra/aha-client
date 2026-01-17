@@ -1,11 +1,27 @@
 import {
     TEAM_ROLE_LIBRARY,
     DEFAULT_TEAM_AGREEMENTS as SHARED_TEAM_AGREEMENTS,
-    DEFAULT_KANBAN_BOARD as SHARED_KANBAN_BOARD,
-    DEFAULT_STATUS_PROPAGATION as SHARED_STATUS_PROPAGATION,
-    DEFAULT_NESTED_TASK_SETTINGS as SHARED_NESTED_TASK_SETTINGS
+    DEFAULT_KANBAN_BOARD as SHARED_KANBAN_BOARD
 } from '@happy/shared-team-config';
-import type { SharedNestedTaskSettings, SharedStatusPropagation } from '@happy/shared-team-config';
+
+// Local type definitions for nested task settings
+export interface StatusPropagation {
+    autoCompleteParent: boolean;
+    blockParentOnBlocked: boolean;
+    cascadeDeleteSubtasks: boolean;
+}
+
+export interface ExecutionSettings {
+    requirePlan: boolean;
+    autoLinkSessions: boolean;
+    broadcastStatus: boolean;
+}
+
+export interface NestedTaskSettings {
+    maxDepth: number;
+    statusPropagation: StatusPropagation;
+    execution: ExecutionSettings;
+}
 
 export interface KanbanColumn {
     id: string;
@@ -32,29 +48,21 @@ export interface TaskBlocker {
     resolution?: string;
 }
 
-// 状态传播配置
-export type StatusPropagation = SharedStatusPropagation;
-
-export type NestedTaskSettings = SharedNestedTaskSettings;
-
+// Default values for nested task settings
 export const DEFAULT_STATUS_PROPAGATION: StatusPropagation = {
-    ...(SHARED_STATUS_PROPAGATION ?? {
-        autoCompleteParent: true,
-        blockParentOnBlocked: true,
-        cascadeDeleteSubtasks: false
-    })
+    autoCompleteParent: true,
+    blockParentOnBlocked: true,
+    cascadeDeleteSubtasks: false
 };
 
-const DEFAULT_EXECUTION_SETTINGS: NestedTaskSettings['execution'] = {
-    ...(SHARED_NESTED_TASK_SETTINGS?.execution ?? {
-        requirePlan: true,
-        autoLinkSessions: true,
-        broadcastStatus: true
-    })
+const DEFAULT_EXECUTION_SETTINGS: ExecutionSettings = {
+    requirePlan: true,
+    autoLinkSessions: true,
+    broadcastStatus: true
 };
 
 const DEFAULT_NESTED_TASK_SETTINGS: NestedTaskSettings = {
-    maxDepth: SHARED_NESTED_TASK_SETTINGS?.maxDepth ?? 3,
+    maxDepth: 3,
     statusPropagation: { ...DEFAULT_STATUS_PROPAGATION },
     execution: { ...DEFAULT_EXECUTION_SETTINGS }
 };
