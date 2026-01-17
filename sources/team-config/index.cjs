@@ -171,5 +171,23 @@ module.exports = {
   TEAM_ROLE_MAP,
   DEFAULT_TEAM_AGREEMENTS,
   DEFAULT_KANBAN_COLUMNS,
-  DEFAULT_KANBAN_BOARD
+  DEFAULT_KANBAN_BOARD,
+  DEFAULT_NESTED_TASK_SETTINGS,
+  DEFAULT_STATUS_PROPAGATION
+};
+
+const DEFAULT_STATUS_PROPAGATION = {
+  autoCompleteParent: true,
+  blockParentOnBlocked: true,
+  cascadeDeleteSubtasks: false
+};
+
+const DEFAULT_NESTED_TASK_SETTINGS = {
+  maxDepth: 3,
+  statusPropagation: { ...DEFAULT_STATUS_PROPAGATION },
+  execution: {
+    requirePlan: true,
+    autoLinkSessions: true,
+    broadcastStatus: true
+  }
 };
