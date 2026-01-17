@@ -11,7 +11,7 @@ import { Purchases, customerInfoToPurchases } from "./purchases";
 import { TodoState } from "../-zen/model/ops";
 import { Profile } from "./profile";
 import { UserProfile, RelationshipUpdatedEvent } from "./friendTypes";
-import { loadSettings, loadLocalSettings, saveLocalSettings, saveSettings, loadPurchases, savePurchases, loadProfile, saveProfile, loadSessionDrafts, saveSessionDrafts, loadSessionPermissionModes, saveSessionPermissionModes } from "./persistence";
+import { loadSettings, loadLocalSettings, saveLocalSettings, saveSettings, loadPurchases, savePurchases, loadProfile, saveProfile, loadSessionDrafts, saveSessionDrafts, loadSessionPermissionModes, saveSessionPermissionModes, loadArtifacts, saveArtifacts } from "./persistence";
 import type { PermissionMode } from '@/components/PermissionModeSelector';
 import type { CustomerInfo } from './revenueCat/types';
 import React from "react";
@@ -244,6 +244,25 @@ export const storage = create<StorageState>()((set, get) => {
     let profile = loadProfile();
     let sessionDrafts = loadSessionDrafts();
     let sessionPermissionModes = loadSessionPermissionModes();
+    let loadedArtifacts = loadArtifacts();
+
+    // Clean up artifacts with undefined type (old/corrupted data)
+    const validArtifacts: Record<string, DecryptedArtifact> = {};
+    let cleanedCount = 0;
+    Object.entries(loadedArtifacts).forEach(([id, artifact]) => {
+        if (artifact.type !== undefined) {
+            validArtifacts[id] = artifact;
+        } else {
+            cleanedCount++;
+        }
+    });
+
+    if (cleanedCount > 0) {
+        saveArtifacts(validArtifacts);
+        // console.log(`🧹 Storage: Cleaned up ${cleanedCount} artifacts with missing type`);
+    }
+
+    let artifacts = validArtifacts;
     return {
         settings,
         settingsVersion: version,
@@ -252,7 +271,7 @@ export const storage = create<StorageState>()((set, get) => {
         profile,
         sessions: {},
         machines: {},
-        artifacts: {},  // Initialize artifacts
+        artifacts,  // Load persisted artifacts
         friends: {},  // Initialize relationships cache
         users: {},  // Initialize global user cache
         feedItems: [],  // Initialize feed items list
@@ -857,12 +876,13 @@ export const storage = create<StorageState>()((set, get) => {
         }),
         // Artifact methods
         applyArtifacts: (artifacts: DecryptedArtifact[]) => set((state) => {
-            console.log(`🗂️ Storage.applyArtifacts: Applying ${artifacts.length} artifacts`);
             const mergedArtifacts = { ...state.artifacts };
             artifacts.forEach(artifact => {
                 mergedArtifacts[artifact.id] = artifact;
             });
-            console.log(`🗂️ Storage.applyArtifacts: Total artifacts after merge: ${Object.keys(mergedArtifacts).length}`);
+
+            // Persist artifacts to storage
+            saveArtifacts(mergedArtifacts);
 
             return {
                 ...state,
@@ -875,6 +895,9 @@ export const storage = create<StorageState>()((set, get) => {
                 [artifact.id]: artifact
             };
 
+            // Persist artifacts to storage
+            saveArtifacts(updatedArtifacts);
+
             return {
                 ...state,
                 artifacts: updatedArtifacts
@@ -886,6 +909,9 @@ export const storage = create<StorageState>()((set, get) => {
                 [artifact.id]: artifact
             };
 
+            // Persist artifacts to storage
+            saveArtifacts(updatedArtifacts);
+
             return {
                 ...state,
                 artifacts: updatedArtifacts
@@ -893,6 +919,9 @@ export const storage = create<StorageState>()((set, get) => {
         }),
         deleteArtifact: (artifactId: string) => set((state) => {
             const { [artifactId]: _, ...remainingArtifacts } = state.artifacts;
+
+            // Persist artifacts to storage
+            saveArtifacts(remainingArtifacts);
 
             return {
                 ...state,

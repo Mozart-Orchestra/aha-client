@@ -9,6 +9,7 @@ import { useCheckScannerPermissions } from '@/hooks/useCheckCameraPermissions';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 import { sync } from '@/sync/sync';
+import { deriveKey } from '@/encryption/deriveKey';
 
 interface UseConnectTerminalOptions {
     onSuccess?: () => void;
@@ -45,14 +46,19 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
             const mySecret = decodeBase64(auth.credentials.secret, 'base64url');
             console.log('[TERMINAL AUTH] 🔐 My secret length:', mySecret.length);
 
-            // V1 Response
+            // V1 Response (legacy mode)
             const responseV1 = encryptBox(mySecret, publicKey);
             console.log('[TERMINAL AUTH] 🔒 Encrypted V1 response length:', responseV1.length);
 
-            // V2 Response
-            let responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
-            responseV2Bundle[0] = 0;
-            responseV2Bundle.set(sync.encryption.contentDataKey, 1);
+            // V2 Response (dataKey mode)
+            // Derive contentSecretKey from masterSecret (same derivation as Encryption.create)
+            const contentSecretKey = await deriveKey(mySecret, 'Happy EnCoder', ['content']);
+            console.log('[TERMINAL AUTH] 🔑 Derived contentSecretKey length:', contentSecretKey.length);
+
+            // Send contentSecretKey (not publicKey!) so CLI can use the same encryption key
+            let responseV2Bundle = new Uint8Array(contentSecretKey.length + 1);
+            responseV2Bundle[0] = 0;  // Version byte
+            responseV2Bundle.set(contentSecretKey, 1);  // ✅ Send the actual secret key
             const responseV2 = encryptBox(responseV2Bundle, publicKey);
             console.log('[TERMINAL AUTH] 🔒 Encrypted V2 response length:', responseV2.length);
 

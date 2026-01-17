@@ -19,7 +19,7 @@ export type TeamMessagePriority = 'low' | 'normal' | 'high' | 'urgent';
 export interface TeamMessage {
     id: string;                    // 消息唯一 ID
     teamId: string;                // 所属团队（artifact ID）
-    fromSessionId: string;         // 发送者 session ID
+    fromSessionId?: string;        // 发送者 session ID（用户消息可为空）
     fromRole?: string;             // 发送者角色
     fromDisplayName?: string;      // 发送者显示名称
     content: string;               // 消息内容
@@ -125,7 +125,7 @@ export function formatMessageForInjection(context: TeamMessageContext): string {
 📨 Team Message ${mentionTag} ${urgentTag}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Team: ${context.teamName}
-From: ${context.message.fromDisplayName || context.message.fromSessionId} (${context.message.fromRole || 'unknown'})
+From: ${context.message.fromDisplayName || context.message.fromSessionId || 'unknown'} (${context.message.fromRole || 'unknown'})
 Type: ${context.message.type}
 Time: ${new Date(context.message.timestamp).toLocaleString()}
 

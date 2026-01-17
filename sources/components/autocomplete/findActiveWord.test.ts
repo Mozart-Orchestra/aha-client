@@ -7,35 +7,70 @@ describe('findActiveWord', () => {
             const content = 'Hello @john';
             const selection = { start: 11, end: 11 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@john', offset: 6, length: 5 });
+            expect(result).toEqual({
+                word: '@john',
+                activeWord: result.word,
+                offset: 6,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should detect : emoji at cursor', () => {
             const content = 'I feel :happy';
             const selection = { start: 13, end: 13 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: ':happy', offset: 7, length: 6 });
+            expect(result).toEqual({
+                word: ':happy',
+                activeWord: result.word,
+                offset: 7,
+                length: 6,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should detect / command at cursor', () => {
             const content = 'Type /help for info';
             const selection = { start: 10, end: 10 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '/help', offset: 5, length: 5 });
+            expect(result).toEqual({
+                word: '/help',
+                activeWord: result.word,
+                offset: 5,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should detect # tag at cursor', () => {
             const content = 'This is #important';
             const selection = { start: 18, end: 18 };
             const result = findActiveWord(content, selection, ['@', ':', '/', '#']);
-            expect(result).toEqual({ word: '#important', offset: 8, length: 10 });
+            expect(result).toEqual({
+                word: '#important',
+                activeWord: result.word,
+                offset: 8,
+                length: 10,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should return just the prefix when typed alone', () => {
             const content = 'Hello @';
             const selection = { start: 7, end: 7 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@', offset: 6, length: 1 });
+            expect(result).toEqual({
+                word: '@',
+                activeWord: result.word,
+                offset: 6,
+                length: 1,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
     });
 
@@ -51,21 +86,42 @@ describe('findActiveWord', () => {
             const content = 'Hello @user';
             const selection = { start: 11, end: 11 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 6, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 6,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should detect prefix at start of line', () => {
             const content = '@user hello';
             const selection = { start: 5, end: 5 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 0, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 0,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should detect prefix after newline', () => {
             const content = 'Hello\n@user';
             const selection = { start: 11, end: 11 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 6, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 6,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
     });
 
@@ -74,49 +130,98 @@ describe('findActiveWord', () => {
             const content = 'Hello\n@user';
             const selection = { start: 11, end: 11 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 6, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: '@user',
+                offset: 6,
+                length: 5,
+                activeLength: 5,
+                endOffset: 11
+            });
         });
 
         it('should stop at comma', () => {
             const content = 'Hi, @user';
             const selection = { start: 9, end: 9 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 4, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 4,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should stop at parentheses', () => {
             const content = '(@user)';
             const selection = { start: 6, end: 6 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 1, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 1,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should stop at brackets', () => {
             const content = '[@user]';
             const selection = { start: 6, end: 6 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 1, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 1,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should stop at braces', () => {
             const content = '{@user}';
             const selection = { start: 6, end: 6 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 1, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 1,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should stop at angle brackets', () => {
             const content = '<@user>';
             const selection = { start: 6, end: 6 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 1, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 1,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should stop at semicolon', () => {
             const content = 'text;@user';
             const selection = { start: 10, end: 10 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 5, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 5,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
     });
 
@@ -125,21 +230,42 @@ describe('findActiveWord', () => {
             const content = 'Hello @user';
             const selection = { start: 11, end: 11 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 6, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 6,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should stop at multiple spaces', () => {
             const content = 'Hello  @user';
             const selection = { start: 12, end: 12 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 7, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 7,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should handle spaces within active word search', () => {
             const content = 'text @user name';
             const selection = { start: 10, end: 10 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 5, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 5,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
     });
 
@@ -185,26 +311,54 @@ describe('findActiveWord', () => {
             const content = 'Hello $user';
             const selection = { start: 11, end: 11 };
             const result = findActiveWord(content, selection, ['$']);
-            expect(result).toEqual({ word: '$user', offset: 6, length: 5 });
+            expect(result).toEqual({
+                word: '$user',
+                activeWord: result.word,
+                offset: 6,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should work with multiple custom prefixes', () => {
             const content1 = 'Hello $user';
             const selection1 = { start: 11, end: 11 };
             const result1 = findActiveWord(content1, selection1, ['$', '%']);
-            expect(result1).toEqual({ word: '$user', offset: 6, length: 5 });
+            expect(result1).toEqual({
+                word: '$user',
+                activeWord: result1.word,
+                offset: 6,
+                length: 5,
+                activeLength: result1.length,
+                endOffset: result1.offset + result1.length
+            });
 
             const content2 = 'Hello %task';
             const selection2 = { start: 11, end: 11 };
             const result2 = findActiveWord(content2, selection2, ['$', '%']);
-            expect(result2).toEqual({ word: '%task', offset: 6, length: 5 });
+            expect(result2).toEqual({
+                word: '%task',
+                activeWord: result2.word,
+                offset: 6,
+                length: 5,
+                activeLength: result2.length,
+                endOffset: result2.offset + result2.length
+            });
         });
 
         it('should use default prefixes when none provided', () => {
             const content = 'Hello @user';
             const selection = { start: 11, end: 11 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@user', offset: 6, length: 5 });
+            expect(result).toEqual({
+                word: '@user',
+                activeWord: result.word,
+                offset: 6,
+                length: 5,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
     });
 
@@ -283,29 +437,64 @@ describe('findActiveWord', () => {
             const content = 'Hey @john, use :smile: and /help';
             const selection1 = { start: 9, end: 9 };
             const result1 = findActiveWord(content, selection1);
-            expect(result1).toEqual({ word: '@john', offset: 4, length: 5 });
+            expect(result1).toEqual({
+                word: '@john',
+                activeWord: result1.word,
+                offset: 4,
+                length: 5,
+                activeLength: result1.length,
+                endOffset: result1.offset + result1.length
+            });
 
             const selection2 = { start: 22, end: 22 };
             const result2 = findActiveWord(content, selection2);
-            expect(result2).toEqual({ word: ':smile:', offset: 15, length: 7 });
+            expect(result2).toEqual({
+                word: ':smile:',
+                activeWord: result2.word,
+                offset: 15,
+                length: 7,
+                activeLength: result2.length,
+                endOffset: result2.offset + result2.length
+            });
 
             const selection3 = { start: 32, end: 32 };
             const result3 = findActiveWord(content, selection3);
-            expect(result3).toEqual({ word: '/help', offset: 27, length: 5 });
+            expect(result3).toEqual({
+                word: '/help',
+                activeWord: result3.word,
+                offset: 27,
+                length: 5,
+                activeLength: result3.length,
+                endOffset: result3.offset + result3.length
+            });
         });
 
         it('should handle prefix at end of text', () => {
             const content = 'Hello @';
             const selection = { start: 7, end: 7 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@', offset: 6, length: 1 });
+            expect(result).toEqual({
+                word: '@',
+                activeWord: result.word,
+                offset: 6,
+                length: 1,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should handle long active words', () => {
             const content = 'Hello @very_long_username_here';
             const selection = { start: 30, end: 30 };
             const result = findActiveWord(content, selection);
-            expect(result).toEqual({ word: '@very_long_username_here', offset: 6, length: 24 });
+            expect(result).toEqual({
+                word: '@very_long_username_here',
+                activeWord: result.word,
+                offset: 6,
+                length: 24,
+                activeLength: result.length,
+                endOffset: result.offset + result.length
+            });
         });
 
         it('should handle cursor positions within active word', () => {

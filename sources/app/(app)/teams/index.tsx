@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/StyledText';
-import { useArtifacts } from '@/sync/storage';
+import { useArtifacts, storage } from '@/sync/storage';
 import { DecryptedArtifact } from '@/sync/artifactTypes';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -120,7 +120,9 @@ export default function TeamsScreen() {
         (async () => {
             try {
                 const credentials = sync.getCredentials();
-                if (!credentials) return;
+                if (!credentials) {
+                    return;
+                }
 
                 setIsLoading(true);
                 await sync.fetchArtifactsList();
@@ -237,7 +239,7 @@ export default function TeamsScreen() {
                 </Text>
             </View>
         );
-    }, [isLoading, styles]);
+    }, [isLoading, styles, teams, theme]);
 
     return (
         <View style={styles.container}>

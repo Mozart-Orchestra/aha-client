@@ -64,23 +64,41 @@ export class ArtifactEncryption {
      * Decrypt artifact body
      */
     async decryptBody(encryptedBody: string): Promise<ArtifactBody | null> {
-        try {
-            const encryptedData = decodeBase64(encryptedBody, 'base64');
-            const decrypted = await this.encryptor.decrypt([encryptedData]);
-            if (!decrypted[0]) {
-                return null;
-            }
-            // Validate structure
-            const body = decrypted[0] as any;
-            if (typeof body !== 'object' || body === null) {
+        const decoded = decodeBase64(encryptedBody, 'base64');
+        const parseBody = (value: any): ArtifactBody | null => {
+            if (typeof value !== 'object' || value === null) {
                 return null;
             }
             return {
-                body: typeof body.body === 'string' ? body.body : null
+                body: typeof value.body === 'string' ? value.body : null
             };
-        } catch (error) {
-            console.error('Failed to decrypt artifact body:', error);
-            return null;
+        };
+
+        // Try encrypted format first
+        try {
+            const decrypted = await this.encryptor.decrypt([decoded]);
+            const parsed = parseBody(decrypted[0]);
+            if (parsed) {
+                return parsed;
+            }
+        } catch (decryptError) {
+            // Decryption failed, will try plaintext fallback for legacy data
         }
+
+        // Fallback to plaintext for legacy artifacts (temporary migration support)
+        // TODO: Remove this fallback after all artifacts have been migrated
+        try {
+            const plainText = new TextDecoder().decode(decoded);
+            const parsedJson = JSON.parse(plainText);
+            const parsed = parseBody(parsedJson);
+            if (parsed) {
+                return parsed;
+            }
+        } catch (parseError) {
+            // Neither encrypted nor plaintext format worked
+        }
+
+        console.error('Failed to decrypt or parse artifact body');
+        return null;
     }
 }

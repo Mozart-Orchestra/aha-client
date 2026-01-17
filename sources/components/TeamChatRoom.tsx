@@ -252,13 +252,14 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress }: MessageB
         <View style={{ marginBottom: 2 }}>
             {!isMyMessage && (
                 <Text style={styles.senderName}>
-                    {message.fromDisplayName || message.fromSessionId.substring(0, 8)}
+                    {message.fromDisplayName || message.fromSessionId?.substring(0, 8) || 'User'}
                 </Text>
             )}
 
             <View style={[styles.messageRow, isMyMessage && styles.myMessageRow]}>
                 <Pressable
-                    onPress={() => onAvatarPress(message.fromSessionId)}
+                    onPress={() => message.fromSessionId && onAvatarPress(message.fromSessionId)}
+                    disabled={!message.fromSessionId}
                     style={[styles.avatarContainer, isMyMessage && styles.myAvatarContainer]}
                 >
                     <Text style={[styles.avatarText, isMyMessage && styles.myAvatarText]}>
@@ -294,6 +295,7 @@ interface TeamChatRoomProps {
     teamName: string;
     mySessionId?: string;
     myRole?: string;
+    myDisplayName?: string;
     members?: Array<{
         member: { sessionId: string; displayName?: string; roleId?: string };
         session?: { active: boolean; updatedAt: number };
@@ -301,7 +303,7 @@ interface TeamChatRoomProps {
     }>;
 }
 
-export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, members = [] }: TeamChatRoomProps) {
+export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, myDisplayName, members = [] }: TeamChatRoomProps) {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const scrollViewRef = React.useRef<ScrollView>(null);
@@ -508,13 +510,16 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, me
             setIsSending(true);
             const mentions = extractMentions(content);
 
+            // User messages should NOT use team member's session ID
+            // Leave fromSessionId undefined so Happy-CLI recognizes this as a user message
             const request: SendTeamMessageRequest = {
                 teamId,
                 content,
                 type: 'chat',
                 mentions: mentions.length > 0 ? mentions : undefined,
-                fromSessionId: mySessionId,
-                fromRole: myRole,
+                fromSessionId: undefined,  // User message, not from a team member session
+                fromRole: 'user',           // Always 'user' for messages from the user
+                fromDisplayName: 'User'     // Can be improved to use actual user name
             };
 
             await sync.sendTeamMessage(request);
@@ -529,7 +534,14 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, me
     const extractMentions = (text: string): string[] => {
         const mentionRegex = /@([a-zA-Z0-9-]+)/g;
         const matches = [...text.matchAll(mentionRegex)];
-        return matches.map(m => m[1]);
+        return matches.map(m => {
+            const name = m[1].toLowerCase();
+            const member = members.find(mem =>
+                (mem.member.displayName && mem.member.displayName.toLowerCase() === name) ||
+                (mem.member.roleId && mem.member.roleId.toLowerCase() === name)
+            );
+            return member ? member.member.sessionId : null;
+        }).filter(id => id !== null) as string[];
     };
 
     if (isLoading) {
@@ -577,7 +589,7 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, me
                             <MessageBubble
                                 key={message.id}
                                 message={message}
-                                isMyMessage={message.fromSessionId === mySessionId}
+                                isMyMessage={message.fromRole === 'user' && (!message.fromSessionId || message.fromSessionId === mySessionId)}
                                 styles={styles}
                                 onAvatarPress={handleAvatarPress}
                             />

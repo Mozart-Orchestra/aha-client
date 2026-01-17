@@ -2,19 +2,21 @@ import React from 'react';
 import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { Text } from '@/components/StyledText';
 import { useLocalSearchParams, Stack } from 'expo-router';
-import { useArtifact, useAllSessions } from '@/sync/storage';
+import { useArtifact, useAllSessions, useProfile } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '@/modal';
 import {
     KanbanBoard,
+    KanbanColumn,
     KanbanTask,
     DEFAULT_TEAM_ROLES,
     DEFAULT_TEAM_AGREEMENTS,
     DEFAULT_KANBAN_BOARD
 } from '@/sync/kanbanTypes';
 import { useDesktopBridge } from '@/desktop/useDesktopBridge';
+import { getDisplayName } from '@/sync/profile';
 import TeamChatRoom from '@/components/TeamChatRoom';
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -225,15 +227,26 @@ const stylesheet = StyleSheet.create((theme) => ({
 }));
 
 export default function TeamDashboardScreen() {
-    const { id } = useLocalSearchParams();
+    const { id, roomId: roomIdParam } = useLocalSearchParams();
+    const teamId = id as string;
     const { theme } = useUnistyles();
     const styles = stylesheet;
-    const artifact = useArtifact(id as string);
+    const artifact = useArtifact(teamId);
     const allSessions = useAllSessions();
+    const profile = useProfile();
     const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info'>('chat');
     const [isLoading, setIsLoading] = React.useState(false);
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
-    const roomId = (id as string) || undefined;
+    const artifactRoomId = React.useMemo(() => {
+        if (!artifact?.body) return undefined;
+        try {
+            const parsed = JSON.parse(artifact.body);
+            return parsed.roomId as string | undefined;
+        } catch {
+            return undefined;
+        }
+    }, [artifact?.body]);
+    const roomId = (roomIdParam as string) || artifactRoomId || teamId || undefined;
     const desktopRoom = React.useMemo(() => {
         if (!roomId || !collaborationState) return null;
         return collaborationState.rooms.find((room: any) => room.id === roomId) ?? null;
@@ -242,6 +255,12 @@ export default function TeamDashboardScreen() {
         if (!roomId || !collaborationState) return null;
         return collaborationState.boards.find((entry: any) => entry.roomId === roomId)?.board ?? DEFAULT_KANBAN_BOARD;
     }, [collaborationState, roomId]);
+
+    // Get user's display name for chat
+    const myDisplayName = React.useMemo(() => {
+        const displayName = getDisplayName(profile);
+        return displayName || sync.anonID; // Fallback to session ID if no display name
+    }, [profile]);
 
     React.useEffect(() => {
         if (desktopBridge) {
@@ -255,21 +274,48 @@ export default function TeamDashboardScreen() {
     }, [artifact, isLoading, desktopBridge]);
 
     const kanbanData: KanbanBoard = React.useMemo(() => {
+        const ensureColumns = (data: any): KanbanBoard => {
+            const baseColumns = Array.isArray(data?.columns) && data.columns.length > 0
+                ? data.columns
+                : DEFAULT_KANBAN_BOARD.columns;
+
+            const mergedColumns = [...baseColumns];
+            DEFAULT_KANBAN_BOARD.columns.forEach((column) => {
+                if (!mergedColumns.some((c: KanbanColumn) => c.id === column.id)) {
+                    mergedColumns.push(column);
+                }
+            });
+
+            const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+            return { ...data, tasks, columns: mergedColumns };
+        };
+
         if (desktopBridge) {
-            return desktopBoard || DEFAULT_KANBAN_BOARD;
+            return ensureColumns(desktopBoard || DEFAULT_KANBAN_BOARD);
         }
         if (!artifact?.body) return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
         try {
             const parsed = JSON.parse(artifact.body);
-            if (!parsed.columns || parsed.columns.length === 0) {
-                return { ...parsed, columns: DEFAULT_KANBAN_BOARD.columns };
-            }
-            return parsed;
+            return ensureColumns(parsed);
         } catch (e) {
             console.error('Failed to parse kanban data', e);
             return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
         }
     }, [artifact?.body, desktopBoard, desktopBridge]);
+
+    const normalizeStatus = React.useCallback((status: string): string => {
+        const statusMap: Record<string, string> = {
+            'in_progress': 'in-progress',
+            'inprogress': 'in-progress',
+            'InProgress': 'in-progress',
+            'IN_PROGRESS': 'in-progress',
+            'todo': 'todo',
+            'review': 'review',
+            'blocked': 'blocked',
+            'done': 'done'
+        };
+        return statusMap[status] || status.toLowerCase();
+    }, []);
 
     const handleAddTask = async (status: string) => {
         const title = await Modal.prompt('New Task', 'Enter task title');
@@ -312,11 +358,14 @@ export default function TeamDashboardScreen() {
     };
 
     const handleMoveTask = async (task: KanbanTask) => {
+        const normalized = normalizeStatus(task.status);
         const nextStatus = {
             'todo': 'in-progress',
-            'in-progress': 'done',
+            'in-progress': 'review',
+            'review': 'done',
+            'blocked': 'in-progress',
             'done': 'todo'
-        }[task.status] || 'todo';
+        }[normalized] || 'todo';
 
         if (desktopBridge && roomId) {
             await desktopBridge.updateTask(task.id, { status: nextStatus });
@@ -361,14 +410,21 @@ export default function TeamDashboardScreen() {
         const allSessionIds = Array.from(new Set([...(artifact?.sessions ?? []), ...assignedIds]));
 
         return allSessionIds.map((sessionId, index) => {
-            const member = memberMap.get(sessionId) || {
+            const session = sessionLookup.get(sessionId);
+            const existingMember = memberMap.get(sessionId);
+
+            // Create member with proper displayName for mentions functionality
+            const member = existingMember || {
                 sessionId,
                 roleId: '',
-                displayName: undefined,
+                displayName: session?.metadata?.name || session?.metadata?.host || sessionId,
                 focusAreas: []
             };
 
-            const session = sessionLookup.get(sessionId);
+            // Ensure displayName is set for mentions functionality
+            if (!member.displayName) {
+                member.displayName = session?.metadata?.name || session?.metadata?.host || sessionId;
+            }
             const effectiveRoleId = member.roleId || session?.metadata?.role;
 
             const role = roleDefinitions.find((entry) =>
@@ -408,6 +464,10 @@ export default function TeamDashboardScreen() {
         );
     }
 
+    const matchesColumn = React.useCallback((task: KanbanTask, columnId: string) => {
+        return normalizeStatus(task.status) === columnId;
+    }, [normalizeStatus]);
+
     const renderKanban = () => (
         <ScrollView horizontal style={{ flex: 1 }}>
             <View style={styles.boardContainer}>
@@ -416,13 +476,13 @@ export default function TeamDashboardScreen() {
                         <View style={styles.columnHeader}>
                             <Text style={styles.columnTitle}>{column.title}</Text>
                             <Text style={styles.taskCount}>
-                                {kanbanData.tasks.filter(t => t.status === column.id).length}
+                                {kanbanData.tasks.filter(t => matchesColumn(t, column.id)).length}
                             </Text>
                         </View>
 
                         <ScrollView>
                             {kanbanData.tasks
-                                .filter(t => t.status === column.id)
+                                .filter(t => matchesColumn(t, column.id))
                                 .map(task => (
                                     <Pressable
                                         key={task.id}
@@ -482,17 +542,32 @@ export default function TeamDashboardScreen() {
         </ScrollView>
     );
 
-    const renderChat = () => (
-        <View style={{ flex: 1 }}>
-            <TeamChatRoom
-                teamId={id as string}
-                teamName={artifact?.title || desktopRoom?.name || 'Team'}
-                mySessionId={sync.anonID}
-                myRole="user"
-                members={roster}
-            />
-        </View>
-    );
+    const renderChat = () => {
+        // Try to find current user's session in roster
+        // Look for a session that doesn't have an agent role (agents have roles like 'master', 'builder', etc.)
+        const myMember = roster.find(r => {
+            const session = r.session;
+            if (!session) return false;
+            const role = session.metadata?.role;
+            // Sessions without a role or with 'user' role are likely user sessions
+            return !role || role === 'user';
+        });
+
+        const mySessionId = myMember?.member.sessionId;
+
+        return (
+            <View style={{ flex: 1 }}>
+                <TeamChatRoom
+                    teamId={teamId}
+                    teamName={artifact?.title || desktopRoom?.name || 'Team'}
+                    mySessionId={mySessionId}
+                    myRole="user"
+                    myDisplayName={myDisplayName}
+                    members={roster}
+                />
+            </View>
+        );
+    };
 
     return (
         <>

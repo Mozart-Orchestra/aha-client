@@ -1,0 +1,8 @@
+import shared from './index.cjs';
+
+export const READ_ONLY_TOOLS = shared.READ_ONLY_TOOLS;
+export const TEAM_ROLE_LIBRARY = shared.TEAM_ROLE_LIBRARY;
+export const TEAM_ROLE_MAP = shared.TEAM_ROLE_MAP;
+export const DEFAULT_TEAM_AGREEMENTS = shared.DEFAULT_TEAM_AGREEMENTS;
+export const DEFAULT_KANBAN_COLUMNS = shared.DEFAULT_KANBAN_COLUMNS;
+export const DEFAULT_KANBAN_BOARD = shared.DEFAULT_KANBAN_BOARD;
