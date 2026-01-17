@@ -77,13 +77,35 @@ export function useSessionStatus(session: Session): SessionStatus {
  * Returns the last segment of the path, or 'unknown' if no path is available.
  */
 export function getSessionName(session: Session): string {
+    // Try to use explicit name first (set by CLI for team sessions)
+    if (session.metadata?.name) {
+        return session.metadata.name;
+    }
     if (session.metadata?.summary) {
         return session.metadata.summary.text;
-    } else if (session.metadata) {
+    } else if (session.metadata?.path) {
         const segments = session.metadata.path.split('/').filter(Boolean);
         const lastSegment = segments.pop()!;
         return lastSegment;
     }
+
+    // Fallback: try to get display name from team artifact if this session is a team member
+    if (session.metadata?.teamId) {
+        try {
+            const { storage: storageModule } = require('@/sync/storage');
+            const teamArtifact = storageModule.getState().artifacts[session.metadata.teamId];
+            if (teamArtifact?.body) {
+                const board = JSON.parse(teamArtifact.body);
+                const member = board.team?.members?.find((m: any) => m.sessionId === session.id);
+                if (member?.displayName) {
+                    return member.displayName;
+                }
+            }
+        } catch (error) {
+            // Ignore errors, fall through to unknown
+        }
+    }
+
     return t('status.unknown');
 }
 

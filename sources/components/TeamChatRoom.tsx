@@ -252,13 +252,14 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress }: MessageB
         <View style={{ marginBottom: 2 }}>
             {!isMyMessage && (
                 <Text style={styles.senderName}>
-                    {message.fromDisplayName || message.fromSessionId.substring(0, 8)}
+                    {message.fromDisplayName || message.fromSessionId?.substring(0, 8) || 'User'}
                 </Text>
             )}
 
             <View style={[styles.messageRow, isMyMessage && styles.myMessageRow]}>
                 <Pressable
-                    onPress={() => onAvatarPress(message.fromSessionId)}
+                    onPress={() => message.fromSessionId && onAvatarPress(message.fromSessionId)}
+                    disabled={!message.fromSessionId}
                     style={[styles.avatarContainer, isMyMessage && styles.myAvatarContainer]}
                 >
                     <Text style={[styles.avatarText, isMyMessage && styles.myAvatarText]}>
@@ -509,18 +510,16 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
             setIsSending(true);
             const mentions = extractMentions(content);
 
-            // Resolve display name
-            const myMember = members.find(m => m.member.sessionId === mySessionId);
-            const myDisplayName = myMember?.member.displayName || myMember?.role?.title || 'User';
-
+            // User messages should NOT use team member's session ID
+            // Leave fromSessionId undefined so Happy-CLI recognizes this as a user message
             const request: SendTeamMessageRequest = {
                 teamId,
                 content,
                 type: 'chat',
                 mentions: mentions.length > 0 ? mentions : undefined,
-                fromSessionId: mySessionId,
-                fromRole: myRole,
-                fromDisplayName: myDisplayName
+                fromSessionId: undefined,  // User message, not from a team member session
+                fromRole: 'user',           // Always 'user' for messages from the user
+                fromDisplayName: 'User'     // Can be improved to use actual user name
             };
 
             await sync.sendTeamMessage(request);
@@ -590,7 +589,7 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
                             <MessageBubble
                                 key={message.id}
                                 message={message}
-                                isMyMessage={message.fromSessionId === mySessionId}
+                                isMyMessage={message.fromRole === 'user' && (!message.fromSessionId || message.fromSessionId === mySessionId)}
                                 styles={styles}
                                 onAvatarPress={handleAvatarPress}
                             />

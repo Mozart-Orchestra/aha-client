@@ -446,7 +446,7 @@ export default function NewTeamScreen() {
                 };
             });
 
-            // 2. Spawn new agents if bridge is available
+            // 2. Validate requirements for auto-spawned agents
             const spawnedMembers: (KanbanTeamMember & { tag?: string })[] = [];
 
             if (hasRequestedSpawns && !desktopBridge) {
@@ -466,6 +466,7 @@ export default function NewTeamScreen() {
                 }
             }
 
+            // === Desktop Bridge Flow ===
             if (desktopBridge) {
                 const desktopMembers: DesktopRoomMemberInput[] = manualMembers.map((m) => ({
                     id: m.sessionId,
@@ -522,117 +523,172 @@ export default function NewTeamScreen() {
             }
 
             // === Standard Flow (No Bridge / Mobile) ===
+            // STEP 1: Create artifact FIRST to get teamId
+            let artifactId: string;
 
-            if (!desktopBridge && hasRequestedSpawns) {
-                const targetMachine = machineIdForSpawn ? storage.getState().machines[machineIdForSpawn] : null;
-                for (const [roleId, count] of Object.entries(roleCounts)) {
-                    for (let i = 0; i < count; i++) {
-                        try {
-                            const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
-                            const tag = `team-${Date.now()}-${roleId}-${i}`;
+            if (!desktopBridge) {
+                // Prepare board structure
+                const board: KanbanBoard = JSON.parse(JSON.stringify(DEFAULT_KANBAN_BOARD));
+                if (!board.team) {
+                    board.team = {
+                        members: [],
+                        roles: DEFAULT_TEAM_ROLES,
+                        agreements: DEFAULT_TEAM_AGREEMENTS
+                    };
+                }
 
-                            const sessionId = await sync.createSession(
-                                tag,
-                                {
-                                    name: agentTitle,
-                                    role: roleId,
-                                    path: resolvedCwd || undefined,
+                // Add manual members to board
+                board.team.members = [...manualMembers];
+
+                if (target.trim()) {
+                    board.tasks.push({
+                        id: 'team-goal',
+                        title: `🎯 Team Goal: ${target.trim()}`,
+                        description: 'This is the primary objective for this team.',
+                        status: 'todo',
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    });
+                }
+
+                const initialBody = JSON.stringify(board, null, 2);
+                const allMemberSessionIds = manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0);
+
+                // Create artifact to get teamId
+                artifactId = await sync.createArtifact(
+                    title.trim(),
+                    initialBody,
+                    allMemberSessionIds,
+                    false,
+                    'team'
+                );
+
+                // STEP 2: Create and spawn sessions WITH teamId/role from the start
+                if (hasRequestedSpawns) {
+                    const targetMachine = machineIdForSpawn ? storage.getState().machines[machineIdForSpawn] : null;
+
+                    for (const [roleId, count] of Object.entries(roleCounts)) {
+                        for (let i = 0; i < count; i++) {
+                            try {
+                                const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
+                                const tag = `team-${Date.now()}-${roleId}-${i}`;
+
+                                // Spawn WITH teamId, role, name, and path
+                                if (targetMachine?.active && resolvedCwd) {
+                                    try {
+                                        const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
+                                            directory: resolvedCwd,
+                                            agent: agentType,
+                                            sessionTag: tag,
+                                            teamId: artifactId,
+                                            role: roleId,
+                                            sessionName: agentTitle,
+                                            sessionPath: resolvedCwd
+                                        });
+                                        if (spawnedSessionId) {
+                                            spawnedMembers.push({
+                                                sessionId: spawnedSessionId,
+                                                roleId,
+                                                displayName: agentTitle,
+                                                tag
+                                            });
+                                        } else {
+                                            console.warn(`Spawned agent ${roleId} but no sessionId was returned`);
+                                        }
+                                    } catch (spawnError) {
+                                        console.error('Failed to auto-spawn:', spawnError);
+                                    }
+                                } else if (!targetMachine?.active) {
+                                    console.warn('Selected machine is offline; skipping auto-spawn.');
                                 }
-                            );
-
-                            spawnedMembers.push({
-                                sessionId,
-                                roleId,
-                                displayName: agentTitle,
-                                tag
-                            });
-
-                            if (targetMachine?.active && resolvedCwd) {
-                                try {
-                                    await sync.spawnSessionOnMachine(targetMachine.id, {
-                                        sessionId,
-                                        directory: resolvedCwd,
-                                        agent: agentType,
-                                        sessionTag: tag
-                                    });
-                                } catch (spawnError) {
-                                    console.error('Failed to auto-spawn:', spawnError);
-                                }
-                            } else if (!targetMachine?.active) {
-                                console.warn('Selected machine is offline; skipping auto-spawn.');
+                            } catch (e) {
+                                console.error(`Failed to spawn agent ${roleId}:`, e);
                             }
-                        } catch (e) {
-                            console.error(`Failed to spawn agent ${roleId}:`, e);
                         }
                     }
                 }
-            }
 
-            // Initial Kanban Board Structure
-            const board: KanbanBoard = JSON.parse(JSON.stringify(DEFAULT_KANBAN_BOARD));
-            if (!board.team) {
-                board.team = {
-                    members: [],
-                    roles: DEFAULT_TEAM_ROLES,
-                    agreements: DEFAULT_TEAM_AGREEMENTS
-                };
-            }
-            board.team.members = [...manualMembers, ...spawnedMembers];
-            if (roomIdForNavigation) {
-                board.roomId = roomIdForNavigation;
-            }
+                // STEP 3: Update artifact with complete member list
+                board.team.members = [...manualMembers, ...spawnedMembers];
+                const updatedBody = JSON.stringify(board, null, 2);
+                const allMemberIds = [
+                    ...manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0),
+                    ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
+                ];
 
-            if (target.trim()) {
-                board.tasks.push({
-                    id: 'team-goal',
-                    title: `🎯 Team Goal: ${target.trim()}`,
-                    description: 'This is the primary objective for this team.',
-                    status: 'todo',
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                });
-            }
+                await sync.updateArtifact(artifactId, null, updatedBody, allMemberIds);
 
-            const initialBody = JSON.stringify(board, null, 2);
-            const allMemberIds = [
-                ...manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0),
-                ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
-            ];
-
-            const artifactId = await sync.createArtifact(
-                title.trim(),
-                initialBody,
-                allMemberIds,
-                false,
-                'team'
-            );
-
-            for (const member of manualMembers) {
-                const session = sessionLookup.get(member.sessionId);
-                if (session && session.metadata) {
-                    try {
-                        await sync.updateSessionMetadata(member.sessionId, {
-                            ...session.metadata,
-                            role: member.roleId,
-                            teamId: artifactId
-                        });
-                    } catch (error) {
-                        console.warn(`Failed to update metadata for session ${member.sessionId}:`, error);
+                // Update metadata for manual members only (running sessions)
+                if (manualMembers.length > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    for (const member of manualMembers) {
+                        try {
+                            const currentSession = storage.getState().sessions[member.sessionId];
+                            if (currentSession && currentSession.metadata) {
+                                await sync.updateSessionMetadata(member.sessionId, {
+                                    ...currentSession.metadata,
+                                    role: member.roleId,
+                                    teamId: artifactId
+                                });
+                            }
+                        } catch (error) {
+                            console.warn(`Failed to update metadata for manual session ${member.sessionId}:`, error);
+                        }
                     }
                 }
-            }
+            } else {
+                // Desktop bridge flow: create artifact with all members
+                const board: KanbanBoard = JSON.parse(JSON.stringify(DEFAULT_KANBAN_BOARD));
+                if (!board.team) {
+                    board.team = {
+                        members: [],
+                        roles: DEFAULT_TEAM_ROLES,
+                        agreements: DEFAULT_TEAM_AGREEMENTS
+                    };
+                }
+                board.team.members = [...manualMembers, ...spawnedMembers];
+                if (roomIdForNavigation) {
+                    board.roomId = roomIdForNavigation;
+                }
 
-            for (const member of spawnedMembers) {
-                if (!member.sessionId) continue;
-                try {
-                    await sync.updateSessionMetadata(member.sessionId, {
-                        name: member.displayName,
-                        role: member.roleId,
-                        path: resolvedCwd || undefined,
-                        teamId: artifactId
+                if (target.trim()) {
+                    board.tasks.push({
+                        id: 'team-goal',
+                        title: `🎯 Team Goal: ${target.trim()}`,
+                        description: 'This is the primary objective for this team.',
+                        status: 'todo',
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
                     });
-                } catch (error) {
-                    console.warn(`Failed to update metadata for spawned session ${member.sessionId}:`, error);
+                }
+
+                const initialBody = JSON.stringify(board, null, 2);
+                const allMemberIds = [
+                    ...manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0),
+                    ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
+                ];
+
+                artifactId = await sync.createArtifact(
+                    title.trim(),
+                    initialBody,
+                    allMemberIds,
+                    false,
+                    'team'
+                );
+
+                for (const member of manualMembers) {
+                    const session = sessionLookup.get(member.sessionId);
+                    if (session && session.metadata) {
+                        try {
+                            await sync.updateSessionMetadata(member.sessionId, {
+                                ...session.metadata,
+                                role: member.roleId,
+                                teamId: artifactId
+                            });
+                        } catch (error) {
+                            console.warn(`Failed to update metadata for session ${member.sessionId}:`, error);
+                        }
+                    }
                 }
             }
 

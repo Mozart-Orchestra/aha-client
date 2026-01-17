@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/StyledText';
-import { useArtifacts } from '@/sync/storage';
+import { useArtifacts, storage } from '@/sync/storage';
 import { DecryptedArtifact } from '@/sync/artifactTypes';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -108,7 +108,13 @@ export default function TeamsScreen() {
 
     // Filter for team artifacts
     const teams = React.useMemo(() => {
-        return allArtifacts.filter(a => a.type === 'team');
+        console.log(`🔍 TeamsScreen: Total artifacts: ${allArtifacts.length}`);
+        console.log(`🔍 TeamsScreen: Artifacts:`, allArtifacts.map(a => `${a.id} (${a.type})`));
+        const filtered = allArtifacts.filter(a => a.type === 'team');
+        console.log(`🔍 TeamsScreen: Filtered teams: ${filtered.length}`);
+        console.log(`🔍 TeamsScreen: isDataReady:`, storage.getState().isDataReady);
+        console.log(`🔍 TeamsScreen: Raw artifacts in storage:`, Object.keys(storage.getState().artifacts).length);
+        return filtered;
     }, [allArtifacts]);
 
     const [isLoading, setIsLoading] = React.useState(false);
@@ -120,10 +126,15 @@ export default function TeamsScreen() {
         (async () => {
             try {
                 const credentials = sync.getCredentials();
-                if (!credentials) return;
+                if (!credentials) {
+                    console.log('🔍 TeamsScreen: No credentials, skipping fetch');
+                    return;
+                }
 
+                console.log('🔍 TeamsScreen: Starting fetchArtifactsList');
                 setIsLoading(true);
                 await sync.fetchArtifactsList();
+                console.log('🔍 TeamsScreen: fetchArtifactsList completed');
             } catch (error) {
                 console.error('Failed to fetch artifacts:', error);
             } finally {
@@ -221,6 +232,17 @@ export default function TeamsScreen() {
             );
         }
 
+        // Debug info
+        const debugInfo = {
+            isDataReady: storage.getState().isDataReady,
+            totalArtifacts: Object.keys(storage.getState().artifacts).length,
+            artifactTypes: Object.values(storage.getState().artifacts).reduce((acc: any, a: any) => {
+                acc[a.type || 'undefined'] = (acc[a.type || 'undefined'] || 0) + 1;
+                return acc;
+            }, {}),
+            teams: teams.length
+        };
+
         return (
             <View style={styles.emptyContainer}>
                 <Ionicons
@@ -235,9 +257,20 @@ export default function TeamsScreen() {
                 <Text style={styles.emptyDescription}>
                     Create a team to collaborate with multiple agents.
                 </Text>
+
+                {/* Debug info */}
+                <View style={{ marginTop: 32, padding: 16, backgroundColor: theme.colors.surface, borderRadius: 8, width: '100%' }}>
+                    <Text style={{ fontSize: 12, color: theme.colors.text, fontFamily: 'monospace' }}>
+                        Debug Info:{'\n'}
+                        isDataReady: {String(debugInfo.isDataReady)}{'\n'}
+                        Total artifacts: {debugInfo.totalArtifacts}{'\n'}
+                        Types: {JSON.stringify(debugInfo.artifactTypes)}{'\n'}
+                        Filtered teams: {debugInfo.teams}
+                    </Text>
+                </View>
             </View>
         );
-    }, [isLoading, styles]);
+    }, [isLoading, styles, teams, theme]);
 
     return (
         <View style={styles.container}>

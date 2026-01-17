@@ -862,7 +862,8 @@ export const storage = create<StorageState>()((set, get) => {
             artifacts.forEach(artifact => {
                 mergedArtifacts[artifact.id] = artifact;
             });
-            console.log(`🗂️ Storage.applyArtifacts: Total artifacts after merge: ${Object.keys(mergedArtifacts).length}`);
+            const teamCount = Object.values(mergedArtifacts).filter((a: any) => a.type === 'team').length;
+            console.log(`🗂️ Storage.applyArtifacts: Total artifacts after merge: ${Object.keys(mergedArtifacts).length}, teams: ${teamCount}`);
 
             return {
                 ...state,
@@ -874,6 +875,8 @@ export const storage = create<StorageState>()((set, get) => {
                 ...state.artifacts,
                 [artifact.id]: artifact
             };
+            console.log(`📝 addArtifact: Adding artifact ${artifact.id} (type: ${artifact.type}, title: ${artifact.title})`);
+            console.log(`📝 addArtifact: Total artifacts before: ${Object.keys(state.artifacts).length}, after: ${Object.keys(updatedArtifacts).length}`);
 
             return {
                 ...state,

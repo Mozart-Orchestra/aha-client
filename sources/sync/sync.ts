@@ -585,6 +585,7 @@ class Sync {
             log.log('📦 fetchArtifactsList: Fetching artifacts from server');
             const artifacts = await fetchArtifacts(this.credentials);
             log.log(`📦 fetchArtifactsList: Received ${artifacts.length} artifacts from server`);
+            console.log(`📦 fetchArtifactsList: Server returned ${artifacts.length} artifacts:`, artifacts.map(a => ({ id: a.id, createdAt: a.createdAt })));
             const decryptedArtifacts: DecryptedArtifact[] = [];
 
             for (const artifact of artifacts) {
@@ -720,9 +721,21 @@ class Sync {
             // Create artifact encryption instance
             const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
 
-            // Encrypt header and body
+            // Encrypt header
             const encryptedHeader = await artifactEncryption.encryptHeader({ title, sessions, draft, type });
-            const encryptedBody = await artifactEncryption.encryptBody({ body });
+
+            // For team artifacts, store body as base64-encoded plaintext (no encryption)
+            // This allows Happy-CLI to read team context without shared encryption keys
+            let encryptedBody: string;
+            if (type === 'team') {
+                // Store as plaintext JSON (base64 encoded)
+                const plainBody = JSON.stringify({ body });
+                encryptedBody = encodeBase64(new TextEncoder().encode(plainBody), 'base64');
+                console.log('📝 Creating team artifact with plaintext body for cross-client access');
+            } else {
+                // Normal encryption for non-team artifacts
+                encryptedBody = await artifactEncryption.encryptBody({ body });
+            }
 
             // Create the request
             const request: ArtifactCreateRequest = {
@@ -752,6 +765,8 @@ class Sync {
             };
 
             storage.getState().addArtifact(decryptedArtifact);
+            console.log(`✅ Created artifact ${artifactId} with type: ${type}, title: ${title}`);
+            console.log(`📦 Total artifacts in storage: ${Object.keys(storage.getState().artifacts).length}`);
 
             return artifactId;
         } catch (error) {
@@ -824,7 +839,14 @@ class Sync {
 
             // Only update body if it changed
             if (body !== currentArtifact.body) {
-                const encryptedBody = await artifactEncryption.encryptBody({ body });
+                // For team artifacts, store body as base64-encoded plaintext (no encryption)
+                let encryptedBody: string;
+                if (type === 'team' || currentArtifact.type === 'team') {
+                    const plainBody = JSON.stringify({ body });
+                    encryptedBody = encodeBase64(new TextEncoder().encode(plainBody), 'base64');
+                } else {
+                    encryptedBody = await artifactEncryption.encryptBody({ body });
+                }
                 updateRequest.body = encryptedBody;
                 updateRequest.expectedBodyVersion = bodyVersion;
             }
@@ -1564,7 +1586,7 @@ class Sync {
         // Process decrypted messages
         for (let i = 0; i < decryptedMessages.length; i++) {
             const decrypted = decryptedMessages[i];
-            if (decrypted) {
+            if (decrypted && decrypted.content !== null) {
                 eixstingMessages.add(decrypted.id);
                 // Normalize the decrypted message
                 let normalized = normalizeRawMessage(decrypted.id, decrypted.localId, decrypted.createdAt, decrypted.content);
@@ -1697,19 +1719,36 @@ class Sync {
     }
 
     public async spawnSessionOnMachine(machineId: string, params: {
-        sessionId: string;
+        sessionId?: string;
         directory: string;
         agent: 'claude' | 'codex';
         token?: string;
         sessionTag?: string;
-    }): Promise<void> {
+        teamId?: string;
+        role?: string;
+        sessionName?: string;
+        sessionPath?: string;
+    }): Promise<string | null> {
         try {
-            await apiSocket.machineRPC(machineId, 'spawn-happy-session', {
+            const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-happy-session', {
                 ...params,
                 machineId,
-                approvedNewDirectoryCreation: true
+                approvedNewDirectoryCreation: true,
+                teamId: params.teamId,
+                role: params.role,
+                sessionName: params.sessionName,
+                sessionPath: params.sessionPath
             });
-            log.log(`Spawned session ${params.sessionId} on machine ${machineId}`);
+            const sessionId = result?.sessionId || (result?.type === 'success' ? result?.sessionId : null);
+            if (result?.type === 'requestToApproveDirectoryCreation') {
+                console.warn(`Directory creation approval required for: ${result.directory}`);
+            }
+            if (sessionId) {
+                log.log(`Spawned session ${sessionId} on machine ${machineId}`);
+                return sessionId;
+            }
+            log.log(`Spawn request completed on machine ${machineId} (no sessionId returned)`);
+            return null;
         } catch (error) {
             console.error(`Failed to spawn session on machine ${machineId}:`, error);
             throw error;
@@ -1777,7 +1816,7 @@ class Sync {
             let lastMessage: NormalizedMessage | null = null;
             if (updateData.body.message) {
                 const decrypted = await encryption.decryptMessage(updateData.body.message);
-                if (decrypted) {
+                if (decrypted && decrypted.content !== null) {
                     lastMessage = normalizeRawMessage(decrypted.id, decrypted.localId, decrypted.createdAt, decrypted.content);
 
                     // Update session
@@ -2325,16 +2364,31 @@ class Sync {
             // 获取当前 session 信息
             const sessions = storage.getState().sessionsData || [];
             const mySession = sessions.find(s => typeof s !== 'string');
+            const fallbackSession = mySession && typeof mySession !== 'string' ? mySession : undefined;
 
-            // 优先使用 request 中的 fromSessionId/Role，否则使用 fallback
-            const fromSessionId = request.fromSessionId || (mySession && typeof mySession !== 'string' ? mySession.id : 'unknown');
+            // Use fallback session ID if fromSessionId is undefined
+            // Server requires fromSessionId to be present, but fromRole determines message intent
+            // If no fallback session, use the first session from the team (for user messages)
+            let fromSessionId = request.fromSessionId ?? fallbackSession?.id;
+            if (!fromSessionId && request.teamId) {
+                // Get team artifact to find a member session
+                const teamArtifact = storage.getState().artifacts[request.teamId];
+                if (teamArtifact?.sessions && teamArtifact.sessions.length > 0) {
+                    fromSessionId = teamArtifact.sessions[0];
+                    console.log(`[sendTeamMessage] Using first team member session ${fromSessionId} for user message`);
+                }
+            }
+            if (!fromSessionId) {
+                throw new Error('Cannot send team message: no valid session ID available');
+            }
 
-            // Re-resolve mySession based on fromSessionId if possible to get correct metadata
-            const sendingSession = sessions.find(s => typeof s !== 'string' && s.id === fromSessionId) || mySession;
+            // Resolve session metadata only when we have a session ID
+            const sendingSession = fromSessionId
+                ? sessions.find(s => typeof s !== 'string' && s.id === fromSessionId) || fallbackSession
+                : undefined;
 
-            const fromRole = request.fromRole || (sendingSession && typeof sendingSession !== 'string' ? sendingSession.metadata?.role : undefined);
-            const fromDisplayName = request.fromDisplayName || (sendingSession && typeof sendingSession !== 'string' ?
-                (sendingSession.metadata?.name || sendingSession.metadata?.path) : undefined);
+            const fromRole = request.fromRole ?? (sendingSession?.metadata?.role);
+            const fromDisplayName = request.fromDisplayName ?? (sendingSession?.metadata?.name || sendingSession?.metadata?.path);
 
             const message: import('@/sync/teamMessageTypes').TeamMessage = {
                 id: randomUUID(),
