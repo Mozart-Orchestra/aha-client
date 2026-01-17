@@ -244,6 +244,7 @@ export const storage = create<StorageState>()((set, get) => {
     let profile = loadProfile();
     let sessionDrafts = loadSessionDrafts();
     let sessionPermissionModes = loadSessionPermissionModes();
+    let artifacts = loadArtifacts();
     return {
         settings,
         settingsVersion: version,
@@ -252,7 +253,7 @@ export const storage = create<StorageState>()((set, get) => {
         profile,
         sessions: {},
         machines: {},
-        artifacts: {},  // Initialize artifacts
+        artifacts,  // Load persisted artifacts
         friends: {},  // Initialize relationships cache
         users: {},  // Initialize global user cache
         feedItems: [],  // Initialize feed items list
