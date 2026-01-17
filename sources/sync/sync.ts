@@ -587,6 +587,7 @@ class Sync {
             log.log(`📦 fetchArtifactsList: Received ${artifacts.length} artifacts from server`);
             console.log(`📦 fetchArtifactsList: Server returned ${artifacts.length} artifacts:`, artifacts.map(a => ({ id: a.id, createdAt: a.createdAt })));
             const decryptedArtifacts: DecryptedArtifact[] = [];
+            const invalidArtifactIds: string[] = [];
 
             for (const artifact of artifacts) {
                 try {
@@ -622,21 +623,32 @@ class Sync {
                     });
                 } catch (err) {
                     console.error(`Failed to decrypt artifact ${artifact.id}:`, err);
-                    // Add with decryption failed flag
-                    decryptedArtifacts.push({
-                        id: artifact.id,
-                        title: null,
-                        body: undefined,
-                        headerVersion: artifact.headerVersion,
-                        seq: artifact.seq,
-                        createdAt: artifact.createdAt,
-                        updatedAt: artifact.updatedAt,
-                        isDecrypted: false,
-                    });
+                    console.log(`🗑️ Artifact ${artifact.id} appears to be encrypted with old/invalid key, marking for deletion`);
+                    invalidArtifactIds.push(artifact.id);
                 }
             }
 
-            log.log(`📦 fetchArtifactsList: Successfully decrypted ${decryptedArtifacts.length} artifacts`);
+            // Clean up invalid artifacts from server and local storage
+            if (invalidArtifactIds.length > 0) {
+                console.log(`🗑️ Deleting ${invalidArtifactIds.length} invalid artifacts from server and local storage...`);
+
+                // Remove from local storage first
+                for (const artifactId of invalidArtifactIds) {
+                    storage.getState().deleteArtifact(artifactId);
+                }
+
+                // Then delete from server
+                for (const artifactId of invalidArtifactIds) {
+                    try {
+                        await deleteArtifact(this.credentials, artifactId);
+                        console.log(`✅ Deleted invalid artifact ${artifactId} from server`);
+                    } catch (deleteErr) {
+                        console.error(`Failed to delete invalid artifact ${artifactId}:`, deleteErr);
+                    }
+                }
+            }
+
+            log.log(`📦 fetchArtifactsList: Successfully decrypted ${decryptedArtifacts.length} artifacts (deleted ${invalidArtifactIds.length} invalid)`);
             storage.getState().applyArtifacts(decryptedArtifacts);
             log.log('📦 fetchArtifactsList: Artifacts applied to storage');
         } catch (error) {

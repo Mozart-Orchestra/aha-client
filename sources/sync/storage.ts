@@ -244,7 +244,26 @@ export const storage = create<StorageState>()((set, get) => {
     let profile = loadProfile();
     let sessionDrafts = loadSessionDrafts();
     let sessionPermissionModes = loadSessionPermissionModes();
-    let artifacts = loadArtifacts();
+    let loadedArtifacts = loadArtifacts();
+
+    // Clean up artifacts with undefined type (old/corrupted data)
+    const validArtifacts: Record<string, DecryptedArtifact> = {};
+    let cleanedCount = 0;
+    Object.entries(loadedArtifacts).forEach(([id, artifact]) => {
+        if (artifact.type !== undefined) {
+            validArtifacts[id] = artifact;
+        } else {
+            cleanedCount++;
+            console.log(`🗑️ Cleaned up corrupted artifact ${id} (type: undefined)`);
+        }
+    });
+
+    if (cleanedCount > 0) {
+        console.log(`🧹 Cleaned up ${cleanedCount} corrupted artifacts from local storage`);
+        saveArtifacts(validArtifacts);
+    }
+
+    let artifacts = validArtifacts;
     return {
         settings,
         settingsVersion: version,
