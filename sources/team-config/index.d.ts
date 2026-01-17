@@ -60,11 +60,11 @@ export interface SharedKanbanBoard {
   };
 }
 
-export const READ_ONLY_TOOLS: string[];
-export const TEAM_ROLE_LIBRARY: SharedTeamRole[];
-export const TEAM_ROLE_MAP: Record<string, SharedTeamRole>;
-export const DEFAULT_TEAM_AGREEMENTS: SharedTeamAgreements;
-export const DEFAULT_KANBAN_COLUMNS: SharedKanbanColumn[];
-export const DEFAULT_KANBAN_BOARD: SharedKanbanBoard;
-export const DEFAULT_STATUS_PROPAGATION: SharedStatusPropagation;
-export const DEFAULT_NESTED_TASK_SETTINGS: SharedNestedTaskSettings;
+export declare const READ_ONLY_TOOLS: string[];
+export declare const TEAM_ROLE_LIBRARY: SharedTeamRole[];
+export declare const TEAM_ROLE_MAP: Record<string, SharedTeamRole>;
+export declare const DEFAULT_TEAM_AGREEMENTS: SharedTeamAgreements;
+export declare const DEFAULT_KANBAN_COLUMNS: SharedKanbanColumn[];
+export declare const DEFAULT_KANBAN_BOARD: SharedKanbanBoard;
+export declare const DEFAULT_STATUS_PROPAGATION: SharedStatusPropagation;
+export declare const DEFAULT_NESTED_TASK_SETTINGS: SharedNestedTaskSettings;

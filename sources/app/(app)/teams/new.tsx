@@ -17,8 +17,20 @@ const ROLE_LIBRARY: Record<string, KanbanTeamRole> = DEFAULT_TEAM_ROLES.reduce((
     return acc;
 }, {} as Record<string, KanbanTeamRole>);
 const INITIAL_ROLE_COUNTS: Record<string, number> = DEFAULT_TEAM_ROLES.reduce((acc, role) => {
-    if (role.id === 'master' || role.id === 'builder' || role.id === 'framer') {
+    if (role.id === 'master') {
         acc[role.id] = 1;
+    } else if (role.id === 'builder') {
+        acc[role.id] = 1;
+    } else if (role.id === 'framer') {
+        acc[role.id] = 0;
+    } else if (role.id === 'scout') {
+        acc[role.id] = 1;
+    } else if (role.id === 'scribe') {
+        acc[role.id] = 1;
+    } else if (role.id === 'qa') {
+        acc[role.id] = 0;
+    } else if (role.id === 'reviewer') {
+        acc[role.id] = 0;
     } else {
         acc[role.id] = 0;
     }

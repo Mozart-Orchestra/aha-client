@@ -1509,6 +1509,144 @@ class Sync {
         }
     }
 
+    private syncSessionToTeam = async (sessionId: string, sessionMetadata: any): Promise<void> => {
+        if (!sessionMetadata) {
+            return;
+        }
+
+        // Handle case where metadata is JSON string
+        let metadata = sessionMetadata;
+        if (typeof sessionMetadata === 'string') {
+            try {
+                metadata = JSON.parse(sessionMetadata);
+            } catch (e) {
+                console.error(`[syncSessionToTeam] Failed to parse metadata string:`, e);
+                return;
+            }
+        }
+
+        const teamId = metadata.teamId;
+        const role = metadata.role;
+        const displayName = metadata.name || metadata.path;
+
+        // Only sync if session has both teamId and role
+        if (!teamId || !role) {
+            return;
+        }
+
+        try {
+            // Get team artifact
+            const teamArtifact = await this.fetchArtifactWithBody(teamId);
+
+            if (!teamArtifact || !teamArtifact.body) {
+                console.log(`[syncSessionToTeam] Team artifact ${teamId} not found or has no body`);
+                return;
+            }
+
+            let board: any;
+            try {
+                board = JSON.parse(teamArtifact.body);
+            } catch (e) {
+                console.error(`[syncSessionToTeam] Failed to parse team body:`, e);
+                return;
+            }
+
+            // Check if team structure exists
+            if (!board.team || !Array.isArray(board.team.members)) {
+                console.log(`[syncSessionToTeam] Team artifact has no team.members array`);
+                return;
+            }
+
+            // Check if session is already in members
+            const existingMember = board.team.members.find((m: any) => m.sessionId === sessionId);
+
+            if (existingMember) {
+                // Update existing member's info if needed
+                if (existingMember.roleId !== role || existingMember.displayName !== displayName) {
+                    console.log(`[syncSessionToTeam] Updating existing member ${sessionId}`);
+                    existingMember.roleId = role;
+                    existingMember.displayName = displayName;
+
+                    // Save updated board
+                    const updatedBody = JSON.stringify(board, null, 2);
+                    await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, teamArtifact.sessions || [], false, 'team');
+                }
+                return;
+            }
+
+            // Add new member
+            console.log(`[syncSessionToTeam] Adding new member ${sessionId} to team ${teamId}`);
+            const newMember: any = {
+                sessionId,
+                roleId: role,
+                displayName: displayName || `Agent ${role}`,
+                focusAreas: []
+            };
+
+            board.team.members.push(newMember);
+
+            // Save updated board
+            const updatedBody = JSON.stringify(board, null, 2);
+
+            // Collect all member session IDs
+            const allMemberIds = board.team.members
+                .map((m: any) => m.sessionId)
+                .filter((id: string) => id && id.length > 0);
+
+            await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, allMemberIds, false, 'team');
+
+            console.log(`[syncSessionToTeam] Successfully added member ${sessionId} to team ${teamId}`);
+        } catch (error) {
+            console.error(`[syncSessionToTeam] Failed to sync session to team:`, error);
+        }
+    }
+
+    private removeSessionFromTeams = async (sessionId: string): Promise<void> => {
+        try {
+            // Get all artifacts
+            const artifacts = storage.getState().artifacts;
+
+            // Filter for team artifacts
+            const teamArtifacts = Object.values(artifacts).filter(a => a.type === 'team' && a.body);
+
+            for (const teamArtifact of teamArtifacts) {
+                let board: any;
+                try {
+                    board = JSON.parse(teamArtifact.body!);
+                } catch (e) {
+                    continue;
+                }
+
+                // Check if team structure exists and has members
+                if (!board.team || !Array.isArray(board.team.members)) {
+                    continue;
+                }
+
+                // Check if session is in members
+                const memberIndex = board.team.members.findIndex((m: any) => m.sessionId === sessionId);
+
+                if (memberIndex !== -1) {
+                    console.log(`[removeSessionFromTeams] Removing ${sessionId} from team ${teamArtifact.id}`);
+
+                    // Remove member from array
+                    board.team.members.splice(memberIndex, 1);
+
+                    // Update artifact
+                    const updatedBody = JSON.stringify(board, null, 2);
+                    const allMemberIds = board.team.members
+                        .map((m: any) => m.sessionId)
+                        .filter((id: string) => id && id.length > 0);
+
+                    await this.updateArtifact(teamArtifact.id, teamArtifact.title || teamArtifact.id, updatedBody, allMemberIds, false, 'team');
+
+                    console.log(`[removeSessionFromTeams] Successfully removed ${sessionId} from team ${teamArtifact.id}`);
+                }
+            }
+        } catch (error) {
+            console.error(`[removeSessionFromTeams] Failed to remove session from teams:`, error);
+        }
+    }
+
     private fetchNativeUpdate = async () => {
         try {
             // Skip in development
@@ -1960,6 +2098,9 @@ class Sync {
             // Clear any cached git status
             gitStatusSync.clearForSession(sessionId);
 
+            // Remove session from all teams it belongs to
+            this.removeSessionFromTeams(sessionId);
+
             log.log(`🗑️ Session ${sessionId} deleted from local storage`);
         } else if (updateData.body.t === 'update-session') {
             const session = storage.getState().sessions[updateData.body.id];
@@ -2004,6 +2145,9 @@ class Sync {
                         voiceHooks.onPermissionRequested(updateData.body.id, requestIds[0], toolName, firstRequest?.arguments);
                     }
                 }
+
+                // Auto-sync session metadata to team artifact if session has team information
+                this.syncSessionToTeam(updateData.body.id, metadata);
             }
         } else if (updateData.body.t === 'update-account') {
             const accountUpdate = updateData.body;
