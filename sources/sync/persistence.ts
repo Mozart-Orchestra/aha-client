@@ -4,6 +4,7 @@ import { LocalSettings, localSettingsDefaults, localSettingsParse } from './loca
 import { Purchases, purchasesDefaults, purchasesParse } from './purchases';
 import { Profile, profileDefaults, profileParse } from './profile';
 import type { PermissionMode } from '@/components/PermissionModeSelector';
+import type { DecryptedArtifact } from './artifactTypes';
 
 const mmkv = new MMKV();
 
@@ -144,6 +145,23 @@ export function loadProfile(): Profile {
 
 export function saveProfile(profile: Profile) {
     mmkv.set('profile', JSON.stringify(profile));
+}
+
+export function loadArtifacts(): Record<string, DecryptedArtifact> {
+    const artifacts = mmkv.getString('artifacts');
+    if (artifacts) {
+        try {
+            return JSON.parse(artifacts);
+        } catch (e) {
+            console.error('Failed to parse artifacts', e);
+            return {};
+        }
+    }
+    return {};
+}
+
+export function saveArtifacts(artifacts: Record<string, DecryptedArtifact>) {
+    mmkv.set('artifacts', JSON.stringify(artifacts));
 }
 
 // Simple temporary text storage for passing large strings between screens
