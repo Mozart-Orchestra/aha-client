@@ -4,6 +4,7 @@
   "description": "Shared team role definitions and Kanban defaults for Happy apps",
   "license": "MIT",
   "types": "./index.d.ts",
+  "main": "index.cjs",
   "exports": {
     ".": {
       "types": "./index.d.ts",

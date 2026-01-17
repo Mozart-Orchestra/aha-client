@@ -4,6 +4,7 @@ export interface SharedTeamRolePolicy {
   watchers?: string[];
   accessLevel?: 'read-only' | 'full-access';
   disallowedTools?: string[];
+  taskSettings?: SharedNestedTaskSettings;
 }
 
 export interface SharedTeamRole {
