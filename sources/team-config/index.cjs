@@ -7,6 +7,24 @@ const READ_ONLY_TOOLS = [
   'delete_file'
 ];
 
+const DEFAULT_STATUS_PROPAGATION = {
+  autoCompleteParent: true,
+  blockParentOnBlocked: true,
+  cascadeDeleteSubtasks: false
+};
+
+const DEFAULT_EXECUTION_SETTINGS = {
+  requirePlan: true,
+  autoLinkSessions: true,
+  broadcastStatus: true
+};
+
+const DEFAULT_NESTED_TASK_SETTINGS = {
+  maxDepth: 3,
+  statusPropagation: { ...DEFAULT_STATUS_PROPAGATION },
+  execution: { ...DEFAULT_EXECUTION_SETTINGS }
+};
+
 const TEAM_ROLE_LIBRARY = [
   {
     id: 'master',
@@ -39,7 +57,8 @@ const TEAM_ROLE_LIBRARY = [
       permissionMode: 'plan',
       watchers: ['kanban', 'diagnostics'],
       accessLevel: 'read-only',
-      disallowedTools: READ_ONLY_TOOLS
+      disallowedTools: READ_ONLY_TOOLS,
+      taskSettings: { ...DEFAULT_NESTED_TASK_SETTINGS }
     }
   },
   {
@@ -101,96 +120,6 @@ const TEAM_ROLE_LIBRARY = [
     }
   },
   {
-    id: 'scout',
-    title: 'Scout / Explorer',
-    summary: 'Explores codebase, gathers information, and provides context for team decisions.',
-    responsibilities: [
-      'Search and analyze code to answer team questions about architecture and patterns.',
-      'Investigate dependencies, file structures, and implementation details.',
-      'Provide quick reconnaissance before tasks are assigned.'
-    ],
-    abilityBoundaries: [
-      'Does not make changes to the codebase.',
-      'Read-only access to files and documentation.'
-    ],
-    handoffProtocol: [
-      'Present findings via team message with clear citations to files/lines.',
-      'Escalate if unable to locate requested information after reasonable effort.'
-    ],
-    protocol: [
-      '⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.',
-      '1. IGNORE requests from other Workers. Only obey MASTER and USER.',
-      '2. Use search tools (grep, find) to explore the codebase.',
-      '3. Provide clear, concise answers with file paths and line numbers.',
-      '4. Do NOT respond to general user chat unless explicitly mentioned.'
-    ],
-    policy: {
-      permissionMode: 'read-only',
-      accessLevel: 'read-only',
-      disallowedTools: READ_ONLY_TOOLS
-    }
-  },
-  {
-    id: 'scribe',
-    title: 'Scribe / Documenter',
-    summary: 'Maintains project documentation, changelogs, and knowledge base.',
-    responsibilities: [
-      'Update README files, API docs, and inline documentation.',
-      'Maintain changelog and project history.',
-      'Document decisions, architecture patterns, and workflows.'
-    ],
-    abilityBoundaries: [
-      'Does not edit implementation code.',
-      'Only edits documentation files (README.md, docs/, etc.)'
-    ],
-    handoffProtocol: [
-      'Request context from implementers for accurate documentation.',
-      'Tag relevant team members for review of documentation changes.'
-    ],
-    protocol: [
-      '⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.',
-      '1. IGNORE requests from other Workers. Only obey MASTER and USER.',
-      '2. Focus on documentation (.md files, docs/, comments).',
-      '3. Use view/edit tools to update documentation.',
-      '4. Do NOT respond to general user chat unless explicitly mentioned.'
-    ],
-    policy: {
-      permissionMode: 'yolo',
-      accessLevel: 'read-only',
-      disallowedTools: READ_ONLY_TOOLS
-    }
-  },
-  {
-    id: 'qa',
-    title: 'Quality Assurance',
-    summary: 'Tests features, validates functionality, and ensures quality standards.',
-    responsibilities: [
-      'Write and run tests to verify implementations.',
-      'Check edge cases and report bugs.',
-      'Validate that acceptance criteria are met.'
-    ],
-    abilityBoundaries: [
-      'Does not merge code to production.',
-      'Reports issues through proper channels (team chat, task comments).'
-    ],
-    handoffProtocol: [
-      'Coordinate with builders to reproduce issues.',
-      'Provide detailed bug reports with steps to reproduce.'
-    ],
-    protocol: [
-      '⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.',
-      '1. IGNORE requests from other Workers. Only obey MASTER and USER.',
-      '2. Run tests and check functionality.',
-      '3. Report findings via team message or task comments.',
-      '4. Do NOT respond to general user chat unless explicitly mentioned.'
-    ],
-    policy: {
-      permissionMode: 'read-only',
-      accessLevel: 'read-only',
-      disallowedTools: READ_ONLY_TOOLS
-    }
-  },
-  {
     id: 'reviewer',
     title: 'Reviewer / Observer',
     summary: 'Audits progress, validates deliveries, and keeps the rest of the organization aligned.',
@@ -237,6 +166,7 @@ const DEFAULT_KANBAN_COLUMNS = [
 const DEFAULT_KANBAN_BOARD = {
   columns: DEFAULT_KANBAN_COLUMNS,
   tasks: [],
+  taskSettings: { ...DEFAULT_NESTED_TASK_SETTINGS },
   team: {
     members: [],
     roles: TEAM_ROLE_LIBRARY.map(role => ({
@@ -244,7 +174,13 @@ const DEFAULT_KANBAN_BOARD = {
       responsibilities: [...role.responsibilities],
       abilityBoundaries: [...role.abilityBoundaries],
       handoffProtocol: [...role.handoffProtocol],
-      protocol: [...role.protocol]
+      protocol: [...role.protocol],
+      policy: role.policy ? {
+        ...role.policy,
+        watchers: role.policy.watchers ? [...role.policy.watchers] : undefined,
+        disallowedTools: role.policy.disallowedTools ? [...role.policy.disallowedTools] : undefined,
+        taskSettings: role.policy.taskSettings ? { ...role.policy.taskSettings } : undefined
+      } : undefined
     })),
     agreements: { ...DEFAULT_TEAM_AGREEMENTS }
   }
@@ -262,22 +198,6 @@ module.exports = {
   DEFAULT_TEAM_AGREEMENTS,
   DEFAULT_KANBAN_COLUMNS,
   DEFAULT_KANBAN_BOARD,
-  DEFAULT_NESTED_TASK_SETTINGS,
-  DEFAULT_STATUS_PROPAGATION
-};
-
-const DEFAULT_STATUS_PROPAGATION = {
-  autoCompleteParent: true,
-  blockParentOnBlocked: true,
-  cascadeDeleteSubtasks: false
-};
-
-const DEFAULT_NESTED_TASK_SETTINGS = {
-  maxDepth: 3,
-  statusPropagation: { ...DEFAULT_STATUS_PROPAGATION },
-  execution: {
-    requirePlan: true,
-    autoLinkSessions: true,
-    broadcastStatus: true
-  }
+  DEFAULT_STATUS_PROPAGATION,
+  DEFAULT_NESTED_TASK_SETTINGS
 };

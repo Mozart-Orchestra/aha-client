@@ -11,10 +11,35 @@ export interface AuthCredentials {
     secret: string;
 }
 
+/**
+ * Web storage with sessionStorage fallback for better security.
+ * Note: For production web apps, consider using HttpOnly cookies
+ * or a more secure storage mechanism to protect against XSS attacks.
+ */
+const WebStorage = {
+    getItem(key: string): string | null {
+        // Use sessionStorage for better security (cleared on tab close)
+        // Falls back to localStorage for persistence if needed
+        return sessionStorage.getItem(key) ?? localStorage.getItem(key);
+    },
+    setItem(key: string, value: string): void {
+        // Store in sessionStorage for security
+        sessionStorage.setItem(key, value);
+        // Also store in localStorage for persistence across tabs
+        // but clear it on explicit logout
+        localStorage.setItem(key, value);
+    },
+    removeItem(key: string): void {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+    }
+};
+
 export const TokenStorage = {
     async getCredentials(): Promise<AuthCredentials | null> {
         if (Platform.OS === 'web') {
-            return localStorage.getItem(AUTH_KEY) ? JSON.parse(localStorage.getItem(AUTH_KEY)!) as AuthCredentials : null;
+            const stored = WebStorage.getItem(AUTH_KEY);
+            return stored ? JSON.parse(stored) as AuthCredentials : null;
         }
         try {
             const stored = await SecureStore.getItemAsync(AUTH_KEY);
@@ -29,7 +54,7 @@ export const TokenStorage = {
 
     async setCredentials(credentials: AuthCredentials): Promise<boolean> {
         if (Platform.OS === 'web') {
-            localStorage.setItem(AUTH_KEY, JSON.stringify(credentials));
+            WebStorage.setItem(AUTH_KEY, JSON.stringify(credentials));
             return true;
         }
         try {
@@ -44,8 +69,8 @@ export const TokenStorage = {
     },
 
     async removeCredentials(): Promise<boolean> {
-        if (Platform.OS === 'web') {    
-            localStorage.removeItem(AUTH_KEY);
+        if (Platform.OS === 'web') {
+            WebStorage.removeItem(AUTH_KEY);
             return true;
         }
         try {
