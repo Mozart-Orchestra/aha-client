@@ -86,4 +86,12 @@ export function getTeamRoleTitles(): Record<string, string> {
   }, {} as Record<string, string>)
 }
 
+/**
+ * Export as array for backward compatibility with DEFAULT_TEAM_ROLES
+ * This allows easy migration from hardcoded roles to localized roles
+ */
+export function getLocalizedTeamRolesAsArray() {
+  return getLocalizedTeamRoles()
+}
+
 export default getLocalizedTeamRoles

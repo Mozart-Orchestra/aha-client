@@ -11,8 +11,11 @@ import { useAllSessions, storage, useAllMachines, useSetting } from '@/sync/stor
 import { Ionicons } from '@expo/vector-icons';
 import { DEFAULT_KANBAN_BOARD, KanbanTeamMember, KanbanBoard, DEFAULT_TEAM_AGREEMENTS, DEFAULT_TEAM_ROLES, KanbanTeamRole } from '@/sync/kanbanTypes';
 import { getRecentPathForMachine, updateRecentMachinePaths, getKnownPathsForMachine } from '@/utils/machinePaths';
+import { getLocalizedTeamRoles } from '@/team-config/i18n';
 
-const ROLE_LIBRARY: Record<string, KanbanTeamRole> = DEFAULT_TEAM_ROLES.reduce((acc, role) => {
+// Use localized team roles instead of hardcoded ones
+const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
+const ROLE_LIBRARY: Record<string, KanbanTeamRole> = LOCALIZED_TEAM_ROLES.reduce((acc, role) => {
     acc[role.id] = role;
     return acc;
 }, {} as Record<string, KanbanTeamRole>);
@@ -816,7 +819,7 @@ export default function NewTeamScreen() {
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Team Composition (Auto-Spawn)</Text>
                         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: theme.colors.divider }}>
-                            {DEFAULT_TEAM_ROLES.map(role => (
+                            {LOCALIZED_TEAM_ROLES.map(role => (
                                 <View key={role.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, lastChild: { marginBottom: 0 } } as any}>
                                     <View style={{ flex: 1, marginRight: 16 }}>
                                         <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 4 }}>{role.title}</Text>
