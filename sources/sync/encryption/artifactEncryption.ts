@@ -69,9 +69,15 @@ export class ArtifactEncryption {
             if (typeof value !== 'object' || value === null) {
                 return null;
             }
-            return {
-                body: typeof value.body === 'string' ? value.body : null
-            };
+            // Handle both string bodies (legacy notes) and object bodies (team artifacts)
+            const bodyValue = value.body;
+            if (typeof bodyValue === 'string') {
+                return { body: bodyValue };
+            } else if (typeof bodyValue === 'object' && bodyValue !== null) {
+                // Team artifact with object body - serialize it back to JSON string
+                return { body: JSON.stringify(bodyValue) };
+            }
+            return null;
         };
 
         // Try encrypted format first
