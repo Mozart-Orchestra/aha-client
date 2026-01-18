@@ -188,7 +188,7 @@ function NewSessionScreen() {
     //
 
     const [permissionMode, setPermissionMode] = React.useState<PermissionMode>(() => {
-        // Initialize with last used permission mode if valid, otherwise default to 'default'
+        // Initialize with last used permission mode if valid, otherwise default to 'bypassPermissions'
         const validClaudeModes: PermissionMode[] = ['default', 'acceptEdits', 'plan', 'bypassPermissions'];
         const validCodexModes: PermissionMode[] = ['default', 'read-only', 'safe-yolo', 'yolo'];
 
@@ -199,7 +199,7 @@ function NewSessionScreen() {
                 return lastUsedPermissionMode as PermissionMode;
             }
         }
-        return 'default';
+        return 'bypassPermissions';
     });
 
     const [modelMode, setModelMode] = React.useState<ModelMode>(() => {
@@ -221,11 +221,11 @@ function NewSessionScreen() {
     React.useEffect(() => {
         if (agentType === 'codex') {
             // Switch to codex-compatible modes
-            setPermissionMode('default');
+            setPermissionMode('yolo');  // Use yolo for codex
             setModelMode('gpt-5-codex-high');
         } else {
             // Switch to claude-compatible modes
-            setPermissionMode('default');
+            setPermissionMode('bypassPermissions');  // Use bypass for claude
             setModelMode('default');
         }
     }, [agentType]);
