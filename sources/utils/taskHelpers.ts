@@ -231,3 +231,73 @@ export function canStartTask(task: KanbanTask, allTasks: KanbanTask[]): boolean 
     if (isTaskBlocked(task, allTasks)) return false;
     return true;
 }
+
+/**
+ * 🆕 Edit a task
+ * Updates task fields while preserving metadata
+ */
+export function editTask(task: KanbanTask, updates: Partial<KanbanTask>): KanbanTask {
+    return {
+        ...task,
+        ...updates,
+        id: task.id,  // Preserve ID
+        createdAt: task.createdAt,  // Preserve creation time
+        updatedAt: Date.now(),  // Update modification time
+        // Preserve approval metadata
+        approvalStatus: updates.approvalStatus || task.approvalStatus,
+        approvedBy: updates.approvedBy || task.approvedBy,
+        rejectedBy: updates.rejectedBy || task.rejectedBy,
+        rejectionReason: updates.rejectionReason || task.rejectionReason
+    };
+}
+
+/**
+ * 🆕 Delete a task (mark as deleted)
+ * Returns a copy of the task with deletion metadata
+ */
+export function deleteTask(task: KanbanTask, deleterId: string, reason?: string): KanbanTask {
+    return {
+        ...task,
+        approvalStatus: 'rejected',
+        rejectionReason: reason || 'Task deleted',
+        rejectedBy: [...(task.rejectedBy || []), deleterId],
+        updatedAt: Date.now(),
+        // Add deletion marker
+        source: 'deleted'
+    };
+}
+
+/**
+ * 🆕 Reassign a task to a different team member
+ */
+export function reassignTask(task: KanbanTask, newAssigneeId: string, reassignerId: string): KanbanTask {
+    return {
+        ...task,
+        assigneeId: newAssigneeId,
+        updatedAt: Date.now(),
+        // Track reassignment history
+        reassignedBy: [reassignerId],
+        reassignedAt: Date.now()
+    };
+}
+
+/**
+ * 🆕 Get tasks pending approval
+ */
+export function getPendingApprovalTasks(tasks: KanbanTask[]): KanbanTask[] {
+    return tasks.filter(task => taskNeedsApproval(task));
+}
+
+/**
+ * 🆕 Get approved tasks
+ */
+export function getApprovedTasks(tasks: KanbanTask[]): KanbanTask[] {
+    return tasks.filter(task => task.approvalStatus === 'approved');
+}
+
+/**
+ * 🆕 Get rejected tasks
+ */
+export function getRejectedTasks(tasks: KanbanTask[]): KanbanTask[] {
+    return tasks.filter(task => task.approvalStatus === 'rejected');
+}
