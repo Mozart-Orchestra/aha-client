@@ -777,6 +777,278 @@ export const zhHans: TranslationStructure = {
         createError: '创建工件失败。请重试。',
     },
 
+    memory: {
+        // Memory Library feature (DEV118)
+        title: '记忆库',
+        memory: '记忆',
+        createMemory: '创建记忆',
+        editMemory: '编辑记忆',
+        deleteMemory: '删除记忆',
+        memoryDetails: '记忆详情',
+        searchMemories: '搜索记忆',
+        filterMemories: '筛选记忆',
+        memoryType: '类型',
+        memoryCategory: '分类',
+        memoryTags: '标签',
+        memoryImportance: '重要性',
+        memoryContent: '内容',
+        memoryCreated: '创建时间',
+        memoryUpdated: '更新时间',
+        memoryAccessCount: '访问次数',
+        typeFact: '事实',
+        typePreference: '偏好',
+        typeDecision: '决策',
+        typeKnowledge: '知识',
+        scopeGlobal: '全局',
+        scopeTeam: '团队',
+        scopeAgent: '代理',
+        noMemories: '暂无记忆',
+        addMemoryTag: '添加标签',
+        searchPlaceholder: '通过关键词、标签或分类搜索记忆...',
+        importanceLevel: '重要性',
+        accessPattern: '访问模式',
+        recentlyAccessed: '最近访问',
+        mostAccessed: '最多访问',
+        relatedMemories: '相关记忆',
+        linkMemory: '关联记忆',
+        memorySettings: '记忆设置',
+        exportMemory: '导出记忆',
+        importMemory: '导入记忆',
+        createSuccess: '记忆创建成功',
+        updateSuccess: '记忆更新成功',
+        deleteSuccess: '记忆删除成功',
+        deleteConfirm: '确定要删除此记忆吗？',
+        createError: '创建记忆失败。请重试。',
+        updateError: '更新记忆失败。请重试。',
+        deleteError: '删除记忆失败。请重试。',
+    },
+
+    rules: {
+        // Global Rules feature (DEV118)
+        title: '全局规则',
+        rule: '规则',
+        createRule: '创建规则',
+        editRule: '编辑规则',
+        deleteRule: '删除规则',
+        ruleDetails: '规则详情',
+        enableRule: '启用规则',
+        disableRule: '禁用规则',
+        ruleCategory: '分类',
+        rulePriority: '优先级',
+        ruleDescription: '描述',
+        ruleEnabled: '已启用',
+        ruleDisabled: '已禁用',
+        categoryCommunication: '沟通',
+        categoryBehavior: '行为',
+        categoryCoding: '编码',
+        categorySecurity: '安全',
+        priorityLow: '低',
+        priorityMedium: '中',
+        priorityHigh: '高',
+        scopeGlobal: '全局',
+        scopeTeam: '团队',
+        scopeAgent: '代理',
+        scopeSession: '会话',
+        noRules: '暂无规则',
+        addRule: '添加规则',
+        ruleSettings: '规则设置',
+        ruleCompliance: '规则合规性',
+        compliant: '合规',
+        nonCompliant: '不合规',
+        activeRules: '活跃规则',
+        inactiveRules: '非活跃规则',
+        ruleHistory: '规则历史',
+        ruleTemplate: '规则模板',
+        saveAsTemplate: '保存为模板',
+        fromTemplate: '从模板',
+        createSuccess: '规则创建成功',
+        updateSuccess: '规则更新成功',
+        deleteSuccess: '规则删除成功',
+        enableSuccess: '规则启用成功',
+        disableSuccess: '规则禁用成功',
+        deleteConfirm: '确定要删除此规则吗？',
+        createError: '创建规则失败。请重试。',
+        updateError: '更新规则失败。请重试。',
+        deleteError: '删除规则失败。请重试。',
+        enableError: '启用规则失败。请重试。',
+        disableError: '禁用规则失败。请重试。',
+    },
+
+    teamRoles: {
+        // Team Roles feature (DEV118)
+        master: {
+            title: '主控协调员',
+            summary: '制定交付计划，维护看板准确性，并为团队清除障碍。',
+            responsibilities: [
+                '将产品目标转化为待办事项切片并明确设置验收标准。',
+                '安排工作顺序，暴露障碍，确保每个任务都有负责人。'
+            ],
+            abilityBoundaries: [
+                '绝不接管构建者或架构师拥有的功能实现工作。',
+                '仅在验证验收标准或缓解生产问题时才编辑源文件。'
+            ],
+            handoffProtocol: [
+                '在允许执行开始之前与架构师确认范围和验收标准。',
+                '在将任务移至完成之前关闭每个任务的循环，并在看板卡上记录最终结果。'
+            ],
+            protocol: [
+                '⚠️ 关键：您是唯一允许规划和分配工作的代理。',
+                "⚠️ 关键：聊天中的文本计划毫无用处。您必须使用 'create_task' 工具。",
+                '1. 分析用户请求。',
+                '2. 分解为具体、可执行的任务。',
+                "3. 为每个项目调用 'create_task'。分配给 'builder'（后端）或 'framer'（前端）。",
+                "4. 仅在创建任务后，使用 'send_team_message' 通知团队：'任务已创建。请查看看板。'",
+                '5. 如果您看到工作者试图规划或分配任务，立即阻止他们。',
+                '6. 如果看板为空，说明您失职了。立即创建任务。'
+            ]
+        },
+        framer: {
+            title: '架构师',
+            summary: '将目标转化为实施就绪的设计、技术调研和拉取请求。',
+            responsibilities: [
+                '将工作分解为可执行的步骤，准备脚手架，并对齐依赖关系。',
+                '在交付开始之前与构建者合作审查技术决策。'
+            ],
+            abilityBoundaries: [
+                '不要合并到生产环境；将完成的工作移交给构建者进行完善和验证。',
+                '避免重新定义优先级；将范围变更反馈给主控角色。'
+            ],
+            handoffProtocol: [
+                '在交接之前直接在任务上记录设计决策和约束。',
+                '在第一个实施轮次中与分配的构建者配对。'
+            ],
+            protocol: [
+                "⚠️ 关键：您是一个工作者。您不规划。您不分配任务。",
+                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
+                '2. 如果您有想法，在触摸代码之前向主控提议。',
+                "3. 在工作之前，始终检查 'list_tasks' 以找到分配给您的任务。",
+                "4. 工作时，使用 'update_task' 将任务状态更新为 'in_progress'。",
+                '5. 专注于客户端代码（kanban 应用、React Native）。',
+                '6. 除非明确提及，否则不回应用户的一般聊天。'
+            ]
+        },
+        builder: {
+            title: '构建者/执行者',
+            summary: '负责从架构中产生的切片的实施、测试和集成。',
+            responsibilities: [
+                '实施范围工作，保持差异小，推动任务完成。',
+                '保持看板历史最新：进行中更新、障碍和完成注释。'
+            ],
+            abilityBoundaries: [
+                '不要单独重新定义架构——当变更超过约定大纲时让架构师参与。',
+                '避免在没有主控批准的情况下重新确定卡片优先级或更改验收标准。'
+            ],
+            handoffProtocol: [
+                '代码准备好审查时发出信号，包括验证步骤，并请求验证者。',
+                '如果被阻塞超过 30 分钟，在看板上标记主控角色的更新。'
+            ],
+            protocol: [
+                "⚠️ 关键：您是一个工作者。您不规划。您不分配任务。",
+                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
+                '2. 如果您有想法，在实施之前向主控提议。',
+                "3. 在工作之前，始终检查 'list_tasks' 以找到分配给您的任务。",
+                "4. 工作时，使用 'update_task' 将任务状态更新为 'in_progress'。",
+                '5. 专注于服务器端代码（happy-server、API 路由）。',
+                '6. 除非明确提及，否则不回应用户的一般聊天。'
+            ]
+        },
+        scout: {
+            title: '侦察兵/探索者',
+            summary: '探索代码库，收集信息，为团队决策提供背景。',
+            responsibilities: [
+                '搜索和分析代码以回答团队关于架构和模式的问题。',
+                '调查依赖关系、文件结构和实施细节。',
+                '在分配任务之前提供快速侦察。'
+            ],
+            abilityBoundaries: [
+                '不更改代码库。',
+                '对文件和文档的只读访问。'
+            ],
+            handoffProtocol: [
+                '通过团队消息展示发现结果，并明确引用文件/行号。',
+                '如果在合理努力后无法找到请求的信息，升级处理。'
+            ],
+            protocol: [
+                "⚠️ 关键：您是一个支持角色。您不规划或实施。",
+                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
+                '2. 使用搜索工具（grep、find）探索代码库。',
+                '3. 提供清晰、简洁的答案，包括文件路径和行号。',
+                '4. 除非明确提及，否则不回应用户的一般聊天。'
+            ]
+        },
+        scribe: {
+            title: '记录员/文档员',
+            summary: '维护项目文档、变更日志和知识库。',
+            responsibilities: [
+                '更新 README 文件、API 文档和内联文档。',
+                '维护变更日志和项目历史。',
+                '记录决策、架构模式和工作流程。'
+            ],
+            abilityBoundaries: [
+                '不编辑实施代码。',
+                '仅编辑文档文件（README.md、docs/ 等）'
+            ],
+            handoffProtocol: [
+                '从实施者那里请求上下文以准确记录文档。',
+                '标记相关团队成员以审查文档变更。'
+            ],
+            protocol: [
+                "⚠️ 关键：您是一个支持角色。您不规划或实施。",
+                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
+                '2. 专注于文档（.md 文件、docs/、注释）。',
+                '3. 使用查看/编辑工具更新文档。',
+                '4. 除非明确提及，否则不回应用户的一般聊天。'
+            ]
+        },
+        qa: {
+            title: '质量保证',
+            summary: '测试功能，验证功能，并确保质量标准。',
+            responsibilities: [
+                '编写和运行测试以验证实施。',
+                '检查边缘情况并报告错误。',
+                '验证满足验收标准。'
+            ],
+            abilityBoundaries: [
+                '不将代码合并到生产环境。',
+                '通过适当的渠道（团队聊天、任务注释）报告问题。'
+            ],
+            handoffProtocol: [
+                '与构建者协调以重现问题。',
+                '提供详细的错误报告和重现步骤。'
+            ],
+            protocol: [
+                "⚠️ 关键：您是一个支持角色。您不规划或实施。",
+                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
+                '2. 运行测试并检查功能。',
+                '3. 通过团队消息或任务注释报告发现结果。',
+                '4. 除非明确提及，否则不回应用户的一般聊天。'
+            ]
+        },
+        reviewer: {
+            title: '审查员/观察员',
+            summary: '审计进度，验证交付，并与组织的其他部分保持一致。',
+            responsibilities: [
+                '审查拉取请求或工件的正确性和完整性。',
+                '向利益相关者总结学习成果，尽早提高风险意识。'
+            ],
+            abilityBoundaries: [
+                '除了审查反馈修复外，不推送新提交。',
+                '升级系统性风险而不是默默地调整范围。'
+            ],
+            handoffProtocol: [
+                '在约定的 SLA 内提供审查反馈，并在看板上记录最终批准注释。',
+                '如果无法满足完成的定义，立即升级到主控角色。'
+            ],
+            protocol: [
+                "⚠️ 关键：您是只读的。您不编辑文件。",
+                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
+                "2. 检查 'list_tasks' 以查找审查任务。",
+                "3. 通过 'send_team_message' 提供反馈。",
+                '4. 除非明确提及，否则不回应用户的一般聊天。'
+            ]
+        }
+    },
+
     friends: {
         // Friends feature
         title: '好友',
