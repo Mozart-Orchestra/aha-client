@@ -7,6 +7,7 @@ import { TeamMessage, SendTeamMessageRequest } from '@/sync/teamMessageTypes';
 import { sync } from '@/sync/sync';
 import { MarkdownView } from './markdown/MarkdownView';
 import { useRouter } from 'expo-router';
+import { randomUUID } from 'expo-crypto';
 import {
   parseCommand,
   executeCreateTask,
@@ -18,6 +19,7 @@ import {
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { KanbanTask } from '@/sync/kanbanTypes';
 import { parseTaskCommand, createTaskFromCommand } from '@/utils/taskHelpers';
+import { extractTaskIds } from '@/utils/taskChatSync';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -427,7 +429,22 @@ export default function TeamChatRoom({
     // 🆕 使用外部 messages（如果提供），否则使用内部状态
     const [internalMessages, setInternalMessages] = React.useState<TeamMessage[]>([]);
     const messages = externalMessages ?? internalMessages;
-    const setMessages = onMessagesChange ?? setInternalMessages;
+    const messagesRef = React.useRef<TeamMessage[]>(messages);
+
+    React.useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
+
+    const setMessages = React.useCallback((update: React.SetStateAction<TeamMessage[]>) => {
+        if (onMessagesChange) {
+            const nextMessages = typeof update === 'function'
+                ? (update as (prev: TeamMessage[]) => TeamMessage[])(messagesRef.current)
+                : update;
+            onMessagesChange(nextMessages);
+            return;
+        }
+        setInternalMessages(update);
+    }, [onMessagesChange, setInternalMessages]);
 
     const [inputText, setInputText] = React.useState('');
     const [isSending, setIsSending] = React.useState(false);
@@ -445,7 +462,7 @@ export default function TeamChatRoom({
 
     React.useEffect(() => {
         setMessages([]);
-    }, [teamId]);
+    }, [teamId, setMessages]);
 
     // Filter active members for status display
     const activeMembers = React.useMemo(() => {
@@ -570,7 +587,7 @@ export default function TeamChatRoom({
     // Load messages
     React.useEffect(() => {
         loadMessages();
-    }, [teamId]);
+    }, [loadMessages]);
 
     // Subscribe to real-time messages
     React.useEffect(() => {
@@ -590,7 +607,7 @@ export default function TeamChatRoom({
         });
 
         return unsubscribe;
-    }, [teamId]);
+    }, [teamId, setMessages]);
 
     // Deduplicate and sort
     const uniqueMessages = React.useMemo(() => {
@@ -602,7 +619,7 @@ export default function TeamChatRoom({
         }).sort((a, b) => a.timestamp - b.timestamp);
     }, [messages]);
 
-    const loadMessages = async () => {
+    const loadMessages = React.useCallback(async () => {
         try {
             setIsLoading(true);
             const result = await sync.getTeamMessages(teamId);
@@ -621,7 +638,7 @@ export default function TeamChatRoom({
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [teamId, setMessages]);
 
     const handleSend = async () => {
         const content = inputText.trim();
@@ -630,9 +647,8 @@ export default function TeamChatRoom({
         try {
             setIsSending(true);
 
-            // 🆕 1. 检查是否应该从消息创建任务
-            if (taskChatSync && taskChatSync.shouldCreateTaskFromMessage(content)) {
-                // 直接调用 Hook 的 createTaskFromMessage 方法
+            // 🆕 1. 尝试从消息创建任务
+            if (taskChatSync) {
                 const createdTask = await taskChatSync.createTaskFromMessage(
                     content,
                     mySessionId || 'user',
@@ -644,19 +660,6 @@ export default function TeamChatRoom({
                     setInputText('');
                     return;
                 }
-            }
-
-            // 🆕 2. 检查是否引用了任务（自动链接消息到任务）
-            const taskIds = taskChatSync?.extractTaskIds(content) || [];
-            let messageMetadata: TeamMessage['metadata'] = undefined;
-
-            if (taskIds.length > 0 && taskChatSync) {
-                // 链接消息到第一个引用的任务
-                await taskChatSync.linkMessageToTask(`msg_${Date.now()}`, taskIds[0]);
-                messageMetadata = {
-                    taskId: taskIds[0],
-                    action: 'task_referenced'
-                };
             }
 
             // 🆕 3. 检查是否是 /task 命令（Master要求的格式）
@@ -777,10 +780,41 @@ export default function TeamChatRoom({
 
             // 4. 普通聊天消息
             const mentions = extractMentions(content);
+            const taskIds = taskChatSync ? extractTaskIds(content) : [];
+            const messageId = randomUUID();
+            const messageMetadata: TeamMessage['metadata'] = taskIds.length > 0
+                ? {
+                    taskId: taskIds[0],
+                    action: 'task_referenced'
+                }
+                : undefined;
+
+            if (taskIds.length > 0 && taskChatSync) {
+                const messageTimestamp = Date.now();
+                const outgoingMessage: TeamMessage = {
+                    id: messageId,
+                    teamId,
+                    content,
+                    type: 'chat',
+                    mentions: mentions.length > 0 ? mentions : undefined,
+                    fromRole: 'user',
+                    fromDisplayName: 'User',
+                    timestamp: messageTimestamp,
+                    metadata: messageMetadata
+                };
+
+                await taskChatSync.linkMessageToTask(
+                    messageId,
+                    taskIds[0],
+                    myDisplayName || 'User',
+                    outgoingMessage
+                );
+            }
 
             // User messages should NOT use team member's session ID
             // Leave fromSessionId undefined so Happy-CLI recognizes this as a user message
             const request: SendTeamMessageRequest = {
+                id: messageId,
                 teamId,
                 content,
                 type: 'chat',

@@ -11,7 +11,7 @@ const usageDataSchema = z.object({
     cache_creation_input_tokens: z.number().optional(),
     cache_read_input_tokens: z.number().optional(),
     output_tokens: z.number(),
-    service_tier: z.string().optional(),
+    service_tier: z.string().nullish(),
 });
 
 export type UsageData = z.infer<typeof usageDataSchema>;

@@ -172,9 +172,10 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
     const linkMessageToTask = useCallback(async (
         messageId: string,
         taskId: string,
-        actorName: string = '用户'
+        actorName: string = '用户',
+        messageOverride?: TeamMessage
     ): Promise<void> => {
-        const message = messages.find(m => m.id === messageId);
+        const message = messages.find(m => m.id === messageId) ?? messageOverride;
         const task = tasks.find(t => t.id === taskId);
 
         if (!message || !task) return;

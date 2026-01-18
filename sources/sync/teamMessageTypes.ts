@@ -59,7 +59,6 @@ export interface TeamMessageMetadata {
     attachmentIds?: string[];      // 附件 IDs（未来支持）
     edited?: boolean;              // 是否已编辑
     editedAt?: number;             // 编辑时间
-    mentions?: string[];           // 提及的成员 IDs
     reactions?: MessageReaction[]; // 消息反应
     handshake?: {
         type?: string;
@@ -82,6 +81,7 @@ export interface MessageReaction {
  */
 export interface SendTeamMessageRequest {
     teamId: string;
+    id?: string;
     content: string;
     type?: TeamMessageType;
     mentions?: string[];

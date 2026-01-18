@@ -62,7 +62,10 @@ export function parseTaskCommand(content: string): ParsedTaskCommand | null {
             }
         } else if (line.startsWith('#due ')) {
             const dueDate = line.slice(5).trim();
-            task.dueDate = new Date(dueDate).getTime();
+            const dueTimestamp = new Date(dueDate).getTime();
+            if (!Number.isNaN(dueTimestamp)) {
+                task.dueDate = dueTimestamp;
+            }
         } else if (line.startsWith('#tags ')) {
             const tags = line.slice(6).trim();
             task.tags = tags.split(',').map(t => t.trim()).filter(t => t);
@@ -81,7 +84,7 @@ export function createTaskFromCommand(
     reporterId: string
 ): KanbanTask {
     return {
-        id: Math.random().toString(36).substr(2, 9),
+        id: randomUUID(),
         title: parsed.task.title!,
         description: parsed.task.description,
         status: parsed.task.status || 'todo',

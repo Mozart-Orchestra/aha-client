@@ -2635,8 +2635,9 @@ class Sync {
             const fromRole = request.fromRole ?? (sendingSession?.metadata?.role);
             const fromDisplayName = request.fromDisplayName ?? (sendingSession?.metadata?.name || sendingSession?.metadata?.path);
 
+            const messageId = request.id ?? randomUUID();
             const message: import('@/sync/teamMessageTypes').TeamMessage = {
-                id: randomUUID(),
+                id: messageId,
                 teamId: request.teamId,
                 ...(fromSessionId ? { fromSessionId } : {}),
                 ...(fromRole ? { fromRole } : {}),

@@ -210,8 +210,9 @@ export interface TodoItem {
 
 ## 📊 统计数据
 
-- **新增接口**: 4 个 (KanbanTask, TeamMessage, TodoItem, MessageReaction)
-- **新增类型**: 6 个 (TaskAttachment, TaskChecklist, TaskChecklistItem, TaskComment, MessageReaction, ParsedTaskCommand)
+- **新增接口**: 1 个 (MessageReaction)
+- **扩展接口**: 3 个 (KanbanTask, TeamMessage, TodoItem)
+- **新增类型**: 5 个 (TaskAttachment, TaskChecklist, TaskChecklistItem, TaskComment, ParsedTaskCommand)
 - **新增函数**: 11 个工具函数
 - **代码行数**: ~400 行新增代码
 - **文档**: 3 个完整文档

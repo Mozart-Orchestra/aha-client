@@ -22,6 +22,7 @@ import { TaskDetailModal } from '@/components/TaskDetailModal';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
+import Color from 'color';
 import { syncKanbanStatusToTodo } from '@/-zen/model/ops';
 import { getCurrentAuth } from '@/auth/AuthContext';
 
@@ -259,6 +260,14 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
 }));
 
+const withAlpha = (color: string, alpha: number): string => {
+    try {
+        return Color(color).alpha(alpha).rgb().string();
+    } catch {
+        return color;
+    }
+};
+
 export default function TeamDashboardScreen() {
     const { id, roomId: roomIdParam } = useLocalSearchParams();
     const teamId = id as string;
@@ -365,6 +374,9 @@ export default function TeamDashboardScreen() {
                 await desktopBridge.updateTask(taskId, updates);
                 return;
             }
+            if (!artifact) {
+                return;
+            }
 
             // 更新本地任务数据
             const updatedTasks = kanbanData.tasks.map(t =>
@@ -377,17 +389,18 @@ export default function TeamDashboardScreen() {
             };
 
             await sync.updateArtifact(
-                artifact!.id,
-                artifact!.title,
+                artifact.id,
+                artifact.title,
                 JSON.stringify(newData, null, 2),
-                artifact!.sessions,
-                artifact!.draft,
-                artifact!.type
+                artifact.sessions,
+                artifact.draft,
+                artifact.type
             );
         },
         onMessageSend: async (message) => {
             await sync.sendTeamMessage({
                 teamId,
+                id: message.id,
                 content: message.content,
                 type: message.type,
                 mentions: message.mentions,
@@ -401,8 +414,11 @@ export default function TeamDashboardScreen() {
             setTeamMessages(prev => [...prev, message]);
         },
         onTaskCreate: async (taskData) => {
+            if (!artifact) {
+                throw new Error('No artifact available for task creation.');
+            }
             const newTask: KanbanTask = {
-                id: Math.random().toString(36).substr(2, 9),
+                id: Math.random().toString(36).substring(2, 11),
                 ...taskData,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
@@ -414,12 +430,12 @@ export default function TeamDashboardScreen() {
             };
 
             await sync.updateArtifact(
-                artifact!.id,
-                artifact!.title,
+                artifact.id,
+                artifact.title,
                 JSON.stringify(newData, null, 2),
-                artifact!.sessions,
-                artifact!.draft,
-                artifact!.type
+                artifact.sessions,
+                artifact.draft,
+                artifact.type
             );
 
             return newTask;
@@ -657,10 +673,10 @@ export default function TeamDashboardScreen() {
                                                         styles.taskPriority,
                                                         {
                                                             backgroundColor: task.priority === 'high' || task.priority === 'urgent'
-                                                                ? theme.colors.error + '20'
+                                                                ? withAlpha(theme.colors.error, 0.125)
                                                                 : task.priority === 'medium'
-                                                                ? theme.colors.warning + '20'
-                                                                : theme.colors.success + '20'
+                                                                ? withAlpha(theme.colors.warning, 0.125)
+                                                                : withAlpha(theme.colors.success, 0.125)
                                                         }
                                                     ]}>
                                                         <Text style={[
