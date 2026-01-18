@@ -15,6 +15,8 @@ import {
   getCommandHelp,
   type TaskCommandResult
 } from '@/utils/teamCommandParser';
+import { useTaskChatSync } from '@/hooks/useTaskChatSync';
+import type { KanbanTask } from '@/sync/kanbanTypes';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -218,15 +220,93 @@ const getAvatarContent = (roleId?: string, displayName?: string) => {
     return name.substring(0, 2).toUpperCase();
 };
 
+// 🆕 Task Card Component for displaying task references in chat
+interface TaskCardProps {
+    task: KanbanTask;
+    onPress?: () => void;
+    styles: any;
+}
+
+const TaskCard = ({ task, onPress, styles }: TaskCardProps) => {
+    const statusColors: Record<string, string> = {
+        'todo': '#888',
+        'in-progress': '#007AFF',
+        'review': '#FF9500',
+        'done': '#34C759',
+        'blocked': '#FF3B30'
+    };
+
+    const statusColor = statusColors[task.status] || '#888';
+    const statusLabels: Record<string, string> = {
+        'todo': 'To Do',
+        'in-progress': 'In Progress',
+        'review': 'Review',
+        'done': 'Done',
+        'blocked': 'Blocked'
+    };
+
+    return (
+        <Pressable
+            onPress={onPress}
+            style={{
+                backgroundColor: styles.messageBubble.backgroundColor,
+                borderRadius: 12,
+                padding: 12,
+                marginTop: 8,
+                borderWidth: 1,
+                borderColor: statusColor,
+                borderLeftWidth: 4,
+                borderLeftColor: statusColor
+            }}
+        >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: styles.messageContent.color }}>
+                    {task.title}
+                </Text>
+                <View style={{
+                    backgroundColor: statusColor + '20',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 8
+                }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: statusColor }}>
+                        {statusLabels[task.status] || task.status}
+                    </Text>
+                </View>
+            </View>
+            {task.description && (
+                <Text style={{ fontSize: 13, color: styles.messageContent.color, opacity: 0.8, marginTop: 4 }}>
+                    {task.description.substring(0, 100)}
+                    {task.description.length > 100 ? '...' : ''}
+                </Text>
+            )}
+            {task.assigneeId && (
+                <Text style={{ fontSize: 12, color: styles.messageTime.color, marginTop: 6 }}>
+                    Assigned to: @{task.assigneeId.substring(0, 8)}
+                </Text>
+            )}
+        </Pressable>
+    );
+};
+
 interface MessageBubbleProps {
     message: TeamMessage;
     isMyMessage: boolean;
     styles: any;
     onAvatarPress: (sessionId: string) => void;
+    // 🆕 Task references support
+    taskChatSync?: ReturnType<typeof useTaskChatSync>;
 }
 
-const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress }: MessageBubbleProps) => {
+const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSync }: MessageBubbleProps) => {
     const [expanded, setExpanded] = React.useState(false);
+
+    // 🆕 查找关联的任务
+    const relatedTask = React.useMemo(() => {
+        if (!taskChatSync || !message.metadata?.taskId) return null;
+        const taskStats = taskChatSync.getTaskStats();
+        return taskStats.tasks.find(t => t.id === message.metadata.taskId);
+    }, [taskChatSync, message.metadata?.taskId]);
 
     // Determine if we should show short or long content
     // If shortContent exists, use it as the summary.
@@ -292,6 +372,18 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress }: MessageB
                             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                     </Pressable>
+
+                    {/* 🆕 显示关联的任务卡片 */}
+                    {relatedTask && (
+                        <TaskCard
+                            task={relatedTask}
+                            styles={styles}
+                            onPress={() => {
+                                // TODO: Navigate to task detail or switch to board tab
+                                console.log('Task pressed:', relatedTask.id);
+                            }}
+                        />
+                    )}
                 </View>
             </View>
         </View>
@@ -309,15 +401,33 @@ interface TeamChatRoomProps {
         session?: { active: boolean; updatedAt: number };
         role?: { title: string };
     }>;
+    // 🆕 Chat-Board 同步相关 props
+    messages?: TeamMessage[];
+    onMessagesChange?: (messages: TeamMessage[]) => void;
+    taskChatSync?: ReturnType<typeof useTaskChatSync>;
 }
 
-export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, myDisplayName, members = [] }: TeamChatRoomProps) {
+export default function TeamChatRoom({
+    teamId,
+    teamName,
+    mySessionId,
+    myRole,
+    myDisplayName,
+    members = [],
+    messages: externalMessages,
+    onMessagesChange,
+    taskChatSync
+}: TeamChatRoomProps) {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const scrollViewRef = React.useRef<ScrollView>(null);
     const router = useRouter();
 
-    const [messages, setMessages] = React.useState<TeamMessage[]>([]);
+    // 🆕 使用外部 messages（如果提供），否则使用内部状态
+    const [internalMessages, setInternalMessages] = React.useState<TeamMessage[]>([]);
+    const messages = externalMessages ?? internalMessages;
+    const setMessages = onMessagesChange ?? setInternalMessages;
+
     const [inputText, setInputText] = React.useState('');
     const [isSending, setIsSending] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -519,7 +629,51 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
         try {
             setIsSending(true);
 
-            // 检查是否是命令
+            // 🆕 1. 检查是否应该从消息创建任务
+            if (taskChatSync && taskChatSync.shouldCreateTaskFromMessage(content)) {
+                const taskData = taskChatSync.createTaskFromMessage(content, mySessionId || 'user');
+
+                if (taskData) {
+                    const createdTask = await taskChatSync.createTaskFromMessage(taskData);
+
+                    if (createdTask) {
+                        // 创建成功，显示系统消息
+                        const successMessage: TeamMessage = {
+                            id: `task_created_${Date.now()}`,
+                            teamId,
+                            content: `✅ Task created: "${createdTask.title}"`,
+                            type: 'system',
+                            timestamp: Date.now(),
+                            fromRole: 'system',
+                            fromDisplayName: 'System',
+                            metadata: {
+                                taskId: createdTask.id,
+                                action: 'task_created',
+                                taskTitle: createdTask.title
+                            }
+                        };
+
+                        setMessages(prev => [...prev, successMessage]);
+                        setInputText('');
+                        return;
+                    }
+                }
+            }
+
+            // 🆕 2. 检查是否引用了任务（自动链接消息到任务）
+            const taskIds = taskChatSync?.extractTaskIds(content) || [];
+            let messageMetadata: TeamMessage['metadata'] = undefined;
+
+            if (taskIds.length > 0 && taskChatSync) {
+                // 链接消息到第一个引用的任务
+                await taskChatSync.linkMessageToTask(`msg_${Date.now()}`, taskIds[0]);
+                messageMetadata = {
+                    taskId: taskIds[0],
+                    action: 'task_referenced'
+                };
+            }
+
+            // 3. 检查是否是命令
             const command = parseCommand(content);
 
             if (command) {
@@ -548,7 +702,7 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
                 return;
             }
 
-            // 普通聊天消息
+            // 4. 普通聊天消息
             const mentions = extractMentions(content);
 
             // User messages should NOT use team member's session ID
@@ -560,7 +714,8 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
                 mentions: mentions.length > 0 ? mentions : undefined,
                 fromSessionId: undefined,  // User message, not from a team member session
                 fromRole: 'user',           // Always 'user' for messages from the user
-                fromDisplayName: 'User'     // Can be improved to use actual user name
+                fromDisplayName: 'User',    // Can be improved to use actual user name
+                metadata: messageMetadata   // 🆕 包含任务链接信息
             };
 
             await sync.sendTeamMessage(request);
@@ -674,6 +829,7 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
                                 isMyMessage={message.fromRole === 'user' && (!message.fromSessionId || message.fromSessionId === mySessionId)}
                                 styles={styles}
                                 onAvatarPress={handleAvatarPress}
+                                taskChatSync={taskChatSync}
                             />
                         );
                     })
@@ -689,7 +845,8 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
                     <TextInput
                         style={styles.input}
                         value={inputText}
-                        onChangeText={setInputText                        placeholder="Type a message or /create task... (Type /help for commands)"
+                        onChangeText={setInputText}
+                        placeholder="Type a message, use '创建任务' to create tasks, or /help for commands..."
                         placeholderTextColor={theme.colors.input.placeholder}
                         multiline
                         maxLength={2000}

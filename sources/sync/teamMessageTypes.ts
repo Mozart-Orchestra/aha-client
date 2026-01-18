@@ -7,6 +7,8 @@
 export type TeamMessageType =
     | 'chat'              // 普通聊天消息
     | 'task-update'       // 任务状态更新
+    | 'task-created'      // 任务创建
+    | 'task-assigned'     // 任务分配
     | 'notification'      // 系统通知
     | 'role-assignment'   // 角色分配
     | 'system';           // 系统消息
@@ -46,17 +48,33 @@ export interface TaskSnapshot {
 export interface TeamMessageMetadata {
     taskId?: string;               // 关联的任务 ID
     taskSnapshot?: TaskSnapshot;   // 任务快照
+    taskChange?: {                 // 任务变更详情
+        field: string;
+        oldValue: any;
+        newValue: any;
+    };
+    todoId?: string;               // 关联的 Todo ID
     priority?: TeamMessagePriority; // 优先级
     replyToId?: string;            // 回复的消息 ID
     attachmentIds?: string[];      // 附件 IDs（未来支持）
     edited?: boolean;              // 是否已编辑
     editedAt?: number;             // 编辑时间
+    mentions?: string[];           // 提及的成员 IDs
+    reactions?: MessageReaction[]; // 消息反应
     handshake?: {
         type?: string;
         version?: string;
         payload?: Record<string, any>;
     };
     [key: string]: any;
+}
+
+/**
+ * 消息反应
+ */
+export interface MessageReaction {
+    emoji: string;
+    sessionIds: string[];
 }
 
 /**

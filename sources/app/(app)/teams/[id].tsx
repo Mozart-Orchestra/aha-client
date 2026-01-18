@@ -18,6 +18,9 @@ import {
 import { useDesktopBridge } from '@/desktop/useDesktopBridge';
 import { getDisplayName } from '@/sync/profile';
 import TeamChatRoom from '@/components/TeamChatRoom';
+import { TaskDetailModal } from '@/components/TaskDetailModal';
+import { useTaskChatSync } from '@/hooks/useTaskChatSync';
+import type { TeamMessage } from '@/sync/teamMessageTypes';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -236,6 +239,9 @@ export default function TeamDashboardScreen() {
     const profile = useProfile();
     const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info'>('chat');
     const [isLoading, setIsLoading] = React.useState(false);
+    const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
+    const [showTaskDetail, setShowTaskDetail] = React.useState(false);
+    const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const artifactRoomId = React.useMemo(() => {
         if (!artifact?.body) return undefined;
@@ -303,6 +309,77 @@ export default function TeamDashboardScreen() {
         }
     }, [artifact?.body, desktopBoard, desktopBridge]);
 
+    // 🆕 Chat-Board 双向同步 Hook
+    const taskChatSync = useTaskChatSync({
+        teamId,
+        tasks: kanbanData.tasks,
+        messages: teamMessages,
+        onTaskUpdate: async (taskId, updates) => {
+            if (desktopBridge && roomId) {
+                await desktopBridge.updateTask(taskId, updates);
+                return;
+            }
+
+            // 更新本地任务数据
+            const updatedTasks = kanbanData.tasks.map(t =>
+                t.id === taskId ? { ...t, ...updates, updatedAt: Date.now() } : t
+            );
+
+            const newData: KanbanBoard = {
+                ...kanbanData,
+                tasks: updatedTasks
+            };
+
+            await sync.updateArtifact(
+                artifact!.id,
+                artifact!.title,
+                JSON.stringify(newData, null, 2),
+                artifact!.sessions,
+                artifact!.draft,
+                artifact!.type
+            );
+        },
+        onMessageSend: async (message) => {
+            await sync.sendTeamMessage({
+                teamId,
+                content: message.content,
+                type: message.type,
+                mentions: message.mentions,
+                metadata: message.metadata,
+                fromSessionId: message.fromSessionId,
+                fromRole: message.fromRole,
+                fromDisplayName: message.fromDisplayName,
+            });
+
+            // 更新本地消息列表
+            setTeamMessages(prev => [...prev, message]);
+        },
+        onTaskCreate: async (taskData) => {
+            const newTask: KanbanTask = {
+                id: Math.random().toString(36).substr(2, 9),
+                ...taskData,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            } as KanbanTask;
+
+            const newData: KanbanBoard = {
+                ...kanbanData,
+                tasks: [...kanbanData.tasks, newTask]
+            };
+
+            await sync.updateArtifact(
+                artifact!.id,
+                artifact!.title,
+                JSON.stringify(newData, null, 2),
+                artifact!.sessions,
+                artifact!.draft,
+                artifact!.type
+            );
+
+            return newTask;
+        },
+    });
+
     const normalizeStatus = React.useCallback((status: string): string => {
         const statusMap: Record<string, string> = {
             'in_progress': 'in-progress',
@@ -367,28 +444,17 @@ export default function TeamDashboardScreen() {
             'done': 'todo'
         }[normalized] || 'todo';
 
-        if (desktopBridge && roomId) {
-            await desktopBridge.updateTask(task.id, { status: nextStatus });
-            return;
+        // 🆕 使用 Chat-Board 同步功能：自动发送通知到聊天
+        try {
+            await taskChatSync.updateTaskWithSync(
+                task.id,
+                { status: nextStatus },
+                myDisplayName || '用户'
+            );
+        } catch (error) {
+            console.error('Failed to sync task update:', error);
+            // 即使同步失败，任务状态更新仍然会进行（在 updateTaskWithSync 中）
         }
-
-        const updatedTasks = kanbanData.tasks.map(t =>
-            t.id === task.id ? { ...t, status: nextStatus, updatedAt: Date.now() } : t
-        );
-
-        const newData: KanbanBoard = {
-            ...kanbanData,
-            tasks: updatedTasks
-        };
-
-        await sync.updateArtifact(
-            artifact!.id,
-            artifact!.title,
-            JSON.stringify(newData, null, 2),
-            artifact!.sessions,
-            artifact!.draft,
-            artifact!.type
-        );
     };
 
     const sessionLookup = React.useMemo(() => {
@@ -564,6 +630,9 @@ export default function TeamDashboardScreen() {
                     myRole="user"
                     myDisplayName={myDisplayName}
                     members={roster}
+                    messages={teamMessages}
+                    onMessagesChange={setTeamMessages}
+                    taskChatSync={taskChatSync}
                 />
             </View>
         );

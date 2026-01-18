@@ -2110,6 +2110,7 @@ class Sync {
                     this.teamMessagesCache.set(teamId, [...currentMessages, message as any]);
 
                     // Only notify subscribers for new messages
+                    // NOTE: Reading teamMessageSubscriptions is safe because we only read, not mutate
                     const subscribers = this.teamMessageSubscriptions.get(teamId);
                     if (subscribers) {
                         subscribers.forEach(callback => callback(message as any));
@@ -2595,8 +2596,11 @@ class Sync {
             const data = await response.json();
             const messages = data.messages || [];
 
-            // 缓存消息
-            this.teamMessagesCache.set(teamId, messages);
+            // PROTECTED: Acquire mutex before writing to Map
+            await this.getTeamMessagesMutex(teamId).runExclusive(async () => {
+                // 缓存消息
+                this.teamMessagesCache.set(teamId, messages);
+            });
 
             return {
                 messages,
@@ -2664,6 +2668,7 @@ class Sync {
                 this.teamMessagesCache.set(request.teamId, [...cached, message]);
 
                 // 触发本地订阅者
+                // NOTE: Reading teamMessageSubscriptions is safe because we only read, not mutate
                 const subscribers = this.teamMessageSubscriptions.get(request.teamId);
                 if (subscribers) {
                     subscribers.forEach(callback => callback(message));
@@ -2694,11 +2699,16 @@ class Sync {
 
             // 返回取消订阅函数
             return () => {
+                // NOTE: Unsubscribing doesn't need mutex because Set.delete is atomic in JS
+                // and we're not modifying the Map structure itself
                 const subs = this.teamMessageSubscriptions.get(teamId);
                 if (subs) {
                     subs.delete(callback);
                     if (subs.size === 0) {
-                        this.teamMessageSubscriptions.delete(teamId);
+                        // PROTECTED: Delete from Map needs mutex protection
+                        this.getTeamSubscriptionsMutex(teamId).runExclusive(() => {
+                            this.teamMessageSubscriptions.delete(teamId);
+                        });
                     }
                 }
             };

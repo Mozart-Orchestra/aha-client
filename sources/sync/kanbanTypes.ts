@@ -101,6 +101,63 @@ export interface KanbanTask {
     relatedMessageIds?: string[];     // 关联的聊天消息ID列表
     dueDate?: number;                 // 截止日期
     tags?: string[];                  // 任务标签
+
+    // 🆕 Todo 集成
+    todoId?: string;                  // 关联的 Todo 项 ID
+    linkedSessionIds?: string[];      // 相关的会话 IDs (从 Todo 继承)
+
+    // 🆕 任务来源和审批
+    source?: 'ai' | 'user' | 'todo';  // 任务来源
+    sourceMessageId?: string;         // 来源消息 ID（如果从聊天创建）
+    approvalStatus?: 'pending' | 'approved' | 'rejected'; // 审批状态
+    rejectionReason?: string;         // 拒绝原因
+    approvedBy?: string[];            // 审批者 IDs
+    rejectedBy?: string[];            // 拒绝者 IDs
+
+    // 🆕 依赖关系
+    dependencies?: string[];          // 依赖的任务 IDs
+    blocks?: string[];                // 阻塞的任务 IDs
+
+    // 🆕 附件和检查清单
+    attachments?: TaskAttachment[];   // 附件（文件、截图等）
+    checklists?: TaskChecklist[];     // 任务检查清单
+    comments?: TaskComment[];         // 任务评论
+}
+
+// 🆕 任务附件
+export interface TaskAttachment {
+    id: string;
+    type: 'file' | 'image' | 'link' | 'code';
+    name: string;
+    url?: string;
+    content?: string;
+    createdAt: number;
+    createdBy?: string;
+}
+
+// 🆕 任务检查清单
+export interface TaskChecklist {
+    id: string;
+    title: string;
+    items: TaskChecklistItem[];
+}
+
+export interface TaskChecklistItem {
+    id: string;
+    text: string;
+    completed: boolean;
+    completedAt?: number;
+    completedBy?: string;
+}
+
+// 🆕 任务评论
+export interface TaskComment {
+    id: string;
+    sessionId: string;
+    displayName: string;
+    content: string;
+    createdAt: number;
+    updatedAt?: number;
 }
 
 export interface KanbanBoard {

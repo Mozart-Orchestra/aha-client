@@ -77,7 +77,7 @@ ${actor} ${actionText}：**${task.title}**
 ${task.description ? `> ${task.description}` : ''}
 
 **状态**: ${task.status}
-**优先级**: task.priority || '未设置'}
+**优先级**: ${task.priority || '未设置'}
 **查看**: #task-${task.id}
     `.trim();
 }

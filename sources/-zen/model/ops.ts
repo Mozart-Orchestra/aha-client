@@ -37,6 +37,13 @@ export interface TodoItem {
             linkedAt: number;   // Unix timestamp when linked
         }
     };
+
+    // 🆕 Kanban 集成字段
+    kanbanTaskId?: string;       // 关联的 Kanban 任务 ID
+    teamId?: string;             // 所属团队 ID (artifact ID)
+    priority?: 'low' | 'medium' | 'high' | 'urgent';  // 优先级
+    tags?: string[];             // 标签
+    dueDate?: number;            // 截止日期
 }
 
 export interface TodoIndex {
