@@ -1019,11 +1019,18 @@ export async function syncTodoStatusToKanban(
         return;  // Not linked to Kanban, nothing to sync
     }
 
+    // Check sync source to prevent loops
+    if ((todo as any)[SYNC_SOURCE_KEY] === 'kanban') {
+        console.log('[Sync] Skipping Todo→Kanban sync (source was Kanban)');
+        return;
+    }
+
     try {
-        // Update Kanban task status
+        // Update Kanban task status with sync source flag
         await onUpdateTask(todo.kanbanTaskId, {
-            status: done ? 'done' : 'todo'
-        });
+            status: done ? 'done' : 'todo',
+            [SYNC_SOURCE_KEY]: 'todo' as SyncSource
+        } as any);
     } catch (error) {
         console.error('Failed to sync Todo status to Kanban:', error);
     }
@@ -1036,8 +1043,15 @@ export async function syncTodoStatusToKanban(
 export async function syncKanbanStatusToTodo(
     credentials: AuthCredentials,
     taskId: string,
-    status: string
+    status: string,
+    syncSource?: SyncSource  // 🆕 Add sync source parameter
 ): Promise<void> {
+    // Check sync source to prevent loops
+    if (syncSource === 'todo') {
+        console.log('[Sync] Skipping Kanban→Todo sync (source was Todo)');
+        return;
+    }
+
     // Find Todo with this kanbanTaskId
     const currentState = storage.getState();
     const { todos, undoneOrder, doneOrder, versions } = currentState.todoState || {
@@ -1073,7 +1087,8 @@ export async function syncKanbanStatusToTodo(
         ...todo,
         done: isDone,
         updatedAt: now,
-        completedAt: isDone ? now : undefined
+        completedAt: isDone ? now : undefined,
+        [SYNC_SOURCE_KEY]: 'kanban'  // Mark as coming from Kanban
     };
 
     // Calculate new orders
@@ -1187,6 +1202,88 @@ export async function syncKanbanStatusToTodo(
         } catch (error) {
             console.error('Failed to sync Kanban status to Todo:', error);
             // Keep optimistic update even on error
+        }
+    });
+}
+
+//
+// Kanban Integration Functions
+//
+
+// Sync loop protection flag
+const SYNC_SOURCE_KEY = '_syncSource' as const;
+type SyncSource = 'todo' | 'kanban' | undefined;
+
+/**
+ * Update Todo with Kanban integration fields (kanbanTaskId, teamId)
+ * This is used when converting a Todo to a Kanban task
+ */
+export async function updateTodoKanbanIntegration(
+    credentials: AuthCredentials,
+    todoId: string,
+    kanbanTaskId: string,
+    teamId: string
+): Promise<void> {
+    const currentState = storage.getState();
+    const { todos, undoneOrder, doneOrder, versions } = currentState.todoState || {
+        todos: {},
+        undoneOrder: [],
+        doneOrder: [],
+        versions: {}
+    };
+
+    const todo = todos[todoId];
+    if (!todo) {
+        console.error(`Todo ${todoId} not found`);
+        return;
+    }
+
+    const updatedTodo: TodoItem = {
+        ...todo,
+        kanbanTaskId,
+        teamId,
+        updatedAt: Date.now()
+    };
+
+    // Apply optimistic update immediately
+    storage.getState().applyTodos({
+        todos: { ...todos, [todoId]: updatedTodo },
+        undoneOrder,
+        doneOrder,
+        versions
+    });
+
+    // Sync to server inside lock
+    await todoLock.inLock(async () => {
+        try {
+            const todoKey = getTodoKey(todoId);
+            const encrypted = await encryptTodoData(updatedTodo);
+
+            // Get current version
+            const currentVersion = versions[todoKey] || -1;
+
+            const newVersion = await kvSet(credentials, todoKey, encrypted, currentVersion);
+
+            // Update version
+            const newVersions = { ...versions, [todoKey]: newVersion };
+
+            storage.getState().applyTodos({
+                todos: { ...todos, [todoId]: updatedTodo },
+                undoneOrder,
+                doneOrder,
+                versions: newVersions
+            });
+
+            console.log(`Todo ${todoId} updated with Kanban integration: task=${kanbanTaskId}, team=${teamId}`);
+        } catch (error) {
+            console.error('Failed to update todo Kanban integration:', error);
+            // Revert on error
+            storage.getState().applyTodos({
+                todos,
+                undoneOrder,
+                doneOrder,
+                versions
+            });
         }
     });
 }

@@ -12,18 +12,22 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { TODO_HEIGHT, TodoView } from './TodoView';
 
 export type TodoListProps = {
-    todos: { id: string, title: string, done: boolean }[];
+    todos: { id: string, title: string, done: boolean, kanbanTaskId?: string, teamId?: string }[];
     onToggleTodo?: (id: string) => void;
     onReorderTodo?: (id: string, newIndex: number) => void;
+    onConvertTodoToTask?: (id: string) => void;
+    onViewKanbanTask?: (taskId: string, teamId: string) => void;
 }
 
 type AnimatedTodoItemProps = {
-    todo: { id: string, title: string, done: boolean };
+    todo: { id: string, title: string, done: boolean, kanbanTaskId?: string, teamId?: string };
     index: number;
     positions: SharedValue<Record<string, number>>;
     scrollY: SharedValue<number>;
     onToggle?: () => void;
     onReorder?: (id: string, newIndex: number) => void;
+    onConvertToTask?: () => void;
+    onViewTask?: () => void;
 }
 
 const ITEM_SPACING = 12;
@@ -44,7 +48,9 @@ const AnimatedTodoItem = React.memo<AnimatedTodoItemProps>(({
     positions,
     scrollY,
     onToggle,
-    onReorder
+    onReorder,
+    onConvertToTask,
+    onViewTask
 }) => {
     const isDragging = useSharedValue(false);
     const dragY = useSharedValue(0);
@@ -172,6 +178,10 @@ const AnimatedTodoItem = React.memo<AnimatedTodoItemProps>(({
                     done={todo.done}
                     value={todo.title}
                     onToggle={onToggle}
+                    kanbanTaskId={todo.kanbanTaskId}
+                    teamId={todo.teamId}
+                    onConvertToTask={onConvertToTask}
+                    onViewTask={onViewTask}
                     // hasDragged={hasDragged}
                 />
             </Animated.View>
@@ -206,6 +216,8 @@ export const TodoList = React.memo<TodoListProps>((props) => {
                     scrollY={scrollY}
                     onToggle={() => props.onToggleTodo?.(todo.id)}
                     onReorder={props.onReorderTodo}
+                    onConvertToTask={() => props.onConvertTodoToTask?.(todo.id)}
+                    onViewTask={() => todo.kanbanTaskId && todo.teamId && props.onViewKanbanTask?.(todo.kanbanTaskId, todo.teamId)}
                 />
             ))}
         </View>

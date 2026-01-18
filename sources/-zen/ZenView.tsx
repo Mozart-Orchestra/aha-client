@@ -1,19 +1,22 @@
 import * as React from 'react';
-import { View, Text, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TextInput, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography } from '@/constants/Typography';
 import { Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { randomUUID } from 'expo-crypto';
 import { storage } from '@/sync/storage';
-import { toggleTodo, updateTodoTitle, deleteTodo } from '@/-zen/model/ops';
+import { toggleTodo, updateTodoTitle, deleteTodo, updateTodoKanbanIntegration, type TodoItem } from '@/-zen/model/ops';
 import { useAuth } from '@/auth/AuthContext';
 import { useShallow } from 'zustand/react/shallow';
 import { clarifyPrompt } from '@/-zen/model/prompts';
 import { storeTempData, type NewSessionData } from '@/utils/tempDataStore';
 import { toCamelCase } from '@/utils/stringUtils';
 import { removeTaskLinks, getSessionsForTask } from '@/-zen/model/taskSessionLink';
+import { sync } from '@/sync/sync';
+import type { KanbanTask } from '@/sync/kanbanTypes';
 
 export const ZenView = React.memo(() => {
     const router = useRouter();
@@ -33,7 +36,10 @@ export const ZenView = React.memo(() => {
         return {
             id: todoItem.id,
             title: todoItem.title,
-            done: todoItem.done
+            done: todoItem.done,
+            kanbanTaskId: todoItem.kanbanTaskId,
+            teamId: todoItem.teamId,
+            linkedSessions: todoItem.linkedSessions
         };
     }));
 
@@ -144,6 +150,90 @@ export const ZenView = React.memo(() => {
         });
     };
 
+    const handleConvertToKanban = async () => {
+        if (!auth?.credentials) {
+            Alert.alert('Error', 'You must be logged in to convert tasks');
+            return;
+        }
+
+        // Check if already converted
+        if (todo?.kanbanTaskId) {
+            Alert.alert('Already Converted', 'This todo has already been converted to a Kanban task');
+            return;
+        }
+
+        // Get available teams (artifacts with type 'team')
+        const state = storage.getState();
+        const teamArtifacts = Object.values(state.artifacts).filter(
+            artifact => artifact.type === 'team'
+        );
+
+        if (teamArtifacts.length === 0) {
+            Alert.alert('No Teams', 'You need to create a team first before converting todos to Kanban tasks');
+            return;
+        }
+
+        // If multiple teams, let user choose (for now, just pick the first one)
+        const selectedTeam = teamArtifacts[0];
+
+        try {
+            // Parse the team data
+            const teamData = JSON.parse(selectedTeam.body || '{}');
+            const linkedSessionIds = todo?.linkedSessions ? Object.keys(todo.linkedSessions) : [];
+
+            // Create new Kanban task
+            const newTask: KanbanTask = {
+                id: randomUUID(),
+                title: todo?.title || '',
+                description: `Converted from todo with ${linkedSessionIds.length} linked sessions`,
+                status: 'todo',
+                priority: todo?.priority || 'medium',
+                dueDate: todo?.dueDate,
+                tags: todo?.tags,
+                todoId: todoId,
+                linkedSessionIds: linkedSessionIds,
+                source: 'todo',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+
+            // Add task to team board
+            teamData.tasks = teamData.tasks || [];
+            teamData.tasks.push(newTask);
+
+            // Update artifact
+            await sync.updateArtifact(
+                selectedTeam.id,
+                selectedTeam.title,
+                JSON.stringify(teamData, null, 2),
+                selectedTeam.sessions,
+                selectedTeam.draft,
+                selectedTeam.type
+            );
+
+            // Update Todo with kanbanTaskId and teamId
+            await updateTodoKanbanIntegration(auth.credentials, todoId, newTask.id, selectedTeam.id);
+
+            // Send notification to team chat
+            await sync.sendTeamMessage({
+                teamId: selectedTeam.id,
+                fromRole: 'system',
+                content: `New task created from todo: "${todo?.title}"`,
+                shortContent: 'Todo converted to task',
+                type: 'task-created',
+                metadata: {
+                    taskId: newTask.id,
+                    todoId: todoId
+                }
+            });
+
+            Alert.alert('Success', 'Todo converted to Kanban task successfully!');
+        } catch (error) {
+            console.error('Failed to convert todo to kanban:', error);
+            Alert.alert('Error', 'Failed to convert todo to Kanban task. Please try again.');
+        }
+    };
+
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -227,6 +317,16 @@ export const ZenView = React.memo(() => {
                             <Ionicons name="sparkles" size={20} color={theme.colors.text} />
                             <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>Clarify</Text>
                         </Pressable>
+
+                        {!todo?.kanbanTaskId && (
+                            <Pressable
+                                onPress={handleConvertToKanban}
+                                style={[styles.actionButton, { backgroundColor: theme.colors.button.secondary.background || '#3B82F6' }]}
+                            >
+                                <Ionicons name="trending-up" size={20} color="#FFFFFF" />
+                                <Text style={styles.actionButtonText}>Convert to Kanban</Text>
+                            </Pressable>
+                        )}
 
                         <Pressable
                             onPress={handleDelete}

@@ -12,6 +12,10 @@ export type TodoViewProps = {
     done: boolean;
     value: string;
     onToggle?: () => void;
+    kanbanTaskId?: string;
+    teamId?: string;
+    onConvertToTask?: () => void;
+    onViewTask?: () => void;
     // hasDragged?: SharedValue<boolean>;
 }
 
@@ -76,7 +80,7 @@ export const TodoView = React.memo<TodoViewProps>((props) => {
                     <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                 )}
             </Pressable>
-            <View style={{ flex: 1, flexDirection: 'row' }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
                 <Text
                     style={{
                         paddingLeft: 4,
@@ -94,6 +98,63 @@ export const TodoView = React.memo<TodoViewProps>((props) => {
                 >
                     {props.value}
                 </Text>
+
+                {/* Kanban Integration UI */}
+                {props.kanbanTaskId ? (
+                    <Pressable
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            props.onViewTask?.();
+                        }}
+                        hitSlop={8}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: theme.colors.success + '20',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 12,
+                            marginLeft: 8
+                        }}
+                    >
+                        <Ionicons name="link" size={14} color={theme.colors.success} />
+                        <Text style={{
+                            color: theme.colors.success,
+                            fontSize: 12,
+                            marginLeft: 4,
+                            fontWeight: '600'
+                        }}>
+                            已关联
+                        </Text>
+                    </Pressable>
+                ) : props.onConvertToTask ? (
+                    <Pressable
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            props.onConvertToTask?.();
+                        }}
+                        hitSlop={8}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: theme.colors.primary + '20',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 12,
+                            marginLeft: 8
+                        }}
+                    >
+                        <Ionicons name="list" size={14} color={theme.colors.primary} />
+                        <Text style={{
+                            color: theme.colors.primary,
+                            fontSize: 12,
+                            marginLeft: 4,
+                            fontWeight: '600'
+                        }}>
+                            转任务
+                        </Text>
+                    </Pressable>
+                ) : null}
             </View>
             {Platform.OS === 'web' && (
                 <View

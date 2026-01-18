@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, ScrollView, Text, Platform } from 'react-native';
+import { View, ScrollView, Text, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { layout } from '@/components/layout';
 import { ZenHeader } from './components/ZenHeader';
@@ -7,9 +7,10 @@ import { TodoList } from './components/TodoList';
 import { useUnistyles } from 'react-native-unistyles';
 import { router } from 'expo-router';
 import { storage } from '@/sync/storage';
-import { toggleTodo as toggleTodoSync, reorderTodos as reorderTodosSync } from '@/-zen/model/ops';
+import { toggleTodo as toggleTodoSync, reorderTodos as reorderTodosSync, convertTodoToKanban } from '@/-zen/model/ops';
 import { useAuth } from '@/auth/AuthContext';
 import { useShallow } from 'zustand/react/shallow';
+import type { KanbanTask } from '@/sync/kanbanTypes';
 
 export const ZenHome = () => {
     const insets = useSafeAreaInsets();
@@ -29,12 +30,24 @@ export const ZenHome = () => {
         const undone = todoState.undoneOrder
             .map(id => todoState.todos[id])
             .filter(Boolean)
-            .map(t => ({ id: t.id, title: t.title, done: t.done }));
+            .map(t => ({
+                id: t.id,
+                title: t.title,
+                done: t.done,
+                kanbanTaskId: t.kanbanTaskId,
+                teamId: t.teamId
+            }));
 
         const done = todoState.doneOrder
             .map(id => todoState.todos[id])
             .filter(Boolean)
-            .map(t => ({ id: t.id, title: t.title, done: t.done }));
+            .map(t => ({
+                id: t.id,
+                title: t.title,
+                done: t.done,
+                kanbanTaskId: t.kanbanTaskId,
+                teamId: t.teamId
+            }));
 
         return { undoneTodos: undone, doneTodos: done };
     }, [todoState]);
@@ -52,6 +65,89 @@ export const ZenHome = () => {
             await reorderTodosSync(auth.credentials, id, newIndex, 'undone');
         }
     }, [auth?.credentials]);
+
+    // Handle convert Todo to Kanban task
+    const handleConvertTodoToTask = React.useCallback(async (todoId: string) => {
+        if (!auth?.credentials) return;
+
+        // Check if user has any teams
+        const artifacts = storage.getState().artifacts;
+        const teamIds = Object.keys(artifacts).filter(id =>
+            artifacts[id].type === 'team' && artifacts[id].body
+        );
+
+        if (teamIds.length === 0) {
+            Alert.alert('提示', '您还没有创建任何团队，请先创建团队后再转换任务。');
+            return;
+        }
+
+        // For simplicity, use the first team (could add team selector in the future)
+        const teamId = teamIds[0];
+
+        try {
+            // Create a Kanban task from the Todo
+            const kanbanTask = await convertTodoToKanban(
+                auth.credentials,
+                todoId,
+                teamId,
+                async (taskData: Partial<KanbanTask>): Promise<KanbanTask> => {
+                    // This callback creates the actual Kanban task
+                    const artifact = artifacts[teamId];
+                    if (!artifact?.body) throw new Error('Team not found');
+
+                    const board = JSON.parse(artifact.body);
+                    const newTask: KanbanTask = {
+                        id: Math.random().toString(36).substring(2, 15),
+                        title: taskData.title || '',
+                        description: taskData.description,
+                        status: 'todo',
+                        priority: taskData.priority || 'medium',
+                        tags: taskData.tags || [],
+                        dueDate: taskData.dueDate,
+                        todoId: taskData.todoId,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                        assigneeId: storage.getState().profile.id,
+                        reporterId: storage.getState().profile.id
+                    };
+
+                    board.tasks.push(newTask);
+
+                    // Update artifact
+                    const { sync } = await import('@/sync/sync');
+                    await sync.updateArtifact(
+                        teamId,
+                        artifact.title,
+                        JSON.stringify(board, null, 2),
+                        artifact.sessions,
+                        artifact.draft,
+                        artifact.type
+                    );
+
+                    return newTask;
+                }
+            );
+
+            if (kanbanTask) {
+                Alert.alert(
+                    '转换成功',
+                    `Todo 已转换为 Kanban 任务`,
+                    [
+                        { text: '查看任务', onPress: () => router.push(`/teams/${teamId}`) },
+                        { text: '好的' }
+                    ]
+                );
+            }
+        } catch (error) {
+            console.error('Failed to convert Todo to Kanban task:', error);
+            Alert.alert('转换失败', '无法将 Todo 转换为 Kanban 任务，请重试。');
+        }
+    }, [auth?.credentials]);
+
+    // Handle view linked Kanban task
+    const handleViewKanbanTask = React.useCallback((taskId: string, teamId: string) => {
+        router.push(`/teams/${teamId}`);
+    }, []);
 
     // Add keyboard shortcut for "T" to open new task (Web only)
     React.useEffect(() => {
@@ -102,7 +198,13 @@ export const ZenHome = () => {
                                 </Text>
                             </View>
                         ) : (
-                            <TodoList todos={undoneTodos} onToggleTodo={handleToggle} onReorderTodo={handleReorder} />
+                            <TodoList
+                                todos={undoneTodos}
+                                onToggleTodo={handleToggle}
+                                onReorderTodo={handleReorder}
+                                onConvertTodoToTask={handleConvertTodoToTask}
+                                onViewKanbanTask={handleViewKanbanTask}
+                            />
                         )}
                     </View>
                 </View>

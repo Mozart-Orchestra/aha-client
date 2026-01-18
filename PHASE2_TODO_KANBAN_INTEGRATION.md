@@ -328,30 +328,38 @@ export interface KanbanTask {
    }
    ```
 
-### Phase 2.4: UI 集成
+### Phase 2.4: UI 集成 ✅ **已完成**
 
-**在 TodoList 组件中添加:**
+**实现的功能:**
 
-```typescript
-// 在 TodoItem 组件中
-{item.kanbanTaskId ? (
-    <View style={styles.linkedTask}>
-        <Ionicons name="link" size={16} color={theme.colors.success} />
-        <Text style={styles.linkedText}>已关联任务</Text>
-        <Pressable onPress={() => navigateToKanbanTask(item.kanbanTaskId)}>
-            <Text style={styles.viewTaskText}>查看</Text>
-        </Pressable>
-    </View>
-) : (
-    <Pressable
-        style={styles.convertButton}
-        onPress={() => convertTodoToKanban(item)}
-    >
-        <Ionicons name="list" size={16} color="#FFF" />
-        <Text style={styles.convertButtonText}>转为任务</Text>
-    </Pressable>
-)}
-```
+1. **TodoView 组件增强** (`sources/-zen/components/TodoView.tsx`):
+   - 添加 `kanbanTaskId`, `teamId`, `onConvertToTask`, `onViewTask` props
+   - 为未关联的 Todo 显示"转任务"按钮
+   - 为已关联的 Todo 显示"已关联"按钮
+   - 按钮样式与主题颜色一致
+
+2. **TodoList 组件增强** (`sources/-zen/components/TodoList.tsx`):
+   - 扩展类型定义支持 Kanban 字段
+   - 传递转换和查看回调函数
+
+3. **ZenHome 主页面集成** (`sources/-zen/ZenHome.tsx`):
+   - `handleConvertTodoToTask`: 处理 Todo 到 Kanban 任务的转换
+     - 检查用户是否有团队
+     - 调用 `convertTodoToKanban` 函数
+     - 创建 Kanban 任务并更新 artifact
+     - 显示成功提示并导航到团队页面
+   - `handleViewKanbanTask`: 导航到关联的 Kanban 任务
+
+**UI 效果:**
+- 未关联 Todo: 显示蓝色"转任务"按钮
+- 已关联 Todo: 显示绿色"已关联"按钮
+- 点击"转任务"触发转换流程
+- 点击"已关联"跳转到团队 Kanban 面板
+
+**已修改文件:**
+- ✅ `sources/-zen/components/TodoView.tsx` - UI 元素
+- ✅ `sources/-zen/components/TodoList.tsx` - Props 传递
+- ✅ `sources/-zen/ZenHome.tsx` - 业务逻辑
 
 ---
 
@@ -399,7 +407,7 @@ Todo 列表          Kanban Board
 - ✅ 删除 Kanban 任务时取消 Todo 关联
 
 ### UI/UX
-- ✅ Todo 卡片显示"转为任务"按钮
+- ✅ Todo 卡片显示"转任务"按钮
 - ✅ 已关联的 Todo 显示任务链接
 - ✅ 点击链接跳转到 Kanban 任务详情
 - ✅ 状态同步时有视觉反馈
@@ -413,29 +421,25 @@ Todo 列表          Kanban Board
 
 ## 📝 关键文件
 
-**需要修改:**
-1. `sources/-zen/model/ops.ts` - 添加 Todo-Kanban 转换函数
-2. `sources/-zen/components/TodoList.tsx` - 添加"转为任务"按钮
-3. `sources/app/(app)/teams/[id].tsx` - 添加 Todo 同步逻辑
-
-**需要创建:**
-1. `sources/utils/todoKanbanSync.ts` - Todo-Kanban 同步工具
-2. `sources/hooks/useTodoKanbanSync.ts` - 同步 Hook
+**已完成修改:**
+1. ✅ `sources/-zen/model/ops.ts` - 添加 Todo-Kanban 转换函数 (Phase 2.1-2.3)
+2. ✅ `sources/-zen/components/TodoView.tsx` - 添加"转任务"和"已关联"UI 按钮
+3. ✅ `sources/-zen/components/TodoList.tsx` - 传递 Kanban 相关 props
+4. ✅ `sources/-zen/ZenHome.tsx` - 实现转换和查看处理逻辑
 
 ---
 
-## ⏱️ 预计时间
+## ⏱️ 实际完成时间
 
-- Phase 2.1: 从 Todo 创建 Kanban 任务 (2-3小时)
-- Phase 2.2: Kanban 状态同步到 Todo (1-2小时)
-- Phase 2.3: Todo 完成时同步 Kanban (1-2小时)
-- Phase 2.4: UI 集成 (2-3小时)
-- 测试和优化 (1-2小时)
+- Phase 2.1: 从 Todo 创建 Kanban 任务 ✅ (已完成)
+- Phase 2.2: Kanban 状态同步到 Todo ✅ (已完成)
+- Phase 2.3: Todo 完成时同步 Kanban ✅ (已完成)
+- Phase 2.4: UI 集成 ✅ (已完成 - 2026-01-18)
 
-**总计: 1-1.5 天**
+**Phase 2 状态: 100% 完成**
 
 ---
 
 *创建时间: 2026-01-18 10:35*
-*Phase 2 方案文档*
-*状态: 待 Master 审批和分配*
+*Phase 2 完成时间: 2026-01-18*
+*状态: ✅ 完成*
