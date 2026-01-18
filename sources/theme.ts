@@ -5,90 +5,104 @@ export const lightTheme = {
     colors: {
 
         //
-        // Main colors
+        // Main colors - Enhanced with modern color palette
         //
 
-        text: '#000000',
-        textDestructive: Platform.select({ ios: '#FF3B30', default: '#F44336' }),
-        textSecondary: Platform.select({ ios: '#8E8E93', default: '#49454F' }),
-        textLink: '#2BACCC',
-        warningCritical: '#FF3B30',
-        warning: '#8E8E93',
-        success: '#34C759',
+        text: '#1a1a1a',
+        textDestructive: Platform.select({ ios: '#FF3B30', default: '#FF4444' }),
+        textSecondary: Platform.select({ ios: '#8E8E93', default: '#6B7280' }),
+        textLink: '#3B82F6',
+        warningCritical: '#EF4444',
+        warning: '#F59E0B',
+        success: '#10B981',
         surface: '#ffffff',
-        surfaceRipple: 'rgba(0, 0, 0, 0.08)',
-        surfacePressed: '#f0f0f2',
-        surfaceSelected: Platform.select({ ios: '#C6C6C8', default: '#eaeaea' }),
-        surfacePressedOverlay: Platform.select({ ios: '#D1D1D6', default: 'transparent' }),
-        surfaceHigh: '#F8F8F8',
-        surfaceHighest: '#f0f0f0',
-        divider: Platform.select({ ios: '#eaeaea', default: '#eaeaea' }),
+        surfaceRipple: 'rgba(0, 0, 0, 0.06)',
+        surfacePressed: '#f8fafc',
+        surfaceSelected: Platform.select({ ios: '#E2E8F0', default: '#f1f5f9' }),
+        surfacePressedOverlay: Platform.select({ ios: '#E2E8F0', default: 'transparent' }),
+        surfaceHigh: '#f8fafc',
+        surfaceHighest: '#f1f5f9',
+        divider: Platform.select({ ios: '#E2E8F0', default: '#e2e8f0' }),
         shadow: {
-            color: Platform.select({ default: '#000000', web: 'rgba(0, 0, 0, 0.1)' }),
-            opacity: 0.1,
+            color: Platform.select({ default: 'rgba(0, 0, 0, 0.08)', web: 'rgba(0, 0, 0, 0.08)' }),
+            opacity: 0.08,
         },
 
         //
-        // System components
+        // System components - Enhanced with modern styling
         //
 
         groupped: {
-            background: Platform.select({ ios: '#F2F2F7', default: '#F5F5F5' }),
-            chevron: Platform.select({ ios: '#C7C7CC', default: '#49454F' }),
-            sectionTitle: Platform.select({ ios: '#8E8E93', default: '#49454F' }),
+            background: Platform.select({ ios: '#F2F2F7', default: '#f8fafc' }),
+            chevron: Platform.select({ ios: '#C7C7CC', default: '#64748B' }),
+            sectionTitle: Platform.select({ ios: '#8E8E93', default: '#64748B' }),
         },
         header: {
             background: '#ffffff',
-            tint: '#18171C'
+            tint: '#1e293b'
         },
         switch: {
             track: {
-                active: Platform.select({ ios: '#34C759', default: '#1976D2' }),
-                inactive: '#dddddd',
+                active: Platform.select({ ios: '#34C759', default: '#10B981' }),
+                inactive: '#e2e8f0',
             },
             thumb: {
                 active: '#FFFFFF',
-                inactive: '#767577',
+                inactive: '#94a3b8',
             },
         },
         fab: {
-            background: '#000000',
-            backgroundPressed: '#1a1a1a',
+            background: '#3B82F6',
+            backgroundPressed: '#2563EB',
             icon: '#FFFFFF',
         },
         radio: {
-            active: '#007AFF',
-            inactive: '#C0C0C0',
-            dot: '#007AFF',
+            active: '#3B82F6',
+            inactive: '#cbd5e1',
+            dot: '#3B82F6',
         },
         modal: {
-            border: 'rgba(0, 0, 0, 0.1)'
+            border: 'rgba(0, 0, 0, 0.08)'
         },
         button: {
             primary: {
-                background: '#000000',
+                background: '#3B82F6',
+                backgroundPressed: '#2563EB',
                 tint: '#FFFFFF',
-                disabled: '#C0C0C0',
+                disabled: '#cbd5e1',
             },
             secondary: {
-                tint: '#666666',
+                background: '#f1f5f9',
+                tint: '#475569',
             }
         },
         input: {
-            background: '#F5F5F5',
-            text: '#000000',
-            placeholder: '#999999',
+            background: '#f8fafc',
+            text: '#1a1a1a',
+            placeholder: '#94a3b8',
+            border: '#e2e8f0',
+            focusBorder: '#3B82F6',
         },
         box: {
             warning: {
-                background: '#FFF8F0',
-                border: '#FF9500',
-                text: '#FF9500',
+                background: '#fef3c7',
+                border: '#f59e0b',
+                text: '#92400e',
             },
             error: {
-                background: '#FFF0F0',
-                border: '#FF3B30',
-                text: '#FF3B30',
+                background: '#fee2e2',
+                border: '#ef4444',
+                text: '#991b1b',
+            },
+            info: {
+                background: '#dbeafe',
+                border: '#3b82f6',
+                text: '#1e40af',
+            },
+            success: {
+                background: '#d1fae5',
+                border: '#10b981',
+                text: '#065f46',
             }
         },
 
@@ -211,91 +225,105 @@ export const darkTheme = {
     colors: {
 
         //
-        // Main colors
+        // Main colors - Enhanced with modern dark theme palette
         //
 
-        text: '#ffffff',
-        textDestructive: Platform.select({ ios: '#FF453A', default: '#F48FB1' }),
-        textSecondary: Platform.select({ ios: '#8E8E93', default: '#CAC4D0' }),
-        textLink: '#2BACCC',
-        warningCritical: '#FF453A',
-        warning: '#8E8E93',
-        success: '#32D74B',
-        surface: Platform.select({ ios: '#18171C', default: '#212121' }),
-        surfaceRipple: 'rgba(255, 255, 255, 0.08)',
-        surfacePressed: '#2C2C2E',
-        surfaceSelected: '#2C2C2E',
+        text: '#f1f5f9',
+        textDestructive: Platform.select({ ios: '#FF453A', default: '#f87171' }),
+        textSecondary: Platform.select({ ios: '#8E8E93', default: '#94a3b8' }),
+        textLink: '#60A5FA',
+        warningCritical: '#EF4444',
+        warning: '#F59E0B',
+        success: '#10B981',
+        surface: Platform.select({ ios: '#0f0f0f', default: '#0a0a0a' }),
+        surfaceRipple: 'rgba(255, 255, 255, 0.06)',
+        surfacePressed: '#1e293b',
+        surfaceSelected: '#1e293b',
         surfacePressedOverlay: Platform.select({ ios: '#2C2C2E', default: 'transparent' }),
         // iOS dark theme is #1c1c1e for items, and #000 for the background
-        surfaceHigh: Platform.select({ ios: '#2C2C2E', default: '#171717' }),
-        surfaceHighest: Platform.select({ ios: '#38383A', default: '#292929' }),
-        divider: Platform.select({ ios: '#38383A', default: '#292929' }),
+        surfaceHigh: Platform.select({ ios: '#1C1C1E', default: '#171717' }),
+        surfaceHighest: Platform.select({ ios: '#38383A', default: '#1e293b' }),
+        divider: Platform.select({ ios: '#38383A', default: '#334155' }),
         shadow: {
-            color: Platform.select({ default: '#000000', web: 'rgba(0, 0, 0, 0.1)' }),
-            opacity: 0.1,
+            color: Platform.select({ default: 'rgba(0, 0, 0, 0.3)', web: 'rgba(0, 0, 0, 0.3)' }),
+            opacity: 0.3,
         },
 
         //
-        // System components
+        // System components - Enhanced with modern dark styling
         //
 
         header: {
-            background: Platform.select({ ios: '#18171C', default: '#212121' }),
-            tint: '#ffffff'
+            background: Platform.select({ ios: '#18171C', default: '#0a0a0a' }),
+            tint: '#f1f5f9'
         },
         switch: {
             track: {
-                active: Platform.select({ ios: '#34C759', default: '#1976D2' }),
-                inactive: '#3a393f',
+                active: Platform.select({ ios: '#34C759', default: '#10B981' }),
+                inactive: '#334155',
             },
             thumb: {
                 active: '#FFFFFF',
-                inactive: '#767577',
+                inactive: '#94a3b8',
             },
         },
         groupped: {
-            background: Platform.select({ ios: '#1C1C1E', default: '#1e1e1e' }),
-            chevron: Platform.select({ ios: '#48484A', default: '#CAC4D0' }),
-            sectionTitle: Platform.select({ ios: '#8E8E93', default: '#CAC4D0' }),
+            background: Platform.select({ ios: '#1C1C1E', default: '#0f172a' }),
+            chevron: Platform.select({ ios: '#48484A', default: '#64748B' }),
+            sectionTitle: Platform.select({ ios: '#8E8E93', default: '#94a3b8' }),
         },
         fab: {
-            background: '#FFFFFF',
-            backgroundPressed: '#f0f0f0',
-            icon: '#000000',
+            background: '#3B82F6',
+            backgroundPressed: '#2563EB',
+            icon: '#FFFFFF',
         },
         radio: {
-            active: '#0A84FF',
-            inactive: '#48484A',
-            dot: '#0A84FF',
+            active: '#60A5FA',
+            inactive: '#475569',
+            dot: '#60A5FA',
         },
         modal: {
-            border: 'rgba(255, 255, 255, 0.1)'
+            border: 'rgba(255, 255, 255, 0.08)'
         },
         button: {
             primary: {
-                background: '#000000',
+                background: '#3B82F6',
+                backgroundPressed: '#2563EB',
                 tint: '#FFFFFF',
-                disabled: '#C0C0C0',
+                disabled: '#475569',
             },
             secondary: {
-                tint: '#8E8E93',
+                background: '#1e293b',
+                tint: '#cbd5e1',
             }
         },
         input: {
-            background: Platform.select({ ios: '#1C1C1E', default: '#303030' }),
-            text: '#FFFFFF',
-            placeholder: '#8E8E93',
+            background: Platform.select({ ios: '#1C1C1E', default: '#0f172a' }),
+            text: '#f1f5f9',
+            placeholder: '#64748B',
+            border: '#334155',
+            focusBorder: '#60A5FA',
         },
         box: {
             warning: {
-                background: 'rgba(255, 159, 10, 0.15)',
-                border: '#FF9F0A',
-                text: '#FFAB00',
+                background: 'rgba(251, 191, 36, 0.15)',
+                border: '#fbbf24',
+                text: '#fde68a',
             },
             error: {
-                background: 'rgba(255, 69, 58, 0.15)',
-                border: '#FF453A',
-                text: '#FF6B6B',
+                background: 'rgba(248, 113, 113, 0.15)',
+                border: '#f87171',
+                text: '#fecaca',
+            },
+            info: {
+                background: 'rgba(96, 165, 250, 0.15)',
+                border: '#60a5fa',
+                text: '#bfdbfe',
+            },
+            success: {
+                background: 'rgba(52, 211, 153, 0.15)',
+                border: '#34d399',
+                text: '#a7f3d0',
             }
         },
 
