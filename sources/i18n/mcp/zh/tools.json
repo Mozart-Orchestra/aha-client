@@ -10,7 +10,7 @@
     },
     "list_tasks": {
       "name": "list_tasks",
-      "description": "列出来看板上的所有任务"
+    "description": "列出看板上的所有任务"
     },
     "send_team_message": {
       "name": "send_team_message",

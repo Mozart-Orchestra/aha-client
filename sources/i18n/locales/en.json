@@ -62,7 +62,7 @@
   "team": {
     "title": "Team",
     "members": "Members",
-    "roles": "Roles",
+    "rolesLabel": "Roles",
     "chat": "Chat",
     "online": "Online",
     "offline": "Offline",

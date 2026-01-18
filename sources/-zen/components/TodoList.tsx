@@ -179,7 +179,6 @@ const AnimatedTodoItem = React.memo<AnimatedTodoItemProps>(({
                     value={todo.title}
                     onToggle={onToggle}
                     kanbanTaskId={todo.kanbanTaskId}
-                    teamId={todo.teamId}
                     onConvertToTask={onConvertToTask}
                     onViewTask={onViewTask}
                     // hasDragged={hasDragged}

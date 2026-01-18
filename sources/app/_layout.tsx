@@ -17,6 +17,7 @@ import { ModalProvider } from '@/modal';
 import { PostHogProvider } from 'posthog-react-native';
 import { tracking } from '@/track/tracking';
 import { syncRestore } from '@/sync/sync';
+import { initializeI18n } from '@/i18n';
 import { useTrackScreens } from '@/track/useTrackScreens';
 import { RealtimeProvider } from '@/realtime/RealtimeProvider';
 import { FaviconPermissionIndicator } from '@/components/web/FaviconPermissionIndicator';
@@ -159,6 +160,7 @@ export default function RootLayout() {
             try {
                 await loadFonts();
                 await sodium.ready;
+                await initializeI18n();
                 const credentials = await TokenStorage.getCredentials();
                 console.log('credentials', credentials);
                 if (credentials) {

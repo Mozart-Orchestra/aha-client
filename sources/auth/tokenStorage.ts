@@ -12,26 +12,21 @@ export interface AuthCredentials {
 }
 
 /**
- * Web storage with sessionStorage fallback for better security.
+ * Web storage using sessionStorage only for better security.
  * Note: For production web apps, consider using HttpOnly cookies
  * or a more secure storage mechanism to protect against XSS attacks.
  */
 const WebStorage = {
     getItem(key: string): string | null {
-        // Use sessionStorage for better security (cleared on tab close)
-        // Falls back to localStorage for persistence if needed
-        return sessionStorage.getItem(key) ?? localStorage.getItem(key);
+        // Use sessionStorage only (cleared on tab close)
+        return sessionStorage.getItem(key);
     },
     setItem(key: string, value: string): void {
-        // Store in sessionStorage for security
+        // Store in sessionStorage only for security
         sessionStorage.setItem(key, value);
-        // Also store in localStorage for persistence across tabs
-        // but clear it on explicit logout
-        localStorage.setItem(key, value);
     },
     removeItem(key: string): void {
         sessionStorage.removeItem(key);
-        localStorage.removeItem(key);
     }
 };
 
@@ -39,7 +34,14 @@ export const TokenStorage = {
     async getCredentials(): Promise<AuthCredentials | null> {
         if (Platform.OS === 'web') {
             const stored = WebStorage.getItem(AUTH_KEY);
-            return stored ? JSON.parse(stored) as AuthCredentials : null;
+            if (!stored) return null;
+            try {
+                return JSON.parse(stored) as AuthCredentials;
+            } catch (error) {
+                console.error('Error parsing web credentials:', error);
+                WebStorage.removeItem(AUTH_KEY);
+                return null;
+            }
         }
         try {
             const stored = await SecureStore.getItemAsync(AUTH_KEY);
@@ -54,8 +56,13 @@ export const TokenStorage = {
 
     async setCredentials(credentials: AuthCredentials): Promise<boolean> {
         if (Platform.OS === 'web') {
-            WebStorage.setItem(AUTH_KEY, JSON.stringify(credentials));
-            return true;
+            try {
+                WebStorage.setItem(AUTH_KEY, JSON.stringify(credentials));
+                return true;
+            } catch (error) {
+                console.error('Error setting web credentials:', error);
+                return false;
+            }
         }
         try {
             const json = JSON.stringify(credentials);

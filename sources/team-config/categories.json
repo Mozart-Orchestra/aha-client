@@ -1,0 +1,151 @@
+{
+  "_comment": "Category-based task routing system - inspired by oh-my-opencode's ulw pattern",
+  "_version": "1.0.0",
+  "_documentation": "https://github.com/code-yeongyu/oh-my-opencode",
+
+  "categories": {
+    "product-planning": {
+      "_description": "战略产品规划、愿景定义、路线图制定",
+      "targetAgent": "product-owner",
+      "model": "anthropic/claude-opus-4-5",
+      "temperature": 0.3,
+      "thinkingBudget": 32000,
+      "promptAppend": "You are defining product vision and strategic direction. Focus on business value, user needs, and market positioning.",
+      "skills": ["product-strategy", "roadmap-planning", "stakeholder-communication"]
+    },
+
+    "requirements-analysis": {
+      "_description": "需求收集、用户故事定义、业务分析",
+      "targetAgent": "business-analyst",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.2,
+      "thinkingBudget": 16000,
+      "promptAppend": "You are analyzing business requirements and user needs. Focus on clarity, completeness, and traceability.",
+      "skills": ["requirements-gathering", "user-stories", "stakeholder-interviews"]
+    },
+
+    "spec-writing": {
+      "_description": "撰写详细的产品规格说明文档",
+      "targetAgent": "spec-writer",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.1,
+      "thinkingBudget": 16000,
+      "promptAppend": "You are writing detailed specification documents following OpenSpec methodology. Use SHALL/MUST terminology and define acceptance criteria.",
+      "skills": ["technical-writing", "specification-formatting", "acceptance-criteria"]
+    },
+
+    "ux-research": {
+      "_description": "用户研究、可用性测试、用户行为分析",
+      "targetAgent": "ux-researcher",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.3,
+      "thinkingBudget": 16000,
+      "promptAppend": "You are conducting user research and usability analysis. Focus on user pain points, behaviors, and needs.",
+      "skills": ["user-interviews", "usability-testing", "behavioral-analysis"]
+    },
+
+    "ux-design": {
+      "_description": "UI/UX 设计、交互流程、原型设计",
+      "targetAgent": "product-designer",
+      "model": "google/gemini-2.5-pro",
+      "temperature": 0.7,
+      "thinkingBudget": 32000,
+      "promptAppend": "You are designing user experiences and interfaces. Be creative, focus on usability, accessibility, and delight.",
+      "skills": ["ui-design", "interaction-design", "prototyping", "design-systems"]
+    },
+
+    "architecture": {
+      "_description": "系统架构设计、技术决策、模式选择",
+      "targetAgent": "architect",
+      "model": "openai/gpt-5.2",
+      "temperature": 0.2,
+      "thinkingBudget": 32000,
+      "promptAppend": "You are designing system architecture. Focus on scalability, maintainability, and technical excellence.",
+      "skills": ["system-design", "design-patterns", "tech-stack-selection", "api-design"]
+    },
+
+    "code-implementation": {
+      "_description": "功能实现、编码、单元测试",
+      "targetAgent": "implementer",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.3,
+      "thinkingBudget": 32000,
+      "promptAppend": "You are implementing features according to specifications. Write clean, maintainable, well-tested code.",
+      "skills": ["coding", "testing", "debugging", "code-organization"]
+    },
+
+    "testing": {
+      "_description": "QA 测试、测试策略、质量保证",
+      "targetAgent": "qa-engineer",
+      "model": "anthropic/claude-haiku-4",
+      "temperature": 0.1,
+      "thinkingBudget": 16000,
+      "promptAppend": "You are testing software quality. Focus on thoroughness, edge cases, and clear bug reports.",
+      "skills": ["test-automation", "manual-testing", "edge-case-analysis", "bug-reporting"]
+    },
+
+    "documentation": {
+      "_description": "技术文档编写、API 文档、用户指南",
+      "targetAgent": "technical-writer",
+      "model": "google/gemini-2.5-flash",
+      "temperature": 0.4,
+      "thinkingBudget": 16000,
+      "promptAppend": "You are writing technical documentation. Be clear, concise, and audience-appropriate.",
+      "skills": ["technical-writing", "api-documentation", "user-guides", "examples"]
+    },
+
+    "research": {
+      "_description": "代码库探索、技术调研、文档查找",
+      "targetAgent": "researcher",
+      "model": "anthropic/claude-haiku-4",
+      "temperature": 0.1,
+      "thinkingBudget": 8000,
+      "promptAppend": "You are researching codebases and technologies. Be thorough, provide precise references, and cite sources.",
+      "skills": ["code-exploration", "documentation-research", "pattern-matching"]
+    },
+
+    "project-management": {
+      "_description": "项目管理、时间线跟踪、风险管理",
+      "targetAgent": "project-manager",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.2,
+      "thinkingBudget": 16000,
+      "promptAppend": "You are managing project execution. Focus on timelines, resources, risks, and stakeholder communication.",
+      "skills": ["planning", "risk-management", "resource-allocation", "reporting"]
+    }
+  },
+
+  "routingRules": [
+    {
+      "if": "task.description.includes('design') && task.description.includes('UI')",
+      "then": "ux-design"
+    },
+    {
+      "if": "task.description.includes('spec') || task.description.includes('requirement')",
+      "then": "spec-writing"
+    },
+    {
+      "if": "task.tags.includes('architecture')",
+      "then": "architecture"
+    },
+    {
+      "if": "task.tags.includes('testing') || task.tags.includes('qa')",
+      "then": "testing"
+    },
+    {
+      "if": "task.tags.includes('docs') || task.tags.includes('documentation')",
+      "then": "documentation"
+    }
+  ],
+
+  "defaultCategory": "code-implementation",
+
+  "concurrencyLimits": {
+    "anthropic/claude-opus-4-5": 2,
+    "openai/gpt-5.2": 2,
+    "google/gemini-2.5-pro": 3,
+    "anthropic/claude-sonnet-4-5": 5,
+    "google/gemini-2.5-flash": 10,
+    "anthropic/claude-haiku-4": 15
+  }
+}

@@ -213,13 +213,30 @@ const stylesheet = StyleSheet.create((theme) => ({
 
 // Helper to get avatar initials or icon based on role
 const getAvatarContent = (roleId?: string, displayName?: string) => {
-    if (roleId === 'master') return '👑';
-    if (roleId === 'builder') return '🛠️';
-    if (roleId === 'framer') return '🎨';
-    if (roleId === 'reviewer') return '🔍';
+    if (!roleId) {
+        const name = displayName || '?';
+        return name.substring(0, 2).toUpperCase();
+    }
+
+    const normalizedRole = ({
+        master: 'orchestrator',
+        builder: 'implementer',
+        framer: 'architect',
+        scout: 'researcher',
+        scribe: 'observer',
+        qa: 'qa-engineer',
+        reviewer: 'observer',
+    } as const)[roleId] ?? roleId;
+
+    if (normalizedRole === 'orchestrator') return '👑';
+    if (normalizedRole === 'architect') return '🧭';
+    if (normalizedRole === 'implementer') return '🛠️';
+    if (normalizedRole === 'researcher') return '🔎';
+    if (normalizedRole === 'qa-engineer') return '🧪';
+    if (normalizedRole === 'observer') return '👁️';
 
     // Fallback to initials
-    const name = displayName || roleId || '?';
+    const name = displayName || normalizedRole || '?';
     return name.substring(0, 2).toUpperCase();
 };
 
@@ -307,9 +324,9 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
     // 🆕 查找关联的任务
     const relatedTask = React.useMemo(() => {
         if (!taskChatSync || !message.metadata?.taskId) return null;
-        const taskStats = taskChatSync.getTaskStats();
-        return taskStats.tasks.find(t => t.id === message.metadata.taskId);
-    }, [taskChatSync, message.metadata?.taskId]);
+        const tasksForMessage = taskChatSync.getTasksForMessage(message.id);
+        return tasksForMessage.find(t => t.id === message.metadata?.taskId) ?? null;
+    }, [taskChatSync, message.id, message.metadata?.taskId]);
 
     // Determine if we should show short or long content
     // If shortContent exists, use it as the summary.
@@ -430,6 +447,7 @@ export default function TeamChatRoom({
     const [internalMessages, setInternalMessages] = React.useState<TeamMessage[]>([]);
     const messages = externalMessages ?? internalMessages;
     const messagesRef = React.useRef<TeamMessage[]>(messages);
+    const messageIdsRef = React.useRef<Set<string>>(new Set());
 
     React.useEffect(() => {
         messagesRef.current = messages;
@@ -446,6 +464,15 @@ export default function TeamChatRoom({
         setInternalMessages(update);
     }, [onMessagesChange, setInternalMessages]);
 
+    const setMessagesRef = React.useRef(setMessages);
+    React.useEffect(() => {
+        setMessagesRef.current = setMessages;
+    }, [setMessages]);
+
+    React.useEffect(() => {
+        messageIdsRef.current = new Set(messages.map(message => message.id));
+    }, [messages]);
+
     const [inputText, setInputText] = React.useState('');
     const [isSending, setIsSending] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -461,8 +488,9 @@ export default function TeamChatRoom({
     }, []);
 
     React.useEffect(() => {
-        setMessages([]);
-    }, [teamId, setMessages]);
+        setMessagesRef.current([]);
+        messageIdsRef.current = new Set();
+    }, [teamId]);
 
     // Filter active members for status display
     const activeMembers = React.useMemo(() => {
@@ -586,27 +614,47 @@ export default function TeamChatRoom({
 
     // Load messages
     React.useEffect(() => {
-        loadMessages();
+        void loadMessages();
     }, [loadMessages]);
 
     // Subscribe to real-time messages
     React.useEffect(() => {
-        const unsubscribe = sync.subscribeToTeamMessages(teamId, (message) => {
-            setMessages(prev => {
-                // O(1) deduplication check using Set (replaced O(n) Array.some)
-                const messageIds = new Set(prev.map(m => m.id));
-                if (messageIds.has(message.id)) {
-                    return prev;
+        let isActive = true;
+        let cleanup: (() => void) | undefined;
+
+        const subscribe = async () => {
+            try {
+                const unsubscribe = await sync.subscribeToTeamMessages(teamId, (message) => {
+                    setMessages(prev => {
+                        if (messageIdsRef.current.has(message.id)) {
+                            return prev;
+                        }
+                        messageIdsRef.current.add(message.id);
+                        return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
+                    });
+
+                    setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                    }, 100);
+                });
+
+                if (!isActive) {
+                    unsubscribe();
+                    return;
                 }
-                return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
-            });
 
-            setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        });
+                cleanup = unsubscribe;
+            } catch (error) {
+                console.error('Failed to subscribe to team messages:', error);
+            }
+        };
 
-        return unsubscribe;
+        void subscribe();
+
+        return () => {
+            isActive = false;
+            cleanup?.();
+        };
     }, [teamId, setMessages]);
 
     // Deduplicate and sort
@@ -667,10 +715,13 @@ export default function TeamChatRoom({
             if (taskCommand && taskChatSync) {
                 try {
                     // 创建新任务
+                    const taskId = randomUUID();
+                    const sourceMessageId = randomUUID();
                     const newTask = createTaskFromCommand(
                         taskCommand,
-                        `msg_${Date.now()}`,
-                        mySessionId || 'user'
+                        taskId,
+                        mySessionId || 'user',
+                        sourceMessageId
                     );
 
                     // 调用 onTaskCreate 创建任务
@@ -678,11 +729,11 @@ export default function TeamChatRoom({
 
                     // 发送 task-created 通知到聊天
                     const notificationMessage: TeamMessage = {
-                        id: `task_created_${Date.now()}`,
+                        id: `task_created_${randomUUID()}`,
                         teamId,
                         fromDisplayName: myDisplayName || 'User',
                         content: `✅ Created task: **${newTask.title}**\n\n${newTask.description ? `Description: ${newTask.description}\n\n` : ''}Priority: ${newTask.priority}\nStatus: ${newTask.status}\n\n#task-${newTask.id}`,
-                        type: 'task-created',
+                        type: 'notification',
                         timestamp: Date.now(),
                         metadata: {
                             taskId: newTask.id,
@@ -697,7 +748,7 @@ export default function TeamChatRoom({
                     await sync.sendTeamMessage({
                         teamId,
                         content: notificationMessage.content,
-                        type: 'task-created',
+                        type: 'notification',
                         metadata: notificationMessage.metadata,
                         fromDisplayName: myDisplayName || 'User'
                     });
@@ -707,8 +758,8 @@ export default function TeamChatRoom({
                         const assigneeMention = `@${newTask.assigneeId}`;
                         await sync.sendTeamMessage({
                             teamId,
-                            content: `${assigneeMention} 你被分配了新任务: ${newTask.title}`,
-                            type: 'task-assigned',
+                            content: `${assigneeMention} You have been assigned a new task: ${newTask.title}`,
+                            type: 'notification',
                             mentions: [newTask.assigneeId],
                             metadata: {
                                 taskId: newTask.id,

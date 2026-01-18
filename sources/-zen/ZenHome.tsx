@@ -10,7 +10,7 @@ import { storage } from '@/sync/storage';
 import { toggleTodo as toggleTodoSync, reorderTodos as reorderTodosSync, convertTodoToKanban } from '@/-zen/model/ops';
 import { useAuth } from '@/auth/AuthContext';
 import { useShallow } from 'zustand/react/shallow';
-import type { KanbanTask } from '@/sync/kanbanTypes';
+import type { KanbanBoard, KanbanTask } from '@/sync/kanbanTypes';
 
 export const ZenHome = () => {
     const insets = useSafeAreaInsets();
@@ -95,7 +95,22 @@ export const ZenHome = () => {
                     const artifact = artifacts[teamId];
                     if (!artifact?.body) throw new Error('Team not found');
 
-                    const board = JSON.parse(artifact.body);
+                    let board: KanbanBoard;
+                    try {
+                        board = JSON.parse(artifact.body);
+                    } catch (error) {
+                        throw new Error('Invalid team board data');
+                    }
+
+                    if (!board || typeof board !== 'object') {
+                        throw new Error('Invalid team board data');
+                    }
+
+                    if (!Array.isArray(board.tasks)) {
+                        board.tasks = [];
+                    }
+
+                    const profileId = storage.getState().profile?.id ?? null;
                     const newTask: KanbanTask = {
                         id: Math.random().toString(36).substring(2, 15),
                         title: taskData.title || '',
@@ -107,8 +122,8 @@ export const ZenHome = () => {
                         todoId: taskData.todoId,
                         createdAt: Date.now(),
                         updatedAt: Date.now(),
-                        assigneeId: storage.getState().profile.id,
-                        reporterId: storage.getState().profile.id
+                        assigneeId: taskData.assigneeId ?? profileId,
+                        reporterId: profileId ?? undefined
                     };
 
                     board.tasks.push(newTask);

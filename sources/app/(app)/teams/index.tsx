@@ -113,9 +113,9 @@ export default function TeamsScreen() {
 
     const [isLoading, setIsLoading] = React.useState(false);
 
-    // Fetch artifacts on mount
     React.useEffect(() => {
         let cancelled = false;
+        let isMounted = true;
 
         (async () => {
             try {
@@ -129,7 +129,7 @@ export default function TeamsScreen() {
             } catch (error) {
                 console.error('Failed to fetch artifacts:', error);
             } finally {
-                if (!cancelled) {
+                if (isMounted && !cancelled) {
                     setIsLoading(false);
                 }
             }
@@ -137,6 +137,7 @@ export default function TeamsScreen() {
 
         return () => {
             cancelled = true;
+            isMounted = false;
         };
     }, []);
 

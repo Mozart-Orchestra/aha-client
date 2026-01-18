@@ -14,8 +14,9 @@ const getDeviceLanguage = () => {
     const deviceLanguage = locales[0].languageCode
     // Map device language to supported languages
     if (deviceLanguage === 'zh') {
-      // Check for specific Chinese variants
-      const region = locales[0].languageTag?.split('-')[1] || ''
+      // Check for specific Chinese variants using the last subtag
+      const tag = locales[0].languageTag || ''
+      const region = tag.split(/[-_]/).pop()?.toUpperCase() || ''
       return region === 'TW' || region === 'HK' ? 'zh-TW' : 'zh-CN'
     }
     return deviceLanguage
@@ -44,7 +45,7 @@ export const saveLanguage = async (language: string) => {
 }
 
 // Initialize i18n
-const initI18n = async () => {
+const initI18n = async (): Promise<string> => {
   const savedLanguage = await loadSavedLanguage()
 
   await i18n
@@ -53,7 +54,8 @@ const initI18n = async () => {
       compatibilityJSON: 'v3',
       resources: {
         en: { translation: en },
-        'zh-CN': { translation: zhCN }
+        'zh-CN': { translation: zhCN },
+        'zh-TW': { translation: zhCN }
       },
       lng: savedLanguage,
       fallbackLng: 'en',
@@ -71,13 +73,11 @@ const initI18n = async () => {
 // Export i18n instance and language change handler
 export { i18n }
 export const changeLanguage = async (language: string) => {
+  await i18nReady
   await i18n.changeLanguage(language)
   await saveLanguage(language)
 }
 
-// Auto-initialize
-initI18n().catch(error => {
-  console.error('Error initializing i18n:', error)
-})
+export const i18nReady = initI18n()
 
 export default i18n

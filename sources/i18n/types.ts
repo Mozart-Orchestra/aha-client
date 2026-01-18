@@ -24,10 +24,10 @@ export interface LanguageOption {
 
 // i18n context type for type-safe translations
 export interface I18nContext {
-  t: (key: string, options?: any) => string;
+  t: (key: TranslationKey, options?: TranslationOptions) => string;
   i18n: {
     language: SupportedLanguage;
-    changeLanguage: (language: string) => Promise<void>;
+    changeLanguage: (language: SupportedLanguage) => Promise<void>;
   };
 }
 

@@ -13,7 +13,6 @@ export type TodoViewProps = {
     value: string;
     onToggle?: () => void;
     kanbanTaskId?: string;
-    teamId?: string;
     onConvertToTask?: () => void;
     onViewTask?: () => void;
     // hasDragged?: SharedValue<boolean>;

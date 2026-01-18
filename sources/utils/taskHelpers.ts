@@ -9,7 +9,6 @@
  */
 
 import { KanbanTask, KanbanBoard } from '@/sync/kanbanTypes';
-import { randomUUID } from 'expo-crypto';
 
 /**
  * Parse task creation command from chat message
@@ -80,11 +79,13 @@ export function parseTaskCommand(content: string): ParsedTaskCommand | null {
  */
 export function createTaskFromCommand(
     parsed: ParsedTaskCommand,
-    messageId: string,
-    reporterId: string
+    taskId: string,
+    reporterId: string,
+    sourceMessageId?: string
 ): KanbanTask {
+    const relatedMessageIds = sourceMessageId ? [sourceMessageId] : undefined;
     return {
-        id: randomUUID(),
+        id: taskId,
         title: parsed.task.title!,
         description: parsed.task.description,
         status: parsed.task.status || 'todo',
@@ -94,10 +95,10 @@ export function createTaskFromCommand(
         dueDate: parsed.task.dueDate,
         tags: parsed.task.tags,
         source: parsed.task.source,
-        sourceMessageId: messageId,
+        sourceMessageId,
         createdAt: parsed.task.createdAt!,
         updatedAt: parsed.task.updatedAt!,
-        relatedMessageIds: [messageId],
+        relatedMessageIds,
         approvalStatus: 'approved' // User-created tasks are auto-approved
     };
 }
@@ -256,14 +257,17 @@ export function editTask(task: KanbanTask, updates: Partial<KanbanTask>): Kanban
  * Returns a copy of the task with deletion metadata
  */
 export function deleteTask(task: KanbanTask, deleterId: string, reason?: string): KanbanTask {
+    const deletionReason = reason || 'Task deleted';
     return {
         ...task,
         approvalStatus: 'rejected',
-        rejectionReason: reason || 'Task deleted',
+        rejectionReason: deletionReason,
         rejectedBy: [...(task.rejectedBy || []), deleterId],
         updatedAt: Date.now(),
         // Add deletion marker
-        source: 'deleted'
+        isDeleted: true,
+        deletedAt: Date.now(),
+        deletionReason
     };
 }
 

@@ -19,21 +19,19 @@ const ROLE_LIBRARY: Record<string, KanbanTeamRole> = LOCALIZED_TEAM_ROLES.reduce
     acc[role.id] = role;
     return acc;
 }, {} as Record<string, KanbanTeamRole>);
-const INITIAL_ROLE_COUNTS: Record<string, number> = DEFAULT_TEAM_ROLES.reduce((acc, role) => {
+const INITIAL_ROLE_COUNTS: Record<string, number> = LOCALIZED_TEAM_ROLES.reduce((acc, role) => {
     if (role.id === 'master') {
+        acc[role.id] = 1;  // Master 是团队的核心协调者
+    } else if (role.id === 'orchestrator') {
+        acc[role.id] = 0;  // Orchestrator 与 Master 类似，默认不启用
+    } else if (role.id === 'architect') {
         acc[role.id] = 1;
-    } else if (role.id === 'builder') {
+    } else if (role.id === 'implementer') {
         acc[role.id] = 1;
-    } else if (role.id === 'framer') {
-        acc[role.id] = 0;
-    } else if (role.id === 'scout') {
+    } else if (role.id === 'qa-engineer') {
         acc[role.id] = 1;
-    } else if (role.id === 'scribe') {
+    } else if (role.id === 'observer') {
         acc[role.id] = 1;
-    } else if (role.id === 'qa') {
-        acc[role.id] = 0;
-    } else if (role.id === 'reviewer') {
-        acc[role.id] = 0;
     } else {
         acc[role.id] = 0;
     }
@@ -324,7 +322,7 @@ export default function NewTeamScreen() {
     });
     const [isPathDropdownOpen, setIsPathDropdownOpen] = React.useState(false);
 
-    const defaultRoleId = 'builder';
+    const defaultRoleId = 'implementer';
 
     React.useEffect(() => {
         if (machines.length === 0) {
@@ -487,7 +485,7 @@ export default function NewTeamScreen() {
                     id: m.sessionId,
                     name: m.displayName || m.sessionId,
                     type: 'session',
-                    role: m.roleId === 'master' ? 'master' : 'executor',
+                    role: m.roleId === 'orchestrator' ? 'master' : 'executor',
                     transport: 'remote',
                     metadata: {
                         roleId: m.roleId

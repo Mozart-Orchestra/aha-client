@@ -193,10 +193,10 @@ export function shouldRespondToMessage(
         return false;
     }
 
-    // 4. 来自 master 的消息（特殊处理）
-    if (message.fromRole === 'master' && message.type === 'chat') {
-        // Builder 和 Framer 应该关注 master 的指令
-        if (['builder', 'framer'].includes(myRole)) {
+    // 4. 来自 orchestrator 的消息（特殊处理）
+    if (message.type === 'chat' && ['orchestrator', 'master'].includes(message.fromRole || '')) {
+        // Implementer 和 Architect 应该关注 orchestrator 的指令
+        if (['implementer', 'architect', 'builder', 'framer'].includes(myRole)) {
             return true;
         }
     }

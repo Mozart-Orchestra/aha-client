@@ -62,7 +62,7 @@
   "team": {
     "title": "团队",
     "members": "成员",
-    "roles": "角色",
+    "rolesLabel": "角色",
     "chat": "聊天",
     "online": "在线",
     "offline": "离线",

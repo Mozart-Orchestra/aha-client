@@ -113,6 +113,11 @@ export interface KanbanTask {
     rejectionReason?: string;         // 拒绝原因
     approvedBy?: string[];            // 审批者 IDs
     rejectedBy?: string[];            // 拒绝者 IDs
+    reassignedBy?: string[];          // 重新分配执行者 IDs
+    reassignedAt?: number | null;     // 重新分配时间
+    isDeleted?: boolean;              // 删除标记
+    deletedAt?: number | null;        // 删除时间
+    deletionReason?: string;          // 删除原因
 
     // 🆕 依赖关系
     dependencies?: string[];          // 依赖的任务 IDs

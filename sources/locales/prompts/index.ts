@@ -52,21 +52,29 @@ export function useTeamRoles(): LocalizedTeamConfig {
  * 根据语言环境获取团队角色（服务端）
  */
 export function getTeamRoles(locale: string = 'zh'): LocalizedTeamConfig {
+  const allowedLocales = ['en', 'zh'];
+  const safeLocale = allowedLocales.includes(locale) ? locale : 'zh';
+
   try {
     // Dynamic import based on locale
-    const rolesData = require(`./${locale}/roles.json`);
+    const rolesData = require(`./${safeLocale}/roles.json`);
     return {
       roles: rolesData.roles,
       agreements: rolesData.agreements
     };
   } catch (error) {
-    console.error(`Failed to load team roles for locale "${locale}":`, error);
+    console.error(`Failed to load team roles for locale "${safeLocale}":`, error);
     // Fallback to Chinese
-    const zhRoles = require('./zh/roles.json');
-    return {
-      roles: zhRoles.roles,
-      agreements: zhRoles.agreements
-    };
+    try {
+      const zhRoles = require('./zh/roles.json');
+      return {
+        roles: zhRoles.roles,
+        agreements: zhRoles.agreements
+      };
+    } catch (fallbackError) {
+      console.error('Failed to load fallback zh roles:', fallbackError);
+      return { roles: {}, agreements: {} };
+    }
   }
 }
 

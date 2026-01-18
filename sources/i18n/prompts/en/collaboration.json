@@ -1,5 +1,5 @@
 {
   "handoff": "Hand off task to next agent",
-  "escalate": "Escalate blocker to master",
+  "escalate": "Escalate blocker to lead",
   "notify": "Notify team of progress"
 }

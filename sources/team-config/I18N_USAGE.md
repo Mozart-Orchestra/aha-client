@@ -117,12 +117,12 @@ function RoleDetails({ roleId }) {
       <Text style={styles.title}>{role.title}</Text>
       <Text style={styles.summary}>{role.summary}</Text>
 
-      <Text style={styles.sectionTitle}>职责：</Text>
+      <Text style={styles.sectionTitle}>{t('teamRoles.labels.responsibilities')}：</Text>
       {role.responsibilities.map((resp, index) => (
         <Text key={index} style={styles.item}>• {resp}</Text>
       ))}
 
-      <Text style={styles.sectionTitle}>能力边界：</Text>
+      <Text style={styles.sectionTitle}>{t('teamRoles.labels.abilityBoundaries')}：</Text>
       {role.abilityBoundaries.map((boundary, index) => (
         <Text key={index} style={styles.item}>• {boundary}</Text>
       ))}

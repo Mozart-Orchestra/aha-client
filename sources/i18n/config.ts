@@ -128,29 +128,33 @@ const resources = {
   },
 };
 
-// i18next configuration
-i18n
-  .use(initReactI18next)
-  .init({
-    resources,
-    lng: 'en', // Will be updated after loading saved preference
-    fallbackLng: 'en',
-    defaultNS: 'common',
-    ns: ['common', 'components', 'screens', 'errors', 'tasks', 'team', 'memory', 'rules', 'prompts', 'mcp'],
-    compatibilityJSON: 'v3',
-    interpolation: {
-      escapeValue: false, // React already escapes values
-    },
-    react: {
-      useSuspense: false, // Disable suspense for React Native
-    },
-  });
-
-// Initialize language on app start
-export const initializeLanguage = async (): Promise<void> => {
+// Initialize i18next after loading saved preference
+export const initializeI18n = async (): Promise<void> => {
   const savedLanguage = await loadSavedLanguage();
-  await i18n.changeLanguage(savedLanguage);
+  if (!i18n.isInitialized) {
+    await i18n
+      .use(initReactI18next)
+      .init({
+        resources,
+        lng: savedLanguage,
+        fallbackLng: 'en',
+        defaultNS: 'common',
+        ns: ['common', 'components', 'screens', 'errors', 'tasks', 'team', 'memory', 'rules', 'prompts', 'mcp'],
+        compatibilityJSON: 'v3',
+        interpolation: {
+          escapeValue: false, // React already escapes values
+        },
+        react: {
+          useSuspense: false, // Disable suspense for React Native
+        },
+      });
+  } else {
+    await i18n.changeLanguage(savedLanguage);
+  }
 };
+
+// Backwards-compatible alias
+export const initializeLanguage = initializeI18n;
 
 // Change language and save preference
 export const changeLanguage = async (language: string): Promise<void> => {

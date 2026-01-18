@@ -1,0 +1,627 @@
+# Happy Role Definitions - Complete Role Registry
+# Version: 2.0
+# Last Updated: 2025-01-18
+#
+# This is the unified role registry for the Happy multi-agent system.
+# It serves as a comprehensive reference for all 21 available roles.
+#
+# Source of Truth: ROLE_REGISTRY.cjs dynamically loads these from
+# individual SKILL.md files in kanban/sources/team-config/skills/
+#
+# Role Categories:
+#   - Coordination: Planning, orchestrating, managing
+#   - Product: Vision, requirements, user research
+#   - Design: UX, UI, product design
+#   - Architecture: Technical decisions, system design
+#   - Development: Implementation, coding
+#   - QA: Testing, quality assurance, reviewing
+#   - Support: Documentation, observation
+
+# =====================================================================
+# COORDINATION ROLES
+# =====================================================================
+
+orchestrator:
+  category: coordination
+  title: Orchestrator
+  summary: Plans, delegates, and coordinates team workflows
+  model: claude-opus-4-5
+  temperature: 0.3
+  capabilities:
+    - Break down user requests into actionable tasks
+    - Assign tasks based on role expertise AND category-based routing
+    - Monitor team progress and coordinate handoffs
+    - Unblock team members and resolve conflicts
+    - Maintain Kanban board accuracy
+    - Route tasks automatically using category system
+    - Orchestrate spec-driven development workflow
+  required_tools:
+    - update_task
+    - list_tasks
+    - send_team_message
+    - read
+  disallowed_tools:
+    - bash
+    - edit
+    - spawn_session
+  access_level: read-only
+  legacy_mapping: master
+
+project-manager:
+  category: coordination
+  title: Project Manager
+  summary: Manages project timelines, coordinates resources, tracks risks
+  model: claude-opus-4-5
+  temperature: 0.3
+  capabilities:
+    - Manage project timelines and milestones
+    - Coordinate resource allocation across team
+    - Track project risks and mitigation plans
+    - Report project status to stakeholders
+    - Facilitate team communication and collaboration
+    - Identify and resolve blockers
+    - Manage project scope and changes
+  required_tools:
+    - read
+    - update_task
+    - list_tasks
+    - send_team_message
+    - grep
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+  access_level: read-only
+
+# =====================================================================
+# PRODUCT ROLES
+# =====================================================================
+
+product-owner:
+  category: product
+  title: Product Owner
+  summary: Owns product vision, roadmap, and backlog prioritization
+  model: claude-opus-4-5
+  temperature: 0.3
+  capabilities:
+    - Define product vision and strategy
+    - Manage and prioritize product backlog
+    - Make feature tradeoff decisions
+    - Accept completed work against criteria
+    - Gather and prioritize user feedback
+    - Define success metrics and KPIs
+    - Communicate product direction to team
+  required_tools:
+    - read
+    - update_task
+    - list_tasks
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+  access_level: read-only
+  status: new # One of 4 new roles being added
+
+business-analyst:
+  category: product
+  title: Business Analyst
+  summary: Analyzes business requirements and processes
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Elicit and document business requirements
+    - Analyze current business processes
+    - Identify improvement opportunities
+    - Document business rules and logic
+    - Create user stories and acceptance criteria
+    - Facilitate requirements gathering workshops
+  required_tools:
+    - read
+    - send_team_message
+    - grep
+    - websearch_exa
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+    - update_task
+  access_level: read-only
+
+ux-researcher:
+  category: product
+  title: UX Researcher
+  summary: Conducts user research, usability testing, and provides design insights
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Plan and conduct user research studies
+    - Analyze user behavior and patterns
+    - Identify usability issues and pain points
+    - Create user personas and journey maps
+    - Provide actionable design insights
+    - Validate design decisions with data
+    - Conduct competitive usability analysis
+  required_tools:
+    - read
+    - websearch_exa
+    - send_team_message
+    - grep
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+    - update_task
+  access_level: read-only
+
+# =====================================================================
+# DESIGN ROLES
+# =====================================================================
+
+product-designer:
+  category: design
+  title: Product Designer
+  summary: Designs user experiences and interfaces
+  model: gemini-2.5-pro
+  temperature: 0.4
+  capabilities:
+    - Design user interfaces and experiences
+    - Create wireframes and prototypes
+    - Design user flows and interactions
+    - Apply design thinking methodology
+    - Collaborate with UX researchers
+    - Create design systems and components
+  required_tools:
+    - read
+    - edit
+    - write_to_file
+    - send_team_message
+  disallowed_tools:
+    - bash
+    - spawn_session
+    - delete
+  access_level: full-access
+
+ux-designer:
+  category: design
+  title: UX Designer
+  summary: Focuses on user experience design and usability
+  model: gemini-2.5-pro
+  temperature: 0.4
+  capabilities:
+    - Design intuitive user experiences
+    - Create user journey maps
+    - Design wireframes and mockups
+    - Conduct usability evaluations
+    - Apply UX best practices and principles
+    - Collaborate with UI designers
+  required_tools:
+    - read
+    - edit
+    - write_to_file
+    - send_team_message
+  disallowed_tools:
+    - bash
+    - spawn_session
+    - delete
+  access_level: full-access
+  status: new # One of 4 new roles being added
+
+# =====================================================================
+# ARCHITECTURE ROLES
+# =====================================================================
+
+architect:
+  category: architecture
+  title: Architect
+  summary: Makes technical decisions and designs system architecture
+  model: claude-opus-4-5
+  temperature: 0.3
+  capabilities:
+    - Design system architecture and components
+    - Make technical decisions and tradeoffs
+    - Define coding standards and patterns
+    - Review architectural proposals
+    - Ensure technical feasibility
+    - Guide complex implementations
+    - Enforce architectural guidelines
+  required_tools:
+    - read
+    - grep
+    - ast-grep
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+  access_level: read-only
+
+solution-architect:
+  category: architecture
+  title: Solution Architect
+  summary: Designs end-to-end solutions for complex requirements
+  model: claude-opu-4-5
+  temperature: 0.3
+  capabilities:
+    - Design comprehensive technical solutions
+    - Analyze requirements and design solutions
+    - Make technology stack decisions
+    - Create solution architecture documents
+    - Evaluate technical tradeoffs
+    - Guide implementation teams
+    - Ensure scalability and performance
+  required_tools:
+    - read
+    - grep
+    - ast-grep
+    - send_team_message
+    - edit
+  disallowed_tools:
+    - bash
+    - spawn_session
+  access_level: full-access
+  status: new # One of 4 new roles being added
+
+# =====================================================================
+# DEVELOPMENT ROLES
+# =====================================================================
+
+builder:
+  category: development
+  title: Builder
+  summary: Implements features with full code access
+  model: claude-sonnet-4-5
+  temperature: 0.3
+  capabilities:
+    - Implement scoped work
+    - Keep diffs small and drive tasks to completion
+    - Keep Kanban history current
+    - Signal when code is ready for review
+    - Coordinate with architect for technical decisions
+    - Follow architectural guidelines
+  required_tools:
+    - read
+    - grep
+    - ast-grep
+    - edit
+    - bash
+    - update_task
+  disallowed_tools:
+    - spawn_session
+    - delete
+  access_level: full-access
+  legacy_mapping: implementer
+
+implementer:
+  category: development
+  title: Implementer
+  summary: Owns implementation, testing, and integration of features
+  model: claude-sonnet-4-5
+  temperature: 0.3
+  capabilities:
+    - Implement scoped work, keep diffs small
+    - Keep Kanban history current
+    - Signal when code is ready for review
+    - Coordinate with architect for decisions
+    - If blocked >30min, tag orchestrator
+  required_tools:
+    - read
+    - grep
+    - ast-grep
+    - edit
+    - bash
+    - update_task
+  disallowed_tools:
+    - spawn_session
+    - delete
+  access_level: full-access
+
+framer:
+  category: development
+  title: Framer
+  summary: Frontend developer specializing in React Native and UI
+  model: claude-sonnet-4-5
+  temperature: 0.3
+  capabilities:
+    - Build React Native components
+    - Implement UI designs
+    - Style components with Unistyles
+    - Handle state management
+    - Integrate with backend APIs
+  required_tools:
+    - read
+    - edit
+    - bash
+    - grep
+  disallowed_tools:
+    - spawn_session
+  access_level: full-access
+
+# =====================================================================
+# QA ROLES
+# =====================================================================
+
+qa:
+  category: qa
+  title: QA Engineer
+  summary: Quality assurance and testing
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Design and execute test plans
+    - Perform manual and automated testing
+    - Report and track bugs
+    - Verify acceptance criteria
+    - Ensure quality standards
+  required_tools:
+    - read
+    - bash
+    - update_task
+  disallowed_tools:
+    - edit
+    - spawn_session
+  access_level: full-access
+
+qa-engineer:
+  category: qa
+  title: QA Engineer
+  summary: Quality assurance specialist focused on testing strategy
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Design comprehensive test strategies
+    - Create test plans and test cases
+    - Perform manual and automated testing
+    - Identify, report, and track bugs
+    - Verify acceptance criteria are met
+    - Ensure quality standards are maintained
+  required_tools:
+    - read
+    - bash
+    - update_task
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - spawn_session
+    - delete
+  access_level: full-access
+
+reviewer:
+  category: qa
+  title: Code Reviewer
+  summary: Reviews code for quality, security, and best practices
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Review code changes and pull requests
+    - Identify bugs and security issues
+    - Ensure code quality standards
+    - Provide constructive feedback
+    - Verify test coverage
+    - Check documentation completeness
+  required_tools:
+    - read
+    - grep
+    - ast-grep
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+  access_level: read-only
+
+# =====================================================================
+# SUPPORT ROLES
+# =====================================================================
+
+researcher:
+  category: support
+  title: Researcher
+  summary: Conducts research and gathers information
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Research technical topics
+    - Gather and synthesize information
+    - Find solutions to technical problems
+    - Document research findings
+    - Provide recommendations
+  required_tools:
+    - read
+    - websearch_exa
+    - grep
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+  access_level: read-only
+  legacy_mapping: scout
+
+scout:
+  category: support
+  title: Scout
+  summary: Explores codebase and discovers architectural patterns
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Explore and understand codebase architecture
+    - Discover existing patterns and conventions
+    - Identify opportunities for improvement
+    - Research technical solutions
+    - Document architectural findings
+  required_tools:
+    - read
+    - grep
+    - glob
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+  access_level: read-only
+
+scribe:
+  category: support
+  title: Scribe
+  summary: Documents team activities and maintains records
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Document team meetings and decisions
+    - Maintain project records
+    - Create summaries and reports
+    - Track team progress
+    - Organize documentation
+  required_tools:
+    - read
+    - write_to_file
+    - send_team_message
+  disallowed_tools:
+    - bash
+    - spawn_session
+    - delete
+  access_level: full-access
+
+technical-writer:
+  category: support
+  title: Technical Writer
+  summary: Creates technical documentation and guides
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Write technical documentation
+    - Create user guides and tutorials
+    - Document APIs and interfaces
+    - Maintain code documentation
+    - Create diagrams and visual aids
+  required_tools:
+    - read
+    - edit
+    - write_to_file
+    - send_team_message
+  disallowed_tools:
+    - bash
+    - spawn_session
+  access_level: full-access
+
+spec-writer:
+  category: support
+  title: Spec Writer
+  summary: Writes technical specifications and requirements
+  model: claude-sonnet-4-5
+  temperature: 0.2
+  capabilities:
+    - Gather requirements from stakeholders
+    - Write clear technical specifications
+    - Define acceptance criteria
+    - Review specs with team
+    - Maintain spec documentation
+  required_tools:
+    - read
+    - write_to_file
+    - send_team_message
+    - grep
+  disallowed_tools:
+    - bash
+    - spawn_session
+  access_level: full-access
+
+observer:
+  category: support
+  title: Observer
+  summary: Observes team activities without active participation
+  model: claude-sonnet-4-5
+  temperature: 0.0
+  capabilities:
+    - Observe team activities
+    - Monitor progress
+    - Watch patterns and workflows
+    - Learn from team interactions
+  required_tools:
+    - read
+    - list_tasks
+  disallowed_tools:
+    - edit
+    - bash
+    - spawn_session
+    - send_team_message
+    - update_task
+  access_level: read-only
+
+troubleshooter:
+  category: support
+  title: Troubleshooter
+  summary: Diagnoses and resolves technical issues
+  model: claude-sonnet-4-5
+  temperature: 0.3
+  capabilities:
+    - Diagnose technical problems
+    - Identify root causes
+    - Propose solutions
+    - Guide troubleshooting process
+    - Document incidents and resolutions
+  required_tools:
+    - read
+    - grep
+    - bash
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - spawn_session
+  access_level: full-access
+
+master:
+  category: coordination
+  title: Master
+  summary: Legacy role - maps to orchestrator
+  model: claude-opus-4-5
+  temperature: 0.3
+  capabilities:
+    - Task planning and coordination
+    - Team orchestration
+    - Progress monitoring
+  required_tools:
+    - update_task
+    - list_tasks
+    - send_team_message
+  disallowed_tools:
+    - edit
+    - bash
+  access_level: read-only
+  status: deprecated # Use orchestrator instead
+
+# =====================================================================
+# ROLE SYSTEM METADATA
+# =====================================================================
+
+_metadata:
+  total_roles: 21
+  categories:
+    - coordination
+    - product
+    - design
+    - architecture
+    - development
+    - qa
+    - support
+
+  new_roles:
+    - product-owner
+    - ux-designer
+    - solution-architect
+    - project-manager
+
+  deprecated_roles:
+    - master # Replaced by orchestrator
+
+  legacy_mappings:
+    master: orchestrator
+    builder: implementer
+    framer: framer # No change needed
+    reviewer: reviewer # No change needed
+    scout: researcher
+    scribe: scribe # No change needed
+
+  source_of_truth: ROLE_REGISTRY.cjs dynamically loads from SKILL.md files
+  location: /Users/swmt/happy/kanban/sources/team-config/skills/

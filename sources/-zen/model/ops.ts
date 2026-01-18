@@ -20,6 +20,10 @@ import { AsyncLock } from '@/utils/lock';
 
 const todoLock = new AsyncLock();
 
+type SyncSource = 'todo' | 'kanban';
+const SYNC_SOURCE_KEY = '_syncSource' as const;
+const todoSyncSourceById = new Map<string, SyncSource>();
+
 //
 // Types
 //
@@ -1020,8 +1024,9 @@ export async function syncTodoStatusToKanban(
     }
 
     // Check sync source to prevent loops
-    if ((todo as any)[SYNC_SOURCE_KEY] === 'kanban') {
+    if (todoSyncSourceById.get(todoId) === 'kanban') {
         console.log('[Sync] Skipping Todo→Kanban sync (source was Kanban)');
+        todoSyncSourceById.delete(todoId);
         return;
     }
 
@@ -1082,13 +1087,14 @@ export async function syncKanbanStatusToTodo(
         return;
     }
 
+    todoSyncSourceById.set(todoId, 'kanban');
+
     const now = Date.now();
     const updatedTodo: TodoItem = {
         ...todo,
         done: isDone,
         updatedAt: now,
-        completedAt: isDone ? now : undefined,
-        [SYNC_SOURCE_KEY]: 'kanban'  // Mark as coming from Kanban
+        completedAt: isDone ? now : undefined
     };
 
     // Calculate new orders
@@ -1211,8 +1217,6 @@ export async function syncKanbanStatusToTodo(
 //
 
 // Sync loop protection flag
-const SYNC_SOURCE_KEY = '_syncSource' as const;
-type SyncSource = 'todo' | 'kanban' | undefined;
 
 /**
  * Update Todo with Kanban integration fields (kanbanTaskId, teamId)

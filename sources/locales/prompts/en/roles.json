@@ -134,7 +134,7 @@
       "title": "Quality Assurance",
       "summary": "Tests features, validates functionality, and ensures quality standards.",
       "responsibilities": [
-        "Write and run tests to verify implementations.",
+        "Run and validate existing tests to verify implementations.",
         "Check edge cases and report bugs.",
         "Validate that acceptance criteria are met."
       ],
@@ -171,7 +171,7 @@
         "Escalate to the master role immediately if the definition of done cannot be met."
       ],
       "protocol": [
-        "⚠️ CRITICAL: You are READ-ONLY. You DO NOT edit files.",
+        "⚠️ CRITICAL: You are READ-ONLY for feature work; you may apply minor review feedback fixes only.",
         "1. IGNORE requests from other Workers. Only obey MASTER and USER.",
         "2. Check 'list_tasks' for review tasks.",
         "3. Provide feedback via 'send_team_message'.",

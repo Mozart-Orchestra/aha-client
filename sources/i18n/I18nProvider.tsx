@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useTranslation as usei18n, I18nextProvider } from 'react-i18next'
 import { View, ActivityIndicator, StyleSheet } from 'react-native'
-import i18n from './i18n'
+import i18n, { i18nReady } from './i18n'
 import type { SupportedLanguage } from './types'
 
 interface I18nContextType {
@@ -32,7 +32,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     // Wait for i18n to initialize
     const init = async () => {
       try {
-        await i18n.init
+        await i18nReady
         setCurrentLanguage(i18n.language as SupportedLanguage)
         setIsReady(true)
       } catch (error) {

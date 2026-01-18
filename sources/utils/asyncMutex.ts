@@ -4,7 +4,7 @@
 
 export class Mutex {
     private locked = false;
-    private queue: Array<(unlock: () => void) => void> = [];
+    private queue: Array<() => void> = [];
 
     /**
      * Acquire the lock and execute the callback

@@ -39,7 +39,10 @@ export const ZenView = React.memo(() => {
             done: todoItem.done,
             kanbanTaskId: todoItem.kanbanTaskId,
             teamId: todoItem.teamId,
-            linkedSessions: todoItem.linkedSessions
+            linkedSessions: todoItem.linkedSessions,
+            priority: todoItem.priority,
+            dueDate: todoItem.dueDate,
+            tags: todoItem.tags
         };
     }));
 
@@ -220,7 +223,7 @@ export const ZenView = React.memo(() => {
                 fromRole: 'system',
                 content: `New task created from todo: "${todo?.title}"`,
                 shortContent: 'Todo converted to task',
-                type: 'task-created',
+                type: 'chat',
                 metadata: {
                     taskId: newTask.id,
                     todoId: todoId

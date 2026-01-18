@@ -697,52 +697,57 @@ class Sync {
                 const fixedArtifacts = new Map<string, DecryptedArtifact>();
                 let migratedCount = 0;
 
-                for (const artifact of artifactsNeedingTypeFix) {
-                    try {
-                        // Heuristic: If artifact has sessions array, likely a team
-                        const likelyTeam = artifact.sessions && artifact.sessions.length >= 1;
+                try {
+                    for (const artifact of artifactsNeedingTypeFix) {
+                        try {
+                            // Heuristic: If artifact has sessions array, likely a team
+                            const likelyTeam = artifact.sessions && artifact.sessions.length >= 1;
 
-                        // Fetch the full artifact with body
-                        const fullArtifact = await this.fetchArtifactWithBody(artifact.id);
-                        if (fullArtifact && fullArtifact.body) {
-                            try {
-                                const bodyData = JSON.parse(fullArtifact.body);
-                                if (bodyData.team && Array.isArray(bodyData.team.members)) {
-                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
-                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
-                                    migratedCount++;
-                                } else if (likelyTeam) {
-                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
-                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
-                                    migratedCount++;
+                            const fullArtifact = await this.fetchArtifactWithBody(artifact.id);
+                            if (fullArtifact && fullArtifact.body) {
+                                try {
+                                    const bodyData = JSON.parse(fullArtifact.body);
+                                    if (bodyData.team && Array.isArray(bodyData.team.members)) {
+                                        fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
+                                        await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
+                                        migratedCount++;
+                                    } else {
+                                        if (likelyTeam) {
+                                            fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
+                                            await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
+                                            migratedCount++;
+                                        }
+                                    }
+                                } catch (parseError) {
+                                    if (likelyTeam) {
+                                        fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
+                                        await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
+                                        migratedCount++;
+                                    }
                                 }
-                            } catch (parseError) {
-                                // Fallback to heuristic if body parsing fails
+                            } else {
                                 if (likelyTeam) {
-                                    fixedArtifacts.set(artifact.id, { ...fullArtifact, type: 'team' });
-                                    await this.updateArtifact(artifact.id, fullArtifact.title, fullArtifact.body, fullArtifact.sessions, fullArtifact.draft, 'team');
+                                    const minimalTeam = { ...artifact, type: 'team' as const };
+                                    fixedArtifacts.set(artifact.id, minimalTeam);
+                                    await this.updateArtifact(artifact.id, artifact.title, artifact.body || null, artifact.sessions, artifact.draft, 'team');
                                     migratedCount++;
                                 }
                             }
-                        } else if (likelyTeam) {
-                            // No body but has sessions - likely a team
-                            const minimalTeam = { ...artifact, type: 'team' as const };
-                            fixedArtifacts.set(artifact.id, minimalTeam);
-                            await this.updateArtifact(artifact.id, artifact.title, artifact.body || null, artifact.sessions, artifact.draft, 'team');
-                            migratedCount++;
+                        } catch (error) {
+                            console.error(`[Migration] Failed to migrate artifact ${artifact.id}:`, error);
                         }
-                    } catch (error) {
-                        console.error(`[Migration] Failed to migrate artifact ${artifact.id}:`, error);
                     }
+
+                    // Update the decryptedArtifacts array with fixed artifacts
+                    decryptedArtifacts = decryptedArtifacts.map(artifact => {
+                        const fixedArtifact = fixedArtifacts.get(artifact.id);
+                        return fixedArtifact || artifact;
+                    });
+
+                    log.log(`[Migration] Successfully migrated ${migratedCount} artifacts`);
+                } catch (migrationError) {
+                    console.error('[Migration] Migration process encountered error, continuing with current artifacts:', migrationError);
                 }
-
-                // Update the decryptedArtifacts array with the fixed artifacts
-                decryptedArtifacts = decryptedArtifacts.map(artifact => {
-                    const fixedArtifact = fixedArtifacts.get(artifact.id);
-                    return fixedArtifact || artifact;
-                });
-
-                log.log(`[Migration] Successfully migrated ${migratedCount} artifacts`);
             }
 
             storage.getState().applyArtifacts(decryptedArtifacts);
@@ -968,57 +973,7 @@ class Sync {
             const response = await updateArtifact(this.credentials, artifactId, updateRequest);
 
             if (!response.success) {
-                // Handle version mismatch
-                if (response.error === 'version-mismatch') {
-                    console.log('🔄 Version mismatch detected, retrying update...');
-
-                    // Fetch latest artifact data
-                    const latestArtifact = await this.fetchArtifactWithBody(artifactId);
-                    if (!latestArtifact) {
-                        throw new Error('Failed to fetch latest artifact for retry');
-                    }
-
-                    // Update local state with latest data
-                    storage.getState().updateArtifact(latestArtifact);
-
-                    // Retry update with new versions
-                    // Note: In a real collaborative app, we should merge changes here.
-                    // For now, we'll retry the update with the new expected versions.
-                    // This effectively implements "last write wins" but ensures we're building on the latest version.
-
-                    const retryRequest: ArtifactUpdateRequest = {};
-
-                    if (updateRequest.header) {
-                        retryRequest.header = updateRequest.header;
-                        retryRequest.expectedHeaderVersion = latestArtifact.headerVersion;
-                    }
-
-                    if (updateRequest.body) {
-                        retryRequest.body = updateRequest.body;
-                        retryRequest.expectedBodyVersion = latestArtifact.bodyVersion;
-                    }
-
-                    const retryResponse = await updateArtifact(this.credentials, artifactId, retryRequest);
-
-                    if (!retryResponse.success) {
-                        throw new Error('Failed to update artifact after retry: ' + retryResponse.error);
-                    }
-
-                    // Update local storage with retry response versions
-                    const finalArtifact: DecryptedArtifact = {
-                        ...latestArtifact,
-                        title,
-                        type,
-                        sessions,
-                        draft,
-                        body,
-                        headerVersion: retryResponse.headerVersion !== undefined ? retryResponse.headerVersion : latestArtifact.headerVersion,
-                        bodyVersion: retryResponse.bodyVersion !== undefined ? retryResponse.bodyVersion : latestArtifact.bodyVersion,
-                        updatedAt: Date.now(),
-                    };
-                    storage.getState().updateArtifact(finalArtifact);
-                    return;
-                }
+                // If version-mismatch, let caller handle it (e.g. syncSessionToTeam will retry with merge)
                 throw new Error('Failed to update artifact: ' + response.error);
             }
 
@@ -1571,70 +1526,95 @@ class Sync {
             return;
         }
 
-        try {
-            // Get team artifact
-            const teamArtifact = await this.fetchArtifactWithBody(teamId);
+        const MAX_RETRIES = 5;
+        let attempt = 0;
 
-            if (!teamArtifact || !teamArtifact.body) {
-                console.log(`[syncSessionToTeam] Team artifact ${teamId} not found or has no body`);
-                return;
-            }
-
-            let board: any;
+        while (attempt < MAX_RETRIES) {
+            attempt++;
             try {
-                board = JSON.parse(teamArtifact.body);
-            } catch (e) {
-                console.error(`[syncSessionToTeam] Failed to parse team body:`, e);
-                return;
-            }
+                // Get team artifact
+                const teamArtifact = await this.fetchArtifactWithBody(teamId);
 
-            // Check if team structure exists
-            if (!board.team || !Array.isArray(board.team.members)) {
-                console.log(`[syncSessionToTeam] Team artifact has no team.members array`);
-                return;
-            }
-
-            // Check if session is already in members
-            const existingMember = board.team.members.find((m: any) => m.sessionId === sessionId);
-
-            if (existingMember) {
-                // Update existing member's info if needed
-                if (existingMember.roleId !== role || existingMember.displayName !== displayName) {
-                    console.log(`[syncSessionToTeam] Updating existing member ${sessionId}`);
-                    existingMember.roleId = role;
-                    existingMember.displayName = displayName;
-
-                    // Save updated board
-                    const updatedBody = JSON.stringify(board, null, 2);
-                    await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, teamArtifact.sessions || [], false, 'team');
+                if (!teamArtifact || !teamArtifact.body) {
+                    console.log(`[syncSessionToTeam] Team artifact ${teamId} not found or has no body`);
+                    return;
                 }
-                return;
+
+                let board: any;
+                try {
+                    board = JSON.parse(teamArtifact.body);
+                } catch (e) {
+                    console.error(`[syncSessionToTeam] Failed to parse team body:`, e);
+                    return;
+                }
+
+                // Check if team structure exists
+                if (!board.team || !Array.isArray(board.team.members)) {
+                    console.log(`[syncSessionToTeam] Team artifact has no team.members array`);
+                    return;
+                }
+
+                // Check if session is already in members
+                const existingMember = board.team.members.find((m: any) => m.sessionId === sessionId);
+
+                if (existingMember) {
+                    // Update existing member's info if needed
+                    if (existingMember.roleId !== role || existingMember.displayName !== displayName) {
+                        console.log(`[syncSessionToTeam] Updating existing member ${sessionId}`);
+                        existingMember.roleId = role;
+                        existingMember.displayName = displayName;
+
+                        // Save updated board
+                        const updatedBody = JSON.stringify(board, null, 2);
+                        await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, teamArtifact.sessions || [], false, 'team');
+                    }
+                    return;
+                }
+
+                // Add new member
+                console.log(`[syncSessionToTeam] Adding new member ${sessionId} to team ${teamId}`);
+                const newMember: any = {
+                    sessionId,
+                    roleId: role,
+                    displayName: displayName || `Agent ${role}`,
+                    focusAreas: []
+                };
+
+                board.team.members.push(newMember);
+
+                // Save updated board
+                const updatedBody = JSON.stringify(board, null, 2);
+
+                // Collect all member session IDs
+                const allMemberIds = board.team.members
+                    .map((m: any) => m.sessionId)
+                    .filter((id: string) => id && id.length > 0);
+
+                await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, allMemberIds, false, 'team');
+
+                console.log(`[syncSessionToTeam] Successfully added member ${sessionId} to team ${teamId}`);
+                break; // Success
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                const isVersionMismatch = errorMsg.includes('version-mismatch');
+
+                console.error(`[syncSessionToTeam] Failed to sync session to team (attempt ${attempt}/${MAX_RETRIES}): ${errorMsg}`);
+
+                if (attempt >= MAX_RETRIES) {
+                    console.error(`[syncSessionToTeam] Max retries reached, giving up.`);
+                    break;
+                }
+
+                // For version-mismatch, use exponential backoff with longer wait time
+                // This allows other concurrent updates to complete first
+                const baseDelay = isVersionMismatch ? 500 : 200;
+                const maxJitter = isVersionMismatch ? 1000 : 500;
+                const backoffMultiplier = isVersionMismatch ? attempt : 1;
+                const delay = (baseDelay * backoffMultiplier) + (Math.random() * maxJitter);
+
+                console.log(`[syncSessionToTeam] Retrying in ${Math.round(delay)}ms (version-mismatch: ${isVersionMismatch})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
-
-            // Add new member
-            console.log(`[syncSessionToTeam] Adding new member ${sessionId} to team ${teamId}`);
-            const newMember: any = {
-                sessionId,
-                roleId: role,
-                displayName: displayName || `Agent ${role}`,
-                focusAreas: []
-            };
-
-            board.team.members.push(newMember);
-
-            // Save updated board
-            const updatedBody = JSON.stringify(board, null, 2);
-
-            // Collect all member session IDs
-            const allMemberIds = board.team.members
-                .map((m: any) => m.sessionId)
-                .filter((id: string) => id && id.length > 0);
-
-            await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, allMemberIds, false, 'team');
-
-            console.log(`[syncSessionToTeam] Successfully added member ${sessionId} to team ${teamId}`);
-        } catch (error) {
-            console.error(`[syncSessionToTeam] Failed to sync session to team:`, error);
         }
     }
 
@@ -2099,6 +2079,9 @@ class Sync {
             const { teamId, message } = updateData.body;
             console.log(`🔄 Sync: Received team message for team ${teamId}: ${message.id}`);
 
+            let subscribersSnapshot: Array<(message: import('@/sync/teamMessageTypes').TeamMessage) => void> = [];
+            let shouldNotify = false;
+
             // PROTECTED: Acquire mutex for this teamId to prevent concurrent Map access
             await this.getTeamMessagesMutex(teamId).runExclusive(async () => {
                 // Update cache
@@ -2110,15 +2093,19 @@ class Sync {
                     this.teamMessagesCache.set(teamId, [...currentMessages, message as any]);
 
                     // Only notify subscribers for new messages
-                    // NOTE: Reading teamMessageSubscriptions is safe because we only read, not mutate
                     const subscribers = this.teamMessageSubscriptions.get(teamId);
                     if (subscribers) {
-                        subscribers.forEach(callback => callback(message as any));
+                        subscribersSnapshot = [...subscribers];
                     }
+                    shouldNotify = true;
                 } else {
                     console.log(`🔄 Sync: Duplicate message ${message.id}, skipping notification`);
                 }
             });
+
+            if (shouldNotify) {
+                subscribersSnapshot.forEach(callback => callback(message as any));
+            }
 
         } else if (updateData.body.t === 'new-session') {
             log.log('🆕 New session update received');
@@ -2662,6 +2649,8 @@ class Sync {
                 throw new Error(`Failed to send team message: ${response.status} - ${text}`);
             }
 
+            let subscribersSnapshot: Array<(message: import('@/sync/teamMessageTypes').TeamMessage) => void> = [];
+
             // PROTECTED: Acquire mutex for this teamId to prevent concurrent Map access
             await this.getTeamMessagesMutex(request.teamId).runExclusive(async () => {
                 // 立即更新本地缓存
@@ -2669,12 +2658,13 @@ class Sync {
                 this.teamMessagesCache.set(request.teamId, [...cached, message]);
 
                 // 触发本地订阅者
-                // NOTE: Reading teamMessageSubscriptions is safe because we only read, not mutate
                 const subscribers = this.teamMessageSubscriptions.get(request.teamId);
                 if (subscribers) {
-                    subscribers.forEach(callback => callback(message));
+                    subscribersSnapshot = [...subscribers];
                 }
             });
+
+            subscribersSnapshot.forEach(callback => callback(message));
         } catch (error) {
             console.error('Failed to send team message:', error);
             throw error;
@@ -2683,37 +2673,31 @@ class Sync {
 
     /**
      * 订阅团队消息
+     * NOTE: 同步实现，不使用 Mutex。JS 单线程特性确保 Map/Set 操作是原子的。
+     * 使用异步 Mutex 会导致 callback 注册延迟，从而丢失在注册完成前到达的消息。
      */
     subscribeToTeamMessages(
         teamId: string,
         callback: (message: import('@/sync/teamMessageTypes').TeamMessage) => void
     ): () => void {
-        // PROTECTED: Acquire mutex for this teamId's subscription set
-        return this.getTeamSubscriptionsMutex(teamId).runExclusive(() => {
-            let subscribers = this.teamMessageSubscriptions.get(teamId);
-            if (!subscribers) {
-                subscribers = new Set();
-                this.teamMessageSubscriptions.set(teamId, subscribers);
-            }
+        let subscribers = this.teamMessageSubscriptions.get(teamId);
+        if (!subscribers) {
+            subscribers = new Set();
+            this.teamMessageSubscriptions.set(teamId, subscribers);
+        }
 
-            subscribers.add(callback);
+        subscribers.add(callback);
 
-            // 返回取消订阅函数
-            return () => {
-                // NOTE: Unsubscribing doesn't need mutex because Set.delete is atomic in JS
-                // and we're not modifying the Map structure itself
-                const subs = this.teamMessageSubscriptions.get(teamId);
-                if (subs) {
-                    subs.delete(callback);
-                    if (subs.size === 0) {
-                        // PROTECTED: Delete from Map needs mutex protection
-                        this.getTeamSubscriptionsMutex(teamId).runExclusive(() => {
-                            this.teamMessageSubscriptions.delete(teamId);
-                        });
-                    }
+        // 返回取消订阅函数
+        return () => {
+            const subs = this.teamMessageSubscriptions.get(teamId);
+            if (subs) {
+                subs.delete(callback);
+                if (subs.size === 0) {
+                    this.teamMessageSubscriptions.delete(teamId);
                 }
-            };
-        }) as any; // Type assertion because runExclusive returns Promise<void>
+            }
+        };
     }
 }
 

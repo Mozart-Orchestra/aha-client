@@ -80,6 +80,11 @@ const rawAgentRecordSchema = z.discriminatedUnion('type', [z.object({
         isMeta: z.boolean().nullish(),
         uuid: z.string().nullish(),
         parentUuid: z.string().nullish(),
+        userType: z.string().nullish(),
+        cwd: z.string().nullish(),
+        sessionId: z.string().nullish(),
+        version: z.string().nullish(),
+        gitBranch: z.string().nullish(),
     })),
 }), z.object({
     type: z.literal('event'),
@@ -124,6 +129,44 @@ const rawRecordSchema = z.discriminatedUnion('role', [
             type: z.literal('text'),
             text: z.string()
         }),
+        meta: MessageMetaSchema.optional()
+    }),
+    z.object({
+        role: z.literal('assistant'),
+        content: z.union([
+            z.object({
+                type: z.literal('assistant'),
+                message: z.object({
+                    role: z.literal('assistant'),
+                    model: z.string(),
+                    content: z.array(rawAgentContentSchema),
+                    usage: usageDataSchema.optional()
+                }),
+                parent_tool_use_id: z.string().nullable().optional()
+            }),
+            z.object({
+                type: z.literal('assistant'),
+                message: z.object({
+                    role: z.literal('assistant'),
+                    model: z.string(),
+                    content: z.object({
+                        role: z.literal('assistant'),
+                        model: z.string(),
+                        content: z.union([
+                            z.array(rawAgentContentSchema),
+                            z.object({
+                                role: z.literal('assistant'),
+                                model: z.string(),
+                                content: z.array(rawAgentContentSchema),
+                                usage: usageDataSchema.optional()
+                            })
+                        ])
+                    }),
+                    usage: usageDataSchema.optional()
+                }),
+                parent_tool_use_id: z.string().nullable().optional()
+            })
+        ]),
         meta: MessageMetaSchema.optional()
     })
 ]);
@@ -430,6 +473,14 @@ export function normalizeRawMessage(id: string, localId: string | null, createdA
             }
 
         }
+    }
+    const isAgentOutputRecord = raw.role === 'agent' && raw.content.type === 'output';
+    if (isAgentOutputRecord) {
+        // Ignore unsupported agent-output variants (e.g., non-assistant/tool payloads) to avoid hard failures.
+        console.debug('[sync] Ignoring unsupported agent output record', {
+            role: raw.role,
+            contentType: raw.content.type
+        });
     }
     return null;
 }

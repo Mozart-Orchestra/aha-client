@@ -142,6 +142,7 @@ export function extractTaskFromMessage(message: string): {
 
     // Strip all task creation keywords/prefixes
     const title = lines[0]
+        .replace(/^\s*\[(?:todo|task)\]\s*/i, '')
         .replace(/^(创建任务|新建任务|待办|todo|new\s+task|create\s+task)\s*:/i, '')
         .replace(/^(创建任务|新建任务)\s*/i, '')
         .trim();
@@ -246,9 +247,14 @@ export function createTaskFromChatMessage(
         return null;
     }
 
+    const title = extracted.title.trim();
+    if (!title) {
+        return null;
+    }
+
     const now = Date.now();
     return {
-        title: extracted.title,
+        title,
         description: extracted.description,
         reporterId: creatorId,
         createdAt: now,

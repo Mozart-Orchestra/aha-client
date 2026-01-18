@@ -121,8 +121,8 @@ function parseUpdateParams(input: string): Record<string, any> {
   const params: Record<string, any> = {};
 
   // 第一个词是taskId
-  const parts = input.trim().split(/\s+/);
-  if (parts.length > 0) {
+  const parts = input.trim().split(/\s+/).filter(Boolean);
+  if (parts[0]) {
     params.taskId = parts[0];
   }
 
@@ -193,8 +193,16 @@ export async function executeCreateTask(
 
     // 添加到storage
     const currentState = storage.getState();
-    const todoState = currentState.todoState || { todos: {} };
-    todoState.todos[taskId] = newTask;
+    const todoState = currentState.todoState || { todos: {}, undoneOrder: [], doneOrder: [], versions: {} };
+    const updatedTodoState = {
+      ...todoState,
+      todos: { ...todoState.todos, [taskId]: newTask },
+      undoneOrder: todoState.undoneOrder?.includes(taskId)
+        ? todoState.undoneOrder
+        : [taskId, ...(todoState.undoneOrder || [])],
+    };
+
+    storage.getState().applyTodos(updatedTodoState);
 
     // 关联当前session
     await linkTaskToSession(

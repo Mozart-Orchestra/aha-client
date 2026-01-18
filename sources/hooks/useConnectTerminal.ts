@@ -50,7 +50,12 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
             console.log('[TERMINAL AUTH] 🔒 Encrypted V1 response length:', responseV1.length);
 
             // V2 Response
-            let responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
+            if (!sync.encryption?.contentDataKey) {
+                console.log('[TERMINAL AUTH] ❌ Missing content data key');
+                throw new Error('Missing content data key');
+            }
+
+            const responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
             responseV2Bundle[0] = 0;
             responseV2Bundle.set(sync.encryption.contentDataKey, 1);
             const responseV2 = encryptBox(responseV2Bundle, publicKey);

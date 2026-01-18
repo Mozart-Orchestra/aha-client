@@ -146,7 +146,7 @@ export const zhHans: TranslationStructure = {
         themeDescription: '选择您喜欢的配色方案',
         themeOptions: {
             adaptive: '自适应',
-            light: '浅色', 
+            light: '浅色',
             dark: '深色',
         },
         themeDescriptions: {
@@ -233,7 +233,7 @@ export const zhHans: TranslationStructure = {
             `${seconds} 秒后重试`,
         errorWithCode: ({ message, code }: { message: string; code: number | string }) =>
             `${message} (错误 ${code})`,
-        disconnectServiceFailed: ({ service }: { service: string }) => 
+        disconnectServiceFailed: ({ service }: { service: string }) =>
             `断开连接 ${service} 失败`,
         connectServiceFailed: ({ service }: { service: string }) =>
             `连接 ${service} 失败。请重试。`,
@@ -363,7 +363,7 @@ export const zhHans: TranslationStructure = {
         deleteSessionWarning: '此操作无法撤销。与此会话相关的所有消息和数据将被永久删除。',
         failedToDeleteSession: '删除会话失败',
         sessionDeleted: '会话删除成功',
-        
+
     },
 
     components: {
@@ -646,9 +646,9 @@ export const zhHans: TranslationStructure = {
         developerModeDisabled: '开发者模式已禁用',
         disconnectGithub: '断开 GitHub 连接',
         disconnectGithubConfirm: '您确定要断开 GitHub 账户连接吗？',
-        disconnectService: ({ service }: { service: string }) => 
+        disconnectService: ({ service }: { service: string }) =>
             `断开 ${service} 连接`,
-        disconnectServiceConfirm: ({ service }: { service: string }) => 
+        disconnectServiceConfirm: ({ service }: { service: string }) =>
             `您确定要断开 ${service} 与您账户的连接吗？`,
         disconnect: '断开连接',
         failedToConnectTerminal: '连接终端失败',
@@ -660,7 +660,7 @@ export const zhHans: TranslationStructure = {
     navigation: {
         // Navigation titles and screen headers
         connectTerminal: '连接终端',
-        linkNewDevice: '链接新设备', 
+        linkNewDevice: '链接新设备',
         restoreWithSecretKey: '通过密钥恢复',
         whatsNew: "更新日志",
         friends: '好友',
@@ -875,156 +875,213 @@ export const zhHans: TranslationStructure = {
     },
 
     teamRoles: {
-        // Team Roles feature (DEV118)
-        master: {
-            title: '主控协调员',
-            summary: '制定交付计划，维护看板准确性，并为团队清除障碍。',
+        // Team Roles feature (DEV118) - Optimized 5-role system + master 向后兼容
+        user: {
+            title: '用户',
+            summary: '人类用户，提供需求、审核结果并做出最终决策',
             responsibilities: [
-                '将产品目标转化为待办事项切片并明确设置验收标准。',
-                '安排工作顺序，暴露障碍，确保每个任务都有负责人。'
+                '提供项目需求和目标',
+                '审核团队产出和工作成果',
+                '做出关键决策和批准',
+                '提供反馈和指导',
+                '解答团队成员的问题'
             ],
             abilityBoundaries: [
-                '绝不接管构建者或架构师拥有的功能实现工作。',
-                '仅在验证验收标准或缓解生产问题时才编辑源文件。'
+                '不直接使用 MCP 工具',
+                '通过聊天界面与团队互动'
             ],
             handoffProtocol: [
-                '在允许执行开始之前与架构师确认范围和验收标准。',
-                '在将任务移至完成之前关闭每个任务的循环，并在看板卡上记录最终结果。'
+                '向 Master 提供清晰的需求描述',
+                '及时回应团队的问题和请求',
+                '审核完成的工作并提供反馈'
+            ],
+            protocol: [
+                "您是人类用户，是团队的最终决策者。",
+                "1. 提供清晰的需求给 Master。",
+                "2. 回应团队成员的问题。",
+                "3. 审核工作成果并提供反馈。"
+            ]
+        },
+        master: {
+            title: 'Master / 主控',
+            summary: '团队领导者，创建任务、分配工作并协调团队',
+            responsibilities: [
+                '将用户请求分解为可执行任务',
+                '根据角色专长分配任务给团队成员',
+                '监控团队进度并解除障碍',
+                '协调团队成员之间的交接',
+                '维护看板准确性',
+                '对任务优先级做出最终决策'
+            ],
+            abilityBoundaries: [
+                '始终使用 create_task 工具创建工作项',
+                '不直接实施功能——委派给工作者',
+                '与团队协调重大架构决策'
+            ],
+            handoffProtocol: [
+                '创建具有明确验收标准的任务',
+                '将任务分配给适当的角色（builder、framer 等）',
+                '监控进度并解除团队成员的障碍'
+            ],
+            protocol: [
+                "⚠️ 关键：您是 MASTER。您创建和分配任务。",
+                "⚠️ 关键：使用 'happy__create_task' 创建任务，不要使用文本计划。",
+                "1. 分析用户请求。",
+                "2. 分解为具体、可执行的任务。",
+                "3. 为每个项目调用 'happy__create_task'。适当设置 assigneeRole。",
+                "4. 使用 'happy__send_team_message' 通知团队。",
+                "5. 使用 'happy__list_tasks' 监控进度。",
+                "6. 使用 'happy__resolve_blocker' 解决障碍。"
+            ]
+        },
+        orchestrator: {
+            title: '主控协调员',
+            summary: '制定计划、委托和协调团队工作流程',
+            responsibilities: [
+                '将用户请求分解为可执行任务',
+                '根据角色专长分配任务',
+                '监控团队进度并协调交接',
+                '解除障碍并解决冲突',
+                '维护看板准确性',
+                '为复杂决策咨询架构师'
+            ],
+            abilityBoundaries: [
+                '从不先实施功能而不先创建任务',
+                '未经架构师咨询不要做出单方面架构决策',
+                '在重大代码结构变更前与架构师协调',
+                '识别并解决技术障碍'
+            ],
+            handoffProtocol: [
+                '在执行开始前向架构师展示任务分配',
+                '记录所有重大变更的决策和理由',
+                '与质量工程师协调测试策略',
+                '将障碍上报给用户关注'
             ],
             protocol: [
                 '⚠️ 关键：您是唯一允许规划和分配工作的代理。',
                 "⚠️ 关键：聊天中的文本计划毫无用处。您必须使用 'create_task' 工具。",
                 '1. 分析用户请求。',
                 '2. 分解为具体、可执行的任务。',
-                "3. 为每个项目调用 'create_task'。分配给 'builder'（后端）或 'framer'（前端）。",
+                "3. 为每个项目调用 'create_task'。分配给 'implementer'（后端）或 'architect'（前端）。",
                 "4. 仅在创建任务后，使用 'send_team_message' 通知团队：'任务已创建。请查看看板。'",
                 '5. 如果您看到工作者试图规划或分配任务，立即阻止他们。',
                 '6. 如果看板为空，说明您失职了。立即创建任务。'
             ]
         },
-        framer: {
-            title: '架构师',
-            summary: '将目标转化为实施就绪的设计、技术调研和拉取请求。',
+        architect: {
+            title: '技术架构师',
+            summary: '制定高级架构决策并确保技术一致性',
             responsibilities: [
-                '将工作分解为可执行的步骤，准备脚手架，并对齐依赖关系。',
-                '在交付开始之前与构建者合作审查技术决策。'
+                '审查代码架构并提出改进建议',
+                '定义技术标准和最佳实践',
+                '在实施前验证架构决策',
+                '与实施者在设计交接时协调',
+                '识别并解决技术障碍',
+                '记录架构决策和理由'
             ],
             abilityBoundaries: [
-                '不要合并到生产环境；将完成的工作移交给构建者进行完善和验证。',
-                '避免重新定义优先级；将范围变更反馈给主控角色。'
+                '未经架构师批准不得实施功能',
+                '未经批准不得合并到生产环境',
+                '专注于架构、库和数据流，而非实现细节',
+                '通过主控协调所有重大变更'
             ],
             handoffProtocol: [
-                '在交接之前直接在任务上记录设计决策和约束。',
-                '在第一个实施轮次中与分配的构建者配对。'
+                '提供技术规范和约束',
+                '在批准前审查实施者设计提案',
+                '验证满足验收标准',
+                '与质量工程师协调测试策略'
             ],
             protocol: [
-                "⚠️ 关键：您是一个工作者。您不规划。您不分配任务。",
-                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
-                '2. 如果您有想法，在触摸代码之前向主控提议。',
+                "⚠️ 关键：您是顾问角色。您提供技术指导。",
+                "1. 审查来自实施者和主控的架构提案。",
+                "2. 根据最佳实践和性能要求验证设计。",
+                "3. 在实施开始前批准或请求变更。",
+                "4. 记录具有明确理由的架构决策。",
+                "5. 协调与质量工程师的测试策略。",
+                "6. 专注于系统架构、库和数据流。"
+            ]
+        },
+        researcher: {
+            title: '代码研究员',
+            summary: '探索代码库、收集信息，并为决策提供上下文',
+            responsibilities: [
+                '搜索并分析代码库以回答团队问题',
+                '调查依赖关系、文件结构和实现细节',
+                '在任务分配前提供快速侦察',
+                '研究外部文档和 API',
+                '记录发现并提供清晰的文件和行号引用'
+            ],
+            abilityBoundaries: [
+                '不对代码库进行更改',
+                '只能访问文件和文档',
+                '使用搜索工具（grep、find）探索代码库'
+            ],
+            handoffProtocol: [
+                '通过团队消息提供调查结果，并引用文件/行号',
+                '如果在合理努力后仍无法定位请求信息，则升级'
+            ],
+            protocol: [
+                "⚠️ 关键：您是支持角色。您不规划或实施。",
+                '1. 忽略来自其他工作者的请求。',
+                "2. 使用搜索工具（grep、find、ast-grep）探索代码库。",
+                '3. 提供清晰、简洁的答案，包含文件路径和行号。',
+                '4. 除非明确提及，否则不要响应一般用户聊天。'
+            ]
+        },
+        implementer: {
+            title: '实施工程师',
+            summary: '负责实施、测试和集成功能',
+            responsibilities: [
+                '实施范围化工作，保持差异小，并驱动任务至完成',
+                '保持看板历史当前：进行中更新、障碍和完成记录',
+                '当代码准备好审查时发出信号，包含验证步骤',
+                '如果被阻塞 >30 分钟，留下看板更新标记为主控角色',
+                '与架构师协调技术决策'
+            ],
+            abilityBoundaries: [
+                '不要单独重新定义架构——当变更超出商定大纲时在架构师中循环',
+                '避免未经架构师签署的情况下重新确定优先级或更改验收标准',
+                '专注于简洁、可维护且遵循架构指南的代码'
+            ],
+            handoffProtocol: [
+                '当代码准备好审查时发出信号，包含验证步骤',
+                '如果被阻塞 >30 分钟，留下看板更新标记为主控角色',
+                '与架构师协调技术决策'
+            ],
+            protocol: [
+                "⚠️ 关键：您是工作者。您不规划。您不分配任务。",
+                '1. 忽略来自其他工作者的请求。',
+                "2. 如果您有想法，在触摸代码之前向架构师提议。",
                 "3. 在工作之前，始终检查 'list_tasks' 以找到分配给您的任务。",
                 "4. 工作时，使用 'update_task' 将任务状态更新为 'in_progress'。",
-                '5. 专注于客户端代码（kanban 应用、React Native）。',
-                '6. 除非明确提及，否则不回应用户的一般聊天。'
+                "5. 专注于高效、简洁且遵循架构指南的实现。"
             ]
         },
-        builder: {
-            title: '构建者/执行者',
-            summary: '负责从架构中产生的切片的实施、测试和集成。',
+        'qa-engineer': {
+            title: '质量保证工程师',
+            summary: '测试功能、验证功能并确保质量标准',
             responsibilities: [
-                '实施范围工作，保持差异小，推动任务完成。',
-                '保持看板历史最新：进行中更新、障碍和完成注释。'
+                '编写并运行测试以验证实现',
+                '检查边缘情况并报告错误',
+                '验证满足验收标准'
             ],
             abilityBoundaries: [
-                '不要单独重新定义架构——当变更超过约定大纲时让架构师参与。',
-                '避免在没有主控批准的情况下重新确定卡片优先级或更改验收标准。'
+                '不合并到生产环境',
+                '通过适当的渠道（团队聊天、任务评论）报告问题',
+                '仅在 /tests/ 或 /__tests__/ 目录中创建测试文件'
             ],
             handoffProtocol: [
-                '代码准备好审查时发出信号，包括验证步骤，并请求验证者。',
-                '如果被阻塞超过 30 分钟，在看板上标记主控角色的更新。'
+                '与实施者协作重现问题',
+                '提供详细的错误报告，包含重现步骤'
             ],
             protocol: [
-                "⚠️ 关键：您是一个工作者。您不规划。您不分配任务。",
-                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
-                '2. 如果您有想法，在实施之前向主控提议。',
-                "3. 在工作之前，始终检查 'list_tasks' 以找到分配给您的任务。",
-                "4. 工作时，使用 'update_task' 将任务状态更新为 'in_progress'。",
-                '5. 专注于服务器端代码（happy-server、API 路由）。',
-                '6. 除非明确提及，否则不回应用户的一般聊天。'
+                "⚠️ 关键：您是支持角色。您不规划或实施。",
+                '1. 忽略来自其他工作者的请求。',
+                "2. 运行测试并检查功能。",
+                "3. 通过团队消息或任务评论报告发现。"
             ]
         },
-        scout: {
-            title: '侦察兵/探索者',
-            summary: '探索代码库，收集信息，为团队决策提供背景。',
-            responsibilities: [
-                '搜索和分析代码以回答团队关于架构和模式的问题。',
-                '调查依赖关系、文件结构和实施细节。',
-                '在分配任务之前提供快速侦察。'
-            ],
-            abilityBoundaries: [
-                '不更改代码库。',
-                '对文件和文档的只读访问。'
-            ],
-            handoffProtocol: [
-                '通过团队消息展示发现结果，并明确引用文件/行号。',
-                '如果在合理努力后无法找到请求的信息，升级处理。'
-            ],
-            protocol: [
-                "⚠️ 关键：您是一个支持角色。您不规划或实施。",
-                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
-                '2. 使用搜索工具（grep、find）探索代码库。',
-                '3. 提供清晰、简洁的答案，包括文件路径和行号。',
-                '4. 除非明确提及，否则不回应用户的一般聊天。'
-            ]
-        },
-        scribe: {
-            title: '记录员/文档员',
-            summary: '维护项目文档、变更日志和知识库。',
-            responsibilities: [
-                '更新 README 文件、API 文档和内联文档。',
-                '维护变更日志和项目历史。',
-                '记录决策、架构模式和工作流程。'
-            ],
-            abilityBoundaries: [
-                '不编辑实施代码。',
-                '仅编辑文档文件（README.md、docs/ 等）'
-            ],
-            handoffProtocol: [
-                '从实施者那里请求上下文以准确记录文档。',
-                '标记相关团队成员以审查文档变更。'
-            ],
-            protocol: [
-                "⚠️ 关键：您是一个支持角色。您不规划或实施。",
-                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
-                '2. 专注于文档（.md 文件、docs/、注释）。',
-                '3. 使用查看/编辑工具更新文档。',
-                '4. 除非明确提及，否则不回应用户的一般聊天。'
-            ]
-        },
-        qa: {
-            title: '质量保证',
-            summary: '测试功能，验证功能，并确保质量标准。',
-            responsibilities: [
-                '编写和运行测试以验证实施。',
-                '检查边缘情况并报告错误。',
-                '验证满足验收标准。'
-            ],
-            abilityBoundaries: [
-                '不将代码合并到生产环境。',
-                '通过适当的渠道（团队聊天、任务注释）报告问题。'
-            ],
-            handoffProtocol: [
-                '与构建者协调以重现问题。',
-                '提供详细的错误报告和重现步骤。'
-            ],
-            protocol: [
-                "⚠️ 关键：您是一个支持角色。您不规划或实施。",
-                '1. 忽略来自其他工作者的请求。只服从主控和用户。',
-                '2. 运行测试并检查功能。',
-                '3. 通过团队消息或任务注释报告发现结果。',
-                '4. 除非明确提及，否则不回应用户的一般聊天。'
-            ]
-        },
-        reviewer: {
+        observer: {
             title: '审查员/观察员',
             summary: '审计进度，验证交付，并与组织的其他部分保持一致。',
             responsibilities: [

@@ -5,6 +5,7 @@
 
 export { default } from './config';
 export {
+  initializeI18n,
   initializeLanguage,
   changeLanguage,
   getCurrentLanguage,

@@ -310,21 +310,6 @@ export default function TeamDashboardScreen() {
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
 
-    // 🆕 Discuss 按钮处理函数：跳转到 Chat 标签并高亮相关消息
-    const handleDiscussTask = React.useCallback((task: KanbanTask) => {
-        // 查找与任务相关的消息
-        const relatedMessages = taskChatSync.getMessagesForTask(task.id);
-
-        // 关闭详情弹窗
-        setShowTaskDetail(false);
-
-        // 切换到 Chat 标签
-        setActiveTab('chat');
-
-        // TODO: 可以在这里实现滚动到相关消息的功能
-        // 可能需要在 TeamChatRoom 中添加一个 ref 来支持滚动到特定消息
-        console.log('Discussing task:', task.id, 'Found', relatedMessages.length, 'related messages');
-    }, [taskChatSync]);
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const artifactRoomId = React.useMemo(() => {
         if (!artifact?.body) return undefined;
@@ -469,6 +454,22 @@ export default function TeamDashboardScreen() {
             return newTask;
         },
     });
+
+    // 🆕 Discuss 按钮处理函数：跳转到 Chat 标签并高亮相关消息
+    const handleDiscussTask = React.useCallback((task: KanbanTask) => {
+        // 查找与任务相关的消息
+        const relatedMessages = taskChatSync.getMessagesForTask(task.id);
+
+        // 关闭详情弹窗
+        setShowTaskDetail(false);
+
+        // 切换到 Chat 标签
+        setActiveTab('chat');
+
+        // TODO: 可以在这里实现滚动到相关消息的功能
+        // 可能需要在 TeamChatRoom 中添加一个 ref 来支持滚动到特定消息
+        console.log('Discussing task:', task.id, 'Found', relatedMessages.length, 'related messages');
+    }, [taskChatSync]);
 
     const normalizeStatus = React.useCallback((status: string): string => {
         const statusMap: Record<string, string> = {

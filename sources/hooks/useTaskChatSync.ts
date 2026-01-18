@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import { randomUUID } from 'expo-crypto';
 import type { KanbanTask } from '@/sync/kanbanTypes';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import {
@@ -21,6 +22,7 @@ interface UseTaskChatSyncOptions {
     messages: TeamMessage[];
     onTaskUpdate?: (taskId: string, updates: Partial<KanbanTask>) => Promise<void>;
     onMessageSend?: (message: TeamMessage) => Promise<void>;
+    onMessageUpdate?: (message: TeamMessage) => Promise<void>;
     onTaskCreate?: (task: Partial<KanbanTask>) => Promise<KanbanTask>;
 }
 
@@ -31,7 +33,7 @@ interface TaskChatLink {
 }
 
 export function useTaskChatSync(options: UseTaskChatSyncOptions) {
-    const { teamId, tasks, messages, onTaskUpdate, onMessageSend, onTaskCreate } = options;
+    const { teamId, tasks, messages, onTaskUpdate, onMessageSend, onMessageUpdate, onTaskCreate } = options;
 
     // 任务-消息映射
     const [taskLinks, setTaskLinks] = useState<Map<string, TaskChatLink>>(new Map());
@@ -114,14 +116,16 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         updates: Partial<KanbanTask>,
         actorName: string = '用户'
     ): Promise<void> => {
+        const existingTask = tasks.find(t => t.id === taskId);
+        const mergedTask = existingTask ? { ...existingTask, ...updates } : undefined;
+
         // 1. 更新任务
         await onTaskUpdate?.(taskId, updates);
 
         // 2. 发送通知到聊天
-        const task = tasks.find(t => t.id === taskId);
-        if (!task) return;
+        if (!mergedTask) return;
 
-        const message = createTaskUpdateMessage(task, updates, actorName);
+        const message = createTaskUpdateMessage(mergedTask, updates, actorName);
         message.teamId = teamId;
 
         await onMessageSend?.(message);
@@ -148,7 +152,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
 
         // 发送确认消息到聊天
         const confirmationMessage: TeamMessage = {
-            id: `msg-confirm-${Date.now()}`,
+            id: `msg-confirm-${randomUUID()}`,
             teamId,
             fromDisplayName: creatorName,
             content: `✅ 已创建任务：**${task.title}**\n\n${formatTaskReference(task)}`,
@@ -194,12 +198,18 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
             },
         };
 
-        // TODO: 这里需要调用更新消息的 API
-        // await updateMessage(updatedMessage);
+        const shouldUpdate = updatedContent !== message.content || message.metadata?.taskId !== taskId;
+        if (shouldUpdate && onMessageUpdate) {
+            try {
+                await onMessageUpdate(updatedMessage);
+            } catch (error) {
+                console.error('Failed to update message for task link:', error);
+            }
+        }
 
         // 发送通知
         const notification: TeamMessage = {
-            id: `msg-link-${Date.now()}`,
+            id: `msg-link-${randomUUID()}`,
             teamId,
             fromDisplayName: actorName,
             content: `关联了消息到任务：**${task.title}**`,
@@ -209,7 +219,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         };
 
         await onMessageSend?.(notification);
-    }, [messages, tasks, teamId, onMessageSend]);
+    }, [messages, tasks, teamId, onMessageSend, onMessageUpdate]);
 
     /**
      * 检查消息是否应该创建任务
@@ -217,15 +227,6 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
     const shouldCreateTaskFromMessage = useCallback((message: string): boolean => {
         const keywords = ['创建任务', '新建任务', 'add task', 'create task', 'todo:', '任务：'];
         return keywords.some(keyword => message.toLowerCase().includes(keyword));
-    }, []);
-
-    /**
-     * 提取消息中的任务 ID
-     */
-    const extractTaskIds = useCallback((message: string): string[] => {
-        const taskRegex = /#task-([a-zA-Z0-9_-]+)/g;
-        const matches = [...message.matchAll(taskRegex)];
-        return matches.map(m => m[1]);
     }, []);
 
     /**

@@ -200,6 +200,12 @@ export function t<K extends TranslationKey>(
     }
 }
 
+export function getTranslationSection<K extends keyof Translations>(key: K): TranslationStructure[K] {
+    const currentTranslations = translations[currentLanguage] ?? translations[DEFAULT_LANGUAGE];
+    const fallbackTranslations = translations[DEFAULT_LANGUAGE];
+    return (currentTranslations[key] ?? fallbackTranslations[key]) as TranslationStructure[K];
+}
+
 /**
  * Get the currently active language
  * Useful for debugging and language-aware components

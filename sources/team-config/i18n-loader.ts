@@ -24,12 +24,12 @@ export function getLocalizedTeamRoleLibrary(locale: string = 'zh') {
     protocol: role.protocol,
     // Keep the original policy structure
     policy: {
-      autoStartMaster: role.id === 'master',
-      permissionMode: role.id === 'master' ? 'plan' : 'yolo',
-      watchers: role.id === 'master' ? ['kanban', 'diagnostics'] : undefined,
-      accessLevel: ['master', 'framer', 'builder'].includes(role.id) ? 'read-only' : 'read-only',
-      disallowedTools: ['master', 'framer', 'builder'].includes(role.id) ? undefined : READ_ONLY_TOOLS,
-      taskSettings: role.id === 'master' ? { ...DEFAULT_NESTED_TASK_SETTINGS } : undefined
+      autoStartMaster: role.id === 'orchestrator',
+      permissionMode: role.id === 'orchestrator' ? 'plan' : ['architect', 'implementer', 'qa-engineer'].includes(role.id) ? 'yolo' : 'read-only',
+      watchers: role.id === 'orchestrator' ? ['kanban', 'diagnostics'] : undefined,
+      accessLevel: 'read-only',
+      disallowedTools: ['architect', 'implementer', 'qa-engineer'].includes(role.id) ? undefined : READ_ONLY_TOOLS,
+      taskSettings: role.id === 'orchestrator' ? { ...DEFAULT_NESTED_TASK_SETTINGS } : undefined
     }
   }));
 

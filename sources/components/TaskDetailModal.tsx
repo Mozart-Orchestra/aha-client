@@ -44,10 +44,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const [editedTask, setEditedTask] = useState<Partial<KanbanTask>>({});
     const [subtasks, setSubtasks] = useState<Subtask[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // 当 task 改变时,重置状态
     React.useEffect(() => {
         if (task) {
+            setSaveError(null);
             setEditedTask({
                 title: task.title,
                 description: task.description || '',
@@ -62,17 +64,26 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         }
     }, [task]);
 
+    React.useEffect(() => {
+        if (!visible) {
+            setSaveError(null);
+        }
+    }, [visible]);
+
     if (!task) return null;
 
     const handleSave = async () => {
         if (!onSave || !task) return;
 
         setIsSaving(true);
+        setSaveError(null);
         try {
             await onSave(task.id, editedTask);
             setIsEditing(false);
+            setSaveError(null);
         } catch (error) {
             console.error('Failed to save task:', error);
+            setSaveError(error instanceof Error ? error.message : 'Failed to save task');
         } finally {
             setIsSaving(false);
         }
@@ -80,6 +91,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
     const handleCancel = () => {
         setIsEditing(false);
+        setSaveError(null);
         // 重置为原始值
         setEditedTask({
             title: task.title,
@@ -172,6 +184,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 <Ionicons name="close" size={24} color={theme.colors.text} />
                             </Pressable>
                         </View>
+
+                        {saveError && (
+                            <View style={stylesheet.errorBanner}>
+                                <Text style={stylesheet.errorText}>{saveError}</Text>
+                            </View>
+                        )}
 
                         <ScrollView style={stylesheet.content} showsVerticalScrollIndicator={false}>
                             {/* Title */}
@@ -346,7 +364,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                         onPress={handleCancel}
                                         disabled={isSaving}
                                     >
-                                        <Text style={stylesheet.footerButtonText}>Cancel</Text>
+                                        <Text style={[stylesheet.footerButtonText, stylesheet.cancelButtonText]}>Cancel</Text>
                                     </Pressable>
                                     <Pressable
                                         style={[stylesheet.footerButton, stylesheet.saveButton]}
@@ -553,6 +571,9 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontWeight: '600',
         color: '#FFF',
     },
+    cancelButtonText: {
+        color: theme.colors.groupped.text,
+    },
     discussButton: {
         backgroundColor: theme.colors.info,
     },
@@ -564,5 +585,18 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     saveButton: {
         backgroundColor: theme.colors.success,
+    },
+    errorBanner: {
+        marginHorizontal: 16,
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.textDestructive,
+        backgroundColor: theme.colors.surfaceHighest,
+    },
+    errorText: {
+        fontSize: 12,
+        color: theme.colors.textDestructive,
     },
 }));

@@ -38,9 +38,28 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
     const auth = useAuth();
     const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
     const [rejectionReason, setRejectionReason] = React.useState('');
-    const [isProcessing, setIsProcessing] = React.useState(false);
+    const [processingTaskIds, setProcessingTaskIds] = React.useState<Set<string>>(new Set());
+    const isProcessing = processingTaskIds.size > 0;
+
+    const markProcessing = React.useCallback((taskId: string) => {
+        setProcessingTaskIds(prev => {
+            const next = new Set(prev);
+            next.add(taskId);
+            return next;
+        });
+    }, []);
+
+    const clearProcessing = React.useCallback((taskId: string) => {
+        setProcessingTaskIds(prev => {
+            const next = new Set(prev);
+            next.delete(taskId);
+            return next;
+        });
+    }, []);
 
     const selectedTask = pendingTasks.find(t => t.id === selectedTaskId);
+    const isRejectProcessing = selectedTask ? processingTaskIds.has(selectedTask.id) : false;
+    const isRejectDisabled = !rejectionReason.trim() || isRejectProcessing;
 
     const handleApprove = async (task: KanbanTask) => {
         if (!auth?.credentials) {
@@ -48,7 +67,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
             return;
         }
 
-        setIsProcessing(true);
+        markProcessing(task.id);
         try {
             // Get current artifact
             const state = storage.getState();
@@ -102,7 +121,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
         } catch (error) {
             console.error('Failed to approve task:', error);
         } finally {
-            setIsProcessing(false);
+            clearProcessing(task.id);
         }
     };
 
@@ -117,7 +136,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
             return;
         }
 
-        setIsProcessing(true);
+        markProcessing(task.id);
         try {
             // Get current artifact
             const state = storage.getState();
@@ -174,7 +193,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
         } catch (error) {
             console.error('Failed to reject task:', error);
         } finally {
-            setIsProcessing(false);
+            clearProcessing(task.id);
         }
     };
 
@@ -272,20 +291,20 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
 
                                         {/* Actions */}
                                         <View style={styles.taskActions}>
-                                            <Pressable
-                                                onPress={() => handleApprove(task)}
-                                                style={[styles.actionButton, styles.approveButton, { backgroundColor: theme.colors.success }]}
-                                                disabled={isProcessing}
-                                            >
+                                                <Pressable
+                                                    onPress={() => handleApprove(task)}
+                                                    style={[styles.actionButton, styles.approveButton, { backgroundColor: theme.colors.success }]}
+                                                    disabled={processingTaskIds.has(task.id)}
+                                                >
                                                 <Ionicons name="checkmark" size={18} color="#FFFFFF" />
                                                 <Text style={styles.actionButtonText}>Approve</Text>
                                             </Pressable>
 
-                                            <Pressable
-                                                onPress={() => setSelectedTaskId(task.id)}
-                                                style={[styles.actionButton, styles.rejectButton, { backgroundColor: theme.colors.textDestructive }]}
-                                                disabled={isProcessing}
-                                            >
+                                                <Pressable
+                                                    onPress={() => setSelectedTaskId(task.id)}
+                                                    style={[styles.actionButton, styles.rejectButton, { backgroundColor: theme.colors.textDestructive }]}
+                                                    disabled={processingTaskIds.has(task.id)}
+                                                >
                                                 <Ionicons name="close" size={18} color="#FFFFFF" />
                                                 <Text style={styles.actionButtonText}>Reject</Text>
                                             </Pressable>
@@ -340,8 +359,12 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
 
                                         <Pressable
                                             onPress={() => handleReject(selectedTask)}
-                                            style={[styles.rejectConfirmButton, { backgroundColor: theme.colors.textDestructive }]}
-                                            disabled={!rejectionReason.trim() || isProcessing}
+                                            style={[
+                                                styles.rejectConfirmButton,
+                                                { backgroundColor: theme.colors.textDestructive },
+                                                isRejectDisabled && { opacity: 0.5 }
+                                            ]}
+                                            disabled={isRejectDisabled}
                                         >
                                             <Text style={styles.rejectConfirmText}>Reject Task</Text>
                                         </Pressable>
@@ -556,7 +579,6 @@ const styles = StyleSheet.create((theme) => ({
         padding: 12,
         borderRadius: 8,
         alignItems: 'center',
-        opacity: 0.5,
     },
     rejectConfirmText: {
         color: '#FFFFFF',
