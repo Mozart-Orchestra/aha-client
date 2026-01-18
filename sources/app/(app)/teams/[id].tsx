@@ -25,6 +25,7 @@ import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
 import Color from 'color';
 import { syncKanbanStatusToTodo } from '@/-zen/model/ops';
 import { getCurrentAuth } from '@/auth/AuthContext';
+import { taskNeedsApproval } from '@/utils/taskHelpers';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -144,6 +145,31 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 14,
         color: theme.colors.textSecondary,
         marginLeft: 4,
+    },
+    // 🆕 Pending tasks banner styles
+    pendingBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderWidth: 1,
+        borderRadius: 8,
+    },
+    pendingBannerText: {
+        flex: 1,
+        fontSize: 14,
+        marginLeft: 8,
+    },
+    pendingBannerButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: 6,
+    },
+    pendingBannerButtonText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
     },
     scrollContent: {
         paddingBottom: 48
@@ -280,6 +306,7 @@ export default function TeamDashboardScreen() {
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
+    const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
 
     // 🆕 Discuss 按钮处理函数：跳转到 Chat 标签并高亮相关消息
@@ -586,6 +613,16 @@ export default function TeamDashboardScreen() {
             });
     }, [kanbanData.tasks, roster]);
 
+    // 🆕 Filter out pending tasks (only show approved tasks on board)
+    const approvedTasks = React.useMemo(() => {
+        return kanbanData.tasks.filter(task => !taskNeedsApproval(task));
+    }, [kanbanData.tasks]);
+
+    // 🆕 Pending tasks for approval UI
+    const pendingTasks = React.useMemo(() => {
+        return kanbanData.tasks.filter(task => taskNeedsApproval(task));
+    }, [kanbanData.tasks]);
+
     if (desktopBridge && !desktopRoom) {
         return (
             <View style={styles.loadingContainer}>
@@ -619,20 +656,37 @@ export default function TeamDashboardScreen() {
     }, [kanbanData.tasks]);
 
     const renderKanban = () => (
-        <ScrollView horizontal style={{ flex: 1 }}>
-            <View style={styles.boardContainer}>
-                {kanbanData.columns.map(column => (
-                    <View key={column.id} style={styles.column}>
-                        <View style={styles.columnHeader}>
-                            <Text style={styles.columnTitle}>{column.title}</Text>
-                            <Text style={styles.taskCount}>
-                                {kanbanData.tasks.filter(t => matchesColumn(t, column.id)).length}
-                            </Text>
-                        </View>
+        <>
+            {/* 🆕 Pending tasks notification */}
+            {pendingTasks.length > 0 && (
+                <View style={[styles.pendingBanner, { backgroundColor: '#FFF3CD', borderColor: '#FFC107' }]}>
+                    <Ionicons name="information-circle" size={20} color="#FFC107" />
+                    <Text style={[styles.pendingBannerText, { color: '#856404' }]}>
+                        {pendingTasks.length} {pendingTasks.length === 1 ? 'task' : 'tasks'} awaiting approval
+                    </Text>
+                    <Pressable
+                        onPress={() => setShowApprovalModal(true)}
+                        style={[styles.pendingBannerButton, { backgroundColor: '#FFC107' }]}
+                    >
+                        <Text style={styles.pendingBannerButtonText}>Review</Text>
+                    </Pressable>
+                </View>
+            )}
 
-                        <ScrollView>
-                            {kanbanData.tasks
-                                .filter(t => matchesColumn(t, column.id))
+            <ScrollView horizontal style={{ flex: 1 }}>
+                <View style={styles.boardContainer}>
+                    {kanbanData.columns.map(column => (
+                        <View key={column.id} style={styles.column}>
+                            <View style={styles.columnHeader}>
+                                <Text style={styles.columnTitle}>{column.title}</Text>
+                                <Text style={styles.taskCount}>
+                                    {approvedTasks.filter(t => matchesColumn(t, column.id)).length}
+                                </Text>
+                            </View>
+
+                            <ScrollView>
+                                {approvedTasks
+                                    .filter(t => matchesColumn(t, column.id))
                                 .map(task => {
                                     const linkedSessions = taskSessionLinks.get(task.id) || [];
                                     const sessionCount = linkedSessions.length;
@@ -711,6 +765,7 @@ export default function TeamDashboardScreen() {
                 ))}
             </View>
         </ScrollView>
+        </>
     );
 
     const renderInfo = () => (
