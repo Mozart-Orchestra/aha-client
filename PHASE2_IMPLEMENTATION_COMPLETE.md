@@ -72,11 +72,22 @@ const handleConvertToKanban = async () => {
         return;
     }
 
-    const selectedTeam = teamArtifacts[0]; // 简化：选择第一个
+    // 让用户选择目标团队
+    const selectedTeam = await showTeamPicker(teamArtifacts);
+    if (!selectedTeam) {
+        Alert.alert('Cancelled', 'No team selected');
+        return;
+    }
 
     try {
         // 4. 解析团队数据
-        const teamData = JSON.parse(selectedTeam.body || '{}');
+        let teamData: any = {};
+        try {
+            teamData = JSON.parse(selectedTeam.body || '{}');
+        } catch (error) {
+            console.error(`Failed to parse team artifact ${selectedTeam.id}:`, error);
+            teamData = {};
+        }
         const linkedSessionIds = todo?.linkedSessions
             ? Object.keys(todo.linkedSessions)
             : [];

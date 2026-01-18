@@ -37,7 +37,7 @@ const pendingTasks = React.useMemo(() => {
 // 横幅提示
 {pendingTasks.length > 0 && (
     <View style={styles.pendingBanner}>
-        <Ionicons name="information-circle" size={20} color="#FFC107" />
+        <Ionicons name="warning-outline" size={20} color="#FFC107" />
         <Text>{pendingTasks.length} tasks awaiting approval</Text>
         <Pressable onPress={() => setShowApprovalModal(true)}>
             <Text>Review</Text>

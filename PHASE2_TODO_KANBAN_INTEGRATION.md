@@ -129,81 +129,120 @@ export interface KanbanTask {
 
 2. **转换函数**
    ```typescript
-   export async function convertTodoToKanban(
-       todo: TodoItem,
-       teamId: string,
-       assigneeId?: string
-   ): Promise<KanbanTask> {
-       // 1. 创建 Kanban 任务
-       const newTask: KanbanTask = {
-           id: randomUUID(),
-           title: todo.title,
-           description: `从 Todo 转换`,
-           status: todo.done ? 'done' : 'todo',
-           priority: todo.priority || 'medium',
-           tags: todo.tags || [],
-           dueDate: todo.dueDate,
-           todoId: todo.id,  // 关联到 Todo
-           assigneeId: assigneeId,
-           reporterId: storage.getState().profile.id,
-           createdAt: todo.createdAt,
-           updatedAt: Date.now()
-       };
+export async function convertTodoToKanban(
+    todo: TodoItem,
+    teamId: string,
+    assigneeId?: string
+): Promise<KanbanTask> {
+    if (!teamId) {
+        throw new Error('Missing teamId');
+    }
 
-       // 2. 添加到 Kanban board
-       const board = getKanbanBoard(teamId);
-       board.tasks.push(newTask);
+    const board = getKanbanBoard(teamId);
+    if (!board) {
+        throw new Error('Kanban board not found');
+    }
 
-       // 3. 更新 Kanban artifact
-       await sync.updateArtifact(
-           teamId,
-           board.title,
-           JSON.stringify(board, null, 2),
-           board.sessions,
-           board.draft,
-           board.type
-       );
+    if (assigneeId && !board.team?.members?.some(m => m.sessionId === assigneeId)) {
+        throw new Error('Invalid assigneeId');
+    }
 
-       // 4. 更新 Todo 的 kanbanTaskId
-       await updateTodoKanbanLink(todo.id, newTask.id, teamId);
+    // 1. 创建 Kanban 任务
+    const newTask: KanbanTask = {
+        id: randomUUID(),
+        title: todo.title,
+        description: `从 Todo 转换`,
+        status: todo.done ? 'done' : 'todo',
+        priority: todo.priority || 'medium',
+        tags: todo.tags || [],
+        dueDate: todo.dueDate,
+        todoId: todo.id,  // 关联到 Todo
+        assigneeId: assigneeId,
+        reporterId: storage.getState().profile?.id,
+        createdAt: todo.createdAt,
+        updatedAt: Date.now()
+    };
 
-       // 5. 发送通知到团队聊天
-       await sendTaskCreatedNotification(newTask, teamId);
+    try {
+        // 2. 添加到 Kanban board（先修改内存）
+        board.tasks = Array.isArray(board.tasks) ? board.tasks : [];
+        board.tasks.push(newTask);
 
-       return newTask;
-   }
+        // 3. 更新 Kanban artifact
+        await sync.updateArtifact(
+            teamId,
+            board.title,
+            JSON.stringify(board, null, 2),
+            board.sessions,
+            board.draft,
+            board.type
+        );
+
+        // 4. 更新 Todo 的 kanbanTaskId
+        await updateTodoKanbanLink(todo.id, newTask.id, teamId);
+
+        // 5. 发送通知到团队聊天（仅在持久化成功后）
+        await sendTaskCreatedNotification(newTask, teamId);
+
+        return newTask;
+    } catch (error) {
+        // 回滚内存变更
+        board.tasks = board.tasks.filter(task => task.id !== newTask.id);
+        console.error('Failed to convert Todo to Kanban:', {
+            todoId: todo.id,
+            teamId,
+            profileId: storage.getState().profile?.id,
+            error
+        });
+        throw error;
+    }
+}
    ```
 
 3. **更新 Todo 链接**
    ```typescript
-   async function updateTodoKanbanLink(
-       todoId: string,
-       kanbanTaskId: string,
-       teamId: string
-   ): Promise<void> {
-       const currentState = storage.getState();
-       const todo = currentState.todoState?.todos[todoId];
+async function updateTodoKanbanLink(
+    todoId: string,
+    kanbanTaskId: string,
+    teamId: string
+): Promise<void> {
+    const currentState = storage.getState();
+    const todo = currentState.todoState?.todos[todoId];
+    if (!todo) {
+        throw new Error('Todo not found');
+    }
 
-       if (todo) {
-           const updatedTodo: TodoItem = {
-               ...todo,
-               kanbanTaskId,
-               teamId,
-               updatedAt: Date.now()
-           };
+    let auth;
+    try {
+        auth = (await import('@/auth/AuthContext')).getCurrentAuth();
+    } catch (error) {
+        console.error('Failed to load auth context:', { todoId, kanbanTaskId, teamId, error });
+        throw error;
+    }
 
-           // 更新到服务器
-           const auth = (await import('@/auth/AuthContext')).getCurrentAuth();
-           if (auth?.credentials) {
-               const todoKey = getTodoKey(todoId);
-               const encrypted = await encryptTodoData(updatedTodo);
-               await kvSet(auth.credentials, todoKey, encrypted, -1);
-           }
+    if (!auth?.credentials) {
+        throw new Error('Missing auth credentials');
+    }
 
-           // 更新本地状态
-           storage.getState().updateTodo(updatedTodo);
-       }
-   }
+    const updatedTodo: TodoItem = {
+        ...todo,
+        kanbanTaskId,
+        teamId,
+        updatedAt: Date.now()
+    };
+
+    // 先写远端，成功后再更新本地
+    try {
+        const todoKey = getTodoKey(todoId);
+        const encrypted = await encryptTodoData(updatedTodo);
+        await kvSet(auth.credentials, todoKey, encrypted, -1);
+    } catch (error) {
+        console.error('Failed to update Todo Kanban link:', { todoId, kanbanTaskId, teamId, error });
+        throw error;
+    }
+
+    storage.getState().updateTodo(updatedTodo);
+}
    ```
 
 ### Phase 2.2: Kanban 任务状态同步到 Todo
@@ -217,46 +256,67 @@ export interface KanbanTask {
 1. **监听任务状态变化**
    ```typescript
    // 在 teams/[id].tsx 的 handleMoveTaskStatus 中
+   const syncingTaskIds = new Set<string>();
+
    const handleMoveTaskStatus = async (task: KanbanTask) => {
+       if (syncingTaskIds.has(task.id)) return;
+
        const oldStatus = task.status;
        const newStatus = getNextStatus(task.status);
+       syncingTaskIds.add(task.id);
 
-       // 移动任务
-       await taskChatSync.updateTaskWithSync(
-           task.id,
-           { status: newStatus },
-           myDisplayName
-       );
+       try {
+           // 移动任务（标记来源，避免循环）
+           await taskChatSync.updateTaskWithSync(
+               task.id,
+               { status: newStatus },
+               myDisplayName,
+               { origin: 'kanban' }
+           );
 
-       // 🆕 同步到关联的 Todo
-       if (task.todoId) {
-           await syncKanbanTaskToTodo(task.id, newStatus);
+           // 🆕 同步到关联的 Todo
+           if (task.todoId) {
+               await syncKanbanTaskToTodo(task.id, newStatus, { origin: 'kanban' });
+           }
+       } catch (error) {
+           console.error('Failed to sync Kanban status:', error);
+           await taskChatSync.updateTaskWithSync(
+               task.id,
+               { status: oldStatus },
+               myDisplayName,
+               { origin: 'kanban-revert' }
+           );
+       } finally {
+           syncingTaskIds.delete(task.id);
        }
    };
    ```
 
 2. **同步函数**
    ```typescript
-   export async function syncKanbanTaskToTodo(
-       kanbanTaskId: string,
-       kanbanStatus: string
-   ): Promise<void> {
-       // 1. 查找关联的 Todo
-       const currentState = storage.getState();
-       const todoId = Object.keys(currentState.todoState?.todos || {})
-           .find(id => currentState.todoState?.todos[id]?.kanbanTaskId === kanbanTaskId);
+export async function syncKanbanTaskToTodo(
+    kanbanTaskId: string,
+    kanbanStatus: string
+): Promise<void> {
+    // 1. 查找关联的 Todo
+    const currentState = storage.getState();
+    // 使用反向索引（在创建/更新/删除 Todo 时维护）
+    const todoId = currentState.todoState?.kanbanTaskIdToTodoId?.[kanbanTaskId];
 
-       if (!todoId) return;
+    if (!todoId) {
+        console.warn('No Todo mapping for Kanban task:', kanbanTaskId);
+        return;
+    }
 
-       // 2. 映射状态
-       const todoDone = kanbanStatus === 'done';
+    // 2. 映射状态
+    const todoDone = kanbanStatus === 'done';
 
-       // 3. 如果状态不同,更新 Todo
-       const todo = currentState.todoState.todos[todoId];
-       if (todo && todo.done !== todoDone) {
-           await toggleTodo(currentState.auth.credentials, todoId);
-       }
-   }
+    // 3. 如果状态不同,更新 Todo
+    const todo = currentState.todoState.todos[todoId];
+    if (todo && todo.done !== todoDone) {
+        await toggleTodo(currentState.auth.credentials, todoId, { origin: 'kanban', skipKanbanUpdate: true });
+    }
+}
    ```
 
 ### Phase 2.3: Todo 完成时完成 Kanban 任务
@@ -268,64 +328,115 @@ export interface KanbanTask {
 
 1. **增强 toggleTodo 函数**
    ```typescript
-   export async function toggleTodo(
-       credentials: AuthCredentials,
-       id: string
-   ): Promise<void> {
-       const currentState = storage.getState();
-       const todo = currentState.todoState?.todos[id];
+export async function toggleTodo(
+    credentials: AuthCredentials,
+    id: string,
+    options: { origin?: 'user' | 'kanban'; skipKanbanUpdate?: boolean } = {}
+): Promise<void> {
+    const currentState = storage.getState();
+    const todo = currentState.todoState?.todos[id];
 
-       if (!todo) return;
+    if (!todo) return;
 
-       const wasDone = todo.done;
-       const willBeDone = !wasDone;
+    const wasDone = todo.done;
+    const willBeDone = !wasDone;
 
-       // 原有的切换逻辑...
+    // 原有的切换逻辑...
 
-       // 🆕 如果标记为完成,同时完成关联的 Kanban 任务
-       if (willBeDone && !wasDone && todo.kanbanTaskId) {
-           await completeKanbanTask(todo.kanbanTaskId);
-       }
+    // 🆕 如果标记为完成,同时完成关联的 Kanban 任务
+    if (!options.skipKanbanUpdate && options.origin !== 'kanban' && willBeDone && !wasDone && todo.kanbanTaskId) {
+        try {
+            await completeKanbanTask(todo.kanbanTaskId);
+        } catch (error) {
+            console.error('Failed to complete Kanban task:', error);
+            // 回滚本地状态或记录错误状态
+            storage.getState().updateTodo({ ...todo, done: wasDone });
+            throw error;
+        }
+    }
 
-       // 🆕 如果取消完成,同时取消 Kanban 任务完成
-       if (!willBeDone && wasDone && todo.kanbanTaskId) {
-           await uncompleteKanbanTask(todo.kanbanTaskId);
-       }
-   }
+    // 🆕 如果取消完成,同时取消 Kanban 任务完成
+    if (!options.skipKanbanUpdate && options.origin !== 'kanban' && !willBeDone && wasDone && todo.kanbanTaskId) {
+        try {
+            await uncompleteKanbanTask(todo.kanbanTaskId);
+        } catch (error) {
+            console.error('Failed to uncomplete Kanban task:', error);
+            storage.getState().updateTodo({ ...todo, done: wasDone });
+            throw error;
+        }
+    }
+}
    ```
 
 2. **完成 Kanban 任务**
    ```typescript
-   async function completeKanbanTask(kanbanTaskId: string): Promise<void> {
-       // 查找任务所属的 team
-       const teamId = await findTeamIdByTaskId(kanbanTaskId);
-       if (!teamId) return;
+const syncingKanbanTasks = new Set<string>();
 
-       const artifact = storage.getState().artifacts[teamId];
-       if (!artifact?.body) return;
+async function findTeamIdByTaskId(taskId: string): Promise<string | null> {
+    const artifacts = Object.values(storage.getState().artifacts);
+    const teamArtifact = artifacts.find(a => a.type === 'team' && a.body?.includes(taskId));
+    return teamArtifact?.id || null;
+}
 
-       const board: KanbanBoard = JSON.parse(artifact.body);
-       const task = board.tasks.find(t => t.id === kanbanTaskId);
+async function completeKanbanTask(kanbanTaskId: string): Promise<void> {
+    // 查找任务所属的 team
+    const teamId = await findTeamIdByTaskId(kanbanTaskId);
+    if (!teamId) {
+        console.warn('Unable to locate team for Kanban task:', kanbanTaskId);
+        return;
+    }
 
-       if (task && task.status !== 'done') {
-           // 更新任务状态为 done
-           task.status = 'done';
-           task.updatedAt = Date.now();
+    const artifact = storage.getState().artifacts[teamId];
+    if (!artifact?.body) return;
 
-           // 保存到服务器
-           await sync.updateArtifact(
-               teamId,
-               artifact.title,
-               JSON.stringify(board, null, 2),
-               artifact.sessions,
-               artifact.draft,
-               artifact.type
-           );
+    let board: KanbanBoard;
+    try {
+        board = JSON.parse(artifact.body);
+    } catch (error) {
+        console.error('Failed to parse team artifact:', { teamId, kanbanTaskId, error });
+        return;
+    }
 
-           // 发送通知
-           await sendTaskCompletedNotification(task, teamId);
-       }
-   }
+    const task = board.tasks.find(t => t.id === kanbanTaskId);
+    if (!task || task.status === 'done') return;
+
+    if (syncingKanbanTasks.has(kanbanTaskId)) return;
+    syncingKanbanTasks.add(kanbanTaskId);
+
+    const previousStatus = task.status;
+    const expectedBodyVersion = artifact.bodyVersion;
+
+    try {
+        // 乐观锁检查（确保版本未变化）
+        if (artifact.bodyVersion !== expectedBodyVersion) {
+            console.warn('Stale Kanban artifact detected, aborting update');
+            return;
+        }
+
+        // 更新任务状态为 done
+        task.status = 'done';
+        task.updatedAt = Date.now();
+
+        // 保存到服务器
+        await sync.updateArtifact(
+            teamId,
+            artifact.title,
+            JSON.stringify(board, null, 2),
+            artifact.sessions,
+            artifact.draft,
+            artifact.type
+        );
+
+        // 发送通知（避免循环触发）
+        await sendTaskCompletedNotification(task, teamId);
+    } catch (error) {
+        task.status = previousStatus;
+        console.error('Failed to complete Kanban task:', { teamId, kanbanTaskId, error });
+        return;
+    } finally {
+        syncingKanbanTasks.delete(kanbanTaskId);
+    }
+}
    ```
 
 ### Phase 2.4: UI 集成 ✅ **已完成**
@@ -415,7 +526,11 @@ Todo 列表          Kanban Board
 ### 数据一致性
 - ✅ Todo 和 Kanban 任务状态保持同步
 - ✅ 双向链接正确维护
-- ✅ 冲突解决机制
+- ⏳ 循环更新防护（含单元测试）
+- ⏳ 异步流程错误处理（ZenHome.tsx / TodoView.tsx 转换与同步）
+- ⏳ findTeamIdByTaskId 实现并补齐测试
+- ⏳ 冲突解决逻辑与并发更新集成测试
+- ⏳ 线性搜索热点性能测试
 
 ---
 
@@ -436,10 +551,10 @@ Todo 列表          Kanban Board
 - Phase 2.3: Todo 完成时同步 Kanban ✅ (已完成)
 - Phase 2.4: UI 集成 ✅ (已完成 - 2026-01-18)
 
-**Phase 2 状态: 100% 完成**
+**Phase 2 状态: 70% 完成（可靠性与测试待补齐）**
 
 ---
 
 *创建时间: 2026-01-18 10:35*
-*Phase 2 完成时间: 2026-01-18*
-*状态: ✅ 完成*
+*Phase 2 完成时间: 进行中*
+*状态: 🔄 进行中*

@@ -134,6 +134,44 @@ function validateTaskDependencies(
 }
 ```
 
+#### 1.2 依赖校验接入（创建/更新）
+
+在写入依赖字段前必须先验证，避免引入循环：
+
+```typescript
+// ✅ UI: 更新依赖前先校验
+const handleUpdateTaskDependencies = (taskId: string, newDependencies: string[]) => {
+    const validation = validateTaskDependencies(taskId, newDependencies, kanbanData.tasks);
+    if (!validation.valid) {
+        Modal.alert('Error', validation.error || 'Invalid dependencies');
+        return;
+    }
+
+    // 通过校验后再持久化
+    updateTaskDependencies(taskId, newDependencies);
+};
+
+// ✅ API: 创建任务时校验初始依赖
+app.post('/tasks', (req, res) => {
+    const { taskId, dependencies } = req.body;
+    const validation = validateTaskDependencies(taskId, dependencies, kanbanData.tasks);
+    if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+    }
+    return createTask(req, res);
+});
+
+// ✅ API: 更新任务依赖时校验
+app.patch('/tasks/:id', (req, res) => {
+    const { dependencies } = req.body;
+    const validation = validateTaskDependencies(req.params.id, dependencies, kanbanData.tasks);
+    if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+    }
+    return updateTask(req, res);
+});
+```
+
 #### 2. 扩展 TeamMessage 接口
 
 ```typescript

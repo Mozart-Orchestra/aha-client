@@ -53,7 +53,9 @@
 
 ```typescript
 import { parseTaskCommand, createTaskFromCommand } from '@/utils/taskHelpers';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from 'expo-crypto'; // If expo-crypto is unavailable, use react-native-get-random-values + uuid
+import type { KanbanTask } from '@/sync/kanbanTypes';
+import { sync } from '@/sync/sync';
 import { storage } from '@/sync/storage';
 ```
 
@@ -84,20 +86,44 @@ const handleTaskCommand = async (content: string, teamId: string) => {
     }
 
     // 解析 Kanban 数据
-    const kanbanData = JSON.parse(artifact.body);
+    let kanbanData: { columns?: { id: string }[]; tasks?: KanbanTask[] } | null = null;
+    try {
+        kanbanData = JSON.parse(artifact.body);
+    } catch (error) {
+        console.error(`Failed to parse artifact ${artifact.id}:`, error);
+        Modal.alert('Error', 'Invalid team data');
+        return null;
+    }
+
+    if (!kanbanData || typeof kanbanData !== 'object') {
+        Modal.alert('Error', 'Invalid Kanban data');
+        return null;
+    }
+
+    if (!Array.isArray(kanbanData.columns)) {
+        Modal.alert('Error', 'Invalid Kanban columns');
+        return null;
+    }
+
+    if (!Array.isArray(kanbanData.tasks)) {
+        kanbanData.tasks = [];
+    }
 
     // 检查是否有 todo 列
-    const todoColumn = kanbanData.columns.find((col: any) => col.id === 'todo');
+    const todoColumn = kanbanData.columns.find((col: { id: string }) => col.id === 'todo');
     if (!todoColumn) {
         Modal.alert('Error', 'Todo column not found');
         return null;
     }
 
     // 创建任务
+    const taskId = randomUUID(); // 永久任务 ID
+    const sourceMessageId = randomUUID(); // 来源消息 ID（如需追踪）
     const task = createTaskFromCommand(
         parsed,
-        randomUUID(), // 临时消息 ID
-        mySessionId
+        taskId,
+        mySessionId,
+        sourceMessageId
     );
 
     // 添加任务到看板
@@ -156,8 +182,10 @@ const handleSend = async () => {
     }
 
     // 原有的发送消息逻辑
+    const mySessionId = storage.getState().mySessionId;
     await sync.sendTeamMessage({
         teamId,
+        fromSessionId: mySessionId,
         content: message,
         type: 'chat',
         // ... 其他字段

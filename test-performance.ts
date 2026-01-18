@@ -124,11 +124,11 @@ async function testMutexProtection() {
 
     if (finalValue === 100) {
         console.log('✅ All operations completed successfully - no race conditions detected');
+        console.log('✅ Mutex protection test complete\n');
     } else {
         console.error(`❌ Race condition detected! Expected 100, got ${finalValue}`);
+        throw new Error(`Mutex protection test failed: expected 100, got ${finalValue}`);
     }
-
-    console.log('✅ Mutex protection test complete\n');
 }
 
 // ============================================
@@ -213,19 +213,35 @@ async function testFileLocks() {
 
     console.timeEnd('FileLockProtection');
 
-    // Wait for queue to finish
-    await new Promise(resolve => setTimeout(resolve, 500));
-
     // Verify all messages were written
     const content = await fs.promises.readFile(testFile, 'utf8');
     const lines = content.trim().split('\n').filter(line => line.length > 0);
-    const messages = lines.map(line => JSON.parse(line));
+    const corruptedLines: Array<{ index: number; error: string }> = [];
+    const messages: Array<{ id?: string; content?: string }> = [];
+    let hasFailure = false;
+
+    lines.forEach((line, index) => {
+        try {
+            messages.push(JSON.parse(line));
+        } catch (error) {
+            corruptedLines.push({
+                index,
+                error: error instanceof Error ? error.message : 'Unknown parse error'
+            });
+        }
+    });
 
     console.log(`Messages written: ${messages.length}`);
 
     // Check for corruption
+    if (corruptedLines.length > 0) {
+        hasFailure = true;
+        console.error(`❌ Found ${corruptedLines.length} corrupted lines`);
+    }
+
     const corrupted = messages.filter(msg => !msg.id || !msg.content);
     if (corrupted.length > 0) {
+        hasFailure = true;
         console.error(`❌ Found ${corrupted.length} corrupted messages`);
     } else {
         console.log('✅ All messages written successfully - no file corruption detected');
@@ -239,11 +255,16 @@ async function testFileLocks() {
     if (uniqueIds.size === 50) {
         console.log('✅ All 50 messages preserved without data loss');
     } else {
+        hasFailure = true;
         console.error(`❌ Data loss detected! Expected 50 unique messages, got ${uniqueIds.size}`);
     }
 
     // Cleanup
     fs.rmSync(testDir, { recursive: true, force: true });
+
+    if (hasFailure) {
+        throw new Error('File write locks test failed');
+    }
 
     console.log('✅ File write locks test complete\n');
 }

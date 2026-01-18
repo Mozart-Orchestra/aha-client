@@ -40,7 +40,6 @@ import { fetchFeed } from './apiFeed';
 import { FeedItem } from './feedTypes';
 import { UserProfile } from './friendTypes';
 import { initializeTodoSync } from '../-zen/model/ops';
-import { Mutex } from '@/utils/asyncMutex';
 
 class Sync {
 
@@ -74,33 +73,9 @@ class Sync {
     private teamMessagesCache = new Map<string, import('@/sync/teamMessageTypes').TeamMessage[]>();
     private teamMessageSubscriptions = new Map<string, Set<(message: import('@/sync/teamMessageTypes').TeamMessage) => void>>();
 
-    // Mutex locks for protecting team messaging Maps from concurrent access
-    private teamMessagesMutexes = new Map<string, Mutex>();
-    private teamSubscriptionsMutexes = new Map<string, Mutex>();
-
     // Generic locking mechanism
     private recalculationLockCount = 0;
     private lastRecalculationTime = 0;
-
-    /**
-     * Get or create a mutex for a specific teamId's message cache
-     */
-    private getTeamMessagesMutex(teamId: string): Mutex {
-        if (!this.teamMessagesMutexes.has(teamId)) {
-            this.teamMessagesMutexes.set(teamId, new Mutex());
-        }
-        return this.teamMessagesMutexes.get(teamId)!;
-    }
-
-    /**
-     * Get or create a mutex for a specific teamId's subscription set
-     */
-    private getTeamSubscriptionsMutex(teamId: string): Mutex {
-        if (!this.teamSubscriptionsMutexes.has(teamId)) {
-            this.teamSubscriptionsMutexes.set(teamId, new Mutex());
-        }
-        return this.teamSubscriptionsMutexes.get(teamId)!;
-    }
 
     constructor() {
         this.sessionsSync = new InvalidateSync(this.fetchSessions);
@@ -1598,7 +1573,11 @@ class Sync {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 const isVersionMismatch = errorMsg.includes('version-mismatch');
 
-                console.error(`[syncSessionToTeam] Failed to sync session to team (attempt ${attempt}/${MAX_RETRIES}): ${errorMsg}`);
+                if (isVersionMismatch) {
+                    console.warn(`[syncSessionToTeam] Failed to sync session to team (attempt ${attempt}/${MAX_RETRIES}): ${errorMsg}`);
+                } else {
+                    console.error(`[syncSessionToTeam] Failed to sync session to team (attempt ${attempt}/${MAX_RETRIES}): ${errorMsg}`);
+                }
 
                 if (attempt >= MAX_RETRIES) {
                     console.error(`[syncSessionToTeam] Max retries reached, giving up.`);
@@ -2079,32 +2058,21 @@ class Sync {
             const { teamId, message } = updateData.body;
             console.log(`🔄 Sync: Received team message for team ${teamId}: ${message.id}`);
 
-            let subscribersSnapshot: Array<(message: import('@/sync/teamMessageTypes').TeamMessage) => void> = [];
-            let shouldNotify = false;
+            // Update cache
+            const currentMessages = this.teamMessagesCache.get(teamId) || [];
+            // Check for duplicates
+            const isDuplicate = currentMessages.find(m => m.id === message.id);
 
-            // PROTECTED: Acquire mutex for this teamId to prevent concurrent Map access
-            await this.getTeamMessagesMutex(teamId).runExclusive(async () => {
-                // Update cache
-                const currentMessages = this.teamMessagesCache.get(teamId) || [];
-                // Check for duplicates
-                const isDuplicate = currentMessages.find(m => m.id === message.id);
+            if (!isDuplicate) {
+                this.teamMessagesCache.set(teamId, [...currentMessages, message as any]);
 
-                if (!isDuplicate) {
-                    this.teamMessagesCache.set(teamId, [...currentMessages, message as any]);
-
-                    // Only notify subscribers for new messages
-                    const subscribers = this.teamMessageSubscriptions.get(teamId);
-                    if (subscribers) {
-                        subscribersSnapshot = [...subscribers];
-                    }
-                    shouldNotify = true;
-                } else {
-                    console.log(`🔄 Sync: Duplicate message ${message.id}, skipping notification`);
+                // Only notify subscribers for new messages
+                const subscribers = this.teamMessageSubscriptions.get(teamId);
+                if (subscribers) {
+                    subscribers.forEach(callback => callback(message as any));
                 }
-            });
-
-            if (shouldNotify) {
-                subscribersSnapshot.forEach(callback => callback(message as any));
+            } else {
+                console.log(`🔄 Sync: Duplicate message ${message.id}, skipping notification`);
             }
 
         } else if (updateData.body.t === 'new-session') {
@@ -2583,11 +2551,8 @@ class Sync {
             const data = await response.json();
             const messages = data.messages || [];
 
-            // PROTECTED: Acquire mutex before writing to Map
-            await this.getTeamMessagesMutex(teamId).runExclusive(async () => {
-                // 缓存消息
-                this.teamMessagesCache.set(teamId, messages);
-            });
+            // 缓存消息
+            this.teamMessagesCache.set(teamId, messages);
 
             return {
                 messages,
@@ -2649,22 +2614,15 @@ class Sync {
                 throw new Error(`Failed to send team message: ${response.status} - ${text}`);
             }
 
-            let subscribersSnapshot: Array<(message: import('@/sync/teamMessageTypes').TeamMessage) => void> = [];
+            // 立即更新本地缓存
+            const cached = this.teamMessagesCache.get(request.teamId) || [];
+            this.teamMessagesCache.set(request.teamId, [...cached, message]);
 
-            // PROTECTED: Acquire mutex for this teamId to prevent concurrent Map access
-            await this.getTeamMessagesMutex(request.teamId).runExclusive(async () => {
-                // 立即更新本地缓存
-                const cached = this.teamMessagesCache.get(request.teamId) || [];
-                this.teamMessagesCache.set(request.teamId, [...cached, message]);
-
-                // 触发本地订阅者
-                const subscribers = this.teamMessageSubscriptions.get(request.teamId);
-                if (subscribers) {
-                    subscribersSnapshot = [...subscribers];
-                }
-            });
-
-            subscribersSnapshot.forEach(callback => callback(message));
+            // 触发本地订阅者
+            const subscribers = this.teamMessageSubscriptions.get(request.teamId);
+            if (subscribers) {
+                subscribers.forEach(callback => callback(message));
+            }
         } catch (error) {
             console.error('Failed to send team message:', error);
             throw error;

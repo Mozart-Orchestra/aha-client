@@ -403,7 +403,7 @@ useTaskChatSync.updateTaskWithSync()
 
 **报告生成**: 2026-01-18 10:50
 **报告人**: Master Agent (cmkj194z)
-**项目位置**: `/Users/swmt/happy/kanban/`
+**项目位置**: `~/happy/kanban/`
 **主分支**: `dev3`
 **功能分支**: kanban 在 `dev118`
 

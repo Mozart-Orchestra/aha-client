@@ -368,7 +368,7 @@ toggleTodo(id)
 1. Todo.done = !todo.done (立即生效)
 2. 乐观 UI 更新
   ↓
-3. Fire-and-for: syncTodoStatusToKanban()
+3. Fire-and-forget: syncTodoStatusToKanban()
   ↓
 4. 检查 todo.kanbanTaskId
   ├─ 没有 → 跳过
@@ -378,7 +378,7 @@ toggleTodo(id)
   ↓
 6. Kanban 任务更新
   ↓
-7. Fire-and-for: syncKanbanStatusToTodo()
+7. Fire-and-forget: syncKanbanStatusToTodo()
   ↓
 8. 检查 Todo 状态
   ├─ 已匹配 → return（避免循环）
@@ -403,7 +403,7 @@ handleMoveTask(task)
   ├─ 没有 → 跳过
   └─ 有 → 继续
   ↓
-4. Fire-and-for: syncKanbanStatusToTodo()
+4. Fire-and-forget: syncKanbanStatusToTodo()
   ↓
 5. 反向查找: kanbanTaskId → todoId
   ↓
@@ -413,7 +413,7 @@ handleMoveTask(task)
   ↓
 8. 服务器同步
   ↓
-9. Fire-and-for: syncTodoStatusToKanban()
+9. Fire-and-forget: syncTodoStatusToKanban()
   ↓
 10. 检查 Kanban 状态
    ├─ 已匹配 → return（避免循环）

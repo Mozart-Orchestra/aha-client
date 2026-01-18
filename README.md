@@ -69,6 +69,23 @@ On your computer, run `happy` instead of `claude` or `happy codex` instead of `c
 - **[happy-server](https://github.com/slopus/happy-server)** - Backend server for encrypted sync
 - **happy-coder** - This mobile client (you are here)
 
+## 🤝 多智能体团队协作
+
+Happy Coder 支持生成多个具有专门角色的 AI 智能体，协同完成复杂任务：
+
+| 角色 | 描述 |
+|------|------|
+| Master/Orchestrator | 规划和分配工作，协调团队 |
+| Architect | 做技术决策，审查架构 |
+| Implementer | 实现功能，负责代码执行 |
+| QA-Engineer | 测试功能，验证质量 |
+| Researcher | 探索代码库，收集信息 |
+| Observer | 审计进度，审查交付物 |
+
+智能体通过共享的看板和团队聊天进行沟通，基于角色的工具限制确保职责分离。
+
+**[查看团队协作架构文档](docs/TEAM_COLLABORATION_ARCHITECTURE.md)**
+
 ## 🏠 Who We Are
 
 We're engineers scattered across Bay Area coffee shops and hacker houses, constantly checking how our AI coding agents are progressing on our pet projects during lunch breaks. Happy Coder was born from the frustration of not being able to peek at our AI coding tools building our side hustles while we're away from our keyboards. We believe the best tools come from scratching your own itch and sharing with the community.

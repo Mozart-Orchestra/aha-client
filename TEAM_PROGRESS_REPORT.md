@@ -201,10 +201,12 @@ TodoItem.kanbanTaskId ⟷ KanbanTask.todoId
 ### Scout 评估:
 **Phase 2 准备度: 90%** 🎯
 
-数据结构完美，仅需：
-1. ✨ UI：将 Todo 提升为 Kanban 任务
-2. ✨ 逻辑：状态变化同步
-3. ✨ 导航：Todo ↔ Task 视图切换
+说明：准备度仅代表架构/设计就绪，不代表实际实现完成。
+
+**Phase 2 实施进度: 0%** ⏳
+- [ ] UI：将 Todo 提升为 Kanban 任务
+- [ ] 逻辑：状态变化同步
+- [ ] 导航：Todo ↔ Task 视图切换
 
 ---
 
