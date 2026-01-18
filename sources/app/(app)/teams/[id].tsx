@@ -21,6 +21,7 @@ import TeamChatRoom from '@/components/TeamChatRoom';
 import { TaskDetailModal } from '@/components/TaskDetailModal';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
+import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -97,6 +98,33 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 12,
         color: theme.colors.textSecondary,
         fontStyle: 'italic',
+    },
+    taskMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+    },
+    taskSessionsLink: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    taskSessionsIcon: {
+        marginRight: 4,
+    },
+    taskSessionsText: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+    },
+    taskPriority: {
+        fontSize: 10,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        overflow: 'hidden',
     },
     addTaskButton: {
         flexDirection: 'row',
@@ -536,18 +564,15 @@ export default function TeamDashboardScreen() {
 
     // 🆕 计算每个任务的linked sessions
     const taskSessionLinks = React.useMemo(() => {
-        const links = new Map<string, string[]>();
+        const links = new Map<string, { sessionId: string; title: string; linkedAt: number }[]>();
 
-        // 从artifact的sessions获取
-        if (artifact?.sessions) {
-            artifact.sessions.forEach(sessionId => {
-                // TODO: 从taskSessionLink模型获取实际链接
-                // 暂时使用空的array
-            });
-        }
+        kanbanData.tasks.forEach(task => {
+            const sessions = getSessionsForTask(task.id);
+            links.set(task.id, sessions);
+        });
 
         return links;
-    }, [artifact?.sessions, kanbanData.tasks]);
+    }, [kanbanData.tasks]);
 
     const renderKanban = () => (
         <ScrollView horizontal style={{ flex: 1 }}>
@@ -564,7 +589,11 @@ export default function TeamDashboardScreen() {
                         <ScrollView>
                             {kanbanData.tasks
                                 .filter(t => matchesColumn(t, column.id))
-                                .map(task => (
+                                .map(task => {
+                                    const linkedSessions = taskSessionLinks.get(task.id) || [];
+                                    const sessionCount = linkedSessions.length;
+
+                                    return (
                                     <Pressable
                                         key={task.id}
                                         style={styles.taskCard}
@@ -574,8 +603,53 @@ export default function TeamDashboardScreen() {
                                         {task.assigneeId && (
                                             <Text style={styles.taskAssignee}>@{task.assigneeId}</Text>
                                         )}
+
+                                        {/* 🆕 Linked sessions 显示 */}
+                                        {(sessionCount > 0 || task.priority) && (
+                                            <View style={styles.taskMeta}>
+                                                {sessionCount > 0 && (
+                                                    <View style={styles.taskSessionsLink}>
+                                                        <Ionicons
+                                                            name="chatbubble-outline"
+                                                            size={14}
+                                                            color={theme.colors.textSecondary}
+                                                            style={styles.taskSessionsIcon}
+                                                        />
+                                                        <Text style={styles.taskSessionsText}>
+                                                            {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                {task.priority && (
+                                                    <View style={[
+                                                        styles.taskPriority,
+                                                        {
+                                                            backgroundColor: task.priority === 'high' || task.priority === 'urgent'
+                                                                ? theme.colors.error + '20'
+                                                                : task.priority === 'medium'
+                                                                ? theme.colors.warning + '20'
+                                                                : theme.colors.success + '20'
+                                                        }
+                                                    ]}>
+                                                        <Text style={[
+                                                            styles.taskSessionsText,
+                                                            {
+                                                                color: task.priority === 'high' || task.priority === 'urgent'
+                                                                    ? theme.colors.error
+                                                                    : task.priority === 'medium'
+                                                                    ? theme.colors.warning
+                                                                    : theme.colors.success
+                                                            }
+                                                        ]}>
+                                                            {task.priority}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
                                     </Pressable>
-                                ))}
+                                );
+                                })}
 
                             <Pressable
                                 style={styles.addTaskButton}
