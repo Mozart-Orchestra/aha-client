@@ -7,6 +7,14 @@ import { TeamMessage, SendTeamMessageRequest } from '@/sync/teamMessageTypes';
 import { sync } from '@/sync/sync';
 import { MarkdownView } from './markdown/MarkdownView';
 import { useRouter } from 'expo-router';
+import {
+  parseCommand,
+  executeCreateTask,
+  executeUpdateTask,
+  executeCompleteTask,
+  getCommandHelp,
+  type TaskCommandResult
+} from '@/utils/teamCommandParser';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -510,6 +518,37 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
 
         try {
             setIsSending(true);
+
+            // 检查是否是命令
+            const command = parseCommand(content);
+
+            if (command) {
+                // 执行命令
+                const result = await executeCommand(command);
+
+                // 发送系统消息显示结果
+                const resultMessage: TeamMessage = {
+                    id: `cmd_result_${Date.now()}`,
+                    teamId,
+                    content: result.message,
+                    type: 'system',
+                    timestamp: Date.now(),
+                    fromRole: 'system',
+                    fromDisplayName: 'System'
+                };
+
+                setMessages(prev => [...prev, resultMessage]);
+
+                // 如果是帮助命令，不保存到聊天记录
+                if (command.type === 'unknown' && content.trim() === '/help') {
+                    // 显示帮助信息
+                }
+
+                setInputText('');
+                return;
+            }
+
+            // 普通聊天消息
             const mentions = extractMentions(content);
 
             // User messages should NOT use team member's session ID
@@ -530,6 +569,47 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
             console.error('Failed to send message:', error);
         } finally {
             setIsSending(false);
+        }
+    };
+
+    /**
+     * 执行命令
+     */
+    const executeCommand = async (command: ParsedCommand): Promise<TaskCommandResult> => {
+        if (!mySessionId) {
+            return {
+                success: false,
+                message: '❌ Cannot execute command: No active session'
+            };
+        }
+
+        switch (command.type) {
+            case 'createTask':
+                return await executeCreateTask(
+                    command.params,
+                    mySessionId,
+                    teamId,
+                    myDisplayName || 'User'
+                );
+
+            case 'updateTask':
+                return await executeUpdateTask(command.params);
+
+            case 'assignTask':
+                // TODO: 实现分配逻辑
+                return {
+                    success: false,
+                    message: '⚠️ Task assignment feature coming soon'
+                };
+
+            case 'completeTask':
+                return await executeCompleteTask(command.params.taskId);
+
+            default:
+                return {
+                    success: false,
+                    message: `❌ Unknown command. Type /help for available commands.`
+                };
         }
     };
 
@@ -609,8 +689,7 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
                     <TextInput
                         style={styles.input}
                         value={inputText}
-                        onChangeText={setInputText}
-                        placeholder="Type a message..."
+                        onChangeText={setInputText                        placeholder="Type a message or /create task... (Type /help for commands)"
                         placeholderTextColor={theme.colors.input.placeholder}
                         multiline
                         maxLength={2000}
