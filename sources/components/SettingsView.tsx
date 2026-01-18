@@ -27,6 +27,7 @@ import { disconnectService } from '@/sync/apiServices';
 import { useProfile } from '@/sync/storage';
 import { getDisplayName, getAvatarUrl, getBio } from '@/sync/profile';
 import { Avatar } from '@/components/Avatar';
+import { LanguageSelector } from '@/components/LanguageSelector';
 import { t } from '@/text';
 
 // Manual Auth Modal Component for Android
@@ -386,6 +387,8 @@ export const SettingsView = React.memo(function SettingsView() {
                     icon={<Ionicons name="color-palette-outline" size={29} color="#5856D6" />}
                     onPress={() => router.push('/settings/appearance')}
                 />
+                {/* Language Selector - Custom Component */}
+                <LanguageSelector />
                 <Item
                     title={t('settings.voiceAssistant')}
                     subtitle={t('settings.voiceAssistantSubtitle')}
