@@ -19,6 +19,7 @@ import { useDesktopBridge } from '@/desktop/useDesktopBridge';
 import { getDisplayName } from '@/sync/profile';
 import TeamChatRoom from '@/components/TeamChatRoom';
 import { TaskDetailModal } from '@/components/TaskDetailModal';
+import { TaskApprovalModal } from '@/components/TaskApprovalModal';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
@@ -888,6 +889,20 @@ export default function TeamDashboardScreen() {
                     setShowTaskDetail(false);
                 }}
                 allSessions={allSessions}
+            />
+
+            {/* 🆕 任务审批弹窗 */}
+            <TaskApprovalModal
+                visible={showApprovalModal}
+                onClose={() => setShowApprovalModal(false)}
+                pendingTasks={pendingTasks}
+                teamId={teamId}
+                onTaskApproved={(task) => {
+                    console.log('Task approved:', task.title);
+                }}
+                onTaskRejected={(task, reason) => {
+                    console.log('Task rejected:', task.title, 'Reason:', reason);
+                }}
             />
         </>
     );
