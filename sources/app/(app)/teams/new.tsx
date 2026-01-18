@@ -819,8 +819,8 @@ export default function NewTeamScreen() {
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Team Composition (Auto-Spawn)</Text>
                         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: theme.colors.divider }}>
-                            {LOCALIZED_TEAM_ROLES.map(role => (
-                                <View key={role.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, lastChild: { marginBottom: 0 } } as any}>
+                            {LOCALIZED_TEAM_ROLES.map((role, index) => (
+                                <View key={role.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: index === LOCALIZED_TEAM_ROLES.length - 1 ? 0 : 16 }}>
                                     <View style={{ flex: 1, marginRight: 16 }}>
                                         <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 4 }}>{role.title}</Text>
                                         <Text style={{ fontSize: 13, color: theme.colors.textSecondary }} numberOfLines={2}>{role.summary}</Text>

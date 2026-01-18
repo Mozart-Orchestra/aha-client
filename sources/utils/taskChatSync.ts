@@ -60,26 +60,25 @@ export function generateTaskMessage(
     task: KanbanTask,
     actorName?: string
 ): string {
-    const actionTexts = {
-        created: `创建了任务`,
-        updated: `更新了任务`,
-        assigned: `分配了任务`,
-        completed: `完成了任务`,
-        blocked: `报告任务被阻塞`,
+    const actionTexts: Record<typeof action, string> = {
+        created: '创建了任务',
+        updated: '更新了任务',
+        assigned: '分配了任务',
+        completed: '完成了任务',
+        blocked: '报告任务被阻塞',
     };
 
     const actor = actorName || '有人';
     const actionText = actionTexts[action];
 
-    return `
-${actor} ${actionText}：**${task.title}**
+    const description = task.description ? `> ${task.description}\n\n` : '';
+    const priority = task.priority || '未设置';
 
-${task.description ? `> ${task.description}` : ''}
+    return `${actor} ${actionText}：**${task.title}**
 
-**状态**: ${task.status}
-**优先级**: ${task.priority || '未设置'}
-**查看**: #task-${task.id}
-    `.trim();
+${description}**状态**: ${task.status}
+**优先级**: ${priority}
+**查看**: #task-${task.id}`;
 }
 
 /**
@@ -95,7 +94,7 @@ export function formatTaskReference(task: KanbanTask): string {
 export function insertTaskReference(
     message: string,
     taskId: string,
-    position: 'start' | 'end' | 'cursor' = 'end'
+    position: 'start' | 'end' = 'end'
 ): string {
     const ref = `#task-${taskId}`;
 
@@ -103,8 +102,6 @@ export function insertTaskReference(
         case 'start':
             return `${ref} ${message}`;
         case 'end':
-            return `${message} ${ref}`;
-        case 'cursor':
             return `${message} ${ref}`;
         default:
             return message;
@@ -143,7 +140,12 @@ export function extractTaskFromMessage(message: string): {
 
     if (lines.length === 0) return null;
 
-    const title = lines[0].replace(/^(创建任务|新建任务|todo:|待办:)\s*/i, '').trim();
+    // Strip all task creation keywords/prefixes
+    const title = lines[0]
+        .replace(/^(创建任务|新建任务|待办|todo|new\s+task|create\s+task)\s*:/i, '')
+        .replace(/^(创建任务|新建任务)\s*/i, '')
+        .trim();
+
     const description = lines.length > 1 ? lines.slice(1).join('\n').trim() : undefined;
 
     return { title, description };
@@ -174,7 +176,7 @@ export function createTaskUpdateMessage(
         .join(', ');
 
     return {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         teamId: '', // 需要外部设置
         content: generateTaskMessage('updated', task, actorName) + `\n\n变更: ${changeDetails}`,
         type: 'task-update',

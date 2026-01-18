@@ -88,6 +88,50 @@ interface Comment {
     createdAt: number;
     updatedAt?: number;
 }
+
+/**
+ * Security: Circular dependency validation utility
+ * Prevents infinite loops when task dependencies form cycles
+ */
+function validateTaskDependencies(
+    taskId: string,
+    dependencies: string[] | undefined,
+    allTasks: KanbanTask[]
+): { valid: boolean; error?: string } {
+    if (!dependencies || dependencies.length === 0) {
+        return { valid: true };
+    }
+
+    const visited = new Set<string>();
+    const path = new Set<string>();
+
+    const hasCycle = (currentId: string): boolean => {
+        if (path.has(currentId)) return true; // Cycle detected
+        if (visited.has(currentId)) return false; // Already checked
+
+        visited.add(currentId);
+        path.add(currentId);
+
+        const task = allTasks.find(t => t.id === currentId);
+        if (task?.dependencies) {
+            for (const depId of task.dependencies) {
+                if (hasCycle(depId)) return true;
+            }
+        }
+
+        path.delete(currentId);
+        return false;
+    };
+
+    if (hasCycle(taskId)) {
+        return {
+            valid: false,
+            error: 'Circular dependency detected in task dependencies'
+        };
+    }
+
+    return { valid: true };
+}
 ```
 
 #### 2. 扩展 TeamMessage 接口
@@ -183,7 +227,18 @@ interface Todo {
 ```typescript
 // 在 TeamChatRoom 组件中添加
 const parseTaskCommand = (content: string): { task: Partial<KanbanTask>, description: string } | null => {
-    const taskRegex = /\/task\s+(.+?)(?:\n#desc\s+(.+?))?(?:\n#assign\s+(@\S+))?(?:\n#priority\s+(\w+))?(?:\n#due\s+(\d{4}-\d{2}-\d{2}))?(?:\n#tags\s+(.+?))?$/s;
+    // Security: Validate input length to prevent ReDoS attacks
+    const MAX_INPUT_LENGTH = 5000;
+    if (content.length > MAX_INPUT_LENGTH) {
+        console.warn('Task command input exceeds maximum length');
+        return null;
+    }
+
+    // Security: Tightened regex to prevent catastrophic backtracking
+    // - Use specific character classes instead of .+?
+    // - Limit tag matching to safe characters only
+    // - Avoid nested optional groups that can cause exponential backtracking
+    const taskRegex = /^\/task\s+([^\n#]+?)(?:\n#desc\s+([^\n#]+?))?(?:\n#assign\s+(@[\w-]+))?(?:\n#priority\s+(\w+))?(?:\n#due\s+(\d{4}-\d{2}-\d{2}))?(?:\n#tags\s+([\w\s,]+?))?$/s;
     const match = content.match(taskRegex);
 
     if (!match) return null;
@@ -222,42 +277,52 @@ const handleMoveTask = async (task: KanbanTask) => {
     const oldStatus = task.status;
     const newStatus = getNextStatus(oldStatus);
 
-    // 更新任务
+    // Optimistic update: Update local state immediately
     const updatedTasks = kanbanData.tasks.map(t =>
         t.id === task.id ? { ...t, status: newStatus, updatedAt: Date.now() } : t
     );
 
-    // 发送通知到聊天
-    await sync.sendTeamMessage({
-        teamId,
-        fromRole: 'system',
-        content: `Task "${task.title}" moved from ${oldStatus} to ${newStatus}`,
-        shortContent: `Task moved: ${task.title}`,
-        type: 'task-update',
-        metadata: {
-            taskId: task.id,
-            taskChange: {
-                field: 'status',
-                oldValue: oldStatus,
-                newValue: newStatus
-            }
-        }
-    });
-
-    // 更新 artifact
     const newData: KanbanBoard = {
         ...kanbanData,
         tasks: updatedTasks
     };
 
-    await sync.updateArtifact(
-        artifact!.id,
-        artifact!.title,
-        JSON.stringify(newData, null, 2),
-        artifact!.sessions,
-        artifact!.draft,
-        artifact!.type
-    );
+    // Update local state optimistically
+    setKanbanData(newData);
+
+    try {
+        // 发送通知到聊天
+        await sync.sendTeamMessage({
+            teamId,
+            fromRole: 'system',
+            content: `Task "${task.title}" moved from ${oldStatus} to ${newStatus}`,
+            shortContent: `Task moved: ${task.title}`,
+            type: 'task-update',
+            metadata: {
+                taskId: task.id,
+                taskChange: {
+                    field: 'status',
+                    oldValue: oldStatus,
+                    newValue: newStatus
+                }
+            }
+        });
+
+        // 更新 artifact
+        await sync.updateArtifact(
+            artifact!.id,
+            artifact!.title,
+            JSON.stringify(newData, null, 2),
+            artifact!.sessions,
+            artifact!.draft,
+            artifact!.type
+        );
+    } catch (error) {
+        // Rollback on error
+        console.error('Failed to move task:', error);
+        setKanbanData(kanbanData); // Revert to original state
+        Modal.alert('Error', 'Failed to move task. Please try again.');
+    }
 };
 ```
 
@@ -274,7 +339,7 @@ const handleMoveTask = async (task: KanbanTask) => {
 const parseTaskMentions = (content: string, tasks: KanbanTask[]) => {
     // 匹配 #task-abc 或 #[task title]
     const taskMentionRegex = /#(?:task-([\w-]+)|\[([^\]]+)\])/g;
-    const matches = [...content.matchAll(taskMentionRegex)];
+    const matches = Array.from(content.matchAll(taskMentionRegex)); // Deterministic order
 
     const parts: Array<{ text: string, taskId?: string }> = [];
     let lastIndex = 0;
@@ -283,14 +348,14 @@ const parseTaskMentions = (content: string, tasks: KanbanTask[]) => {
         const taskId = match[1];
         const taskTitle = match[2];
 
-        // 查找任务
+        // 查找任务 - ensure deterministic behavior by finding first match
         const task = taskId
             ? tasks.find(t => t.id === taskId)
             : tasks.find(t => t.title.toLowerCase() === taskTitle?.toLowerCase());
 
         if (task) {
             // 添加前面的文本
-            parts.push({ text: content.slice(lastIndex, match.index) });
+            parts.push({ text: content.slice(lastIndex, match.index!) });
             // 添加任务链接
             parts.push({ text: `#${task.title}`, taskId: task.id });
             lastIndex = match.index! + match[0].length;
@@ -318,9 +383,14 @@ const parseTaskMentions = (content: string, tasks: KanbanTask[]) => {
 **实现**：
 ```typescript
 // 在 ZenView.tsx 中添加
+import { crypto } from '@/utils/crypto'; // Or use uuid v4
+
 const handleConvertTodoToKanban = async (todoId: string) => {
     const todo = storage.getState().todoState?.todos[todoId];
-    if (!todo) return;
+    if (!todo) {
+        Modal.alert('Error', 'Todo not found');
+        return;
+    }
 
     // 检查是否已经转换过
     if (todo.kanbanTaskId) {
@@ -332,9 +402,12 @@ const handleConvertTodoToKanban = async (todoId: string) => {
     const teams = await selectTeam();
     if (!teams) return;
 
+    // Security: Use crypto-secure ID generation instead of Math.random()
+    const newTaskId = crypto.randomUUID(); // Or use proper uuid library
+
     // 创建 Kanban 任务
     const newTask: KanbanTask = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: newTaskId,
         title: todo.content,
         description: `Converted from todo with ${Object.keys(todo.linkedSessions || {}).length} linked sessions`,
         status: 'todo',
@@ -348,35 +421,44 @@ const handleConvertTodoToKanban = async (todoId: string) => {
         updatedAt: Date.now()
     };
 
-    // 更新团队的 artifact
-    const teamArtifact = storage.getState().artifacts[teams.teamId];
-    const teamData = JSON.parse(teamArtifact.body);
-    teamData.tasks.push(newTask);
-
-    await sync.updateArtifact(
-        teams.teamId,
-        teamArtifact.title,
-        JSON.stringify(teamData, null, 2),
-        teamArtifact.sessions,
-        teamArtifact.draft,
-        teamArtifact.type
-    );
-
-    // 更新 Todo
-    await updateTodo(todoId, { kanbanTaskId: newTask.id, teamId: teams.teamId });
-
-    // 发送通知到团队聊天
-    await sync.sendTeamMessage({
-        teamId: teams.teamId,
-        fromRole: 'system',
-        content: `New task created from todo: "${todo.content}"`,
-        shortContent: `Todo converted to task`,
-        type: 'task-created',
-        metadata: {
-            taskId: newTask.id,
-            todoId: todo.id
+    // 更新团队的 artifact with error handling
+    try {
+        const teamArtifact = storage.getState().artifacts[teams.teamId];
+        if (!teamArtifact?.body) {
+            throw new Error('Team artifact not found or invalid');
         }
-    });
+
+        const teamData = JSON.parse(teamArtifact.body);
+        teamData.tasks.push(newTask);
+
+        await sync.updateArtifact(
+            teams.teamId,
+            teamArtifact.title,
+            JSON.stringify(teamData, null, 2),
+            teamArtifact.sessions,
+            teamArtifact.draft,
+            teamArtifact.type
+        );
+
+        // 更新 Todo
+        await updateTodo(todoId, { kanbanTaskId: newTask.id, teamId: teams.teamId });
+
+        // 发送通知到团队聊天
+        await sync.sendTeamMessage({
+            teamId: teams.teamId,
+            fromRole: 'system',
+            content: `New task created from todo: "${todo.content}"`,
+            shortContent: `Todo converted to task`,
+            type: 'task-created',
+            metadata: {
+                taskId: newTask.id,
+                todoId: todo.id
+            }
+        });
+    } catch (error) {
+        console.error('Failed to convert todo to kanban task:', error);
+        Modal.alert('Error', 'Failed to convert todo to Kanban task. Please try again.');
+    }
 };
 ```
 
@@ -392,46 +474,67 @@ const handleConvertTodoToKanban = async (todoId: string) => {
 export async function updateTodo(todoId: string, updates: Partial<Todo>) {
     // ... 现有代码 ...
 
+    // Security: Prevent bidirectional sync loops with flag
+    const SYNC_SOURCE_KEY = '_syncSource';
+
     // 如果 Todo 被标记为完成，且有关联的 Kanban 任务
-    if (updates.status === 'done' && todo.kanbanTaskId && todo.teamId) {
+    if (updates.status === 'done' && todo.kanbanTaskId && todo.teamId && !(updates as any)[SYNC_SOURCE_KEY]) {
         const teamArtifact = storage.getState().artifacts[todo.teamId];
         if (teamArtifact?.body) {
-            const teamData = JSON.parse(teamArtifact.body);
-            const task = teamData.tasks.find((t: KanbanTask) => t.id === todo.kanbanTaskId);
+            try {
+                const teamData = JSON.parse(teamArtifact.body);
+                const task = teamData.tasks.find((t: KanbanTask) => t.id === todo.kanbanTaskId);
 
-            if (task && task.status !== 'done') {
-                // 更新任务状态
-                task.status = 'done';
-                task.updatedAt = Date.now();
+                if (task && task.status !== 'done') {
+                    // 更新任务状态
+                    task.status = 'done';
+                    task.updatedAt = Date.now();
 
-                // 更新 artifact
-                await sync.updateArtifact(
-                    todo.teamId,
-                    teamArtifact.title,
-                    JSON.stringify(teamData, null, 2),
-                    teamArtifact.sessions,
-                    teamArtifact.draft,
-                    teamArtifact.type
-                );
+                    // 更新 artifact
+                    await sync.updateArtifact(
+                        todo.teamId,
+                        teamArtifact.title,
+                        JSON.stringify(teamData, null, 2),
+                        teamArtifact.sessions,
+                        teamArtifact.draft,
+                        teamArtifact.type
+                    );
 
-                // 发送通知
-                await sync.sendTeamMessage({
-                    teamId: todo.teamId,
-                    fromRole: 'system',
-                    content: `Task "${task.title}" marked as done (todo completed)`,
-                    shortContent: 'Task completed',
-                    type: 'task-update',
-                    metadata: {
-                        taskId: task.id,
-                        taskChange: {
-                            field: 'status',
-                            oldValue: task.status,
-                            newValue: 'done'
+                    // 发送通知
+                    await sync.sendTeamMessage({
+                        teamId: todo.teamId,
+                        fromRole: 'system',
+                        content: `Task "${task.title}" marked as done (todo completed)`,
+                        shortContent: 'Task completed',
+                        type: 'task-update',
+                        metadata: {
+                            taskId: task.id,
+                            taskChange: {
+                                field: 'status',
+                                oldValue: task.status,
+                                newValue: 'done'
+                            }
                         }
-                    }
-                });
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to sync todo completion to kanban:', error);
+                // Don't throw - allow todo update to succeed even if sync fails
             }
         }
+    }
+}
+
+// When updating Kanban task and syncing to Todo, set the flag:
+export async function updateKanbanTask(taskId: string, updates: Partial<KanbanTask>) {
+    // ... update task code ...
+
+    // When triggering Todo update, set sync source flag
+    if (updates.status === 'done' && task.todoId) {
+        await updateTodo(task.todoId, {
+            status: 'done',
+            [SYNC_SOURCE_KEY]: 'kanban' // Prevents loop back
+        } as any);
     }
 }
 ```
@@ -482,6 +585,13 @@ const renderTaskApprovalButtons = (task: KanbanTask) => {
 };
 
 const handleApproveTask = async (taskId: string) => {
+    // Security: Authorization check - only team members can approve tasks
+    const currentUser = storage.getState().sessions[currentSessionId];
+    if (!currentUser || !artifact!.sessions.includes(currentUser.id)) {
+        Modal.alert('Unauthorized', 'Only team members can approve tasks');
+        return;
+    }
+
     const updatedTasks = kanbanData.tasks.map(t =>
         t.id === taskId ? { ...t, approvalStatus: 'approved' as const, updatedAt: Date.now() } : t
     );
@@ -499,8 +609,21 @@ const handleApproveTask = async (taskId: string) => {
 };
 
 const handleRejectTask = async (taskId: string) => {
+    // Security: Authorization check - only team members can reject tasks
+    const currentUser = storage.getState().sessions[currentSessionId];
+    if (!currentUser || !artifact!.sessions.includes(currentUser.id)) {
+        Modal.alert('Unauthorized', 'Only team members can reject tasks');
+        return;
+    }
+
     const reason = await Modal.prompt('Rejection Reason', 'Why are you rejecting this task?');
     if (!reason) return;
+
+    // Validate rejection reason length
+    if (reason.length > 500) {
+        Modal.alert('Invalid Input', 'Rejection reason must be less than 500 characters');
+        return;
+    }
 
     // 移除被拒绝的任务
     const updatedTasks = kanbanData.tasks.filter(t => t.id !== taskId);
@@ -606,12 +729,17 @@ export default function AllTasksScreen() {
         return artifacts
             .filter(a => a.type === 'team' && a.body)
             .flatMap(artifact => {
-                const data = JSON.parse(artifact.body);
-                return (data.tasks || []).map((task: KanbanTask) => ({
-                    ...task,
-                    teamId: artifact.id,
-                    teamName: artifact.title
-                }));
+                try {
+                    const data = JSON.parse(artifact.body);
+                    return (data.tasks || []).map((task: KanbanTask) => ({
+                        ...task,
+                        teamId: artifact.id,
+                        teamName: artifact.title
+                    }));
+                } catch (error) {
+                    console.error(`Failed to parse artifact ${artifact.id}:`, error);
+                    return []; // Skip malformed artifacts
+                }
             });
     }, [artifacts]);
 

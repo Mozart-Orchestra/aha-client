@@ -118,6 +118,38 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         ? `${subtasksDone}/${subtasks.length}`
         : null;
 
+    // Handler for status selection
+    const handleStatusPress = () => {
+        if (!isEditing || !columns) return;
+        // TODO: Show status picker modal
+        console.log('Status picker not implemented');
+    };
+
+    // Handler for priority selection
+    const handlePriorityPress = () => {
+        if (!isEditing) return;
+        // TODO: Show priority picker modal
+        console.log('Priority picker not implemented');
+    };
+
+    // Handler for subtask toggle
+    const handleSubtaskToggle = (subtaskId: string) => {
+        setSubtasks(prev => prev.map(st =>
+            st.id === subtaskId ? { ...st, done: !st.done } : st
+        ));
+    };
+
+    // Handler for adding subtask
+    const handleAddSubtask = () => {
+        // TODO: Show add subtask modal
+        console.log('Add subtask not implemented');
+    };
+
+    // Reset edit mode when task changes
+    React.useEffect(() => {
+        setIsEditing(false);
+    }, [task?.id]);
+
     return (
         <Modal
             visible={visible}
@@ -159,7 +191,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 <View style={stylesheet.metaItem}>
                                     <Text style={stylesheet.metaLabel}>Status</Text>
                                     {isEditing ? (
-                                        <Pressable style={stylesheet.selectButton}>
+                                        <Pressable style={stylesheet.selectButton} onPress={handleStatusPress}>
                                             <Text style={stylesheet.selectText}>
                                                 {columns.find(c => c.id === editedTask.status)?.title || editedTask.status}
                                             </Text>
@@ -185,7 +217,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 <View style={stylesheet.metaItem}>
                                     <Text style={stylesheet.metaLabel}>Priority</Text>
                                     {isEditing ? (
-                                        <Pressable style={stylesheet.selectButton}>
+                                        <Pressable style={stylesheet.selectButton} onPress={handlePriorityPress}>
                                             <Text style={[
                                                 stylesheet.metaValue,
                                                 { color: getPriorityColor(editedTask.priority) }
@@ -241,7 +273,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                         )}
                                     </View>
                                     {subtasks.map((subtask) => (
-                                        <Pressable key={subtask.id} style={stylesheet.subtaskRow}>
+                                        <Pressable
+                                            key={subtask.id}
+                                            style={stylesheet.subtaskRow}
+                                            onPress={() => handleSubtaskToggle(subtask.id)}
+                                        >
                                             <Ionicons
                                                 name={subtask.done ? "checkbox" : "square-outline"}
                                                 size={20}
@@ -255,7 +291,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                             </Text>
                                         </Pressable>
                                     ))}
-                                    <Pressable style={stylesheet.addSubtaskButton}>
+                                    <Pressable style={stylesheet.addSubtaskButton} onPress={handleAddSubtask}>
                                         <Ionicons name="add" size={16} color={theme.colors.textSecondary} />
                                         <Text style={stylesheet.addSubtaskText}>Add subtask</Text>
                                     </Pressable>

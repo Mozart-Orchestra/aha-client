@@ -211,6 +211,23 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
     }, [messages, tasks, teamId, onMessageSend]);
 
     /**
+     * 检查消息是否应该创建任务
+     */
+    const shouldCreateTaskFromMessage = useCallback((message: string): boolean => {
+        const keywords = ['创建任务', '新建任务', 'add task', 'create task', 'todo:', '任务：'];
+        return keywords.some(keyword => message.toLowerCase().includes(keyword));
+    }, []);
+
+    /**
+     * 提取消息中的任务 ID
+     */
+    const extractTaskIds = useCallback((message: string): string[] => {
+        const taskRegex = /#task-([a-zA-Z0-9_-]+)/g;
+        const matches = [...message.matchAll(taskRegex)];
+        return matches.map(m => m[1]);
+    }, []);
+
+    /**
      * 获取任务统计
      */
     const getTaskStats = useCallback(() => {
@@ -244,5 +261,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         updateTaskWithSync,
         createTaskFromMessage,
         linkMessageToTask,
+        shouldCreateTaskFromMessage,
+        extractTaskIds,
     };
 }

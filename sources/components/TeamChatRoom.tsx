@@ -17,6 +17,7 @@ import {
 } from '@/utils/teamCommandParser';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { KanbanTask } from '@/sync/kanbanTypes';
+import { parseTaskCommand, createTaskFromCommand } from '@/utils/taskHelpers';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -631,32 +632,17 @@ export default function TeamChatRoom({
 
             // 🆕 1. 检查是否应该从消息创建任务
             if (taskChatSync && taskChatSync.shouldCreateTaskFromMessage(content)) {
-                const taskData = taskChatSync.createTaskFromMessage(content, mySessionId || 'user');
+                // 直接调用 Hook 的 createTaskFromMessage 方法
+                const createdTask = await taskChatSync.createTaskFromMessage(
+                    content,
+                    mySessionId || 'user',
+                    myDisplayName || 'User'
+                );
 
-                if (taskData) {
-                    const createdTask = await taskChatSync.createTaskFromMessage(taskData);
-
-                    if (createdTask) {
-                        // 创建成功，显示系统消息
-                        const successMessage: TeamMessage = {
-                            id: `task_created_${Date.now()}`,
-                            teamId,
-                            content: `✅ Task created: "${createdTask.title}"`,
-                            type: 'system',
-                            timestamp: Date.now(),
-                            fromRole: 'system',
-                            fromDisplayName: 'System',
-                            metadata: {
-                                taskId: createdTask.id,
-                                action: 'task_created',
-                                taskTitle: createdTask.title
-                            }
-                        };
-
-                        setMessages(prev => [...prev, successMessage]);
-                        setInputText('');
-                        return;
-                    }
+                if (createdTask) {
+                    // 创建成功，Hook 已经自动发送了通知消息
+                    setInputText('');
+                    return;
                 }
             }
 
@@ -673,7 +659,84 @@ export default function TeamChatRoom({
                 };
             }
 
-            // 3. 检查是否是命令
+            // 🆕 3. 检查是否是 /task 命令（Master要求的格式）
+            const taskCommand = parseTaskCommand(content);
+            if (taskCommand && taskChatSync) {
+                try {
+                    // 创建新任务
+                    const newTask = createTaskFromCommand(
+                        taskCommand,
+                        `msg_${Date.now()}`,
+                        mySessionId || 'user'
+                    );
+
+                    // 调用 onTaskCreate 创建任务
+                    await taskChatSync.onTaskCreate?.(newTask);
+
+                    // 发送 task-created 通知到聊天
+                    const notificationMessage: TeamMessage = {
+                        id: `task_created_${Date.now()}`,
+                        teamId,
+                        fromDisplayName: myDisplayName || 'User',
+                        content: `✅ Created task: **${newTask.title}**\n\n${newTask.description ? `Description: ${newTask.description}\n\n` : ''}Priority: ${newTask.priority}\nStatus: ${newTask.status}\n\n#task-${newTask.id}`,
+                        type: 'task-created',
+                        timestamp: Date.now(),
+                        metadata: {
+                            taskId: newTask.id,
+                            taskChange: {
+                                action: 'created',
+                                task: newTask
+                            }
+                        },
+                        shortContent: `Task created: ${newTask.title}`
+                    };
+
+                    await sync.sendTeamMessage({
+                        teamId,
+                        content: notificationMessage.content,
+                        type: 'task-created',
+                        metadata: notificationMessage.metadata,
+                        fromDisplayName: myDisplayName || 'User'
+                    });
+
+                    // 如果指定了 assignee，发送 @mention 通知
+                    if (newTask.assigneeId) {
+                        const assigneeMention = `@${newTask.assigneeId}`;
+                        await sync.sendTeamMessage({
+                            teamId,
+                            content: `${assigneeMention} 你被分配了新任务: ${newTask.title}`,
+                            type: 'task-assigned',
+                            mentions: [newTask.assigneeId],
+                            metadata: {
+                                taskId: newTask.id,
+                                taskChange: {
+                                    action: 'assigned',
+                                    task: newTask
+                                }
+                            }
+                        });
+                    }
+
+                    setInputText('');
+                    return;
+                } catch (error) {
+                    console.error('Failed to create task from /task command:', error);
+                    const errorMessage: TeamMessage = {
+                        id: `task_error_${Date.now()}`,
+                        teamId,
+                        content: `❌ Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        type: 'system',
+                        timestamp: Date.now(),
+                        fromRole: 'system',
+                        fromDisplayName: 'System'
+                    };
+                    setMessages(prev => [...prev, errorMessage]);
+                    setInputText('');
+                    return;
+                }
+            }
+
+            // 4. 检查是否是其他命令
             const command = parseCommand(content);
 
             if (command) {
@@ -846,7 +909,7 @@ export default function TeamChatRoom({
                         style={styles.input}
                         value={inputText}
                         onChangeText={setInputText}
-                        placeholder="Type a message, use '创建任务' to create tasks, or /help for commands..."
+                        placeholder="Type a message, /task to create tasks, or /help for commands..."
                         placeholderTextColor={theme.colors.input.placeholder}
                         multiline
                         maxLength={2000}

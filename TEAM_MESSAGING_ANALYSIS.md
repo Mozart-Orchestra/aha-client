@@ -17,15 +17,15 @@ graph TB
     subgraph "User Layer"
         KANBAN[Kanban Dashboard<br/>sources/app/(app)/teams/[id].tsx]
     end
-    
+
     subgraph "Server Layer"
-        SERVER[Happy Server<br/>/Users/swmt/happy/happy-server]
+        SERVER[Happy Server<br/>../happy-server]
         ROUTER[Event Router<br/>eventRouter.ts:238-260]
         KV[KV Store<br/>Encrypted Messages]
     end
-    
+
     subgraph "Agent Layer"
-        CLI[Happy CLI Agents<br/>/Users/swmt/happy/happy-cli]
+        CLI[Happy CLI Agents<br/>../happy-cli]
         MASTER[Master Agent<br/>Orchestrator]
         BUILDER[Builder Agent<br/>Implementation]
         FRAMER[Framer Agent<br/>Architecture]
@@ -134,10 +134,10 @@ sequenceDiagram
     
     Router->>AgentWS: emit('update', { t: 'team-message', message })
     AgentWS->>AgentWS: emit('team-message', message)
-    Note over AgentWS: src/api/apiSession.ts:144-152
-    
+    Note over AgentWS: ../happy-cli/src/api/apiSession.ts:144-152
+
     AgentWS->>AgentHandler: teamMessageListener(message)
-    Note over AgentHandler: src/claude/runClaude.ts:350-460
+    Note over AgentHandler: ../happy-cli/src/claude/runClaude.ts:350-460
     
     AgentHandler->>AgentHandler: Check: should I respond?
     Note over AgentHandler: Based on role, mentions, priority

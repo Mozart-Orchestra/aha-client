@@ -270,6 +270,22 @@ export default function TeamDashboardScreen() {
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
+
+    // 🆕 Discuss 按钮处理函数：跳转到 Chat 标签并高亮相关消息
+    const handleDiscussTask = React.useCallback((task: KanbanTask) => {
+        // 查找与任务相关的消息
+        const relatedMessages = taskChatSync.getMessagesForTask(task.id);
+
+        // 关闭详情弹窗
+        setShowTaskDetail(false);
+
+        // 切换到 Chat 标签
+        setActiveTab('chat');
+
+        // TODO: 可以在这里实现滚动到相关消息的功能
+        // 可能需要在 TeamChatRoom 中添加一个 ref 来支持滚动到特定消息
+        console.log('Discussing task:', task.id, 'Found', relatedMessages.length, 'related messages');
+    }, [taskChatSync]);
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const artifactRoomId = React.useMemo(() => {
         if (!artifact?.body) return undefined;
@@ -597,7 +613,11 @@ export default function TeamDashboardScreen() {
                                     <Pressable
                                         key={task.id}
                                         style={styles.taskCard}
-                                        onPress={() => handleMoveTask(task)}
+                                        onPress={() => {
+                                            setSelectedTask(task);
+                                            setShowTaskDetail(true);
+                                        }}
+                                        onLongPress={() => handleMoveTask(task)}
                                     >
                                         <Text style={styles.taskTitle}>{task.title}</Text>
                                         {task.assigneeId && (
@@ -771,6 +791,21 @@ export default function TeamDashboardScreen() {
                 {activeTab === 'board' && renderKanban()}
                 {activeTab === 'info' && renderInfo()}
             </View>
+
+            {/* 🆕 任务详情弹窗 */}
+            <TaskDetailModal
+                visible={showTaskDetail}
+                task={selectedTask}
+                columns={kanbanData.columns}
+                onClose={() => setShowTaskDetail(false)}
+                onDiscuss={handleDiscussTask}
+                onSave={async (taskId, updates) => {
+                    // 使用 taskChatSync 更新任务，会自动发送通知
+                    await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
+                    setShowTaskDetail(false);
+                }}
+                allSessions={allSessions}
+            />
         </>
     );
 }
