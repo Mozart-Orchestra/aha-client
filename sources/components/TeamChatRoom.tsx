@@ -756,9 +756,19 @@ export default function TeamChatRoom({
 
                 setMessages(prev => [...prev, resultMessage]);
 
-                // 如果是帮助命令，不保存到聊天记录
+                // 如果是帮助命令，显示帮助信息
                 if (command.type === 'unknown' && content.trim() === '/help') {
-                    // 显示帮助信息
+                    const helpMessage: TeamMessage = {
+                        id: `help-${Date.now()}`,
+                        teamId,
+                        content: getCommandHelp(),
+                        type: 'chat',
+                        timestamp: Date.now(),
+                        fromDisplayName: 'System',
+                    };
+                    setMessages(prev => [...prev, helpMessage]);
+                    setInputText('');
+                    return;
                 }
 
                 setInputText('');
