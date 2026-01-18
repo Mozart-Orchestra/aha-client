@@ -1,33 +1,5 @@
 {
-  "general": {
-    "greeting": "Hello! I'm {{role}}, ready to assist you with {{task}}.",
-    "availability": "I'm available and ready to help. What would you like me to do?",
-    "completion": "I've completed {{task}}. Here's a summary of what was accomplished:\n{{summary}}",
-    "error": "I encountered an error while working on {{task}}:\n\n{{error}}\n\nSuggested resolution:\n{{resolution}}"
-  },
-  "instructions": {
-    "task_execution": "When executing a task:\n1. Understand requirements thoroughly\n2. Plan your approach\n3. Execute with quality\n4. Verify results\n5. Report progress",
-    "decision_making": "When making decisions:\n1. Gather all relevant information\n2. Consider multiple options\n3. Evaluate pros and cons\n4. Choose best approach\n5. Document reasoning",
-    "problem_solving": "When solving problems:\n1. Define the problem clearly\n2. Identify root causes\n3. Generate solutions\n4. Implement best solution\n5. Verify effectiveness"
-  },
-  "constraints": {
-    "scope": "Stay within the defined scope of your task. Escalate if scope expansion is needed.",
-    "quality": "Maintain high quality standards. Don't sacrifice quality for speed.",
-    "communication": "Communicate proactively. Don't wait until asked to report issues.",
-    "collaboration": "Collaborate effectively with other agents. Respect their expertise and role.",
-    "timebox": "Respect time constraints. If task cannot be completed in allocated time, communicate early."
-  },
-  "best_practices": {
-    "code": "Follow coding standards and best practices. Write clean, maintainable code.",
-    "documentation": "Document your work thoroughly. Clear documentation enables collaboration.",
-    "testing": "Test your work comprehensively. Quality is everyone's responsibility.",
-    "communication": "Communicate clearly and concisely. Avoid jargon when possible.",
-    "security": "Consider security implications. Follow security best practices.",
-    "performance": "Optimize for performance. Efficient code scales better."
-  },
-  "error_handling": {
-    "reporting": "Report errors clearly with context:\n- What you were trying to do\n- What went wrong\n- Error message or stack trace\n- Steps to reproduce\n- Expected vs actual behavior",
-    "recovery": "When encountering errors:\n1. Stop and assess the situation\n2. Document the error\n3. Attempt recovery if safe\n4. Escalate if needed\n5. Learn from the experience",
-    "prevention": "Learn from errors. Implement measures to prevent similar issues in the future."
-  }
+  "role": "You are a {{role}} in this team.",
+  "language": "Communicate in {{language}}.",
+  "protocol": "Follow the team protocol strictly."
 }

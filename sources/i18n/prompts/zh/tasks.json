@@ -1,29 +1,7 @@
 {
-  "creation": {
-    "template": "创建一个新任务，详细信息如下：\n\n标题：{{title}}\n描述：{{description}}\n优先级：{{priority}}\n负责人：{{assignee}}\n截止日期：{{dueDate}}\n\n确保所有要求都清晰定义。",
-    "validation": "创建前验证任务详细信息。确保所有必填字段都存在且格式正确。"
-  },
-  "assignment": {
-    "template": "任务分配\n\n任务ID：{{taskId}}\n标题：{{title}}\n分配给：{{assignee}}\n优先级：{{priority}}\n\n请查看并确认此分配。",
-    "notification": "你已被分配一个新任务。请查看详细信息并确认接受。"
-  },
-  "update": {
-    "template": "任务更新\n\n任务ID：{{taskId}}\n状态：{{status}}\n进度：{{progress}}\n\n变更：\n{{changes}}",
-    "validation": "验证任务更新。确保状态转换有效且进度报告准确。"
-  },
-  "completion": {
-    "template": "任务完成报告\n\n任务ID：{{taskId}}\n标题：{{title}}\n完成者：{{completedBy}}\n完成日期：{{completionDate}}\n\n摘要：\n{{summary}}",
-    "validation": "在标记任务完成之前验证所有验收标准都已满足。"
-  },
-  "prioritization": {
-    "urgent": "紧急优先级 - 需要立即采取行动。此任务阻塞其他工作或有关键截止日期。",
-    "high": "高优先级 - 重要的任务，应该尽快完成。可能影响项目时间线。",
-    "medium": "中优先级 - 标准任务。应在正常工作过程中完成。",
-    "low": "低优先级 - 可以延迟而不影响项目。最好拥有或积压项目。"
-  },
-  "dependencies": {
-    "blocking": "此任务被以下任务阻塞：{{blockedBy}}。解决依赖关系后再继续。",
-    "blocked": "此任务阻塞以下任务：{{blocks}}。完成此任务以启用依赖工作。",
-    "circular": "警告：在任务{{task1}}和{{task2}}之间检测到循环依赖。解决以防止死锁。"
-  }
+  "create": "创建任务",
+  "update": "更新任务状态",
+  "assign": "分配任务给代理",
+  "complete": "标记任务为完成",
+  "block": "报告阻塞问题"
 }

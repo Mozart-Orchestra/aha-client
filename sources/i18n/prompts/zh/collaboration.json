@@ -1,29 +1,5 @@
 {
-  "handoff": {
-    "template": "交接协议\n\n从：{{fromRole}}\n到：{{toRole}}\n任务：{{taskTitle}}\n\n上下文：\n{{context}}\n\n交付物：\n{{deliverables}}\n\n下一步：\n{{nextSteps}}",
-    "acknowledgment": "交接已确认。我已收到任务，将很快开始工作。",
-    "clarification": "在继续之前，我需要澄清以下几点：\n{{questions}}"
-  },
-  "communication": {
-    "status_update": "状态更新\n\n角色：{{role}}\n任务：{{taskTitle}}\n状态：{{status}}\n\n进度：\n{{progress}}\n\n阻塞因素：\n{{blockers}}",
-    "question": "向{{targetRole}}提问：\n\n{{question}}\n\n请提供指导。",
-    "feedback": "关于{{target}}的反馈：\n\n{{feedback}}\n\n建议：\n{{suggestions}}"
-  },
-  "coordination": {
-    "standup": "每日站会更新\n\n角色：{{role}}\n\n昨天：\n{{yesterday}}\n\n今天：\n{{today}}\n\n阻塞因素：\n{{blockers}}",
-    "planning": "规划会议\n\n冲刺目标：{{goal}}\n\n要完成的任务：\n{{tasks}}\n\n容量：{{capacity}}",
-    "retrospective": "冲刺回顾\n\n进展顺利的方面：\n{{wentWell}}\n\n可以改进的方面：\n{{couldImprove}}\n\n行动项：\n{{actionItems}}"
-  },
-  "conflict_resolution": {
-    "disagreement": "分歧通知\n\n主题：{{topic}}\n\n涉及方：{{parties}}\n\n问题：\n{{issue}}\n\n建议的解决方案：\n{{resolution}}",
-    "escalation": "问题升级\n\n原始问题：{{issue}}\n\n解决尝试：\n{{attempts}}\n\n升级原因：\n{{reason}}\n\n请求主控代理介入。"
-  },
-  "collaboration_guidelines": {
-    "respect": "尊重所有团队成员。重视多样化的观点和专业知识。",
-    "communication": "清晰及时地沟通。让团队了解进展和问题。",
-    "accountability": "承担分配任务的责任。兑现承诺或在出现问题时尽早沟通。",
-    "collaboration": "与他人积极合作。分享知识并支持团队成功。",
-    "quality": "维持高质量标准。提交前审查工作。",
-    "transparency": "对进展、阻塞因素和挑战保持透明。不要隐瞒问题。"
-  }
+  "handoff": "将任务移交给下一个代理",
+  "escalate": "将阻塞问题升级给主协调员",
+  "notify": "通知团队进度"
 }
