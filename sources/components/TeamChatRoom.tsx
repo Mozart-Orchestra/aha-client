@@ -42,22 +42,27 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row-reverse',
     },
     avatarContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: theme.colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
         borderColor: theme.colors.divider,
         marginRight: 8,
-        marginBottom: 4, // Align with bubble bottom
+        marginBottom: 4,
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowRadius: 2,
+        elevation: 1,
     },
     myAvatarContainer: {
         marginRight: 0,
         marginLeft: 8,
-        backgroundColor: theme.colors.button.primary.background,
-        borderColor: theme.colors.button.primary.background,
+        backgroundColor: theme.colors.primary,
+        borderColor: theme.colors.primary,
     },
     avatarText: {
         fontSize: 14,
@@ -75,20 +80,25 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: theme.colors.surface,
         borderRadius: 18,
         padding: 12,
+        paddingBottom: 10,
         borderBottomLeftRadius: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     myMessageBubble: {
-        backgroundColor: theme.colors.button.primary.background,
+        backgroundColor: theme.colors.primary,
         borderRadius: 18,
+        padding: 12,
+        paddingBottom: 10,
         borderBottomRightRadius: 4,
-        borderBottomLeftRadius: 18, // Reset
-        shadowColor: theme.colors.button.primary.background,
-        shadowOpacity: 0.2,
+        borderBottomLeftRadius: 18,
+        shadowColor: theme.colors.primary,
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 3,
     },
     senderName: {
         fontSize: 11,
@@ -152,45 +162,61 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderTopWidth: 1,
         borderTopColor: theme.colors.divider,
         paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingVertical: 12,
         flexDirection: 'row',
         alignItems: 'flex-end',
         gap: 10,
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
     inputWrapper: {
         flex: 1,
         backgroundColor: theme.colors.groupped.background,
         borderRadius: 24,
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 10,
         maxHeight: 120,
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: 'transparent',
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     input: {
         fontSize: 15,
         color: theme.colors.text,
         minHeight: 24,
-        paddingTop: 0, // Fix alignment on Android
+        paddingTop: 0,
         paddingBottom: 0,
     } as any,
     sendButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: theme.colors.button.primary.background,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: theme.colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 2, // Align with input bottom
+        marginBottom: 2,
+        shadowColor: theme.colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 3,
     },
     sendButtonDisabled: {
-        opacity: 0.5,
+        opacity: 0.4,
         backgroundColor: theme.colors.groupped.background,
+        shadowOpacity: 0,
     },
     attachButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 2,
@@ -443,6 +469,10 @@ export default function TeamChatRoom({
     const scrollViewRef = React.useRef<ScrollView>(null);
     const router = useRouter();
 
+    // 🆕 滚动控制状态
+    const [isNearBottom, setIsNearBottom] = React.useState(true);
+    const [showScrollButton, setShowScrollButton] = React.useState(false);
+
     // 🆕 使用外部 messages（如果提供），否则使用内部状态
     const [internalMessages, setInternalMessages] = React.useState<TeamMessage[]>([]);
     const messages = externalMessages ?? internalMessages;
@@ -477,6 +507,27 @@ export default function TeamChatRoom({
     const [isSending, setIsSending] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(true);
     const [showStatus, setShowStatus] = React.useState(false);
+
+    // 🆕 滚动处理函数
+    const handleScrollToTop = React.useCallback(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, []);
+
+    const handleScrollToBottom = React.useCallback(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, []);
+
+    const handleScroll = React.useCallback((event: any) => {
+        const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+        const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+
+        // 判断是否接近底部（100像素以内）
+        const nearBottom = distanceFromBottom < 100;
+        setIsNearBottom(nearBottom);
+
+        // 如果不在底部，显示滚动按钮
+        setShowScrollButton(!nearBottom);
+    }, []);
 
     const formatRelativeTime = React.useCallback((timestamp?: number) => {
         if (!timestamp) return 'No activity';
@@ -962,6 +1013,8 @@ export default function TeamChatRoom({
                     styles.messageListContent,
                     uniqueMessages.length === 0 && { flex: 1 }
                 ]}
+                onScroll={handleScroll}
+                scrollEventThrottle={100}
             >
                 {uniqueMessages.length === 0 ? (
                     <View style={styles.emptyState}>
@@ -993,6 +1046,59 @@ export default function TeamChatRoom({
                     })
                 )}
             </ScrollView>
+
+            {/* 🆕 滚动控制按钮 */}
+            {showScrollButton && (
+                <Pressable
+                    onPress={handleScrollToBottom}
+                    style={{
+                        position: 'absolute',
+                        bottom: 90,
+                        right: 16,
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: theme.colors.button.primary.background,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: theme.colors.shadow.color,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: theme.colors.shadow.opacity,
+                        shadowRadius: 4,
+                        elevation: 3,
+                        zIndex: 100,
+                    }}
+                >
+                    <Ionicons name="chevron-down" size={24} color="#FFF" />
+                </Pressable>
+            )}
+
+            {uniqueMessages.length > 0 && (
+                <Pressable
+                    onPress={handleScrollToTop}
+                    style={{
+                        position: 'absolute',
+                        bottom: 90,
+                        left: 16,
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: theme.colors.surface,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: theme.colors.divider,
+                        shadowColor: theme.colors.shadow.color,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: theme.colors.shadow.opacity,
+                        shadowRadius: 4,
+                        elevation: 3,
+                        zIndex: 100,
+                    }}
+                >
+                    <Ionicons name="chevron-up" size={24} color={theme.colors.textSecondary} />
+                </Pressable>
+            )}
 
             <View style={styles.inputContainer}>
                 <Pressable style={styles.attachButton}>

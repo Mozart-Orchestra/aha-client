@@ -47,7 +47,11 @@ export const ChatHeaderView: React.FC<ChatHeaderViewProps> = ({
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.header.background }]}>
             <View style={styles.contentWrapper}>
                 <View style={[styles.content, { height: headerHeight }]}>
-                <Pressable onPress={handleBackPress} style={styles.backButton} hitSlop={15}>
+                <Pressable
+                    onPress={handleBackPress}
+                    style={styles.backButton}
+                    hitSlop={15}
+                >
                     <Ionicons
                         name={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
                         size={Platform.select({ ios: 28, default: 24 })}
