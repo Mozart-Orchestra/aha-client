@@ -8,6 +8,7 @@ import { Typography } from '@/constants/Typography';
 import { useHeaderHeight } from '@/utils/responsive';
 import { layout } from '@/components/layout';
 import { useUnistyles } from 'react-native-unistyles';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface ChatHeaderViewProps {
     title: string;
@@ -44,17 +45,22 @@ export const ChatHeaderView: React.FC<ChatHeaderViewProps> = ({
     };
 
     return (
-        <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.header.background }]}>
+        <LinearGradient
+            colors={[theme.colors.gradientStart || theme.colors.primary, theme.colors.gradientEnd || theme.colors.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.container, { paddingTop: insets.top }]}
+        >
             <View style={styles.contentWrapper}>
                 <View style={[styles.content, { height: headerHeight }]}>
                 <Pressable onPress={handleBackPress} style={styles.backButton} hitSlop={15}>
                     <Ionicons
                         name={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
                         size={Platform.select({ ios: 28, default: 24 })}
-                        color={theme.colors.header.tint}
+                        color="#FFF"
                     />
                 </Pressable>
-                
+
                 <View style={styles.titleContainer}>
                     <Text
                         numberOfLines={1}
@@ -62,8 +68,13 @@ export const ChatHeaderView: React.FC<ChatHeaderViewProps> = ({
                         style={[
                             styles.title,
                             {
-                                color: theme.colors.header.tint,
-                                ...Typography.default('semiBold')
+                                color: '#FFF',
+                                ...Typography.default('semiBold'),
+                                shadowColor: 'rgba(0,0,0,0.2)',
+                                shadowOffset: { width: 0, height: 1 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 2,
+                                elevation: 2,
                             }
                         ]}
                     >
@@ -76,8 +87,8 @@ export const ChatHeaderView: React.FC<ChatHeaderViewProps> = ({
                             style={[
                                 styles.subtitle,
                                 {
-                                    color: theme.colors.header.tint,
-                                    opacity: 0.7,
+                                    color: '#FFF',
+                                    opacity: 0.9,
                                     ...Typography.default()
                                 }
                             ]}
@@ -86,24 +97,32 @@ export const ChatHeaderView: React.FC<ChatHeaderViewProps> = ({
                         </Text>
                     )}
                 </View>
-                
+
                 {avatarId && onAvatarPress && (
                     <Pressable
                         onPress={onAvatarPress}
                         hitSlop={15}
                         style={styles.avatarButton}
                     >
-                        <Avatar
-                            id={avatarId}
-                            size={32}
-                            monochrome={!isConnected}
-                            flavor={flavor}
-                        />
+                        <View style={{
+                            shadowColor: 'rgba(0,0,0,0.3)',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 4,
+                            elevation: 3,
+                        }}>
+                            <Avatar
+                                id={avatarId}
+                                size={32}
+                                monochrome={!isConnected}
+                                flavor={flavor}
+                            />
+                        </View>
                     </Pressable>
                 )}
                 </View>
             </View>
-        </View>
+        </LinearGradient>
     );
 };
 

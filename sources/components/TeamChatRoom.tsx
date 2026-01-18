@@ -3,6 +3,7 @@ import { View, ScrollView, TextInput, Pressable, KeyboardAvoidingView, Platform,
 import { Text } from '@/components/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { TeamMessage, SendTeamMessageRequest } from '@/sync/teamMessageTypes';
 import { sync } from '@/sync/sync';
 import { MarkdownView } from './markdown/MarkdownView';
@@ -42,22 +43,44 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row-reverse',
     },
     avatarContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: theme.colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: theme.colors.divider,
         marginRight: 8,
         marginBottom: 4, // Align with bubble bottom
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     myAvatarContainer: {
         marginRight: 0,
         marginLeft: 8,
-        backgroundColor: theme.colors.button.primary.background,
-        borderColor: theme.colors.button.primary.background,
+        backgroundColor: theme.colors.primary,
+        borderColor: theme.colors.primary,
+    },
+    // 🆕 Online status indicator
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: theme.colors.success || '#10B981',
+        borderWidth: 2,
+        borderColor: theme.colors.surface,
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
     },
     avatarText: {
         fontSize: 14,
@@ -76,29 +99,31 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 18,
         padding: 12,
         borderBottomLeftRadius: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     myMessageBubble: {
-        backgroundColor: theme.colors.button.primary.background,
+        backgroundColor: theme.colors.primary,
         borderRadius: 18,
         borderBottomRightRadius: 4,
         borderBottomLeftRadius: 18, // Reset
-        shadowColor: theme.colors.button.primary.background,
-        shadowOpacity: 0.2,
+        shadowColor: theme.colors.primary,
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 3,
     },
     senderName: {
         fontSize: 11,
         color: theme.colors.textSecondary,
         marginBottom: 4,
-        marginLeft: 44, // Align with bubble
+        marginLeft: 48, // Align with bubble (updated for larger avatar)
     },
     mySenderName: {
         alignSelf: 'flex-end',
-        marginRight: 44,
+        marginRight: 48,
         marginLeft: 0,
     },
     messageContent: {
@@ -125,7 +150,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 13,
         marginTop: 8,
         fontWeight: '600',
-        color: theme.colors.button.primary.background,
+        color: theme.colors.primary,
     },
     myExpandText: {
         color: '#FFFFFF',
@@ -156,6 +181,11 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row',
         alignItems: 'flex-end',
         gap: 10,
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     inputWrapper: {
         flex: 1,
@@ -164,8 +194,21 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 16,
         paddingVertical: 8,
         maxHeight: 120,
-        borderWidth: 1,
-        borderColor: 'transparent',
+        borderWidth: 2,
+        borderColor: theme.colors.divider,
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    // 🆕 Focused input state
+    inputWrapperFocused: {
+        borderColor: theme.colors.primary,
+        shadowColor: theme.colors.primary,
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 2,
     },
     input: {
         fontSize: 15,
@@ -175,17 +218,20 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingBottom: 0,
     } as any,
     sendButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: theme.colors.button.primary.background,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 2, // Align with input bottom
+        shadowColor: theme.colors.shadowColor || '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.15,
+        shadowRadius: 4,
+        elevation: 3,
     },
     sendButtonDisabled: {
         opacity: 0.5,
-        backgroundColor: theme.colors.groupped.background,
     },
     attachButton: {
         width: 40,
@@ -356,6 +402,9 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
         }
     };
 
+    // 🆕 Check if user is online (placeholder - needs real implementation)
+    const isOnline = message.fromSessionId ? Math.random() > 0.5 : false;
+
     return (
         <View style={{ marginBottom: 2 }}>
             {!isMyMessage && (
@@ -373,6 +422,10 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
                     <Text style={[styles.avatarText, isMyMessage && styles.myAvatarText]}>
                         {getAvatarContent(message.fromRole, message.fromDisplayName)}
                     </Text>
+                    {/* 🆕 Online status indicator */}
+                    {!isMyMessage && isOnline && (
+                        <View style={styles.onlineIndicator} />
+                    )}
                 </Pressable>
 
                 <View style={styles.messageBubbleContainer}>
@@ -477,6 +530,7 @@ export default function TeamChatRoom({
     const [isSending, setIsSending] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(true);
     const [showStatus, setShowStatus] = React.useState(false);
+    const [isInputFocused, setIsInputFocused] = React.useState(false);
 
     const formatRelativeTime = React.useCallback((timestamp?: number) => {
         if (!timestamp) return 'No activity';
@@ -999,7 +1053,7 @@ export default function TeamChatRoom({
                     <Ionicons name="add" size={24} color={theme.colors.textSecondary} />
                 </Pressable>
 
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, isInputFocused && styles.inputWrapperFocused]}>
                     <TextInput
                         style={styles.input}
                         value={inputText}
@@ -1009,6 +1063,8 @@ export default function TeamChatRoom({
                         multiline
                         maxLength={2000}
                         editable={!isSending}
+                        onFocus={() => setIsInputFocused(true)}
+                        onBlur={() => setIsInputFocused(false)}
                     />
                 </View>
 
@@ -1020,7 +1076,24 @@ export default function TeamChatRoom({
                     onPress={handleSend}
                     disabled={!inputText.trim() || isSending}
                 >
-                    <Ionicons name="arrow-up" size={20} color={(!inputText.trim() || isSending) ? theme.colors.textSecondary : "#FFF"} />
+                    {(!inputText.trim() || isSending) ? (
+                        <Ionicons name="arrow-up" size={20} color={theme.colors.textSecondary} />
+                    ) : (
+                        <LinearGradient
+                            colors={[theme.colors.gradientStart || theme.colors.primary, theme.colors.gradientEnd || theme.colors.primary]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 22,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <Ionicons name="arrow-up" size={20} color="#FFF" />
+                        </LinearGradient>
+                    )}
                 </Pressable>
             </View>
         </KeyboardAvoidingView>

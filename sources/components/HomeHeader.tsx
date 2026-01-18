@@ -13,36 +13,43 @@ import { t } from '@/text';
 
 const stylesheet = StyleSheet.create((theme, runtime) => ({
     headerButton: {
-        // marginHorizontal: 4,
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
+        borderRadius: 18,
+        backgroundColor: theme.colors.surfaceVariant || 'rgba(0, 0, 0, 0.05)',
+        shadowColor: theme.colors.shadowColor || '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     iconButton: {
-        color: theme.colors.header.tint,
+        color: theme.colors.primary,
     },
     logoContainer: {
-        // marginHorizontal: 4,
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        tintColor: theme.colors.header.tint,
+        borderRadius: 18,
+        backgroundColor: theme.colors.surfaceVariant || 'rgba(0, 0, 0, 0.05)',
     },
     titleContainer: {
         flex: 1,
         alignItems: 'center',
     },
     titleText: {
-        fontSize: 17,
-        color: theme.colors.header.tint,
-        fontWeight: '600',
+        fontSize: 18,
+        color: theme.colors.onSurface,
+        fontWeight: '700',
         ...Typography.default('semiBold'),
+        letterSpacing: 0.2,
     },
     subtitleText: {
         fontSize: 12,
-        color: theme.colors.textSecondary,
+        color: theme.colors.onSurfaceVariant,
         marginTop: -2,
     },
     statusContainer: {
@@ -54,26 +61,27 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         marginRight: 4,
     },
     statusText: {
-        fontSize: 12,
-        fontWeight: '500',
+        fontSize: 11,
+        fontWeight: '600',
         lineHeight: 16,
         ...Typography.default(),
+        opacity: 0.9,
     },
     // Status colors
     statusConnected: {
-        color: theme.colors.status.connected,
+        color: theme.colors.success || '#10B981',
     },
     statusConnecting: {
-        color: theme.colors.status.connecting,
+        color: theme.colors.warning || '#F59E0B',
     },
     statusDisconnected: {
-        color: theme.colors.status.disconnected,
+        color: theme.colors.onSurfaceVariant || '#78716C',
     },
     statusError: {
-        color: theme.colors.status.error,
+        color: theme.colors.error || '#DC2626',
     },
     statusDefault: {
-        color: theme.colors.status.default,
+        color: theme.colors.onSurfaceVariant || '#A8A29E',
     },
     centeredTitle: {
         textAlign: Platform.OS === 'ios' ? 'center' : 'left',
@@ -123,9 +131,16 @@ function HeaderRight() {
         <Pressable
             onPress={() => router.push('/new')}
             hitSlop={15}
-            style={styles.headerButton}
+            style={(p) => [
+                styles.headerButton,
+                {
+                    opacity: p.pressed ? 0.7 : 1,
+                    transform: [{ scale: p.pressed ? 0.95 : 1 }],
+                    backgroundColor: theme.colors.primary,
+                }
+            ]}
         >
-            <Ionicons name="add-outline" size={28} color={theme.colors.header.tint} />
+            <Ionicons name="add-outline" size={24} color={theme.colors.onPrimary} />
         </Pressable>
     );
 }
@@ -135,14 +150,19 @@ function HeaderRightNotAuth() {
     const { theme } = useUnistyles();
     const styles = stylesheet;
 
-
     return (
         <Pressable
             onPress={() => router.push('/server')}
             hitSlop={15}
-            style={styles.headerButton}
+            style={(p) => [
+                styles.headerButton,
+                {
+                    opacity: p.pressed ? 0.7 : 1,
+                    transform: [{ scale: p.pressed ? 0.95 : 1 }],
+                }
+            ]}
         >
-            <Ionicons name="server-outline" size={24} color={theme.colors.header.tint} />
+            <Ionicons name="server-outline" size={20} color={theme.colors.primary} />
         </Pressable>
     );
 }
