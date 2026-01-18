@@ -390,7 +390,8 @@ export async function updateTodoTitle(
  */
 export async function toggleTodo(
     credentials: AuthCredentials,
-    id: string
+    id: string,
+    onUpdateTask?: (taskId: string, updates: Partial<KanbanTask>) => Promise<void>  // 🆕 Optional callback for Kanban sync
 ): Promise<void> {
     const currentState = storage.getState();
     const { todos, undoneOrder, doneOrder, versions } = currentState.todoState || {
@@ -407,11 +408,12 @@ export async function toggleTodo(
     }
 
     const now = Date.now();
+    const newDoneStatus = !todo.done;
     const updatedTodo: TodoItem = {
         ...todo,
-        done: !todo.done,
+        done: newDoneStatus,
         updatedAt: now,
-        completedAt: !todo.done ? now : undefined  // Set completedAt when marking as done
+        completedAt: newDoneStatus ? now : undefined  // Set completedAt when marking as done
     };
 
     // Calculate new orders optimistically
@@ -435,6 +437,13 @@ export async function toggleTodo(
         doneOrder: optimisticDoneOrder,
         versions
     });
+
+    // 🆕 Sync to Kanban if linked (fire and forget, don't block Todo toggle)
+    if (todo.kanbanTaskId && onUpdateTask) {
+        syncTodoStatusToKanban(id, newDoneStatus, onUpdateTask).catch(err => {
+            console.error('Failed to sync Todo status to Kanban:', err);
+        });
+    }
 
     // Sync to server inside lock
     await todoLock.inLock(async () => {
@@ -887,3 +896,300 @@ export async function reorderTodos(
         }
     });
 }
+
+/**
+ * 🆕 Convert Todo to Kanban Task
+ * Creates a Kanban task from a Todo item
+ */
+export async function convertTodoToKanban(
+    credentials: AuthCredentials,
+    todoId: string,
+    teamId: string,
+    onCreateTask: (task: Partial<KanbanTask>) => Promise<KanbanTask>
+): Promise<KanbanTask | null> {
+    const currentState = storage.getState();
+    const { todos } = currentState.todoState || {
+        todos: {},
+        undoneOrder: [],
+        doneOrder: [],
+        versions: {}
+    };
+
+    const todo = todos[todoId];
+    if (!todo) {
+        console.error(`Todo ${todoId} not found`);
+        return null;
+    }
+
+    // Don't convert if already linked to a Kanban task
+    if (todo.kanbanTaskId) {
+        console.log(`Todo ${todoId} already linked to Kanban task ${todo.kanbanTaskId}`);
+        return null;
+    }
+
+    try {
+        // Create Kanban task from Todo
+        const taskData: Partial<KanbanTask> = {
+            title: todo.title,
+            description: `Converted from Todo item`,
+            status: 'todo',
+            priority: todo.priority || 'medium',
+            tags: todo.tags,
+            dueDate: todo.dueDate,
+            todoId: todoId,  // Link back to Todo
+            reporterId: 'user',
+            createdAt: todo.createdAt,
+            updatedAt: Date.now(),
+            approvalStatus: 'approved',  // User-created todos are auto-approved
+            source: 'todo'  // Mark as coming from Todo
+        };
+
+        // Create the task via callback
+        const kanbanTask = await onCreateTask(taskData);
+
+        // Update Todo with Kanban task link
+        const updatedTodo: TodoItem = {
+            ...todo,
+            kanbanTaskId: kanbanTask.id,
+            teamId: teamId,
+            updatedAt: Date.now()
+        };
+
+        // Apply optimistic update
+        storage.getState().applyTodos({
+            todos: { ...todos, [todoId]: updatedTodo },
+            undoneOrder: currentState.todoState?.undoneOrder || [],
+            doneOrder: currentState.todoState?.doneOrder || [],
+            versions: currentState.todoState?.versions || {}
+        });
+
+        // Sync to server
+        await todoLock.inLock(async () => {
+            try {
+                const todoKey = getTodoKey(todoId);
+                const todoResponse = await kvGet(credentials, todoKey);
+
+                const encrypted = await encryptTodoData(updatedTodo);
+                const newVersion = await kvSet(
+                    credentials,
+                    todoKey,
+                    encrypted,
+                    todoResponse?.version || -1
+                );
+
+                // Update version
+                const newVersions = { ...(currentState.todoState?.versions || {}) };
+                newVersions[todoKey] = newVersion;
+
+                storage.getState().applyTodos({
+                    todos: { ...todos, [todoId]: updatedTodo },
+                    undoneOrder: currentState.todoState?.undoneOrder || [],
+                    doneOrder: currentState.todoState?.doneOrder || [],
+                    versions: newVersions
+                });
+            } catch (error) {
+                console.error('Failed to sync Todo Kanban link:', error);
+                // Keep optimistic update even on error
+            }
+        });
+
+        return kanbanTask;
+    } catch (error) {
+        console.error('Failed to convert Todo to Kanban:', error);
+        return null;
+    }
+}
+
+/**
+ * 🆕 Sync Todo done status to Kanban
+ * Called when Todo is marked as done/undone
+ */
+export async function syncTodoStatusToKanban(
+    todoId: string,
+    done: boolean,
+    onUpdateTask: (taskId: string, updates: Partial<KanbanTask>) => Promise<void>
+): Promise<void> {
+    const currentState = storage.getState();
+    const { todos } = currentState.todoState || {
+        todos: {}
+    };
+
+    const todo = todos[todoId];
+    if (!todo?.kanbanTaskId) {
+        return;  // Not linked to Kanban, nothing to sync
+    }
+
+    try {
+        // Update Kanban task status
+        await onUpdateTask(todo.kanbanTaskId, {
+            status: done ? 'done' : 'todo'
+        });
+    } catch (error) {
+        console.error('Failed to sync Todo status to Kanban:', error);
+    }
+}
+
+/**
+ * 🆕 Sync Kanban task completion back to Todo
+ * Called when Kanban task is marked as done
+ */
+export async function syncKanbanStatusToTodo(
+    credentials: AuthCredentials,
+    taskId: string,
+    status: string
+): Promise<void> {
+    // Find Todo with this kanbanTaskId
+    const currentState = storage.getState();
+    const { todos, undoneOrder, doneOrder, versions } = currentState.todoState || {
+        todos: {},
+        undoneOrder: [],
+        doneOrder: [],
+        versions: {}
+    };
+
+    // Find the todo
+    let todoId: string | null = null;
+    for (const [id, todo] of Object.entries(todos)) {
+        if (todo.kanbanTaskId === taskId) {
+            todoId = id;
+            break;
+        }
+    }
+
+    if (!todoId) {
+        return;  // No linked Todo found
+    }
+
+    const todo = todos[todoId];
+    const isDone = status === 'done';
+
+    // Only update if status actually changed
+    if (todo.done === isDone) {
+        return;
+    }
+
+    const now = Date.now();
+    const updatedTodo: TodoItem = {
+        ...todo,
+        done: isDone,
+        updatedAt: now,
+        completedAt: isDone ? now : undefined
+    };
+
+    // Calculate new orders
+    let optimisticUndoneOrder = [...undoneOrder];
+    let optimisticDoneOrder = [...doneOrder];
+
+    if (isDone) {
+        optimisticUndoneOrder = optimisticUndoneOrder.filter(id => id !== todoId);
+        optimisticDoneOrder = [todoId, ...optimisticDoneOrder.filter(id => id !== todoId)];
+    } else {
+        optimisticDoneOrder = optimisticDoneOrder.filter(id => id !== todoId);
+        optimisticUndoneOrder = [...optimisticUndoneOrder.filter(id => id !== todoId), todoId];
+    }
+
+    // Apply optimistic update
+    storage.getState().applyTodos({
+        todos: { ...todos, [todoId]: updatedTodo },
+        undoneOrder: optimisticUndoneOrder,
+        doneOrder: optimisticDoneOrder,
+        versions
+    });
+
+    // Sync to server
+    await todoLock.inLock(async () => {
+        try {
+            const todoKey = getTodoKey(todoId);
+            const [todoResponse, indexResponse] = await Promise.all([
+                kvGet(credentials, todoKey),
+                kvGet(credentials, TODO_INDEX_KEY)
+            ]);
+
+            // Prepare todo
+            let serverTodo = updatedTodo;
+            let todoVersion = -1;
+
+            if (todoResponse) {
+                todoVersion = todoResponse.version;
+                try {
+                    const existingTodo = await decryptTodoData(todoResponse.value) as TodoItem;
+                    serverTodo = {
+                        ...existingTodo,
+                        done: isDone,
+                        updatedAt: now,
+                        completedAt: isDone ? now : undefined
+                    };
+                } catch (err) {
+                    console.error('Failed to decrypt server todo', err);
+                }
+            }
+
+            // Prepare index
+            let currentIndex: TodoIndex = { undoneOrder: [], completedOrder: [] };
+            let indexVersion = -1;
+
+            if (indexResponse) {
+                indexVersion = indexResponse.version;
+                try {
+                    currentIndex = await decryptTodoData(indexResponse.value) as TodoIndex;
+                } catch (err) {
+                    console.error('Failed to decrypt server index', err);
+                }
+            }
+
+            // Update index
+            let newUndoneOrder = (currentIndex.undoneOrder || []).filter((id: string) => id !== todoId);
+            let newCompletedOrder = (currentIndex.completedOrder || []).filter((id: string) => id !== todoId);
+
+            if (isDone) {
+                newCompletedOrder = [todoId, ...newCompletedOrder];
+            } else {
+                newUndoneOrder = [...newUndoneOrder, todoId];
+            }
+
+            const mergedIndex: TodoIndex = {
+                undoneOrder: newUndoneOrder,
+                completedOrder: newCompletedOrder
+            };
+
+            // Write both
+            const mutations: KvMutation[] = [
+                {
+                    key: todoKey,
+                    value: await encryptTodoData(serverTodo),
+                    version: todoVersion
+                },
+                {
+                    key: TODO_INDEX_KEY,
+                    value: await encryptTodoData(mergedIndex),
+                    version: indexVersion
+                }
+            ];
+
+            const result = await kvMutate(credentials, mutations);
+
+            if (result.success) {
+                const newVersions = { ...versions };
+                for (const res of result.results) {
+                    newVersions[res.key] = res.version;
+                }
+
+                storage.getState().applyTodos({
+                    todos: { ...todos, [todoId]: serverTodo },
+                    undoneOrder: mergedIndex.undoneOrder,
+                    doneOrder: mergedIndex.completedOrder,
+                    versions: newVersions
+                });
+            } else {
+                console.error('Kanban status sync failed, refetching...');
+                await initializeTodoSync(credentials);
+            }
+        } catch (error) {
+            console.error('Failed to sync Kanban status to Todo:', error);
+            // Keep optimistic update even on error
+        }
+    });
+}
+
+// Import KanbanTask type
+type KanbanTask = import('../../sync/kanbanTypes').KanbanTask;

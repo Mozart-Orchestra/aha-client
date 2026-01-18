@@ -250,6 +250,6 @@ const roles = getLocalizedTeamRoles()
 ## 更多帮助
 
 如有问题，请查看：
-- `/Users/swmt/happy/kanban/sources/text/_default.ts` - 英文翻译
-- `/Users/swmt/happy/kanban/sources/text/translations/zh-Hans.ts` - 中文翻译
-- `/Users/swmt/happy/kanban/sources/team-config/index.cjs` - 原始角色定义
+- `sources/text/_default.ts` - 英文翻译
+- `sources/text/translations/zh-Hans.ts` - 中文翻译
+- `sources/team-config/index.cjs` - 原始角色定义
