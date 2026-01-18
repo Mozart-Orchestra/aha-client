@@ -22,6 +22,8 @@ import { TaskDetailModal } from '@/components/TaskDetailModal';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
+import { syncKanbanStatusToTodo } from '@/-zen/model/ops';
+import { getCurrentAuth } from '@/auth/AuthContext';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -495,6 +497,16 @@ export default function TeamDashboardScreen() {
                 { status: nextStatus },
                 myDisplayName || '用户'
             );
+
+            // 🆕 Phase 2: 同步状态到 Todo（如果有链接）
+            if (task.todoId) {
+                const auth = getCurrentAuth();
+                if (auth?.credentials) {
+                    syncKanbanStatusToTodo(auth.credentials, task.id, nextStatus).catch(err => {
+                        console.error('Failed to sync Kanban status to Todo:', err);
+                    });
+                }
+            }
         } catch (error) {
             console.error('Failed to sync task update:', error);
             // 即使同步失败，任务状态更新仍然会进行（在 updateTaskWithSync 中）
