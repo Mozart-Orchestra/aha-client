@@ -534,6 +534,21 @@ export default function TeamDashboardScreen() {
         return normalizeStatus(task.status) === columnId;
     }, [normalizeStatus]);
 
+    // 🆕 计算每个任务的linked sessions
+    const taskSessionLinks = React.useMemo(() => {
+        const links = new Map<string, string[]>();
+
+        // 从artifact的sessions获取
+        if (artifact?.sessions) {
+            artifact.sessions.forEach(sessionId => {
+                // TODO: 从taskSessionLink模型获取实际链接
+                // 暂时使用空的array
+            });
+        }
+
+        return links;
+    }, [artifact?.sessions, kanbanData.tasks]);
+
     const renderKanban = () => (
         <ScrollView horizontal style={{ flex: 1 }}>
             <View style={styles.boardContainer}>
