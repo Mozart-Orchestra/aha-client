@@ -1,0 +1,24 @@
+{
+  "resources": {
+    "tasks": {
+      "uri": "tasks://",
+      "description": "Access to all tasks and task management resources"
+    },
+    "memory": {
+      "uri": "memory://",
+      "description": "Long-term memory storage and retrieval system"
+    },
+    "team": {
+      "uri": "team://",
+      "description": "Team configuration and member information"
+    },
+    "sessions": {
+      "uri": "sessions://",
+      "description": "User sessions and conversation history"
+    },
+    "artifacts": {
+      "uri": "artifacts://",
+      "description": "Shared artifacts and project deliverables"
+    }
+  }
+}

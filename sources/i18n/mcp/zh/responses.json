@@ -1,0 +1,12 @@
+{
+  "responses": {
+    "task_created": "任务'{{title}}'已成功创建，ID为：{{taskId}}",
+    "task_updated": "任务{{taskId}}已成功更新",
+    "task_assigned": "任务{{taskId}}已分配给{{assignee}}",
+    "task_completed": "任务{{taskId}}已标记为完成",
+    "message_sent": "消息已发送给{{recipient}}",
+    "memory_saved": "信息已存储在记忆中",
+    "subtask_created": "子任务'{{title}}'已在父任务{{parentTaskId}}下创建",
+    "handoff_successful": "任务{{taskId}}已成功从{{fromRole}}移交给{{toRole}}"
+  }
+}

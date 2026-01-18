@@ -1,0 +1,29 @@
+{
+  "creation": {
+    "template": "Create a new task with the following details:\n\nTitle: {{title}}\nDescription: {{description}}\nPriority: {{priority}}\nAssignee: {{assignee}}\nDue Date: {{dueDate}}\n\nEnsure all requirements are clearly defined.",
+    "validation": "Validate task details before creation. Ensure all required fields are present and properly formatted."
+  },
+  "assignment": {
+    "template": "Task Assignment\n\nTask ID: {{taskId}}\nTitle: {{title}}\nAssigned to: {{assignee}}\nPriority: {{priority}}\n\nPlease review and acknowledge this assignment.",
+    "notification": "You have been assigned a new task. Please review the details and confirm acceptance."
+  },
+  "update": {
+    "template": "Task Update\n\nTask ID: {{taskId}}\nStatus: {{status}}\nProgress: {{progress}}\n\nChanges:\n{{changes}}",
+    "validation": "Validate task updates. Ensure status transitions are valid and progress is accurately reported."
+  },
+  "completion": {
+    "template": "Task Completion Report\n\nTask ID: {{taskId}}\nTitle: {{title}}\nCompleted by: {{completedBy}}\nCompletion Date: {{completionDate}}\n\nSummary:\n{{summary}}",
+    "validation": "Verify that all acceptance criteria are met before marking task as complete."
+  },
+  "prioritization": {
+    "urgent": "Urgent priority - Immediate action required. This task blocks other work or has critical deadline.",
+    "high": "High priority - Important task that should be completed soon. May impact project timeline.",
+    "medium": "Medium priority - Standard task. Should be completed in normal course of work.",
+    "low": "Low priority - Can be deferred without impacting project. Nice-to-have or backlog item."
+  },
+  "dependencies": {
+    "blocking": "This task is blocked by: {{blockedBy}}. Resolve dependencies before proceeding.",
+    "blocked": "This task blocks: {{blocks}}. Complete this task to enable dependent work.",
+    "circular": "Warning: Circular dependency detected between tasks {{task1}} and {{task2}}. Resolve to prevent deadlock."
+  }
+}

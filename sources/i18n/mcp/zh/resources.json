@@ -1,0 +1,24 @@
+{
+  "resources": {
+    "tasks": {
+      "uri": "tasks://",
+      "description": "访问所有任务和任务管理资源"
+    },
+    "memory": {
+      "uri": "memory://",
+      "description": "长期记忆存储和检索系统"
+    },
+    "team": {
+      "uri": "team://",
+      "description": "团队配置和成员信息"
+    },
+    "sessions": {
+      "uri": "sessions://",
+      "description": "用户会话和对话历史"
+    },
+    "artifacts": {
+      "uri": "artifacts://",
+      "description": "共享工件和项目交付物"
+    }
+  }
+}

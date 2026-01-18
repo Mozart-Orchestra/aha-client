@@ -1,0 +1,6 @@
+{
+  "greeting": {
+    "template": "您好!我是{{role}},负责{{responsibility}}。",
+    "variables": ["role", "responsibility"]
+  }
+}

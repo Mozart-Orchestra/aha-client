@@ -1,0 +1,224 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "save": "Save",
+    "search": "Search",
+    "filter": "Filter",
+    "settings": "Settings",
+    "language": "Language",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "retry": "Retry",
+    "refresh": "Refresh"
+  },
+  "nav": {
+    "home": "Home",
+    "tasks": "Tasks",
+    "team": "Team",
+    "artifacts": "Artifacts",
+    "settings": "Settings",
+    "memory": "Memory",
+    "rules": "Rules"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "create": "Create Task",
+    "edit": "Edit Task",
+    "delete": "Delete Task",
+    "status": "Status",
+    "priority": "Priority",
+    "assignee": "Assignee",
+    "description": "Description",
+    "dueDate": "Due Date",
+    "statuses": {
+      "todo": "To Do",
+      "inProgress": "In Progress",
+      "review": "Review",
+      "done": "Done"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "messages": {
+      "createSuccess": "Task created successfully",
+      "updateSuccess": "Task updated successfully",
+      "deleteSuccess": "Task deleted successfully",
+      "deleteConfirm": "Are you sure you want to delete this task?"
+    }
+  },
+  "team": {
+    "title": "Team",
+    "members": "Members",
+    "roles": "Roles",
+    "chat": "Chat",
+    "online": "Online",
+    "offline": "Offline",
+    "sendMessage": "Send a message...",
+    "typing": "typing...",
+    "roles": {
+      "master": "Master",
+      "builder": "Builder",
+      "framer": "Framer",
+      "scribe": "Scribe",
+      "scout": "Scout",
+      "qa": "QA"
+    },
+    "messages": {
+      "teamCreated": "Team created successfully",
+      "memberAdded": "Member added successfully",
+      "memberRemoved": "Member removed successfully"
+    }
+  },
+  "artifacts": {
+    "title": "Artifacts",
+    "create": "Create Artifact",
+    "view": "View Artifact",
+    "edit": "Edit Artifact",
+    "delete": "Delete Artifact",
+    "type": "Type",
+    "content": "Content",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At",
+    "types": {
+      "document": "Document",
+      "image": "Image",
+      "code": "Code",
+      "data": "Data"
+    },
+    "messages": {
+      "createSuccess": "Artifact created successfully",
+      "updateSuccess": "Artifact updated successfully",
+      "deleteSuccess": "Artifact deleted successfully"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "notifications": "Notifications",
+    "privacy": "Privacy",
+    "about": "About",
+    "languages": {
+      "en": "English",
+      "zh-CN": "简体中文",
+      "zh-TW": "繁體中文"
+    },
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "messages": {
+      "settingsSaved": "Settings saved successfully",
+      "languageChanged": "Language changed successfully"
+    }
+  },
+  "memory": {
+    "title": "Memory Library",
+    "create": "Create Memory",
+    "edit": "Edit Memory",
+    "delete": "Delete Memory",
+    "search": "Search Memories",
+    "filter": "Filter Memories",
+    "type": "Type",
+    "category": "Category",
+    "tags": "Tags",
+    "importance": "Importance",
+    "content": "Content",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At",
+    "accessCount": "Access Count",
+    "types": {
+      "fact": "Fact",
+      "preference": "Preference",
+      "decision": "Decision",
+      "knowledge": "Knowledge"
+    },
+    "scopes": {
+      "global": "Global",
+      "team": "Team",
+      "agent": "Agent"
+    },
+    "messages": {
+      "createSuccess": "Memory created successfully",
+      "updateSuccess": "Memory updated successfully",
+      "deleteSuccess": "Memory deleted successfully",
+      "searchPlaceholder": "Search memories by keyword, tag, or category..."
+    }
+  },
+  "rules": {
+    "title": "Global Rules",
+    "create": "Create Rule",
+    "edit": "Edit Rule",
+    "delete": "Delete Rule",
+    "enable": "Enable Rule",
+    "disable": "Disable Rule",
+    "category": "Category",
+    "priority": "Priority",
+    "description": "Description",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "categories": {
+      "communication": "Communication",
+      "behavior": "Behavior",
+      "coding": "Coding",
+      "security": "Security"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "scopes": {
+      "global": "Global",
+      "team": "Team",
+      "agent": "Agent",
+      "session": "Session"
+    },
+    "messages": {
+      "createSuccess": "Rule created successfully",
+      "updateSuccess": "Rule updated successfully",
+      "deleteSuccess": "Rule deleted successfully",
+      "enableSuccess": "Rule enabled successfully",
+      "disableSuccess": "Rule disabled successfully"
+    }
+  },
+  "errors": {
+    "generic": "An error occurred. Please try again.",
+    "network": "Network error. Please check your connection.",
+    "unauthorized": "Unauthorized. Please log in.",
+    "forbidden": "You don't have permission to perform this action.",
+    "notFound": "The requested resource was not found.",
+    "validation": "Please check your input and try again.",
+    "server": "Server error. Please try again later.",
+    "unknown": "An unknown error occurred."
+  },
+  "prompts": {
+    "system": {
+      "master": "You are the Master agent responsible for coordinating team activities and making high-level decisions.",
+      "builder": "You are the Builder agent responsible for implementing code and building features.",
+      "framer": "You are the Framer agent responsible for structuring problems and creating frameworks.",
+      "scribe": "You are the Scribe agent responsible for documentation and knowledge management.",
+      "scout": "You are the Scout agent responsible for exploration and gathering information.",
+      "qa": "You are the QA agent responsible for testing and quality assurance."
+    },
+    "task": {
+      "create": "Create a new task with the following details...",
+      "update": "Update the task with the following changes...",
+      "delete": "Delete the task and confirm the action..."
+    }
+  }
+}

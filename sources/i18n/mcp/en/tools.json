@@ -1,0 +1,163 @@
+{
+  "tools": {
+    "create_task": {
+      "name": "Create Task",
+      "description": "Create a new task in the project management system",
+      "parameters": {
+        "title": {
+          "description": "The title of the task",
+          "required": true
+        },
+        "description": {
+          "description": "Detailed description of the task",
+          "required": false
+        },
+        "priority": {
+          "description": "Task priority level (urgent, high, medium, low)",
+          "required": false
+        },
+        "assignee": {
+          "description": "ID of the agent or user assigned to the task",
+          "required": false
+        }
+      }
+    },
+    "update_task": {
+      "name": "Update Task",
+      "description": "Update an existing task with new information",
+      "parameters": {
+        "taskId": {
+          "description": "ID of the task to update",
+          "required": true
+        },
+        "status": {
+          "description": "New status of the task",
+          "required": false
+        },
+        "progress": {
+          "description": "Progress percentage (0-100)",
+          "required": false
+        }
+      }
+    },
+    "assign_task": {
+      "name": "Assign Task",
+      "description": "Assign a task to a specific agent or team member",
+      "parameters": {
+        "taskId": {
+          "description": "ID of the task to assign",
+          "required": true
+        },
+        "assignee": {
+          "description": "ID of the agent or user to assign the task to",
+          "required": true
+        }
+      }
+    },
+    "get_task": {
+      "name": "Get Task",
+      "description": "Retrieve detailed information about a specific task",
+      "parameters": {
+        "taskId": {
+          "description": "ID of the task to retrieve",
+          "required": true
+        }
+      }
+    },
+    "list_tasks": {
+      "name": "List Tasks",
+      "description": "List all tasks with optional filtering",
+      "parameters": {
+        "status": {
+          "description": "Filter by task status",
+          "required": false
+        },
+        "assignee": {
+          "description": "Filter by assignee ID",
+          "required": false
+        },
+        "priority": {
+          "description": "Filter by priority level",
+          "required": false
+        }
+      }
+    },
+    "send_message": {
+      "name": "Send Message",
+      "description": "Send a message to team members or agents",
+      "parameters": {
+        "recipient": {
+          "description": "ID of the recipient (agent or user)",
+          "required": true
+        },
+        "content": {
+          "description": "Message content",
+          "required": true
+        },
+        "type": {
+          "description": "Message type (chat, notification, task-update)",
+          "required": false
+        }
+      }
+    },
+    "recall_memory": {
+      "name": "Recall Memory",
+      "description": "Search and retrieve information from the long-term memory",
+      "parameters": {
+        "query": {
+          "description": "Search query for memory retrieval",
+          "required": true
+        },
+        "limit": {
+          "description": "Maximum number of results to return",
+          "required": false
+        },
+        "tag": {
+          "description": "Filter by memory tag",
+          "required": false
+        }
+      }
+    },
+    "remember": {
+      "name": "Remember",
+      "description": "Store information in long-term memory",
+      "parameters": {
+        "content": {
+          "description": "Information to store in memory",
+          "required": true
+        },
+        "tags": {
+          "description": "Tags for categorizing the memory",
+          "required": false
+        },
+        "importance": {
+          "description": "Importance level (1-5)",
+          "required": false
+        }
+      }
+    },
+    "get_team_info": {
+      "name": "Get Team Info",
+      "description": "Retrieve information about the current team and member roles",
+      "parameters": {}
+    },
+    "create_subtask": {
+      "name": "Create Subtask",
+      "description": "Create a subtask under an existing parent task",
+      "parameters": {
+        "parentTaskId": {
+          "description": "ID of the parent task",
+          "required": true
+        },
+        "title": {
+          "description": "Title of the subtask",
+          "required": true
+        },
+        "description": {
+          "description": "Detailed description of the subtask",
+          "required": false
+        }
+      }
+    }
+  }
+}

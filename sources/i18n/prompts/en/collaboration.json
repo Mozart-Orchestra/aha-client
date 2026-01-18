@@ -1,0 +1,10 @@
+{
+  "team_sync": {
+    "template": "Team Synchronization Request\n\nTeam: {{teamId}}\nInitiator: {{initiator}}\nPurpose: {{purpose}}\n\nPlease provide updates on:\n1. Current tasks and their status\n2. Blockers or dependencies\n3. Upcoming work\n4. Any assistance needed",
+    "variables": ["teamId", "initiator", "purpose"]
+  },
+  "handoff": {
+    "template": "Task Handoff: {{taskId}}\n\nFrom: {{fromRole}}\nTo: {{toRole}}\n\nContext: {{context}}\n\nRequirements:\n{{requirements}}\n\nPlease confirm receipt and understanding.",
+    "variables": ["taskId", "fromRole", "toRole", "context", "requirements"]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "create_task": {
+    "template": "Create a new task with the following details:\n\nTitle: {{title}}\nDescription: {{description}}\nPriority: {{priority}}\nAssignee: {{assignee}}\nDue Date: {{dueDate}}\n\nEnsure all required fields are filled and the task is properly categorized.",
+    "variables": ["title", "description", "priority", "assignee", "dueDate"]
+  },
+  "update_task": {
+    "template": "Update the task {{taskId}} with the following changes:\n\n{{changes}}\n\nNotify relevant team members about the update.",
+    "variables": ["taskId", "changes"]
+  },
+  "assign_task": {
+    "template": "Assign task {{taskId}} to {{assignee}}.\n\nConsider the assignee's current workload, skills, and availability before making the assignment.",
+    "variables": ["taskId", "assignee"]
+  },
+  "task_completion": {
+    "template": "Mark task {{taskId}} as complete.\n\nVerify that:\n- All acceptance criteria are met\n- Tests are passing\n- Documentation is updated\n- Related tasks are notified",
+    "variables": ["taskId"]
+  },
+  "nested_task": {
+    "template": "Create a subtask under parent task {{parentTaskId}}:\n\n{{subtaskDetails}}\n\nEnsure the subtask is properly linked and dependencies are tracked.",
+    "variables": ["parentTaskId", "subtaskDetails"]
+  }
+}

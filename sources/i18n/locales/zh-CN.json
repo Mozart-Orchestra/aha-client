@@ -1,0 +1,224 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "saving": "保存中...",
+    "error": "错误",
+    "success": "成功",
+    "cancel": "取消",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "save": "保存",
+    "search": "搜索",
+    "filter": "筛选",
+    "settings": "设置",
+    "language": "语言",
+    "close": "关闭",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "submit": "提交",
+    "retry": "重试",
+    "refresh": "刷新"
+  },
+  "nav": {
+    "home": "首页",
+    "tasks": "任务",
+    "team": "团队",
+    "artifacts": "制品",
+    "settings": "设置",
+    "memory": "记忆库",
+    "rules": "规则"
+  },
+  "tasks": {
+    "title": "任务",
+    "create": "创建任务",
+    "edit": "编辑任务",
+    "delete": "删除任务",
+    "status": "状态",
+    "priority": "优先级",
+    "assignee": "负责人",
+    "description": "描述",
+    "dueDate": "截止日期",
+    "statuses": {
+      "todo": "待办",
+      "inProgress": "进行中",
+      "review": "审核中",
+      "done": "已完成"
+    },
+    "priorities": {
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "urgent": "紧急"
+    },
+    "messages": {
+      "createSuccess": "任务创建成功",
+      "updateSuccess": "任务更新成功",
+      "deleteSuccess": "任务删除成功",
+      "deleteConfirm": "确定要删除此任务吗？"
+    }
+  },
+  "team": {
+    "title": "团队",
+    "members": "成员",
+    "roles": "角色",
+    "chat": "聊天",
+    "online": "在线",
+    "offline": "离线",
+    "sendMessage": "发送消息...",
+    "typing": "正在输入...",
+    "roles": {
+      "master": "主管",
+      "builder": "构建者",
+      "framer": "架构师",
+      "scribe": "记录员",
+      "scout": "侦察员",
+      "qa": "质检员"
+    },
+    "messages": {
+      "teamCreated": "团队创建成功",
+      "memberAdded": "成员添加成功",
+      "memberRemoved": "成员移除成功"
+    }
+  },
+  "artifacts": {
+    "title": "制品",
+    "create": "创建制品",
+    "view": "查看制品",
+    "edit": "编辑制品",
+    "delete": "删除制品",
+    "type": "类型",
+    "content": "内容",
+    "createdAt": "创建时间",
+    "updatedAt": "更新时间",
+    "types": {
+      "document": "文档",
+      "image": "图片",
+      "code": "代码",
+      "data": "数据"
+    },
+    "messages": {
+      "createSuccess": "制品创建成功",
+      "updateSuccess": "制品更新成功",
+      "deleteSuccess": "制品删除成功"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "theme": "主题",
+    "notifications": "通知",
+    "privacy": "隐私",
+    "about": "关于",
+    "languages": {
+      "en": "English",
+      "zh-CN": "简体中文",
+      "zh-TW": "繁體中文"
+    },
+    "themes": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    },
+    "messages": {
+      "settingsSaved": "设置保存成功",
+      "languageChanged": "语言切换成功"
+    }
+  },
+  "memory": {
+    "title": "记忆库",
+    "create": "创建记忆",
+    "edit": "编辑记忆",
+    "delete": "删除记忆",
+    "search": "搜索记忆",
+    "filter": "筛选记忆",
+    "type": "类型",
+    "category": "分类",
+    "tags": "标签",
+    "importance": "重要性",
+    "content": "内容",
+    "createdAt": "创建时间",
+    "updatedAt": "更新时间",
+    "accessCount": "访问次数",
+    "types": {
+      "fact": "事实",
+      "preference": "偏好",
+      "decision": "决策",
+      "knowledge": "知识"
+    },
+    "scopes": {
+      "global": "全局",
+      "team": "团队",
+      "agent": "代理"
+    },
+    "messages": {
+      "createSuccess": "记忆创建成功",
+      "updateSuccess": "记忆更新成功",
+      "deleteSuccess": "记忆删除成功",
+      "searchPlaceholder": "通过关键词、标签或分类搜索记忆..."
+    }
+  },
+  "rules": {
+    "title": "全局规则",
+    "create": "创建规则",
+    "edit": "编辑规则",
+    "delete": "删除规则",
+    "enable": "启用规则",
+    "disable": "禁用规则",
+    "category": "分类",
+    "priority": "优先级",
+    "description": "描述",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "categories": {
+      "communication": "沟通",
+      "behavior": "行为",
+      "coding": "编码",
+      "security": "安全"
+    },
+    "priorities": {
+      "low": "低",
+      "medium": "中",
+      "high": "高"
+    },
+    "scopes": {
+      "global": "全局",
+      "team": "团队",
+      "agent": "代理",
+      "session": "会话"
+    },
+    "messages": {
+      "createSuccess": "规则创建成功",
+      "updateSuccess": "规则更新成功",
+      "deleteSuccess": "规则删除成功",
+      "enableSuccess": "规则启用成功",
+      "disableSuccess": "规则禁用成功"
+    }
+  },
+  "errors": {
+    "generic": "发生错误，请重试。",
+    "network": "网络错误，请检查您的连接。",
+    "unauthorized": "未授权，请登录。",
+    "forbidden": "您没有执行此操作的权限。",
+    "notFound": "未找到请求的资源。",
+    "validation": "请检查您的输入并重试。",
+    "server": "服务器错误，请稍后重试。",
+    "unknown": "发生未知错误。"
+  },
+  "prompts": {
+    "system": {
+      "master": "你是主管代理，负责协调团队活动并做出高层决策。",
+      "builder": "你是构建者代理，负责实现代码和构建功能。",
+      "framer": "你是架构师代理，负责结构化问题和创建框架。",
+      "scribe": "你是记录员代理，负责文档和知识管理。",
+      "scout": "你是侦察员代理，负责探索和信息收集。",
+      "qa": "你是质检员代理，负责测试和质量保证。"
+    },
+    "task": {
+      "create": "使用以下详细信息创建新任务...",
+      "update": "使用以下更改更新任务...",
+      "delete": "删除任务并确认操作..."
+    }
+  }
+}
