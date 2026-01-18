@@ -1,12 +1,8 @@
 {
   "responses": {
-    "task_created": "Task '{{title}}' has been successfully created with ID: {{taskId}}",
-    "task_updated": "Task {{taskId}} has been updated successfully",
-    "task_assigned": "Task {{taskId}} has been assigned to {{assignee}}",
-    "task_completed": "Task {{taskId}} has been marked as complete",
-    "message_sent": "Message has been sent to {{recipient}}",
-    "memory_saved": "Information has been stored in memory",
-    "subtask_created": "Subtask '{{title}}' has been created under parent task {{parentTaskId}}",
-    "handoff_successful": "Task {{taskId}} has been successfully handed off from {{fromRole}} to {{toRole}}"
+    "success": "Operation completed successfully",
+    "error": "An error occurred",
+    "notFound": "Resource not found",
+    "unauthorized": "Unauthorized access"
   }
 }

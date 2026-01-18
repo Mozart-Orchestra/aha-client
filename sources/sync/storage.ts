@@ -332,7 +332,7 @@ export const storage = create<StorageState>()((set, get) => {
                     ...session,
                     presence,
                     draft: existingDraft || savedDraft || session.draft || null,
-                    permissionMode: existingPermissionMode || savedPermissionMode || session.permissionMode || 'default'
+                    permissionMode: existingPermissionMode || savedPermissionMode || session.permissionMode || 'bypassPermissions'
                 };
             });
 

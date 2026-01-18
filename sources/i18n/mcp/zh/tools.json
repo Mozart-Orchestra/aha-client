@@ -1,163 +1,20 @@
 {
   "tools": {
     "create_task": {
-      "name": "创建任务",
-      "description": "在项目管理系统中创建新任务",
-      "parameters": {
-        "title": {
-          "description": "任务标题",
-          "required": true
-        },
-        "description": {
-          "description": "任务的详细描述",
-          "required": false
-        },
-        "priority": {
-          "description": "任务优先级（紧急、高、中、低）",
-          "required": false
-        },
-        "assignee": {
-          "description": "分配任务的代理或用户ID",
-          "required": false
-        }
-      }
+      "name": "create_task",
+      "description": "在看板上创建新任务"
     },
     "update_task": {
-      "name": "更新任务",
-      "description": "使用新信息更新现有任务",
-      "parameters": {
-        "taskId": {
-          "description": "要更新的任务ID",
-          "required": true
-        },
-        "status": {
-          "description": "任务的新状态",
-          "required": false
-        },
-        "progress": {
-          "description": "进度百分比（0-100）",
-          "required": false
-        }
-      }
-    },
-    "assign_task": {
-      "name": "分配任务",
-      "description": "将任务分配给特定的代理或团队成员",
-      "parameters": {
-        "taskId": {
-          "description": "要分配的任务ID",
-          "required": true
-        },
-        "assignee": {
-          "description": "要分配任务的代理或用户ID",
-          "required": true
-        }
-      }
-    },
-    "get_task": {
-      "name": "获取任务",
-      "description": "检索特定任务的详细信息",
-      "parameters": {
-        "taskId": {
-          "description": "要检索的任务ID",
-          "required": true
-        }
-      }
+      "name": "update_task",
+      "description": "更新任务状态和详情"
     },
     "list_tasks": {
-      "name": "列出任务",
-      "description": "列出所有任务并支持可选筛选",
-      "parameters": {
-        "status": {
-          "description": "按任务状态筛选",
-          "required": false
-        },
-        "assignee": {
-          "description": "按负责人ID筛选",
-          "required": false
-        },
-        "priority": {
-          "description": "按优先级筛选",
-          "required": false
-        }
-      }
+      "name": "list_tasks",
+      "description": "列出来看板上的所有任务"
     },
-    "send_message": {
-      "name": "发送消息",
-      "description": "向团队成员或代理发送消息",
-      "parameters": {
-        "recipient": {
-          "description": "接收者的ID（代理或用户）",
-          "required": true
-        },
-        "content": {
-          "description": "消息内容",
-          "required": true
-        },
-        "type": {
-          "description": "消息类型（聊天、通知、任务更新）",
-          "required": false
-        }
-      }
-    },
-    "recall_memory": {
-      "name": "回忆记忆",
-      "description": "从长期记忆中搜索和检索信息",
-      "parameters": {
-        "query": {
-          "description": "记忆检索的搜索查询",
-          "required": true
-        },
-        "limit": {
-          "description": "要返回的最大结果数",
-          "required": false
-        },
-        "tag": {
-          "description": "按记忆标签筛选",
-          "required": false
-        }
-      }
-    },
-    "remember": {
-      "name": "记住",
-      "description": "将信息存储在长期记忆中",
-      "parameters": {
-        "content": {
-          "description": "要存储在记忆中的信息",
-          "required": true
-        },
-        "tags": {
-          "description": "用于分类记忆的标签",
-          "required": false
-        },
-        "importance": {
-          "description": "重要性级别（1-5）",
-          "required": false
-        }
-      }
-    },
-    "get_team_info": {
-      "name": "获取团队信息",
-      "description": "检索当前团队和成员角色的信息",
-      "parameters": {}
-    },
-    "create_subtask": {
-      "name": "创建子任务",
-      "description": "在现有父任务下创建子任务",
-      "parameters": {
-        "parentTaskId": {
-          "description": "父任务的ID",
-          "required": true
-        },
-        "title": {
-          "description": "子任务标题",
-          "required": true
-        },
-        "description": {
-          "description": "子任务的详细描述",
-          "required": false
-        }
-      }
+    "send_team_message": {
+      "name": "send_team_message",
+      "description": "向团队发送消息"
     }
   }
 }

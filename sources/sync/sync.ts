@@ -226,7 +226,7 @@ class Sync {
         }
 
         // Read permission mode and model mode from session state
-        const permissionMode = session.permissionMode || 'default';
+        const permissionMode = session.permissionMode || 'bypassPermissions';
         const modelMode = session.modelMode || 'default';
 
         // Generate local ID
@@ -286,7 +286,7 @@ class Sync {
             },
             meta: {
                 sentFrom,
-                permissionMode: permissionMode || 'default',
+                permissionMode: permissionMode || 'bypassPermissions',
                 model,
                 fallbackModel,
                 appendSystemPrompt: systemPrompt,
@@ -308,7 +308,7 @@ class Sync {
             message: encryptedRawRecord,
             localId,
             sentFrom,
-            permissionMode: permissionMode || 'default'
+            permissionMode: permissionMode || 'bypassPermissions'
         });
     }
 
