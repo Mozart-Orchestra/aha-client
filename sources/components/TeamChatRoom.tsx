@@ -457,7 +457,9 @@ export default function TeamChatRoom({ teamId, teamName, mySessionId, myRole, my
     React.useEffect(() => {
         const unsubscribe = sync.subscribeToTeamMessages(teamId, (message) => {
             setMessages(prev => {
-                if (prev.some(m => m.id === message.id)) {
+                // O(1) deduplication check using Set (replaced O(n) Array.some)
+                const messageIds = new Set(prev.map(m => m.id));
+                if (messageIds.has(message.id)) {
                     return prev;
                 }
                 return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);

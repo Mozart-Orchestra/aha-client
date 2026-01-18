@@ -96,6 +96,11 @@ export interface KanbanTask {
 
     // 🆕 阻塞追踪
     blockers?: TaskBlocker[];
+
+    // 🆕 Chat-Board 集成
+    relatedMessageIds?: string[];     // 关联的聊天消息ID列表
+    dueDate?: number;                 // 截止日期
+    tags?: string[];                  // 任务标签
 }
 
 export interface KanbanBoard {

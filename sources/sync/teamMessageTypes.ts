@@ -31,10 +31,21 @@ export interface TeamMessage {
 }
 
 /**
+ * 任务快照（用于在消息中显示任务状态）
+ */
+export interface TaskSnapshot {
+    id: string;
+    title: string;
+    status: string;
+    priority?: string;
+}
+
+/**
  * 消息元数据
  */
 export interface TeamMessageMetadata {
     taskId?: string;               // 关联的任务 ID
+    taskSnapshot?: TaskSnapshot;   // 任务快照
     priority?: TeamMessagePriority; // 优先级
     replyToId?: string;            // 回复的消息 ID
     attachmentIds?: string[];      // 附件 IDs（未来支持）

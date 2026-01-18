@@ -514,16 +514,29 @@ class Sync {
 
         // Initialize all session encryptions first
         const sessionKeys = new Map<string, Uint8Array | null>();
-        for (const session of sessions) {
-            if (session.dataEncryptionKey) {
-                let decrypted = await this.encryption.decryptEncryptionKey(session.dataEncryptionKey);
-                if (!decrypted) {
-                    console.error(`Failed to decrypt data encryption key for session ${session.id}`);
-                    continue;
+        const results = await Promise.allSettled(
+            sessions.map(async (session) => {
+                if (!session.dataEncryptionKey) {
+                    return { sessionId: session.id, key: null };
                 }
-                sessionKeys.set(session.id, decrypted);
-            } else {
-                sessionKeys.set(session.id, null);
+                try {
+                    const decrypted = await this.encryption.decryptEncryptionKey(session.dataEncryptionKey);
+                    if (!decrypted) {
+                        console.error(`Failed to decrypt data encryption key for session ${session.id}`);
+                        return { sessionId: session.id, key: null };
+                    }
+                    return { sessionId: session.id, key: decrypted };
+                } catch (error) {
+                    console.error(`Exception decrypting key for session ${session.id}:`, error);
+                    return { sessionId: session.id, key: null };
+                }
+            })
+        );
+
+        // Collect successful decryptions
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                sessionKeys.set(result.value.sessionId, result.value.key);
             }
         }
         await this.encryption.initializeSessions(sessionKeys);
@@ -1251,10 +1264,9 @@ class Sync {
                     ...cursor
                 });
 
-                // Check if we reached known items
-                const foundKnown = response.items.some(item =>
-                    existingItems.some(existing => existing.id === item.id)
-                );
+                // Check if we reached known items (O(1) lookup using Set)
+                const existingItemIds = new Set(existingItems.map(e => e.id));
+                const foundKnown = response.items.some(item => existingItemIds.has(item.id));
 
                 allItems.push(...response.items);
                 loadedCount += response.items.length;
