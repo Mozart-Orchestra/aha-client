@@ -1,9 +1,9 @@
 /**
  * Team Roles i18n Helper
- * Provides localized team roles from the @/text system
+ * Provides localized team roles from @/text system
  */
 
-import { t } from '@/text'
+import { translations, getCurrentLanguage, type SupportedLanguage, type TranslationStructure } from '@/text'
 import type { TEAM_ROLE_LIBRARY } from './index'
 
 export interface LocalizedTeamRole {
@@ -19,21 +19,19 @@ export interface LocalizedTeamRole {
 
 /**
  * Get localized team roles for all roles
- * Automatically uses the current language from @/text system
+ * Automatically uses current language from @/text system
  */
 export function getLocalizedTeamRoles(): LocalizedTeamRole[] {
-  const roleKeys: (keyof typeof t.teamRoles)[] = [
-    'master',
-    'framer',
-    'builder',
-    'scout',
-    'scribe',
-    'qa',
-    'reviewer'
-  ]
+  const roleKeys = ['master', 'framer', 'builder', 'scout', 'scribe', 'qa', 'reviewer'] as const
+  const currentLang = getCurrentLanguage()
+  const currentTranslations = translations[currentLang] as TranslationStructure
 
   return roleKeys.map(roleKey => {
-    const translation = t.teamRoles[roleKey]
+    const translation = (currentTranslations as any).teamRoles?.[roleKey]
+
+    if (!translation) {
+      throw new Error(`Missing translation for role: ${roleKey}`)
+    }
 
     return {
       id: roleKey,
@@ -43,7 +41,6 @@ export function getLocalizedTeamRoles(): LocalizedTeamRole[] {
       abilityBoundaries: translation.abilityBoundaries as string[],
       handoffProtocol: translation.handoffProtocol as string[],
       protocol: translation.protocol as string[],
-      // Note: policy is not translated as it contains configuration
     }
   })
 }
