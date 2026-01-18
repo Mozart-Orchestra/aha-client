@@ -21,6 +21,7 @@ import { isMutableTool } from "@/components/tools/knownTools";
 import { projectManager } from "./projectManager";
 import { DecryptedArtifact } from "./artifactTypes";
 import { FeedItem } from "./feedTypes";
+import { apiSocket } from "./apiSocket";
 
 /**
  * Centralized session online state resolver
@@ -787,6 +788,18 @@ export const storage = create<StorageState>()((set, get) => {
 
             // Persist permission modes (only non-default values to save space)
             saveSessionPermissionModes(allModes);
+
+            // Notify CLI about the permission mode change via socket
+            // This ensures CLI immediately knows the new permission mode without waiting for next message
+            try {
+                apiSocket.send('permission-mode-update', {
+                    sid: sessionId,
+                    permissionMode: mode
+                });
+                console.log(`[PermissionMode] Updated session ${sessionId} to mode: ${mode}`);
+            } catch (error) {
+                console.error('[PermissionMode] Failed to send permission mode update:', error);
+            }
 
             // No need to rebuild sessionListViewData since permission mode doesn't affect the list display
             return {
