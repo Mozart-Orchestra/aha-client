@@ -338,18 +338,16 @@ export default function TeamsScreen() {
                 }}
                 onLongPress={() => handleLongPress(item.id)}
             >
-                {isSelectionMode && (
-                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                        {isSelected && (
-                            <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                        )}
+                {isSelectionMode ? (
+                    <View style={[styles.checkbox, isSelected ? styles.checkboxSelected : undefined]}>
+                        {isSelected ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
                     </View>
-                )}
+                ) : null}
                 <View style={styles.teamContent}>
                     <Text
                         style={[
                             styles.teamTitle,
-                            !item.title && styles.teamUntitled
+                            !item.title ? styles.teamUntitled : undefined
                         ]}
                         numberOfLines={1}
                     >
@@ -361,27 +359,18 @@ export default function TeamsScreen() {
                         </Text>
                     </View>
                 </View>
-                {!isSelectionMode && (
-                    <>
+                {!isSelectionMode ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Pressable
                             onPress={(e) => handleDelete(item.id, e)}
                             style={{ padding: 8, marginRight: 4 }}
                             hitSlop={8}
                         >
-                            <Ionicons
-                                name="trash-outline"
-                                size={20}
-                                color={theme.colors.textSecondary}
-                            />
+                            <Ionicons name="trash-outline" size={20} color={theme.colors.textSecondary} />
                         </Pressable>
-                        <Ionicons
-                            name="chevron-forward"
-                            size={18}
-                            style={styles.teamChevron}
-                            color={theme.colors.textSecondary}
-                        />
-                    </>
-                )}
+                        <Ionicons name="chevron-forward" size={18} style={styles.teamChevron} color={theme.colors.textSecondary} />
+                    </View>
+                ) : null}
             </Pressable>
         );
     }, [teams, router, styles, handleDelete, isSelectionMode, selectedTeams, toggleTeamSelection, handleLongPress, theme]);
