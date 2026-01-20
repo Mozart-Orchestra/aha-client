@@ -384,7 +384,7 @@ export default function TeamsScreen() {
                 )}
             </Pressable>
         );
-    }, [teams, router, styles, handleDelete, isSelectionMode, selectedTeams, toggleTeamSelection, handleLongPress]);
+    }, [teams, router, styles, handleDelete, isSelectionMode, selectedTeams, toggleTeamSelection, handleLongPress, theme]);
 
     const keyExtractor = React.useCallback((item: DecryptedArtifact) => item.id, []);
 

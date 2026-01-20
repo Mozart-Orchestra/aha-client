@@ -349,6 +349,18 @@ export default function TeamDashboardScreen() {
         }
     }, [artifact, isLoading, desktopBridge]);
 
+    // Helper to get session IDs from artifact body
+    const getSessionIds = React.useCallback((): string[] => {
+        if (!artifact?.body) return [];
+        try {
+            const parsed = JSON.parse(artifact.body);
+            const members = parsed.team?.members || [];
+            return members.map((m: any) => m.sessionId).filter(Boolean);
+        } catch {
+            return [];
+        }
+    }, [artifact?.body]);
+
     // Archive Team handler
     const handleArchiveTeam = React.useCallback(async () => {
         setShowMenu(false);
@@ -365,7 +377,8 @@ export default function TeamDashboardScreen() {
         if (!confirmed) return;
 
         try {
-            const result = await sync.archiveTeam(teamId);
+            const sessionIds = getSessionIds();
+            const result = await sync.archiveTeam(teamId, sessionIds);
             if (result.success) {
                 Modal.alert('Success', `Team archived with ${result.archivedSessions} sessions.`);
                 router.replace('/teams');
@@ -374,7 +387,7 @@ export default function TeamDashboardScreen() {
             console.error('Failed to archive team:', error);
             Modal.alert('Error', 'Failed to archive team. Please try again.');
         }
-    }, [teamId, router]);
+    }, [teamId, router, getSessionIds]);
 
     // Delete Team handler
     const handleDeleteTeam = React.useCallback(async () => {
@@ -392,7 +405,8 @@ export default function TeamDashboardScreen() {
         if (!confirmed) return;
 
         try {
-            const result = await sync.deleteTeam(teamId);
+            const sessionIds = getSessionIds();
+            const result = await sync.deleteTeam(teamId, sessionIds);
             if (result.success) {
                 Modal.alert('Success', `Team deleted with ${result.deletedSessions} sessions.`);
                 router.replace('/teams');
@@ -401,7 +415,7 @@ export default function TeamDashboardScreen() {
             console.error('Failed to delete team:', error);
             Modal.alert('Error', 'Failed to delete team. Please try again.');
         }
-    }, [teamId, router]);
+    }, [teamId, router, getSessionIds]);
 
     // Rename Team handler
     const handleRenameTeam = React.useCallback(async () => {
@@ -718,22 +732,6 @@ export default function TeamDashboardScreen() {
         return kanbanData.tasks.filter(task => taskNeedsApproval(task));
     }, [kanbanData.tasks]);
 
-    if (desktopBridge && !desktopRoom) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" />
-            </View>
-        );
-    }
-
-    if (!desktopBridge && !artifact) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" />
-            </View>
-        );
-    }
-
     const matchesColumn = React.useCallback((task: KanbanTask, columnId: string) => {
         return normalizeStatus(task.status) === columnId;
     }, [normalizeStatus]);
@@ -749,6 +747,23 @@ export default function TeamDashboardScreen() {
 
         return links;
     }, [kanbanData.tasks]);
+
+    // Early returns MUST come AFTER all hooks to avoid "Rendered fewer hooks" error
+    if (desktopBridge && !desktopRoom) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" />
+            </View>
+        );
+    }
+
+    if (!desktopBridge && !artifact) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" />
+            </View>
+        );
+    }
 
     const renderKanban = () => (
         <>

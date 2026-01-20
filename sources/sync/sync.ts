@@ -2777,24 +2777,26 @@ class Sync {
 
     /**
      * Archive a team and all its sessions
+     * @param sessionIds - Session IDs to archive (passed to server since body is encrypted)
      */
-    public async archiveTeam(teamId: string): Promise<import('./apiTeamManagement').TeamArchiveResponse> {
+    public async archiveTeam(teamId: string, sessionIds: string[] = []): Promise<import('./apiTeamManagement').TeamArchiveResponse> {
         if (!this.credentials) {
             throw new Error('Not authenticated');
         }
         const { archiveTeam } = await import('./apiTeamManagement');
-        return archiveTeam(this.credentials, teamId);
+        return archiveTeam(this.credentials, teamId, sessionIds);
     }
 
     /**
      * Delete a team and all its sessions
+     * @param sessionIds - Session IDs to delete (passed to server since body is encrypted)
      */
-    public async deleteTeam(teamId: string): Promise<import('./apiTeamManagement').TeamDeleteResponse> {
+    public async deleteTeam(teamId: string, sessionIds: string[] = []): Promise<import('./apiTeamManagement').TeamDeleteResponse> {
         if (!this.credentials) {
             throw new Error('Not authenticated');
         }
         const { deleteTeam } = await import('./apiTeamManagement');
-        return deleteTeam(this.credentials, teamId);
+        return deleteTeam(this.credentials, teamId, sessionIds);
     }
 
     /**

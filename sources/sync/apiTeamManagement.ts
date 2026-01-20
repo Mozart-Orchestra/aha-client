@@ -129,10 +129,12 @@ export async function removeTeamMember(
 
 /**
  * Archive a team and all its sessions
+ * @param sessionIds - Session IDs to archive (required since body is encrypted)
  */
 export async function archiveTeam(
     credentials: AuthCredentials,
-    teamId: string
+    teamId: string,
+    sessionIds: string[] = []
 ): Promise<TeamArchiveResponse> {
     const API_ENDPOINT = getServerUrl();
 
@@ -143,7 +145,7 @@ export async function archiveTeam(
                 'Authorization': `Bearer ${credentials.token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({})
+            body: JSON.stringify({ sessionIds })
         });
 
         if (!response.ok) {
@@ -159,10 +161,12 @@ export async function archiveTeam(
 
 /**
  * Delete a team and all its sessions
+ * @param sessionIds - Session IDs to delete (required since body is encrypted)
  */
 export async function deleteTeam(
     credentials: AuthCredentials,
-    teamId: string
+    teamId: string,
+    sessionIds: string[] = []
 ): Promise<TeamDeleteResponse> {
     const API_ENDPOINT = getServerUrl();
 
@@ -170,8 +174,10 @@ export async function deleteTeam(
         const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${credentials.token}`
-            }
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ sessionIds })
         });
 
         if (!response.ok) {
