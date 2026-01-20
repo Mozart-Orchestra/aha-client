@@ -373,6 +373,46 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: theme.colors.button.primary.background,
         borderRadius: 2,
     },
+    // 🆕 Clipboard paste prompt styles
+    clipboardPrompt: {
+        backgroundColor: theme.colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    clipboardPromptContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    clipboardPromptIcon: {
+        marginRight: 10,
+    },
+    clipboardPromptText: {
+        fontSize: 14,
+        color: theme.colors.text,
+        flex: 1,
+    },
+    clipboardPasteButton: {
+        backgroundColor: theme.colors.button.primary.background,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 16,
+        marginLeft: 12,
+    },
+    clipboardPasteButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    clipboardDismissButton: {
+        padding: 6,
+        marginLeft: 8,
+    },
 }));
 
 // Helper to get avatar initials or icon based on role
@@ -776,6 +816,9 @@ export default function TeamChatRoom({
     } | null>(null);
     const [uploadProgress, setUploadProgress] = React.useState(0);
     const [isCompressing, setIsCompressing] = React.useState(false);
+    // 🆕 Clipboard image detection state
+    const [clipboardHasImage, setClipboardHasImage] = React.useState(false);
+    const [isCheckingClipboard, setIsCheckingClipboard] = React.useState(false);
 
     // 🆕 获取我发送过的消息历史（用于历史选取）
     const myMessageHistory = React.useMemo(() => {
@@ -853,6 +896,56 @@ export default function TeamChatRoom({
         } catch (error) {
             console.error('Failed to pick/compress image:', error);
             Modal.alert('Error', 'Failed to process image. Please try again.');
+        } finally {
+            setIsCompressing(false);
+        }
+    }, []);
+
+    // 🆕 Check clipboard for images (called on input focus)
+    const checkClipboardForImage = React.useCallback(async () => {
+        if (selectedImage || isCheckingClipboard) return; // Don't check if already have image selected
+
+        try {
+            setIsCheckingClipboard(true);
+            const hasImage = await Clipboard.hasImageAsync();
+            setClipboardHasImage(hasImage);
+        } catch (error) {
+            console.error('Failed to check clipboard:', error);
+            setClipboardHasImage(false);
+        } finally {
+            setIsCheckingClipboard(false);
+        }
+    }, [selectedImage, isCheckingClipboard]);
+
+    // 🆕 Paste image from clipboard
+    const handlePasteFromClipboard = React.useCallback(async () => {
+        try {
+            setIsCompressing(true);
+            setClipboardHasImage(false);
+
+            const image = await Clipboard.getImageAsync({ format: 'png' });
+            if (!image || !image.data) {
+                Modal.alert('No Image', 'No image found in clipboard.');
+                return;
+            }
+
+            // Get dimensions from image size if available
+            const width = image.size?.width || 800;
+            const height = image.size?.height || 600;
+
+            // Estimate file size (base64 is ~33% larger than binary)
+            const estimatedSize = Math.round((image.data.length * 3) / 4);
+
+            setSelectedImage({
+                uri: `data:image/png;base64,${image.data}`,
+                base64: image.data,
+                width,
+                height,
+                fileSize: estimatedSize,
+            });
+        } catch (error) {
+            console.error('Failed to paste image from clipboard:', error);
+            Modal.alert('Error', 'Failed to paste image. Please try again.');
         } finally {
             setIsCompressing(false);
         }
@@ -1510,6 +1603,39 @@ export default function TeamChatRoom({
                 </View>
             )}
 
+            {/* 🆕 Clipboard paste prompt - shows when clipboard has image */}
+            {clipboardHasImage && !selectedImage && !isCompressing && (
+                <View style={styles.clipboardPrompt}>
+                    <View style={styles.clipboardPromptContent}>
+                        <Ionicons
+                            name="clipboard-outline"
+                            size={20}
+                            color={theme.colors.button.primary.background}
+                            style={styles.clipboardPromptIcon}
+                        />
+                        <Text style={styles.clipboardPromptText}>
+                            Image detected in clipboard
+                        </Text>
+                    </View>
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.clipboardPasteButton,
+                            pressed && { opacity: 0.8 }
+                        ]}
+                        onPress={handlePasteFromClipboard}
+                    >
+                        <Text style={styles.clipboardPasteButtonText}>Paste</Text>
+                    </Pressable>
+                    <Pressable
+                        style={styles.clipboardDismissButton}
+                        onPress={() => setClipboardHasImage(false)}
+                        hitSlop={8}
+                    >
+                        <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
+                    </Pressable>
+                </View>
+            )}
+
             <View style={styles.inputContainer}>
                 {/* 🆕 Image picker button */}
                 <Pressable
@@ -1555,8 +1681,16 @@ export default function TeamChatRoom({
                         multiline
                         maxLength={2000}
                         editable={!isSending}
-                        onFocus={() => setIsInputFocused(true)}
-                        onBlur={() => setIsInputFocused(false)}
+                        onFocus={() => {
+                            setIsInputFocused(true);
+                            // 🆕 Check clipboard for images on focus
+                            checkClipboardForImage();
+                        }}
+                        onBlur={() => {
+                            setIsInputFocused(false);
+                            // 🆕 Hide clipboard prompt on blur (with delay to allow tap)
+                            setTimeout(() => setClipboardHasImage(false), 200);
+                        }}
                     />
                 </View>
 
