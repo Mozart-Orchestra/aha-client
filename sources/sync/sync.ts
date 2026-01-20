@@ -2065,7 +2065,14 @@ class Sync {
             const { teamId, taskId, task } = updateData.body as { teamId: string; taskId: string; task?: any };
             console.log(`🔄 Sync: Received ${updateData.body.t} for team ${teamId}, task ${taskId}`);
 
-            // Invalidate artifacts sync to refresh the board
+            // CRITICAL FIX: Fetch full artifact with body to update the Board UI
+            // artifactsSync.invalidate() only refreshes headers, not body content
+            // Board component needs artifact.body to display tasks
+            this.fetchArtifactWithBody(teamId).catch(err => {
+                console.error(`Failed to fetch artifact body for team ${teamId}:`, err);
+            });
+
+            // Also invalidate the list (for header updates like title changes)
             this.artifactsSync.invalidate();
 
             // Notify task event subscribers
