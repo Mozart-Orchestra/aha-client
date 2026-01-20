@@ -6,7 +6,7 @@ import { DecryptedArtifact } from '@/sync/artifactTypes';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { t } from '@/text';
 import { layout } from '@/components/layout';
 import { sync } from '@/sync/sync';
@@ -98,12 +98,66 @@ const stylesheet = StyleSheet.create((theme) => ({
     teamChevron: {
         color: theme.colors.textSecondary,
     },
+    // Batch selection styles
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: theme.colors.textSecondary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    checkboxSelected: {
+        backgroundColor: theme.colors.button.primary.background,
+        borderColor: theme.colors.button.primary.background,
+    },
+    batchActionBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: theme.colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    batchActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 8,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    batchActionButtonDestructive: {
+        backgroundColor: theme.colors.textDestructive,
+    },
+    batchActionButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.text,
+        marginLeft: 6,
+    },
+    batchActionButtonTextDestructive: {
+        color: '#FFFFFF',
+    },
+    selectionInfo: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+    },
 }));
 
 export default function TeamsScreen() {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const router = useRouter();
+    const safeArea = useSafeAreaInsets();
     const allArtifacts = useArtifacts();
 
     // Filter for team artifacts
@@ -112,6 +166,109 @@ export default function TeamsScreen() {
     }, [allArtifacts]);
 
     const [isLoading, setIsLoading] = React.useState(false);
+    const [isSelectionMode, setIsSelectionMode] = React.useState(false);
+    const [selectedTeams, setSelectedTeams] = React.useState<Set<string>>(new Set());
+    const [isBatchProcessing, setIsBatchProcessing] = React.useState(false);
+
+    // Exit selection mode when no teams selected
+    React.useEffect(() => {
+        if (isSelectionMode && selectedTeams.size === 0 && teams.length > 0) {
+            // Keep selection mode active even with 0 selected
+        }
+    }, [selectedTeams, isSelectionMode, teams.length]);
+
+    // Toggle team selection
+    const toggleTeamSelection = React.useCallback((teamId: string) => {
+        setSelectedTeams(prev => {
+            const next = new Set(prev);
+            if (next.has(teamId)) {
+                next.delete(teamId);
+            } else {
+                next.add(teamId);
+            }
+            return next;
+        });
+    }, []);
+
+    // Enter selection mode via long press
+    const handleLongPress = React.useCallback((teamId: string) => {
+        if (!isSelectionMode) {
+            setIsSelectionMode(true);
+            setSelectedTeams(new Set([teamId]));
+        }
+    }, [isSelectionMode]);
+
+    // Exit selection mode
+    const exitSelectionMode = React.useCallback(() => {
+        setIsSelectionMode(false);
+        setSelectedTeams(new Set());
+    }, []);
+
+    // Select all teams
+    const selectAllTeams = React.useCallback(() => {
+        setSelectedTeams(new Set(teams.map(t => t.id)));
+    }, [teams]);
+
+    // Batch archive handler
+    const handleBatchArchive = React.useCallback(async () => {
+        if (selectedTeams.size === 0) return;
+
+        const confirmed = await Modal.confirm(
+            'Archive Teams',
+            `Archive ${selectedTeams.size} team(s) and all their associated sessions?`,
+            {
+                confirmText: 'Archive',
+                cancelText: 'Cancel',
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setIsBatchProcessing(true);
+            const result = await sync.batchArchiveTeams(Array.from(selectedTeams));
+            if (result.success) {
+                Modal.alert('Success', `Archived ${result.archived} team(s).`);
+                exitSelectionMode();
+            }
+        } catch (error) {
+            console.error('Failed to batch archive teams:', error);
+            Modal.alert('Error', 'Failed to archive teams. Please try again.');
+        } finally {
+            setIsBatchProcessing(false);
+        }
+    }, [selectedTeams, exitSelectionMode]);
+
+    // Batch delete handler
+    const handleBatchDelete = React.useCallback(async () => {
+        if (selectedTeams.size === 0) return;
+
+        const confirmed = await Modal.confirm(
+            'Delete Teams',
+            `Permanently delete ${selectedTeams.size} team(s) and all their associated sessions? This cannot be undone.`,
+            {
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                destructive: true,
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setIsBatchProcessing(true);
+            const result = await sync.batchDeleteTeams(Array.from(selectedTeams));
+            if (result.success) {
+                Modal.alert('Success', `Deleted ${result.deleted} team(s).`);
+                exitSelectionMode();
+            }
+        } catch (error) {
+            console.error('Failed to batch delete teams:', error);
+            Modal.alert('Error', 'Failed to delete teams. Please try again.');
+        } finally {
+            setIsBatchProcessing(false);
+        }
+    }, [selectedTeams, exitSelectionMode]);
 
     React.useEffect(() => {
         let cancelled = false;

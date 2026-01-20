@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { Text } from '@/components/StyledText';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useArtifact, useAllSessions, useProfile } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -298,6 +298,7 @@ const withAlpha = (color: string, alpha: number): string => {
 export default function TeamDashboardScreen() {
     const { id, roomId: roomIdParam } = useLocalSearchParams();
     const teamId = id as string;
+    const router = useRouter();
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const artifact = useArtifact(teamId);
@@ -309,6 +310,7 @@ export default function TeamDashboardScreen() {
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
+    const [showMenu, setShowMenu] = React.useState(false);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const artifactRoomId = React.useMemo(() => {
@@ -346,6 +348,87 @@ export default function TeamDashboardScreen() {
                 .finally(() => setIsLoading(false));
         }
     }, [artifact, isLoading, desktopBridge]);
+
+    // Archive Team handler
+    const handleArchiveTeam = React.useCallback(async () => {
+        setShowMenu(false);
+        const confirmed = await Modal.confirm(
+            'Archive Team',
+            'This will archive the team and all its associated sessions. You can restore it later from the archive. Are you sure?',
+            {
+                confirmText: 'Archive',
+                cancelText: 'Cancel',
+                destructive: false
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const result = await sync.archiveTeam(teamId);
+            if (result.success) {
+                Modal.alert('Success', `Team archived with ${result.archivedSessions} sessions.`);
+                router.replace('/teams');
+            }
+        } catch (error) {
+            console.error('Failed to archive team:', error);
+            Modal.alert('Error', 'Failed to archive team. Please try again.');
+        }
+    }, [teamId, router]);
+
+    // Delete Team handler
+    const handleDeleteTeam = React.useCallback(async () => {
+        setShowMenu(false);
+        const confirmed = await Modal.confirm(
+            'Delete Team',
+            'This will permanently delete the team and all its associated sessions. This action cannot be undone. Are you sure?',
+            {
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                destructive: true
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const result = await sync.deleteTeam(teamId);
+            if (result.success) {
+                Modal.alert('Success', `Team deleted with ${result.deletedSessions} sessions.`);
+                router.replace('/teams');
+            }
+        } catch (error) {
+            console.error('Failed to delete team:', error);
+            Modal.alert('Error', 'Failed to delete team. Please try again.');
+        }
+    }, [teamId, router]);
+
+    // Rename Team handler
+    const handleRenameTeam = React.useCallback(async () => {
+        setShowMenu(false);
+        const newName = await Modal.prompt(
+            'Rename Team',
+            'Enter a new name for this team:',
+            {
+                defaultValue: artifact?.title || '',
+                placeholder: 'Team name',
+                confirmText: 'Rename',
+                cancelText: 'Cancel'
+            }
+        );
+
+        if (!newName || newName.trim() === artifact?.title) return;
+
+        try {
+            const result = await sync.renameTeam(teamId, newName.trim());
+            if (result.success) {
+                // Local storage will be updated via WebSocket sync
+            }
+        } catch (error) {
+            console.error('Failed to rename team:', error);
+            Modal.alert('Error', 'Failed to rename team. Please try again.');
+        }
+    }, [teamId, artifact?.title]);
 
     const kanbanData: KanbanBoard = React.useMemo(() => {
         const ensureColumns = (data: any): KanbanBoard => {
@@ -838,8 +921,89 @@ export default function TeamDashboardScreen() {
                 options={{
                     headerShown: true,
                     headerTitle: (desktopBridge ? desktopRoom?.name : artifact?.title) || 'Team Dashboard',
+                    headerRight: () => (
+                        <View style={{ position: 'relative' }}>
+                            <Pressable
+                                onPress={() => setShowMenu(!showMenu)}
+                                hitSlop={10}
+                                style={{ padding: 8 }}
+                            >
+                                <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
+                            </Pressable>
+                            {showMenu && (
+                                <View style={{
+                                    position: 'absolute',
+                                    top: 40,
+                                    right: 0,
+                                    backgroundColor: theme.colors.surface,
+                                    borderRadius: 12,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.15,
+                                    shadowRadius: 12,
+                                    elevation: 8,
+                                    minWidth: 180,
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.divider,
+                                    zIndex: 1000,
+                                }}>
+                                    <Pressable
+                                        onPress={handleRenameTeam}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            padding: 14,
+                                            borderBottomWidth: 1,
+                                            borderBottomColor: theme.colors.divider,
+                                        }}
+                                    >
+                                        <Ionicons name="pencil-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
+                                        <Text style={{ fontSize: 15, color: theme.colors.text }}>Rename</Text>
+                                    </Pressable>
+                                    <Pressable
+                                        onPress={handleArchiveTeam}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            padding: 14,
+                                            borderBottomWidth: 1,
+                                            borderBottomColor: theme.colors.divider,
+                                        }}
+                                    >
+                                        <Ionicons name="archive-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
+                                        <Text style={{ fontSize: 15, color: theme.colors.text }}>Archive</Text>
+                                    </Pressable>
+                                    <Pressable
+                                        onPress={handleDeleteTeam}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            padding: 14,
+                                        }}
+                                    >
+                                        <Ionicons name="trash-outline" size={18} color={theme.colors.textDestructive} style={{ marginRight: 12 }} />
+                                        <Text style={{ fontSize: 15, color: theme.colors.textDestructive }}>Delete</Text>
+                                    </Pressable>
+                                </View>
+                            )}
+                        </View>
+                    ),
                 }}
             />
+            {/* Menu backdrop */}
+            {showMenu && (
+                <Pressable
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 999,
+                    }}
+                    onPress={() => setShowMenu(false)}
+                />
+            )}
             <View style={styles.container}>
                 <View style={styles.header}>
                     <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>

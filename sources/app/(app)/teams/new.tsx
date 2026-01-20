@@ -341,6 +341,14 @@ export default function NewTeamScreen() {
 
     const defaultRoleId = 'implementer';
 
+    // Track if machine change was user-initiated (not from machines array refresh)
+    const userChangedMachineRef = React.useRef(false);
+
+    const handleMachineChange = React.useCallback((machineId: string | null) => {
+        userChangedMachineRef.current = true;
+        setSelectedMachineId(machineId);
+    }, []);
+
     React.useEffect(() => {
         if (machines.length === 0) {
             setSelectedMachineId(null);
@@ -349,13 +357,18 @@ export default function NewTeamScreen() {
         if (selectedMachineId && machines.some(machine => machine.id === selectedMachineId)) {
             return;
         }
+        // This is a fallback selection, not user-initiated
         const fallback = machines.find(machine => machine.active) ?? machines[0];
         setSelectedMachineId(fallback?.id ?? null);
         setIsPathDropdownOpen(false);
     }, [machines, selectedMachineId]);
 
+    // Only reset cwdEdited when user explicitly changes machine
     React.useEffect(() => {
-        setCwdEdited(false);
+        if (userChangedMachineRef.current) {
+            setCwdEdited(false);
+            userChangedMachineRef.current = false;
+        }
     }, [selectedMachineId]);
 
     // Auto-suggest path when machine changes or on initial mount
@@ -893,7 +906,7 @@ export default function NewTeamScreen() {
                                             return (
                                                 <Pressable
                                                     key={machine.id}
-                                                    onPress={() => setSelectedMachineId(machine.id)}
+                                                    onPress={() => handleMachineChange(machine.id)}
                                                     style={[
                                                         styles.machineItem,
                                                         isSelected && styles.machineItemSelected,
