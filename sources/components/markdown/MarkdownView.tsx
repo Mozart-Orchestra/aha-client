@@ -2,7 +2,7 @@ import { MarkdownSpan, parseMarkdown } from './parseMarkdown';
 import { Link } from 'expo-router';
 import * as React from 'react';
 import { ScrollView, View, Platform, Pressable } from 'react-native';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Text } from '../StyledText';
 import { Typography } from '@/constants/Typography';
 import { SimpleSyntaxHighlighter } from '../SimpleSyntaxHighlighter';
@@ -10,6 +10,8 @@ import { Modal } from '@/modal';
 import { useLocalSetting } from '@/sync/storage';
 import { storeTempText } from '@/sync/persistence';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
 
 // Option type for callback
 export type Option = {
@@ -114,9 +116,45 @@ function RenderNumberedListBlock(props: { items: { number: number, spans: Markdo
 }
 
 function RenderCodeBlock(props: { content: string, language: string | null, first: boolean, last: boolean, selectable: boolean }) {
+    const { theme } = useUnistyles();
+    const [copied, setCopied] = React.useState(false);
+
+    const handleCopy = React.useCallback(async () => {
+        try {
+            await Clipboard.setStringAsync(props.content);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (error) {
+            console.error('Failed to copy code:', error);
+        }
+    }, [props.content]);
+
     return (
         <View style={[style.codeBlock, props.first && style.first, props.last && style.last]}>
-            {props.language && <Text selectable={props.selectable} style={style.codeLanguage}>{props.language}</Text>}
+            <View style={style.codeHeader}>
+                {props.language ? (
+                    <Text selectable={props.selectable} style={style.codeLanguage}>{props.language}</Text>
+                ) : (
+                    <View />
+                )}
+                <Pressable
+                    onPress={handleCopy}
+                    style={({ pressed }) => [
+                        style.copyButton,
+                        pressed && { opacity: 0.7 }
+                    ]}
+                    hitSlop={8}
+                >
+                    {copied ? (
+                        <View style={style.copiedContainer}>
+                            <Ionicons name="checkmark" size={14} color={theme.colors.textSecondary} />
+                            <Text style={style.copiedText}>Copied</Text>
+                        </View>
+                    ) : (
+                        <Ionicons name="copy-outline" size={16} color={theme.colors.textSecondary} />
+                    )}
+                </Pressable>
+            </View>
             <ScrollView
                 style={{ flexGrow: 0, flexShrink: 0 }}
                 horizontal={true}
@@ -361,13 +399,34 @@ const style = StyleSheet.create((theme) => ({
         borderRadius: 8,
         marginVertical: 4,
     },
+    codeHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 8,
+    },
     codeLanguage: {
         ...Typography.mono(),
         color: theme.colors.textSecondary,
         fontSize: 12,
-        marginTop: 8,
-        paddingHorizontal: 16,
+        marginTop: 0,
+        paddingHorizontal: 0,
         marginBottom: 0,
+    },
+    copyButton: {
+        padding: 4,
+        borderRadius: 4,
+    },
+    copiedContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    copiedText: {
+        ...Typography.mono(),
+        fontSize: 12,
+        color: theme.colors.textSecondary,
     },
     codeText: {
         ...Typography.mono(),

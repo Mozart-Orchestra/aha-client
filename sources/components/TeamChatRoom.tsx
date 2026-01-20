@@ -22,6 +22,8 @@ import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { KanbanTask } from '@/sync/kanbanTypes';
 import { parseTaskCommand, createTaskFromCommand } from '@/utils/taskHelpers';
 import { extractTaskIds } from '@/utils/taskChatSync';
+import * as Clipboard from 'expo-clipboard';
+import { Modal } from '@/modal';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -157,6 +159,16 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: '#FFFFFF',
         textDecorationLine: 'underline',
     },
+    copiedIndicator: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+        marginTop: 6,
+        marginLeft: 8,
+    },
+    myCopiedIndicator: {
+        color: 'rgba(255,255,255,0.9)',
+    },
     systemMessage: {
         alignSelf: 'center',
         paddingHorizontal: 12,
@@ -255,6 +267,44 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.textSecondary,
         textAlign: 'center',
         marginTop: 12,
+    },
+    // 🆕 历史消息选择器样式
+    historyContainer: {
+        backgroundColor: theme.colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+        maxHeight: 200,
+    },
+    historyHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    historyTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    historyList: {
+        maxHeight: 150,
+    },
+    historyItem: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    historyItemPressed: {
+        backgroundColor: theme.colors.groupped.background,
+    },
+    historyItemText: {
+        fontSize: 14,
+        color: theme.colors.text,
+        lineHeight: 20,
     },
 }));
 
@@ -367,6 +417,18 @@ interface MessageBubbleProps {
 
 const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSync }: MessageBubbleProps) => {
     const [expanded, setExpanded] = React.useState(false);
+    const [copied, setCopied] = React.useState(false);
+
+    // 🆕 复制消息内容
+    const handleCopyMessage = React.useCallback(async () => {
+        try {
+            await Clipboard.setStringAsync(message.content);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (error) {
+            console.error('Failed to copy message:', error);
+        }
+    }, [message.content]);
 
     // 🆕 查找关联的任务
     const relatedTask = React.useMemo(() => {
@@ -439,6 +501,8 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
                     <Pressable
                         style={[styles.messageBubble, isMyMessage && styles.myMessageBubble]}
                         onPress={() => shouldShowExpand && setExpanded(!expanded)}
+                        onLongPress={handleCopyMessage}
+                        delayLongPress={500}
                     >
                         {renderContent()}
 
@@ -448,9 +512,16 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
                             </Text>
                         )}
 
-                        <Text style={[styles.messageTime, isMyMessage && styles.myMessageTime]}>
-                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={[styles.messageTime, isMyMessage && styles.myMessageTime]}>
+                                {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                            {copied && (
+                                <Text style={[styles.copiedIndicator, isMyMessage && styles.myCopiedIndicator]}>
+                                    Copied
+                                </Text>
+                            )}
+                        </View>
                     </Pressable>
 
                     {/* 🆕 显示关联的任务卡片 */}
@@ -538,6 +609,21 @@ export default function TeamChatRoom({
     const [isLoading, setIsLoading] = React.useState(true);
     const [showStatus, setShowStatus] = React.useState(false);
     const [isInputFocused, setIsInputFocused] = React.useState(false);
+    const [showHistory, setShowHistory] = React.useState(false);
+
+    // 🆕 获取我发送过的消息历史（用于历史选取）
+    const myMessageHistory = React.useMemo(() => {
+        return messages
+            .filter(m =>
+                m.type === 'chat' &&
+                m.fromSessionId === mySessionId &&
+                m.content.trim().length > 0
+            )
+            .map(m => m.content)
+            .filter((content, index, arr) => arr.indexOf(content) === index) // 去重
+            .slice(-20) // 最近20条
+            .reverse(); // 最新的在前
+    }, [messages, mySessionId]);
 
     const formatRelativeTime = React.useCallback((timestamp?: number) => {
         if (!timestamp) return 'No activity';
@@ -1054,9 +1140,53 @@ export default function TeamChatRoom({
                 )}
             </ScrollView>
 
+            {/* 🆕 历史消息选择器 */}
+            {showHistory && myMessageHistory.length > 0 && (
+                <View style={styles.historyContainer}>
+                    <View style={styles.historyHeader}>
+                        <Text style={styles.historyTitle}>Recent Messages</Text>
+                        <Pressable onPress={() => setShowHistory(false)} hitSlop={8}>
+                            <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                        </Pressable>
+                    </View>
+                    <ScrollView
+                        style={styles.historyList}
+                        showsVerticalScrollIndicator={true}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {myMessageHistory.map((content, index) => (
+                            <Pressable
+                                key={index}
+                                style={({ pressed }) => [
+                                    styles.historyItem,
+                                    pressed && styles.historyItemPressed
+                                ]}
+                                onPress={() => {
+                                    setInputText(content);
+                                    setShowHistory(false);
+                                }}
+                            >
+                                <Text style={styles.historyItemText} numberOfLines={2}>
+                                    {content}
+                                </Text>
+                            </Pressable>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
             <View style={styles.inputContainer}>
-                <Pressable style={styles.attachButton}>
-                    <Ionicons name="add" size={24} color={theme.colors.textSecondary} />
+                {/* 🆕 历史消息按钮 */}
+                <Pressable
+                    style={styles.attachButton}
+                    onPress={() => setShowHistory(!showHistory)}
+                    disabled={myMessageHistory.length === 0}
+                >
+                    <Ionicons
+                        name={showHistory ? "time" : "time-outline"}
+                        size={24}
+                        color={myMessageHistory.length === 0 ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
+                    />
                 </Pressable>
 
                 <View style={[styles.inputWrapper, isInputFocused && styles.inputWrapperFocused]}>
