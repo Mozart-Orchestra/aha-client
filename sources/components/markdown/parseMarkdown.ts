@@ -22,6 +22,11 @@ export type MarkdownBlock = {
 } | {
     type: 'options',
     items: string[]
+} | {
+    type: 'table',
+    headers: string[],
+    alignments: ('left' | 'center' | 'right')[],
+    rows: string[][]
 }
 
 export type MarkdownSpan = {

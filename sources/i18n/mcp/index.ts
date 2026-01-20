@@ -26,7 +26,7 @@ export class MCPI18nManager {
     return {
       name,
       description: {
-        [lng]: description
+        [lng]: { template: description }
       },
       parameters: this.getToolParameters(toolId, lng)
     };
@@ -62,7 +62,7 @@ export class MCPI18nManager {
     return {
       uri,
       description: {
-        [lng]: description
+        [lng]: { template: description }
       }
     };
   }
@@ -104,7 +104,7 @@ export class MCPI18nManager {
    */
   getAvailableTools(locale?: string): string[] {
     const lng = locale || i18n.language;
-    const resources = i18n.store.data[lng]?.mcp?.tools || {};
+    const resources = (i18n.store.data[lng] as any)?.mcp?.tools || {};
     return Object.keys(resources);
   }
 
@@ -113,7 +113,7 @@ export class MCPI18nManager {
    */
   getAvailableResources(locale?: string): string[] {
     const lng = locale || i18n.language;
-    const resources = i18n.store.data[lng]?.mcp?.resources || {};
+    const resources = (i18n.store.data[lng] as any)?.mcp?.resources || {};
     return Object.keys(resources);
   }
 }

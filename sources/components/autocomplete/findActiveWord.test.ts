@@ -9,11 +9,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@john',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -23,11 +23,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: ':happy',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 7,
                 length: 6,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -37,11 +37,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '/help',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 5,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -51,11 +51,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection, ['@', ':', '/', '#']);
             expect(result).toEqual({
                 word: '#important',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 8,
                 length: 10,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -65,11 +65,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 1,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
     });
@@ -88,11 +88,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -102,11 +102,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 0,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -116,11 +116,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
     });
@@ -146,11 +146,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 4,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -160,11 +160,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 1,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -174,11 +174,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 1,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -188,11 +188,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 1,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -202,11 +202,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 1,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -216,11 +216,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 5,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
     });
@@ -232,11 +232,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -246,11 +246,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 7,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -260,11 +260,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 5,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
     });
@@ -313,11 +313,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection, ['$']);
             expect(result).toEqual({
                 word: '$user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -327,11 +327,11 @@ describe('findActiveWord', () => {
             const result1 = findActiveWord(content1, selection1, ['$', '%']);
             expect(result1).toEqual({
                 word: '$user',
-                activeWord: result1.word,
+                activeWord: result1!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result1.length,
-                endOffset: result1.offset + result1.length
+                activeLength: result1!.length,
+                endOffset: result1!.offset + result1!.length
             });
 
             const content2 = 'Hello %task';
@@ -339,11 +339,11 @@ describe('findActiveWord', () => {
             const result2 = findActiveWord(content2, selection2, ['$', '%']);
             expect(result2).toEqual({
                 word: '%task',
-                activeWord: result2.word,
+                activeWord: result2!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result2.length,
-                endOffset: result2.offset + result2.length
+                activeLength: result2!.length,
+                endOffset: result2!.offset + result2!.length
             });
         });
 
@@ -353,11 +353,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@user',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 5,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
     });
@@ -439,33 +439,33 @@ describe('findActiveWord', () => {
             const result1 = findActiveWord(content, selection1);
             expect(result1).toEqual({
                 word: '@john',
-                activeWord: result1.word,
+                activeWord: result1!.word,
                 offset: 4,
                 length: 5,
-                activeLength: result1.length,
-                endOffset: result1.offset + result1.length
+                activeLength: result1!.length,
+                endOffset: result1!.offset + result1!.length
             });
 
             const selection2 = { start: 22, end: 22 };
             const result2 = findActiveWord(content, selection2);
             expect(result2).toEqual({
                 word: ':smile:',
-                activeWord: result2.word,
+                activeWord: result2!.word,
                 offset: 15,
                 length: 7,
-                activeLength: result2.length,
-                endOffset: result2.offset + result2.length
+                activeLength: result2!.length,
+                endOffset: result2!.offset + result2!.length
             });
 
             const selection3 = { start: 32, end: 32 };
             const result3 = findActiveWord(content, selection3);
             expect(result3).toEqual({
                 word: '/help',
-                activeWord: result3.word,
+                activeWord: result3!.word,
                 offset: 27,
                 length: 5,
-                activeLength: result3.length,
-                endOffset: result3.offset + result3.length
+                activeLength: result3!.length,
+                endOffset: result3!.offset + result3!.length
             });
         });
 
@@ -475,11 +475,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 1,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 
@@ -489,11 +489,11 @@ describe('findActiveWord', () => {
             const result = findActiveWord(content, selection);
             expect(result).toEqual({
                 word: '@very_long_username_here',
-                activeWord: result.word,
+                activeWord: result!.word,
                 offset: 6,
                 length: 24,
-                activeLength: result.length,
-                endOffset: result.offset + result.length
+                activeLength: result!.length,
+                endOffset: result!.offset + result!.length
             });
         });
 

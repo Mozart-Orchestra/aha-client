@@ -46,7 +46,7 @@ export const ChatHeaderView: React.FC<ChatHeaderViewProps> = ({
 
     return (
         <LinearGradient
-            colors={[theme.colors.gradientStart || theme.colors.primary, theme.colors.gradientEnd || theme.colors.primary]}
+            colors={[theme.colors.button.primary.background, theme.colors.button.primary.background]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[styles.container, { paddingTop: insets.top }]}

@@ -729,7 +729,7 @@ export default function TeamDashboardScreen() {
                                                         styles.taskPriority,
                                                         {
                                                             backgroundColor: task.priority === 'high' || task.priority === 'urgent'
-                                                                ? withAlpha(theme.colors.error, 0.125)
+                                                                ? withAlpha(theme.colors.textDestructive, 0.125)
                                                                 : task.priority === 'medium'
                                                                 ? withAlpha(theme.colors.warning, 0.125)
                                                                 : withAlpha(theme.colors.success, 0.125)
@@ -739,7 +739,7 @@ export default function TeamDashboardScreen() {
                                                             styles.taskSessionsText,
                                                             {
                                                                 color: task.priority === 'high' || task.priority === 'urgent'
-                                                                    ? theme.colors.error
+                                                                    ? theme.colors.textDestructive
                                                                     : task.priority === 'medium'
                                                                     ? theme.colors.warning
                                                                     : theme.colors.success

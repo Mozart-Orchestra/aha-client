@@ -1015,7 +1015,7 @@ export async function syncTodoStatusToKanban(
 ): Promise<void> {
     const currentState = storage.getState();
     const { todos } = currentState.todoState || {
-        todos: {}
+        todos: {} as Record<string, TodoItem>
     };
 
     const todo = todos[todoId];

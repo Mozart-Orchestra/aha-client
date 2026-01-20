@@ -41,9 +41,9 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 9999,
     },
     buttonShadow: {
-        shadowColor: theme.colors.shadowColor || '#000000',
+        shadowColor: theme.colors.shadow.color || '#000000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowOpacity: theme.colors.shadow.opacity || 0.1,
         shadowRadius: 8,
         elevation: 4,
     },
@@ -78,16 +78,16 @@ export const RoundButton = React.memo((props: { size?: RoundButtonSize, display?
         gradientEnd?: string,
     } } = {
         default: {
-            backgroundColor: theme.colors.primary,
+            backgroundColor: theme.colors.button.primary.background,
             borderColor: 'transparent',
-            textColor: theme.colors.onPrimary,
-            gradientStart: theme.colors.gradientStart || theme.colors.primary,
-            gradientEnd: theme.colors.gradientEnd || theme.colors.primary,
+            textColor: theme.colors.button.primary.tint,
+            gradientStart: theme.colors.button.primary.background,
+            gradientEnd: theme.colors.button.primary.background,
         },
         inverted: {
             backgroundColor: 'transparent',
             borderColor: 'transparent',
-            textColor: theme.colors.onBackground,
+            textColor: theme.colors.text,
         }
     }
 

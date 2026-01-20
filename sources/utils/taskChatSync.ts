@@ -159,7 +159,7 @@ export function createTaskUpdateMessage(
     task: KanbanTask,
     changes: {
         status?: string;
-        assigneeId?: string;
+        assigneeId?: string | null;
         priority?: string;
     },
     actorName: string

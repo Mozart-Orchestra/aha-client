@@ -5,13 +5,18 @@
  */
 
 export type TeamMessageType =
-    | 'chat'              // 普通聊天消息
-    | 'task-update'       // 任务状态更新
-    | 'task-created'      // 任务创建
-    | 'task-assigned'     // 任务分配
-    | 'notification'      // 系统通知
-    | 'role-assignment'   // 角色分配
-    | 'system';           // 系统消息
+    | 'chat'                    // 普通聊天消息
+    | 'task-update'             // 任务状态更新
+    | 'task-created'            // 任务创建
+    | 'task-assigned'           // 任务分配
+    | 'notification'            // 系统通知
+    | 'role-assignment'         // 角色分配
+    | 'system'                  // 系统消息
+    | 'collaboration-request'   // 协作请求 (P1.2)
+    | 'help-needed'             // 求助消息 (P1.2)
+    | 'handoff'                 // 任务交接 (P1.2)
+    | 'approval-request'        // 审批请求 (P1.2)
+    | 'approval-decision';      // 审批决定 (P1.2)
 
 export type TeamMessagePriority = 'low' | 'normal' | 'high' | 'urgent';
 
@@ -172,6 +177,79 @@ ${context.shouldRespond ? '📌 Response expected based on team protocol' : ''}
 /**
  * 判断消息是否需要响应
  */
+// === P1.2: Collaboration Protocol Types ===
+
+/**
+ * 协作请求类型
+ */
+export type CollaborationRequestType = 'review' | 'pair' | 'consult' | 'escalate' | 'delegate';
+
+/**
+ * 协作请求紧急程度
+ */
+export type CollaborationUrgency = 'low' | 'normal' | 'high' | 'blocking';
+
+/**
+ * 协作请求
+ */
+export interface CollaborationRequest {
+    requestType: CollaborationRequestType;
+    taskId: string;
+    requestingRole: string;
+    targetRoles: string[];
+    urgency: CollaborationUrgency;
+    context: string;
+    expectedOutcome?: string;
+}
+
+/**
+ * 求助请求
+ */
+export interface HelpNeededRequest {
+    taskId: string;
+    blockerType: 'dependency' | 'question' | 'resource' | 'technical' | 'unknown';
+    description: string;
+    attemptedSolutions?: string[];
+    targetRoles?: string[];
+}
+
+/**
+ * 任务交接请求
+ */
+export interface HandoffRequest {
+    taskId: string;
+    fromRole: string;
+    toRole: string;
+    reason: 'completion' | 'reassignment' | 'escalation' | 'specialization';
+    summary: string;
+    nextSteps?: string[];
+    attachments?: string[];
+}
+
+/**
+ * 审批请求
+ */
+export interface ApprovalRequestPayload {
+    taskId: string;
+    approvalType: 'task-completion' | 'task-creation' | 'scope-change' | 'resource-request';
+    requestedBy: string;
+    requestedByRole: string;
+    priority: TeamMessagePriority;
+    context?: string;
+}
+
+/**
+ * 审批决定
+ */
+export interface ApprovalDecisionPayload {
+    taskId: string;
+    decision: 'approved' | 'rejected';
+    decidedBy: string;
+    decidedByRole: string;
+    reason?: string;
+    conditions?: string[];
+}
+
 export function shouldRespondToMessage(
     message: TeamMessage,
     mySessionId: string,

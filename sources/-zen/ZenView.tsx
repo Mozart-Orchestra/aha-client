@@ -222,7 +222,6 @@ export const ZenView = React.memo(() => {
                 teamId: selectedTeam.id,
                 fromRole: 'system',
                 content: `New task created from todo: "${todo?.title}"`,
-                shortContent: 'Todo converted to task',
                 type: 'chat',
                 metadata: {
                     taskId: newTask.id,
@@ -324,7 +323,7 @@ export const ZenView = React.memo(() => {
                         {!todo?.kanbanTaskId && (
                             <Pressable
                                 onPress={handleConvertToKanban}
-                                style={[styles.actionButton, { backgroundColor: theme.colors.button.secondary.background || '#3B82F6' }]}
+                                style={[styles.actionButton, { backgroundColor: '#3B82F6' }]}
                             >
                                 <Ionicons name="trending-up" size={20} color="#FFFFFF" />
                                 <Text style={styles.actionButtonText}>Convert to Kanban</Text>

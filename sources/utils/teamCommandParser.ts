@@ -182,6 +182,7 @@ export async function executeCreateTask(
       id: taskId,
       title: params.title || 'Untitled Task',
       description: params.description || '',
+      done: false,
       status: 'todo',
       priority: params.priority || 'medium',
       assignee: params.assignee || null,

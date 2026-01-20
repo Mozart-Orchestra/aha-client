@@ -73,6 +73,9 @@ class Sync {
     private teamMessagesCache = new Map<string, import('@/sync/teamMessageTypes').TeamMessage[]>();
     private teamMessageSubscriptions = new Map<string, Set<(message: import('@/sync/teamMessageTypes').TeamMessage) => void>>();
 
+    // Task events (Server-Driven Task Orchestration)
+    private taskEventSubscriptions = new Map<string, Set<(event: { type: 'task-created' | 'task-updated' | 'task-deleted'; teamId: string; taskId: string; task?: any }) => void>>();
+
     // Generic locking mechanism
     private recalculationLockCount = 0;
     private lastRecalculationTime = 0;
@@ -947,9 +950,72 @@ class Sync {
             // Send update to server
             const response = await updateArtifact(this.credentials, artifactId, updateRequest);
 
+            if (!response.success && response.error === 'version-mismatch') {
+                console.log('⚠️ updateArtifact: Version mismatch detected, updating local state from server response');
+
+                // Decrypt server version if provided
+                if (response.currentHeader || response.currentBody) {
+                    try {
+                        const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
+
+                        let serverHeader = undefined;
+                        let serverBody = undefined;
+
+                        if (response.currentHeader) {
+                            serverHeader = await artifactEncryption.decryptHeader(response.currentHeader);
+                        }
+
+                        if (response.currentBody) {
+                            // Handle team artifact plaintext body or encrypted body
+                            if (type === 'team' || currentArtifact.type === 'team') {
+                                try {
+                                    // Try to parse as plaintext base64 first
+                                    const plainText = new TextDecoder().decode(decodeBase64(response.currentBody));
+                                    const jsonBody = JSON.parse(plainText);
+                                    serverBody = { body: jsonBody.body };
+                                } catch (e) {
+                                    // Fallback to encrypted
+                                    serverBody = await artifactEncryption.decryptBody(response.currentBody);
+                                }
+                            } else {
+                                serverBody = await artifactEncryption.decryptBody(response.currentBody);
+                            }
+                        }
+
+                        // Update local storage with server version
+                        const serverArtifact: DecryptedArtifact = {
+                            ...currentArtifact,
+                            ...(serverHeader && {
+                                title: serverHeader.title || null,
+                                type: serverHeader.type, // trust server type
+                                sessions: serverHeader.sessions,
+                                draft: serverHeader.draft,
+                            }),
+                            ...(serverBody && {
+                                body: serverBody.body
+                            }),
+                            headerVersion: response.currentHeaderVersion ?? headerVersion,
+                            bodyVersion: response.currentBodyVersion ?? bodyVersion,
+                            // We don't have updatedAt from response, so we keep current or update?
+                            // Ideally we should start a fresh fetch, but this is a quick sync.
+                            // Let's just update versions to allow next save to proceed if user insists.
+                        };
+
+                        storage.getState().updateArtifact(serverArtifact);
+                        console.log('✅ updateArtifact: Local state updated to match server version');
+                    } catch (decryptError) {
+                        console.error('Failed to decrypt server version during mismatch handling:', decryptError);
+                        // Fallback to invalidation
+                        this.fetchArtifactsList().catch(e => console.error(e));
+                    }
+                }
+
+                throw new Error('Artifact was updated by another device. Local state has been refreshed. Please try again.');
+            }
+
             if (!response.success) {
-                // If version-mismatch, let caller handle it (e.g. syncSessionToTeam will retry with merge)
-                throw new Error('Failed to update artifact: ' + response.error);
+                // If other error
+                throw new Error('Failed to update artifact: ' + (response as any).error);
             }
 
             // Update local storage
@@ -1476,6 +1542,10 @@ class Sync {
         }
     }
 
+    /**
+     * Sync session to team using Server API (avoids version conflicts)
+     * Called when session metadata contains teamId/role information
+     */
     private syncSessionToTeam = async (sessionId: string, sessionMetadata: any): Promise<void> => {
         if (!sessionMetadata) {
             return;
@@ -1494,106 +1564,21 @@ class Sync {
 
         const teamId = metadata.teamId;
         const role = metadata.role;
-        const displayName = metadata.name || metadata.path;
 
         // Only sync if session has both teamId and role
         if (!teamId || !role) {
             return;
         }
 
-        const MAX_RETRIES = 5;
-        let attempt = 0;
-
-        while (attempt < MAX_RETRIES) {
-            attempt++;
-            try {
-                // Get team artifact
-                const teamArtifact = await this.fetchArtifactWithBody(teamId);
-
-                if (!teamArtifact || !teamArtifact.body) {
-                    console.log(`[syncSessionToTeam] Team artifact ${teamId} not found or has no body`);
-                    return;
-                }
-
-                let board: any;
-                try {
-                    board = JSON.parse(teamArtifact.body);
-                } catch (e) {
-                    console.error(`[syncSessionToTeam] Failed to parse team body:`, e);
-                    return;
-                }
-
-                // Check if team structure exists
-                if (!board.team || !Array.isArray(board.team.members)) {
-                    console.log(`[syncSessionToTeam] Team artifact has no team.members array`);
-                    return;
-                }
-
-                // Check if session is already in members
-                const existingMember = board.team.members.find((m: any) => m.sessionId === sessionId);
-
-                if (existingMember) {
-                    // Update existing member's info if needed
-                    if (existingMember.roleId !== role || existingMember.displayName !== displayName) {
-                        console.log(`[syncSessionToTeam] Updating existing member ${sessionId}`);
-                        existingMember.roleId = role;
-                        existingMember.displayName = displayName;
-
-                        // Save updated board
-                        const updatedBody = JSON.stringify(board, null, 2);
-                        await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, teamArtifact.sessions || [], false, 'team');
-                    }
-                    return;
-                }
-
-                // Add new member
-                console.log(`[syncSessionToTeam] Adding new member ${sessionId} to team ${teamId}`);
-                const newMember: any = {
-                    sessionId,
-                    roleId: role,
-                    displayName: displayName || `Agent ${role}`,
-                    focusAreas: []
-                };
-
-                board.team.members.push(newMember);
-
-                // Save updated board
-                const updatedBody = JSON.stringify(board, null, 2);
-
-                // Collect all member session IDs
-                const allMemberIds = board.team.members
-                    .map((m: any) => m.sessionId)
-                    .filter((id: string) => id && id.length > 0);
-
-                await this.updateArtifact(teamId, teamArtifact.title || teamArtifact.id, updatedBody, allMemberIds, false, 'team');
-
-                console.log(`[syncSessionToTeam] Successfully added member ${sessionId} to team ${teamId}`);
-                break; // Success
-            } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                const isVersionMismatch = errorMsg.includes('version-mismatch');
-
-                if (isVersionMismatch) {
-                    console.warn(`[syncSessionToTeam] Failed to sync session to team (attempt ${attempt}/${MAX_RETRIES}): ${errorMsg}`);
-                } else {
-                    console.error(`[syncSessionToTeam] Failed to sync session to team (attempt ${attempt}/${MAX_RETRIES}): ${errorMsg}`);
-                }
-
-                if (attempt >= MAX_RETRIES) {
-                    console.error(`[syncSessionToTeam] Max retries reached, giving up.`);
-                    break;
-                }
-
-                // For version-mismatch, use exponential backoff with longer wait time
-                // This allows other concurrent updates to complete first
-                const baseDelay = isVersionMismatch ? 500 : 200;
-                const maxJitter = isVersionMismatch ? 1000 : 500;
-                const backoffMultiplier = isVersionMismatch ? attempt : 1;
-                const delay = (baseDelay * backoffMultiplier) + (Math.random() * maxJitter);
-
-                console.log(`[syncSessionToTeam] Retrying in ${Math.round(delay)}ms (version-mismatch: ${isVersionMismatch})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
+        try {
+            // Use new Server API to add team member (server handles locking and artifact updates)
+            console.log(`[syncSessionToTeam] Adding member ${sessionId} to team ${teamId} via Server API`);
+            await this.addTeamMember(teamId, sessionId, role);
+            console.log(`[syncSessionToTeam] Successfully added member ${sessionId} to team ${teamId}`);
+        } catch (error) {
+            // Log but don't throw - member may already exist
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.warn(`[syncSessionToTeam] Failed to add member to team: ${errorMsg}`);
         }
     }
 
@@ -2073,6 +2058,74 @@ class Sync {
                 }
             } else {
                 console.log(`🔄 Sync: Duplicate message ${message.id}, skipping notification`);
+            }
+
+        // === Task Events (Server-Driven Task Orchestration) ===
+        } else if (updateData.body.t === 'task-created' || updateData.body.t === 'task-updated' || updateData.body.t === 'task-deleted') {
+            const { teamId, taskId, task } = updateData.body as { teamId: string; taskId: string; task?: any };
+            console.log(`🔄 Sync: Received ${updateData.body.t} for team ${teamId}, task ${taskId}`);
+
+            // Invalidate artifacts sync to refresh the board
+            this.artifactsSync.invalidate();
+
+            // Notify task event subscribers
+            const taskSubscribers = this.taskEventSubscriptions.get(teamId);
+            if (taskSubscribers) {
+                taskSubscribers.forEach(callback => callback({
+                    type: updateData.body.t as 'task-created' | 'task-updated' | 'task-deleted',
+                    teamId,
+                    taskId,
+                    task
+                }));
+            }
+
+        // === Team Update Events (Team Management) ===
+        } else if (updateData.body.t === 'team-update') {
+            const { teamId, eventType, details } = updateData.body as { teamId: string; eventType: string; details: any };
+            log.log(`🏢 Team update received: ${eventType} for team ${teamId}`);
+
+            // Handle different team events
+            switch (eventType) {
+                case 'member-added':
+                case 'member-removed':
+                    // Refresh the team artifact to get updated members list
+                    this.artifactsSync.invalidate();
+                    break;
+                case 'team-archived':
+                case 'team-deleted':
+                    // Remove team artifact from local storage
+                    storage.getState().deleteArtifact(teamId);
+                    // Refresh sessions list (sessions may have been archived/deleted)
+                    this.sessionsSync.invalidate();
+                    break;
+                case 'team-renamed':
+                    // Refresh the team artifact to get updated name
+                    this.artifactsSync.invalidate();
+                    break;
+            }
+
+        // === Session Update Events (Session Management) ===
+        } else if (updateData.body.t === 'session-update') {
+            const { sessionId, eventType, details } = updateData.body as { sessionId: string; eventType: string; details?: any };
+            log.log(`📋 Session update received: ${eventType} for session ${sessionId}`);
+
+            // Handle different session events
+            switch (eventType) {
+                case 'session-archived':
+                case 'session-deleted':
+                    // Remove session from storage
+                    storage.getState().deleteSession(sessionId);
+                    // Remove encryption keys from memory
+                    this.encryption.removeSessionEncryption(sessionId);
+                    // Remove from project manager
+                    projectManager.removeSession(sessionId);
+                    // Clear any cached git status
+                    gitStatusSync.clearForSession(sessionId);
+                    break;
+                case 'session-renamed':
+                    // Refresh sessions list to get updated name
+                    this.sessionsSync.invalidate();
+                    break;
             }
 
         } else if (updateData.body.t === 'new-session') {
@@ -2656,6 +2709,146 @@ class Sync {
                 }
             }
         };
+    }
+
+    /**
+     * Subscribe to task events for a team (Server-Driven Task Orchestration)
+     * Events are pushed from server via WebSocket when tasks are created/updated/deleted
+     */
+    subscribeToTaskEvents(
+        teamId: string,
+        callback: (event: { type: 'task-created' | 'task-updated' | 'task-deleted'; teamId: string; taskId: string; task?: any }) => void
+    ): () => void {
+        let subscribers = this.taskEventSubscriptions.get(teamId);
+        if (!subscribers) {
+            subscribers = new Set();
+            this.taskEventSubscriptions.set(teamId, subscribers);
+        }
+
+        subscribers.add(callback);
+
+        // Return unsubscribe function
+        return () => {
+            const subs = this.taskEventSubscriptions.get(teamId);
+            if (subs) {
+                subs.delete(callback);
+                if (subs.size === 0) {
+                    this.taskEventSubscriptions.delete(teamId);
+                }
+            }
+        };
+    }
+
+    // === Team Management API Methods ===
+
+    /**
+     * Add a member to a team
+     */
+    public async addTeamMember(teamId: string, sessionId: string, roleId?: string, displayName?: string): Promise<import('./apiTeamManagement').TeamMemberResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { addTeamMember } = await import('./apiTeamManagement');
+        return addTeamMember(this.credentials, teamId, sessionId, roleId, displayName);
+    }
+
+    /**
+     * Remove a member from a team
+     */
+    public async removeTeamMember(teamId: string, sessionId: string): Promise<{ success: boolean }> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { removeTeamMember } = await import('./apiTeamManagement');
+        return removeTeamMember(this.credentials, teamId, sessionId);
+    }
+
+    /**
+     * Archive a team and all its sessions
+     */
+    public async archiveTeam(teamId: string): Promise<import('./apiTeamManagement').TeamArchiveResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { archiveTeam } = await import('./apiTeamManagement');
+        return archiveTeam(this.credentials, teamId);
+    }
+
+    /**
+     * Delete a team and all its sessions
+     */
+    public async deleteTeam(teamId: string): Promise<import('./apiTeamManagement').TeamDeleteResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { deleteTeam } = await import('./apiTeamManagement');
+        return deleteTeam(this.credentials, teamId);
+    }
+
+    /**
+     * Rename a team
+     */
+    public async renameTeam(teamId: string, newName: string): Promise<import('./apiTeamManagement').TeamRenameResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { renameTeam } = await import('./apiTeamManagement');
+        return renameTeam(this.credentials, teamId, newName);
+    }
+
+    /**
+     * Batch archive multiple sessions
+     */
+    public async batchArchiveSessions(sessionIds: string[]): Promise<import('./apiTeamManagement').BatchArchiveSessionsResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { batchArchiveSessions } = await import('./apiTeamManagement');
+        return batchArchiveSessions(this.credentials, sessionIds);
+    }
+
+    /**
+     * Batch delete multiple sessions
+     */
+    public async batchDeleteSessions(sessionIds: string[]): Promise<import('./apiTeamManagement').BatchDeleteSessionsResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { batchDeleteSessions } = await import('./apiTeamManagement');
+        return batchDeleteSessions(this.credentials, sessionIds);
+    }
+
+    /**
+     * Rename a session
+     */
+    public async renameSession(sessionId: string, newName: string): Promise<import('./apiTeamManagement').SessionRenameResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { renameSession } = await import('./apiTeamManagement');
+        return renameSession(this.credentials, sessionId, newName);
+    }
+
+    /**
+     * Batch archive multiple teams
+     */
+    public async batchArchiveTeams(teamIds: string[]): Promise<import('./apiTeamManagement').BatchArchiveTeamsResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { batchArchiveTeams } = await import('./apiTeamManagement');
+        return batchArchiveTeams(this.credentials, teamIds);
+    }
+
+    /**
+     * Batch delete multiple teams
+     */
+    public async batchDeleteTeams(teamIds: string[]): Promise<import('./apiTeamManagement').BatchDeleteTeamsResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { batchDeleteTeams } = await import('./apiTeamManagement');
+        return batchDeleteTeams(this.credentials, teamIds);
     }
 }
 

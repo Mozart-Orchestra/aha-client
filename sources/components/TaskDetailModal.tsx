@@ -112,9 +112,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
     const getPriorityColor = (priority?: string) => {
         switch (priority) {
-            case 'urgent': return theme.colors.error;
+            case 'urgent': return theme.colors.textDestructive;
             case 'high': return theme.colors.warning;
-            case 'medium': return theme.colors.info;
+            case 'medium': return theme.colors.textLink;
             case 'low': return theme.colors.success;
             default: return theme.colors.textSecondary;
         }
@@ -572,10 +572,10 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: '#FFF',
     },
     cancelButtonText: {
-        color: theme.colors.groupped.text,
+        color: theme.colors.text,
     },
     discussButton: {
-        backgroundColor: theme.colors.info,
+        backgroundColor: theme.colors.textLink,
     },
     editButton: {
         backgroundColor: theme.colors.button.primary.background,

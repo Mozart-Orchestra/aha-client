@@ -248,7 +248,7 @@ async function testFileLocks() {
     }
 
     // Verify all IDs are present
-    const ids = messages.map(msg => parseInt(msg.id.split('-')[1]));
+    const ids = messages.map(msg => parseInt(msg.id!.split('-')[1]));
     const uniqueIds = new Set(ids);
     console.log(`Unique messages: ${uniqueIds.size} / 50`);
 

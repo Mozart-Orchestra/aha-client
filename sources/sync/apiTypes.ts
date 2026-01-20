@@ -168,6 +168,42 @@ export const ApiUpdateTeamMessageSchema = z.object({
     message: z.any()
 });
 
+// Task event schemas - Server-driven task orchestration
+export const ApiTaskCreatedSchema = z.object({
+    t: z.literal('task-created'),
+    teamId: z.string(),
+    taskId: z.string(),
+    task: z.any()
+});
+
+export const ApiTaskUpdatedSchema = z.object({
+    t: z.literal('task-updated'),
+    teamId: z.string(),
+    taskId: z.string(),
+    task: z.any()
+});
+
+export const ApiTaskDeletedSchema = z.object({
+    t: z.literal('task-deleted'),
+    teamId: z.string(),
+    taskId: z.string()
+});
+
+// Team management event schemas
+export const ApiTeamUpdateSchema = z.object({
+    t: z.literal('team-update'),
+    teamId: z.string(),
+    eventType: z.enum(['member-added', 'member-removed', 'team-archived', 'team-deleted', 'team-renamed']),
+    details: z.any()
+});
+
+export const ApiSessionUpdateSchema = z.object({
+    t: z.literal('session-update'),
+    sessionId: z.string(),
+    eventType: z.enum(['session-archived', 'session-deleted', 'session-renamed']),
+    details: z.any().optional()
+});
+
 export const ApiUpdateSchema = z.discriminatedUnion('t', [
     ApiUpdateNewMessageSchema,
     ApiUpdateNewSessionSchema,
@@ -182,7 +218,12 @@ export const ApiUpdateSchema = z.discriminatedUnion('t', [
     ApiRelationshipUpdatedSchema,
     ApiNewFeedPostSchema,
     ApiKvBatchUpdateSchema,
-    ApiUpdateTeamMessageSchema
+    ApiUpdateTeamMessageSchema,
+    ApiTaskCreatedSchema,
+    ApiTaskUpdatedSchema,
+    ApiTaskDeletedSchema,
+    ApiTeamUpdateSchema,
+    ApiSessionUpdateSchema
 ]);
 
 
@@ -190,6 +231,11 @@ export const ApiUpdateSchema = z.discriminatedUnion('t', [
 export type ApiUpdateNewMessage = z.infer<typeof ApiUpdateNewMessageSchema>;
 export type ApiRelationshipUpdated = z.infer<typeof ApiRelationshipUpdatedSchema>;
 export type ApiKvBatchUpdate = z.infer<typeof ApiKvBatchUpdateSchema>;
+export type ApiTaskCreated = z.infer<typeof ApiTaskCreatedSchema>;
+export type ApiTaskUpdated = z.infer<typeof ApiTaskUpdatedSchema>;
+export type ApiTaskDeleted = z.infer<typeof ApiTaskDeletedSchema>;
+export type ApiTeamUpdate = z.infer<typeof ApiTeamUpdateSchema>;
+export type ApiSessionUpdate = z.infer<typeof ApiSessionUpdateSchema>;
 export type ApiUpdate = z.infer<typeof ApiUpdateSchema>;
 
 //

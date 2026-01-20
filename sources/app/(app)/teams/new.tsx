@@ -194,6 +194,23 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.textSecondary,
         marginTop: 4,
     },
+    machineItemOffline: {
+        opacity: 0.6,
+    },
+    machineMetaOffline: {
+        color: theme.colors.textDestructive,
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    statusOnline: {
+        backgroundColor: '#34C759',
+    },
+    statusOffline: {
+        backgroundColor: theme.colors.textDestructive,
+    },
     agentChipGroup: {
         flexDirection: 'row',
         gap: 12,
@@ -341,13 +358,18 @@ export default function NewTeamScreen() {
         setCwdEdited(false);
     }, [selectedMachineId]);
 
+    // Auto-suggest path when machine changes or on initial mount
+    // NOTE: recentMachinePaths intentionally excluded from deps to prevent
+    // overwriting user input when settings sync. Path is only auto-suggested
+    // when machine changes or on initial mount (when cwdEdited is false).
     React.useEffect(() => {
         if (!selectedMachineId || cwdEdited) {
             return;
         }
         const suggestedPath = getRecentPathForMachine(selectedMachineId, recentMachinePaths);
         setCwd((prev) => (prev === suggestedPath ? prev : suggestedPath));
-    }, [selectedMachineId, recentMachinePaths, cwdEdited]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedMachineId, cwdEdited]);
 
     const selectedMachine = React.useMemo(() => {
         if (!selectedMachineId) {
@@ -474,6 +496,15 @@ export default function NewTeamScreen() {
                     await Modal.alert(
                         t('common.error'),
                         'Please select a machine to run the auto-spawned agents.'
+                    );
+                    return;
+                }
+                // Check if selected machine is online
+                const targetMachineCheck = storage.getState().machines[machineIdForSpawn];
+                if (!targetMachineCheck?.active) {
+                    await Modal.alert(
+                        t('common.error'),
+                        'The selected machine is offline. Please select an online machine or wait for the machine to come online.'
                     );
                     return;
                 }
@@ -629,7 +660,7 @@ export default function NewTeamScreen() {
                     ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
                 ];
 
-                await sync.updateArtifact(artifactId, null, updatedBody, allMemberIds, false, 'team');
+                await sync.updateArtifact(artifactId, title.trim(), updatedBody, allMemberIds, false, 'team');
 
                 // Update metadata for manual members only (running sessions)
                 if (manualMembers.length > 0) {
@@ -865,13 +896,20 @@ export default function NewTeamScreen() {
                                                     onPress={() => setSelectedMachineId(machine.id)}
                                                     style={[
                                                         styles.machineItem,
-                                                        isSelected && styles.machineItemSelected
+                                                        isSelected && styles.machineItemSelected,
+                                                        !machine.active && styles.machineItemOffline
                                                     ]}
                                                 >
-                                                    <Text style={styles.machineName}>
-                                                        {machine.metadata?.displayName || machine.metadata?.host || 'Machine'}
-                                                    </Text>
-                                                    <Text style={styles.machineMeta}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                        <View style={[
+                                                            styles.statusDot,
+                                                            machine.active ? styles.statusOnline : styles.statusOffline
+                                                        ]} />
+                                                        <Text style={styles.machineName}>
+                                                            {machine.metadata?.displayName || machine.metadata?.host || 'Machine'}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={[styles.machineMeta, !machine.active && styles.machineMetaOffline]}>
                                                         {machine.active ? 'Online' : 'Offline'} • {machine.metadata?.platform || 'unknown'}
                                                     </Text>
                                                 </Pressable>

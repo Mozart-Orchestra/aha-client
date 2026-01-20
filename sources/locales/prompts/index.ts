@@ -3,7 +3,7 @@
  * Dynamic Team Role Configuration Loader
  */
 
-import { useTranslation } from '../i18n/useTranslation';
+import { useTranslation } from '../../i18n/useTranslation';
 
 export interface TeamRole {
   id: string;
@@ -73,7 +73,15 @@ export function getTeamRoles(locale: string = 'zh'): LocalizedTeamConfig {
       };
     } catch (fallbackError) {
       console.error('Failed to load fallback zh roles:', fallbackError);
-      return { roles: {}, agreements: {} };
+      return {
+        roles: {},
+        agreements: {
+          statusUpdates: '',
+          handoffs: '',
+          escalation: '',
+          definitionOfDone: ''
+        }
+      };
     }
   }
 }

@@ -15,7 +15,8 @@ import {
   executeUpdateTask,
   executeCompleteTask,
   getCommandHelp,
-  type TaskCommandResult
+  type TaskCommandResult,
+  type ParsedCommand
 } from '@/utils/teamCommandParser';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { KanbanTask } from '@/sync/kanbanTypes';
@@ -53,17 +54,17 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderColor: theme.colors.divider,
         marginRight: 8,
         marginBottom: 4, // Align with bubble bottom
-        shadowColor: theme.colors.shadowColor || '#000',
+        shadowColor: theme.colors.shadow.color || '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowOpacity: theme.colors.shadow.opacity || 0.1,
         shadowRadius: 4,
         elevation: 2,
     },
     myAvatarContainer: {
         marginRight: 0,
         marginLeft: 8,
-        backgroundColor: theme.colors.primary,
-        borderColor: theme.colors.primary,
+        backgroundColor: theme.colors.button.primary.background,
+        borderColor: theme.colors.button.primary.background,
     },
     // 🆕 Online status indicator
     onlineIndicator: {
@@ -76,7 +77,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: theme.colors.success || '#10B981',
         borderWidth: 2,
         borderColor: theme.colors.surface,
-        shadowColor: theme.colors.shadowColor || '#000',
+        shadowColor: theme.colors.shadow.color || '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 2,
@@ -99,18 +100,18 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 18,
         padding: 12,
         borderBottomLeftRadius: 4,
-        shadowColor: theme.colors.shadowColor || '#000',
+        shadowColor: theme.colors.shadow.color || '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowOpacity: theme.colors.shadow.opacity || 0.1,
         shadowRadius: 4,
         elevation: 2,
     },
     myMessageBubble: {
-        backgroundColor: theme.colors.primary,
+        backgroundColor: theme.colors.button.primary.background,
         borderRadius: 18,
         borderBottomRightRadius: 4,
         borderBottomLeftRadius: 18, // Reset
-        shadowColor: theme.colors.primary,
+        shadowColor: theme.colors.button.primary.background,
         shadowOpacity: 0.3,
         shadowRadius: 6,
         elevation: 3,
@@ -150,7 +151,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 13,
         marginTop: 8,
         fontWeight: '600',
-        color: theme.colors.primary,
+        color: theme.colors.button.primary.background,
     },
     myExpandText: {
         color: '#FFFFFF',
@@ -181,9 +182,9 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row',
         alignItems: 'flex-end',
         gap: 10,
-        shadowColor: theme.colors.shadowColor || '#000',
+        shadowColor: theme.colors.shadow.color || '#000',
         shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowOpacity: theme.colors.shadow.opacity || 0.1,
         shadowRadius: 4,
         elevation: 3,
     },
@@ -196,7 +197,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         maxHeight: 120,
         borderWidth: 2,
         borderColor: theme.colors.divider,
-        shadowColor: theme.colors.shadowColor || '#000',
+        shadowColor: theme.colors.shadow.color || '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
@@ -204,8 +205,8 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     // 🆕 Focused input state
     inputWrapperFocused: {
-        borderColor: theme.colors.primary,
-        shadowColor: theme.colors.primary,
+        borderColor: theme.colors.button.primary.background,
+        shadowColor: theme.colors.button.primary.background,
         shadowOpacity: 0.2,
         shadowRadius: 4,
         elevation: 2,
@@ -224,9 +225,9 @@ const stylesheet = StyleSheet.create((theme) => ({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 2, // Align with input bottom
-        shadowColor: theme.colors.shadowColor || '#000',
+        shadowColor: theme.colors.shadow.color || '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: theme.colors.shadowOpacity || 0.15,
+        shadowOpacity: theme.colors.shadow.opacity || 0.15,
         shadowRadius: 4,
         elevation: 3,
     },
@@ -383,6 +384,12 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
 
     const shouldShowExpand = hasShortContent || isLong;
 
+    // Get short text for collapsed view
+    const getShortText = React.useCallback(() => {
+        if (message.shortContent) return message.shortContent;
+        return message.content.substring(0, MAX_LENGTH) + '...';
+    }, [message.shortContent, message.content]);
+
     const renderContent = () => {
         if (!shouldShowExpand || expanded) {
             // Show full content
@@ -392,12 +399,12 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
                 </View>
             );
         } else {
-            // Show short content
-            const shortText = message.shortContent || (message.content.substring(0, MAX_LENGTH) + '...');
+            // Show short content with Markdown support
+            const shortText = getShortText();
             return (
-                <Text style={[styles.messageContent, isMyMessage && styles.myMessageContent]}>
-                    {shortText}
-                </Text>
+                <View style={isMyMessage ? { opacity: 0.95 } : {}}>
+                    <MarkdownView markdown={shortText} textColor={isMyMessage ? '#FFFFFF' : undefined} />
+                </View>
             );
         }
     };
@@ -666,6 +673,37 @@ export default function TeamChatRoom({
         );
     };
 
+    // Deduplicate and sort
+    const uniqueMessages = React.useMemo(() => {
+        const seen = new Set();
+        return messages.filter(m => {
+            if (seen.has(m.id)) return false;
+            seen.add(m.id);
+            return true;
+        }).sort((a, b) => a.timestamp - b.timestamp);
+    }, [messages]);
+
+    const loadMessages = React.useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const result = await sync.getTeamMessages(teamId);
+
+            setMessages(prev => {
+                const combined = [...prev, ...result.messages];
+                const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+                return unique.sort((a, b) => a.timestamp - b.timestamp);
+            });
+
+            setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: false });
+            }, 100);
+        } catch (error) {
+            console.error('Failed to load team messages:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [teamId, setMessages]);
+
     // Load messages
     React.useEffect(() => {
         void loadMessages();
@@ -711,37 +749,6 @@ export default function TeamChatRoom({
         };
     }, [teamId, setMessages]);
 
-    // Deduplicate and sort
-    const uniqueMessages = React.useMemo(() => {
-        const seen = new Set();
-        return messages.filter(m => {
-            if (seen.has(m.id)) return false;
-            seen.add(m.id);
-            return true;
-        }).sort((a, b) => a.timestamp - b.timestamp);
-    }, [messages]);
-
-    const loadMessages = React.useCallback(async () => {
-        try {
-            setIsLoading(true);
-            const result = await sync.getTeamMessages(teamId);
-
-            setMessages(prev => {
-                const combined = [...prev, ...result.messages];
-                const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
-                return unique.sort((a, b) => a.timestamp - b.timestamp);
-            });
-
-            setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd({ animated: false });
-            }, 100);
-        } catch (error) {
-            console.error('Failed to load team messages:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [teamId, setMessages]);
-
     const handleSend = async () => {
         const content = inputText.trim();
         if (!content || isSending) return;
@@ -778,9 +785,6 @@ export default function TeamChatRoom({
                         sourceMessageId
                     );
 
-                    // 调用 onTaskCreate 创建任务
-                    await taskChatSync.onTaskCreate?.(newTask);
-
                     // 发送 task-created 通知到聊天
                     const notificationMessage: TeamMessage = {
                         id: `task_created_${randomUUID()}`,
@@ -792,8 +796,9 @@ export default function TeamChatRoom({
                         metadata: {
                             taskId: newTask.id,
                             taskChange: {
-                                action: 'created',
-                                task: newTask
+                                field: 'status',
+                                oldValue: null,
+                                newValue: 'created'
                             }
                         },
                         shortContent: `Task created: ${newTask.title}`
@@ -818,8 +823,9 @@ export default function TeamChatRoom({
                             metadata: {
                                 taskId: newTask.id,
                                 taskChange: {
-                                    action: 'assigned',
-                                    task: newTask
+                                    field: 'assigneeId',
+                                    oldValue: null,
+                                    newValue: newTask.assigneeId
                                 }
                             }
                         });
@@ -1080,7 +1086,7 @@ export default function TeamChatRoom({
                         <Ionicons name="arrow-up" size={20} color={theme.colors.textSecondary} />
                     ) : (
                         <LinearGradient
-                            colors={[theme.colors.gradientStart || theme.colors.primary, theme.colors.gradientEnd || theme.colors.primary]}
+                            colors={[theme.colors.button.primary.background, theme.colors.button.primary.background]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={{

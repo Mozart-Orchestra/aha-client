@@ -18,15 +18,15 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 18,
-        backgroundColor: theme.colors.surfaceVariant || 'rgba(0, 0, 0, 0.05)',
-        shadowColor: theme.colors.shadowColor || '#000000',
+        backgroundColor: theme.colors.surfaceHighest || 'rgba(0, 0, 0, 0.05)',
+        shadowColor: theme.colors.shadow.color || '#000000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: theme.colors.shadowOpacity || 0.1,
+        shadowOpacity: theme.colors.shadow.opacity || 0.1,
         shadowRadius: 4,
         elevation: 2,
     },
     iconButton: {
-        color: theme.colors.primary,
+        color: theme.colors.button.primary.background,
     },
     logoContainer: {
         width: 36,
@@ -34,7 +34,7 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 18,
-        backgroundColor: theme.colors.surfaceVariant || 'rgba(0, 0, 0, 0.05)',
+        backgroundColor: theme.colors.surfaceHighest || 'rgba(0, 0, 0, 0.05)',
     },
     titleContainer: {
         flex: 1,
@@ -42,14 +42,14 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
     },
     titleText: {
         fontSize: 18,
-        color: theme.colors.onSurface,
+        color: theme.colors.text,
         fontWeight: '700',
         ...Typography.default('semiBold'),
         letterSpacing: 0.2,
     },
     subtitleText: {
         fontSize: 12,
-        color: theme.colors.onSurfaceVariant,
+        color: theme.colors.textSecondary,
         marginTop: -2,
     },
     statusContainer: {
@@ -75,13 +75,13 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         color: theme.colors.warning || '#F59E0B',
     },
     statusDisconnected: {
-        color: theme.colors.onSurfaceVariant || '#78716C',
+        color: theme.colors.textSecondary || '#78716C',
     },
     statusError: {
-        color: theme.colors.error || '#DC2626',
+        color: theme.colors.textDestructive || '#DC2626',
     },
     statusDefault: {
-        color: theme.colors.onSurfaceVariant || '#A8A29E',
+        color: theme.colors.textSecondary || '#A8A29E',
     },
     centeredTitle: {
         textAlign: Platform.OS === 'ios' ? 'center' : 'left',
@@ -136,11 +136,11 @@ function HeaderRight() {
                 {
                     opacity: p.pressed ? 0.7 : 1,
                     transform: [{ scale: p.pressed ? 0.95 : 1 }],
-                    backgroundColor: theme.colors.primary,
+                    backgroundColor: theme.colors.button.primary.background,
                 }
             ]}
         >
-            <Ionicons name="add-outline" size={24} color={theme.colors.onPrimary} />
+            <Ionicons name="add-outline" size={24} color={theme.colors.button.primary.tint} />
         </Pressable>
     );
 }
@@ -162,7 +162,7 @@ function HeaderRightNotAuth() {
                 }
             ]}
         >
-            <Ionicons name="server-outline" size={20} color={theme.colors.primary} />
+            <Ionicons name="server-outline" size={20} color={theme.colors.button.primary.background} />
         </Pressable>
     );
 }

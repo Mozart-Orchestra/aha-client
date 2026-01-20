@@ -51,7 +51,7 @@ const initI18n = async (): Promise<string> => {
   await i18n
     .use(initReactI18next)
     .init({
-      compatibilityJSON: 'v3',
+      compatibilityJSON: 'v4',
       resources: {
         en: { translation: en },
         'zh-CN': { translation: zhCN },

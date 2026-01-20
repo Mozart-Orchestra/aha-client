@@ -59,6 +59,8 @@ export const MarkdownView = React.memo((props: {
                         return <RenderCodeBlock content={block.content} language={block.language} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} />;
                     } else if (block.type === 'options') {
                         return <RenderOptionsBlock items={block.items} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} onOptionPress={props.onOptionPress} textColor={props.textColor} />;
+                    } else if (block.type === 'table') {
+                        return <RenderTableBlock headers={block.headers} alignments={block.alignments} rows={block.rows} key={index} first={index === 0} last={index === blocks.length - 1} selectable={selectable} textColor={props.textColor} />;
                     } else {
                         return null;
                     }
@@ -92,7 +94,7 @@ function RenderHeaderBlock(props: { level: 1 | 2 | 3 | 4 | 5 | 6, spans: Markdow
 function RenderListBlock(props: { items: MarkdownSpan[][], first: boolean, last: boolean, selectable: boolean, textColor?: string }) {
     const listStyle = [style.text, style.list, props.textColor && { color: props.textColor }];
     return (
-        <View style={{ flexDirection: 'column', marginBottom: 8, gap: 1 }}>
+        <View style={{ flexDirection: 'column', marginBottom: 8, gap: 0 }}>
             {props.items.map((item, index) => (
                 <Text selectable={props.selectable} style={listStyle} key={index}>- <RenderSpans spans={item} baseStyle={listStyle} /></Text>
             ))}
@@ -103,7 +105,7 @@ function RenderListBlock(props: { items: MarkdownSpan[][], first: boolean, last:
 function RenderNumberedListBlock(props: { items: { number: number, spans: MarkdownSpan[] }[], first: boolean, last: boolean, selectable: boolean, textColor?: string }) {
     const listStyle = [style.text, style.list, props.textColor && { color: props.textColor }];
     return (
-        <View style={{ flexDirection: 'column', marginBottom: 8, gap: 1 }}>
+        <View style={{ flexDirection: 'column', marginBottom: 8, gap: 0 }}>
             {props.items.map((item, index) => (
                 <Text selectable={props.selectable} style={listStyle} key={index}>{item.number.toString()}. <RenderSpans spans={item.spans} baseStyle={listStyle} /></Text>
             ))}
@@ -167,6 +169,73 @@ function RenderOptionsBlock(props: {
     );
 }
 
+function RenderTableBlock(props: {
+    headers: string[],
+    alignments: ('left' | 'center' | 'right')[],
+    rows: string[][],
+    first: boolean,
+    last: boolean,
+    selectable: boolean,
+    textColor?: string
+}) {
+    const getTextAlign = (index: number): 'left' | 'center' | 'right' => {
+        return props.alignments[index] || 'left';
+    };
+
+    return (
+        <View style={[style.tableContainer, props.first && style.first, props.last && style.last]}>
+            <ScrollView
+                horizontal={true}
+                showsHorizontalScrollIndicator={true}
+                style={style.tableScrollView}
+                contentContainerStyle={style.tableContentContainer}
+                nestedScrollEnabled={true}
+            >
+                <View style={style.table}>
+                    {/* Header Row */}
+                    <View style={style.tableHeaderRow}>
+                        {props.headers.map((header, colIndex) => (
+                            <View key={colIndex} style={[style.tableHeaderCell, colIndex === 0 && style.tableFirstCell]}>
+                                <Text
+                                    selectable={props.selectable}
+                                    style={[
+                                        style.tableHeaderText,
+                                        { textAlign: getTextAlign(colIndex) },
+                                        props.textColor && { color: props.textColor }
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {header}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                    {/* Data Rows */}
+                    {props.rows.map((row, rowIndex) => (
+                        <View key={rowIndex} style={[style.tableRow, rowIndex % 2 === 1 && style.tableRowAlt]}>
+                            {row.map((cell, colIndex) => (
+                                <View key={colIndex} style={[style.tableCell, colIndex === 0 && style.tableFirstCell]}>
+                                    <Text
+                                        selectable={props.selectable}
+                                        style={[
+                                            style.tableCellText,
+                                            { textAlign: getTextAlign(colIndex) },
+                                            props.textColor && { color: props.textColor }
+                                        ]}
+                                        numberOfLines={2}
+                                    >
+                                        {cell}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    ))}
+                </View>
+            </ScrollView>
+        </View>
+    );
+}
+
 function RenderSpans(props: { spans: MarkdownSpan[], baseStyle?: any }) {
     return (<>
         {props.spans.map((span, index) => {
@@ -188,8 +257,8 @@ const style = StyleSheet.create((theme) => ({
         ...Typography.default(),
         fontSize: 16,
         lineHeight: 24, // Reduced from 28 to 24
-        marginTop: 8,
-        marginBottom: 8,
+        marginTop: 4,
+        marginBottom: 4,
         color: theme.colors.text,
         fontWeight: '400',
     },
@@ -226,21 +295,21 @@ const style = StyleSheet.create((theme) => ({
         fontSize: 16,
         lineHeight: 24,  // Reduced from 36 to 24
         fontWeight: '900',
-        marginTop: 16,
+        marginTop: 12,
         marginBottom: 8
     },
     header2: {
         fontSize: 20,
         lineHeight: 24,  // Reduced from 36 to 32
         fontWeight: '600',
-        marginTop: 16,
+        marginTop: 12,
         marginBottom: 8
     },
     header3: {
         fontSize: 16,
         lineHeight: 28,  // Reduced from 32 to 28
         fontWeight: '600',
-        marginTop: 16,
+        marginTop: 10,
         marginBottom: 8,
     },
     header4: {
@@ -290,7 +359,7 @@ const style = StyleSheet.create((theme) => ({
     codeBlock: {
         backgroundColor: theme.colors.surfaceHighest,
         borderRadius: 8,
-        marginVertical: 8,
+        marginVertical: 4,
     },
     codeLanguage: {
         ...Typography.mono(),
@@ -309,8 +378,8 @@ const style = StyleSheet.create((theme) => ({
     horizontalRule: {
         height: 1,
         backgroundColor: theme.colors.divider,
-        marginTop: 8,
-        marginBottom: 8,
+        marginTop: 4,
+        marginBottom: 4,
     },
 
     //
@@ -320,7 +389,7 @@ const style = StyleSheet.create((theme) => ({
     optionsContainer: {
         flexDirection: 'column',
         gap: 8,
-        marginVertical: 8,
+        marginVertical: 4,
     },
     optionItem: {
         backgroundColor: theme.colors.surfaceHighest,
@@ -338,6 +407,70 @@ const style = StyleSheet.create((theme) => ({
         ...Typography.default(),
         fontSize: 16,
         lineHeight: 24,
+        color: theme.colors.text,
+    },
+
+    //
+    // Table Block
+    //
+
+    tableContainer: {
+        marginVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    tableScrollView: {
+        flexGrow: 0,
+        flexShrink: 0,
+    },
+    tableContentContainer: {
+        flexGrow: 0,
+    },
+    table: {
+        flexShrink: 0,
+    },
+    tableHeaderRow: {
+        flexDirection: 'row',
+        backgroundColor: theme.colors.surfaceHighest,
+        borderBottomWidth: 2,
+        borderBottomColor: theme.colors.divider,
+    },
+    tableRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    tableRowAlt: {
+        backgroundColor: theme.colors.surfaceHigh,
+    },
+    tableHeaderCell: {
+        minWidth: 100,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderLeftWidth: 1,
+        borderLeftColor: theme.colors.divider,
+    },
+    tableCell: {
+        minWidth: 100,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderLeftWidth: 1,
+        borderLeftColor: theme.colors.divider,
+    },
+    tableFirstCell: {
+        borderLeftWidth: 0,
+    },
+    tableHeaderText: {
+        ...Typography.default('semiBold'),
+        fontSize: 14,
+        lineHeight: 20,
+        color: theme.colors.text,
+    },
+    tableCellText: {
+        ...Typography.default(),
+        fontSize: 14,
+        lineHeight: 20,
         color: theme.colors.text,
     },
 }));

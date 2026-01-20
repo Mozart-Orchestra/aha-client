@@ -136,16 +136,16 @@ export const TodoView = React.memo<TodoViewProps>((props) => {
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            backgroundColor: theme.colors.primary + '20',
+                            backgroundColor: theme.colors.button.primary.background + '20',
                             paddingHorizontal: 8,
                             paddingVertical: 4,
                             borderRadius: 12,
                             marginLeft: 8
                         }}
                     >
-                        <Ionicons name="list" size={14} color={theme.colors.primary} />
+                        <Ionicons name="list" size={14} color={theme.colors.button.primary.background} />
                         <Text style={{
-                            color: theme.colors.primary,
+                            color: theme.colors.button.primary.background,
                             fontSize: 12,
                             marginLeft: 4,
                             fontWeight: '600'

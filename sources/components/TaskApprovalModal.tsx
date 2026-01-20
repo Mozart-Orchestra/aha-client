@@ -3,8 +3,8 @@ import { View, Text, ScrollView, TextInput, Pressable, Modal, ActivityIndicator 
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/constants/Typography';
+import type { KanbanTask } from '@/sync/kanbanTypes';
 import {
-    KanbanTask,
     taskNeedsApproval,
     approveTask,
     rejectTask,
@@ -84,7 +84,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
             }
 
             // Approve the task
-            const approvedTask = approveTask(teamData.tasks[taskIndex], auth.credentials.sessionId || 'user');
+            const approvedTask = approveTask(teamData.tasks[taskIndex], 'user');
 
             // Update the task
             teamData.tasks[taskIndex] = approvedTask;
@@ -104,7 +104,6 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
                 teamId,
                 fromRole: 'user',
                 content: `Task "${task.title}" approved`,
-                shortContent: 'Task approved',
                 type: 'task-update',
                 metadata: {
                     taskId: task.id,
@@ -155,7 +154,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
             // Reject and remove the task
             const rejectedTask = rejectTask(
                 teamData.tasks[taskIndex],
-                auth.credentials.sessionId || 'user',
+                'user',
                 rejectionReason
             );
 
@@ -178,7 +177,6 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
                     teamId,
                     fromRole: 'user',
                     content: `Task "${task.title}" rejected. Reason: ${rejectionReason}`,
-                    shortContent: 'Task rejected',
                     type: 'notification',
                     metadata: {
                         taskId: task.id,

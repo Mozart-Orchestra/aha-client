@@ -169,14 +169,14 @@ export function t<K extends TranslationKey>(
         const currentTranslations = translations[currentLanguage];
 
         // Navigate to the value using dot notation
-        const keys = key.split('.');
+        const keys = String(key).split('.');
         let value: any = currentTranslations;
 
         for (const k of keys) {
             value = value[k];
             if (value === undefined) {
                 console.warn(`Translation missing: ${key}`);
-                return key;
+                return String(key);
             }
         }
 
@@ -193,10 +193,10 @@ export function t<K extends TranslationKey>(
 
         // Fallback for unexpected types
         console.warn(`Invalid translation value type for key: ${key}`);
-        return key;
+        return String(key);
     } catch (error) {
         console.error(`Translation error for key: ${key}`, error);
-        return key;
+        return String(key);
     }
 }
 

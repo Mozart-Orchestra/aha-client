@@ -140,7 +140,7 @@ export const initializeI18n = async (): Promise<void> => {
         fallbackLng: 'en',
         defaultNS: 'common',
         ns: ['common', 'components', 'screens', 'errors', 'tasks', 'team', 'memory', 'rules', 'prompts', 'mcp'],
-        compatibilityJSON: 'v3',
+        compatibilityJSON: 'v4',
         interpolation: {
           escapeValue: false, // React already escapes values
         },
