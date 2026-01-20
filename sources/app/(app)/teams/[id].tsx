@@ -420,15 +420,25 @@ export default function TeamDashboardScreen() {
         if (!newName || newName.trim() === artifact?.title) return;
 
         try {
+            // Call server API to update body.name
             const result = await sync.renameTeam(teamId, newName.trim());
-            if (result.success) {
-                // Local storage will be updated via WebSocket sync
+            if (result.success && artifact) {
+                // Also update the artifact header title for list display
+                // Server only updates body.name, we need to update header.title
+                await sync.updateArtifact(
+                    teamId,
+                    newName.trim(),
+                    artifact.body || null,
+                    artifact.sessions,
+                    artifact.draft,
+                    artifact.type
+                );
             }
         } catch (error) {
             console.error('Failed to rename team:', error);
             Modal.alert('Error', 'Failed to rename team. Please try again.');
         }
-    }, [teamId, artifact?.title]);
+    }, [teamId, artifact]);
 
     const kanbanData: KanbanBoard = React.useMemo(() => {
         const ensureColumns = (data: any): KanbanBoard => {

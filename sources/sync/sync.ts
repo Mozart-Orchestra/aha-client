@@ -2106,7 +2106,12 @@ class Sync {
                     this.sessionsSync.invalidate();
                     break;
                 case 'team-renamed':
-                    // Refresh the team artifact to get updated name
+                    // Fetch full artifact with body to get updated name
+                    // Note: Server updates name in body, not header title
+                    // So we need fetchArtifactWithBody, not just artifactsSync.invalidate()
+                    this.fetchArtifactWithBody(teamId).catch(err => {
+                        console.error(`Failed to fetch artifact for team rename ${teamId}:`, err);
+                    });
                     this.artifactsSync.invalidate();
                     break;
             }

@@ -319,6 +319,7 @@ export default function TeamsScreen() {
         const isFirst = index === 0;
         const isLast = index === teams.length - 1;
         const isSingle = teams.length === 1;
+        const isSelected = selectedTeams.has(item.id);
 
         return (
             <Pressable
@@ -328,8 +329,22 @@ export default function TeamsScreen() {
                         isFirst ? styles.teamItemFirst :
                             isLast ? styles.teamItemLast : {}
                 ]}
-                onPress={() => router.push(`/teams/${item.id}`)}
+                onPress={() => {
+                    if (isSelectionMode) {
+                        toggleTeamSelection(item.id);
+                    } else {
+                        router.push(`/teams/${item.id}`);
+                    }
+                }}
+                onLongPress={() => handleLongPress(item.id)}
             >
+                {isSelectionMode && (
+                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                        {isSelected && (
+                            <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                        )}
+                    </View>
+                )}
                 <View style={styles.teamContent}>
                     <Text
                         style={[
@@ -346,26 +361,30 @@ export default function TeamsScreen() {
                         </Text>
                     </View>
                 </View>
-                <Pressable
-                    onPress={(e) => handleDelete(item.id, e)}
-                    style={{ padding: 8, marginRight: 4 }}
-                    hitSlop={8}
-                >
-                    <Ionicons
-                        name="trash-outline"
-                        size={20}
-                        color={theme.colors.textSecondary}
-                    />
-                </Pressable>
-                <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    style={styles.teamChevron}
-                    color={theme.colors.textSecondary}
-                />
+                {!isSelectionMode && (
+                    <>
+                        <Pressable
+                            onPress={(e) => handleDelete(item.id, e)}
+                            style={{ padding: 8, marginRight: 4 }}
+                            hitSlop={8}
+                        >
+                            <Ionicons
+                                name="trash-outline"
+                                size={20}
+                                color={theme.colors.textSecondary}
+                            />
+                        </Pressable>
+                        <Ionicons
+                            name="chevron-forward"
+                            size={18}
+                            style={styles.teamChevron}
+                            color={theme.colors.textSecondary}
+                        />
+                    </>
+                )}
             </Pressable>
         );
-    }, [teams, router, styles, handleDelete]);
+    }, [teams, router, styles, handleDelete, isSelectionMode, selectedTeams, toggleTeamSelection, handleLongPress]);
 
     const keyExtractor = React.useCallback((item: DecryptedArtifact) => item.id, []);
 
@@ -400,21 +419,90 @@ export default function TeamsScreen() {
     }, [isLoading, styles, teams, theme]);
 
     return (
-        <View style={styles.container}>
-            <FlatList
-                data={teams}
-                renderItem={renderItem}
-                keyExtractor={keyExtractor}
-                contentContainerStyle={[
-                    styles.contentContainer,
-                    teams.length === 0 && { flex: 1 },
-                    { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' }
-                ]}
-                ListEmptyComponent={ListEmptyComponent}
+        <>
+            <Stack.Screen
+                options={{
+                    headerShown: true,
+                    headerTitle: isSelectionMode ? `${selectedTeams.size} Selected` : 'Teams',
+                    headerLeft: isSelectionMode ? () => (
+                        <Pressable onPress={exitSelectionMode} style={{ padding: 8 }}>
+                            <Text style={{ color: theme.colors.text, fontSize: 16 }}>Cancel</Text>
+                        </Pressable>
+                    ) : undefined,
+                    headerRight: isSelectionMode ? () => (
+                        <Pressable onPress={selectAllTeams} style={{ padding: 8 }}>
+                            <Text style={{ color: theme.colors.text, fontSize: 16 }}>Select All</Text>
+                        </Pressable>
+                    ) : () => (
+                        <Pressable
+                            onPress={() => setIsSelectionMode(true)}
+                            style={{ padding: 8 }}
+                            disabled={teams.length === 0}
+                        >
+                            <Text style={{
+                                color: teams.length === 0 ? theme.colors.textSecondary : theme.colors.text,
+                                fontSize: 16
+                            }}>
+                                Edit
+                            </Text>
+                        </Pressable>
+                    ),
+                }}
             />
+            <View style={styles.container}>
+                <FlatList
+                    data={teams}
+                    renderItem={renderItem}
+                    keyExtractor={keyExtractor}
+                    contentContainerStyle={[
+                        styles.contentContainer,
+                        teams.length === 0 && { flex: 1 },
+                        { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' },
+                        isSelectionMode && { paddingBottom: 100 + safeArea.bottom }
+                    ]}
+                    ListEmptyComponent={ListEmptyComponent}
+                    extraData={selectedTeams}
+                />
 
-            {/* Floating Action Button */}
-            <FAB onPress={() => router.push('/teams/new')} />
-        </View>
+                {/* Floating Action Button - hide in selection mode */}
+                {!isSelectionMode && <FAB onPress={() => router.push('/teams/new')} />}
+
+                {/* Batch Action Bar */}
+                {isSelectionMode && (
+                    <View style={[styles.batchActionBar, { paddingBottom: safeArea.bottom + 12 }]}>
+                        <Text style={styles.selectionInfo}>
+                            {selectedTeams.size} team(s) selected
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <Pressable
+                                onPress={handleBatchArchive}
+                                disabled={selectedTeams.size === 0 || isBatchProcessing}
+                                style={[
+                                    styles.batchActionButton,
+                                    (selectedTeams.size === 0 || isBatchProcessing) && { opacity: 0.5 }
+                                ]}
+                            >
+                                <Ionicons name="archive-outline" size={18} color={theme.colors.text} />
+                                <Text style={styles.batchActionButtonText}>Archive</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={handleBatchDelete}
+                                disabled={selectedTeams.size === 0 || isBatchProcessing}
+                                style={[
+                                    styles.batchActionButton,
+                                    styles.batchActionButtonDestructive,
+                                    (selectedTeams.size === 0 || isBatchProcessing) && { opacity: 0.5 }
+                                ]}
+                            >
+                                <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+                                <Text style={[styles.batchActionButtonText, styles.batchActionButtonTextDestructive]}>
+                                    Delete
+                                </Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                )}
+            </View>
+        </>
     );
 }
