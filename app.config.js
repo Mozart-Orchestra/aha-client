@@ -33,6 +33,7 @@ export default {
             },
             infoPlist: {
                 NSMicrophoneUsageDescription: "Allow $(PRODUCT_NAME) to access your microphone for voice conversations with AI.",
+                NSPhotoLibraryUsageDescription: "Allow $(PRODUCT_NAME) to access your photo library to send images in chat.",
                 NSLocalNetworkUsageDescription: "Allow $(PRODUCT_NAME) to find and connect to local devices on your network.",
                 NSBonjourServices: ["_http._tcp", "_https._tcp"]
             },
@@ -120,6 +121,12 @@ export default {
                     cameraPermission: "Allow $(PRODUCT_NAME) to access your camera to scan QR codes and share photos with AI.",
                     microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone for voice conversations.",
                     recordAudioAndroid: true
+                }
+            ],
+            [
+                "expo-image-picker",
+                {
+                    photosPermission: "Allow $(PRODUCT_NAME) to access your photos to send images in chat."
                 }
             ],
             [

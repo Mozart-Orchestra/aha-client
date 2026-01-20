@@ -1513,9 +1513,13 @@ export default function TeamChatRoom({
             <View style={styles.inputContainer}>
                 {/* 🆕 Image picker button */}
                 <Pressable
-                    style={styles.attachButton}
+                    style={({ pressed }) => [
+                        styles.attachButton,
+                        pressed && { opacity: 0.6 }
+                    ]}
                     onPress={handlePickImage}
                     disabled={isSending || isCompressing}
+                    hitSlop={8}
                 >
                     <Ionicons
                         name="image-outline"
@@ -1526,9 +1530,13 @@ export default function TeamChatRoom({
 
                 {/* 历史消息按钮 */}
                 <Pressable
-                    style={styles.attachButton}
+                    style={({ pressed }) => [
+                        styles.attachButton,
+                        pressed && { opacity: 0.6 }
+                    ]}
                     onPress={() => setShowHistory(!showHistory)}
                     disabled={myMessageHistory.length === 0}
+                    hitSlop={8}
                 >
                     <Ionicons
                         name={showHistory ? "time" : "time-outline"}
