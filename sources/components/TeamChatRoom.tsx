@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, TextInput, Pressable, KeyboardAvoidingView, Platform, Image, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TextInput, Pressable, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal as RNModal, Dimensions } from 'react-native';
 import { Text } from '@/components/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,8 @@ import type { KanbanTask } from '@/sync/kanbanTypes';
 import { parseTaskCommand, createTaskFromCommand } from '@/utils/taskHelpers';
 import { extractTaskIds } from '@/utils/taskChatSync';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Modal } from '@/modal';
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -306,6 +308,71 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.text,
         lineHeight: 20,
     },
+    // 🆕 Image message styles
+    imageContainer: {
+        borderRadius: 12,
+        overflow: 'hidden',
+        marginVertical: 4,
+    },
+    messageImage: {
+        width: 200,
+        height: 200,
+        borderRadius: 12,
+    },
+    imageLoading: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.groupped.background,
+        borderRadius: 12,
+    },
+    // 🆕 Image preview container
+    imagePreviewContainer: {
+        backgroundColor: theme.colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    imagePreview: {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+    },
+    imagePreviewInfo: {
+        flex: 1,
+    },
+    imagePreviewText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: theme.colors.text,
+    },
+    imagePreviewSize: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        marginTop: 2,
+    },
+    removeImageButton: {
+        padding: 8,
+    },
+    uploadProgress: {
+        height: 3,
+        backgroundColor: theme.colors.divider,
+        borderRadius: 2,
+        marginTop: 6,
+        overflow: 'hidden',
+    },
+    uploadProgressBar: {
+        height: '100%',
+        backgroundColor: theme.colors.button.primary.background,
+        borderRadius: 2,
+    },
 }));
 
 // Helper to get avatar initials or icon based on role
@@ -418,6 +485,16 @@ interface MessageBubbleProps {
 const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSync }: MessageBubbleProps) => {
     const [expanded, setExpanded] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
+    const [imageLoading, setImageLoading] = React.useState(true);
+    const [showFullImage, setShowFullImage] = React.useState(false);
+
+    // 🆕 Get image from metadata
+    const imageData = message.metadata?.image as {
+        base64?: string;
+        width?: number;
+        height?: number;
+        mimeType?: string;
+    } | undefined;
 
     // 🆕 复制消息内容
     const handleCopyMessage = React.useCallback(async () => {
@@ -453,11 +530,45 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
     }, [message.shortContent, message.content]);
 
     const renderContent = () => {
+        // 🆕 Render image if present
+        const renderImage = () => {
+            if (!imageData?.base64) return null;
+
+            const aspectRatio = (imageData.width && imageData.height)
+                ? imageData.width / imageData.height
+                : 1;
+            const displayWidth = Math.min(200, imageData.width || 200);
+            const displayHeight = displayWidth / aspectRatio;
+
+            return (
+                <Pressable
+                    onPress={() => setShowFullImage(true)}
+                    style={styles.imageContainer}
+                >
+                    <Image
+                        source={{ uri: `data:${imageData.mimeType || 'image/jpeg'};base64,${imageData.base64}` }}
+                        style={[styles.messageImage, { width: displayWidth, height: displayHeight }]}
+                        resizeMode="cover"
+                        onLoadStart={() => setImageLoading(true)}
+                        onLoadEnd={() => setImageLoading(false)}
+                    />
+                    {imageLoading && (
+                        <View style={[styles.imageLoading, { width: displayWidth, height: displayHeight }]}>
+                            <ActivityIndicator size="small" />
+                        </View>
+                    )}
+                </Pressable>
+            );
+        };
+
         if (!shouldShowExpand || expanded) {
             // Show full content
             return (
                 <View style={isMyMessage ? { opacity: 0.95 } : {}}>
-                    <MarkdownView markdown={message.content} textColor={isMyMessage ? '#FFFFFF' : undefined} />
+                    {renderImage()}
+                    {message.content !== '📷 Image' && (
+                        <MarkdownView markdown={message.content} textColor={isMyMessage ? '#FFFFFF' : undefined} />
+                    )}
                 </View>
             );
         } else {
@@ -465,7 +576,10 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
             const shortText = getShortText();
             return (
                 <View style={isMyMessage ? { opacity: 0.95 } : {}}>
-                    <MarkdownView markdown={shortText} textColor={isMyMessage ? '#FFFFFF' : undefined} />
+                    {renderImage()}
+                    {message.content !== '📷 Image' && (
+                        <MarkdownView markdown={shortText} textColor={isMyMessage ? '#FFFFFF' : undefined} />
+                    )}
                 </View>
             );
         }
@@ -537,6 +651,48 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
                     )}
                 </View>
             </View>
+
+            {/* 🆕 Full-screen image viewer modal */}
+            {imageData?.base64 && (
+                <RNModal
+                    visible={showFullImage}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowFullImage(false)}
+                >
+                    <Pressable
+                        style={{
+                            flex: 1,
+                            backgroundColor: 'rgba(0,0,0,0.9)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                        onPress={() => setShowFullImage(false)}
+                    >
+                        <Image
+                            source={{ uri: `data:${imageData.mimeType || 'image/jpeg'};base64,${imageData.base64}` }}
+                            style={{
+                                width: Dimensions.get('window').width - 32,
+                                height: Dimensions.get('window').height * 0.7,
+                            }}
+                            resizeMode="contain"
+                        />
+                        <Pressable
+                            style={{
+                                position: 'absolute',
+                                top: 60,
+                                right: 20,
+                                padding: 8,
+                                backgroundColor: 'rgba(255,255,255,0.2)',
+                                borderRadius: 20,
+                            }}
+                            onPress={() => setShowFullImage(false)}
+                        >
+                            <Ionicons name="close" size={24} color="#FFF" />
+                        </Pressable>
+                    </Pressable>
+                </RNModal>
+            )}
         </View>
     );
 };
@@ -610,6 +766,16 @@ export default function TeamChatRoom({
     const [showStatus, setShowStatus] = React.useState(false);
     const [isInputFocused, setIsInputFocused] = React.useState(false);
     const [showHistory, setShowHistory] = React.useState(false);
+    // 🆕 Image selection state
+    const [selectedImage, setSelectedImage] = React.useState<{
+        uri: string;
+        base64?: string;
+        width: number;
+        height: number;
+        fileSize?: number;
+    } | null>(null);
+    const [uploadProgress, setUploadProgress] = React.useState(0);
+    const [isCompressing, setIsCompressing] = React.useState(false);
 
     // 🆕 获取我发送过的消息历史（用于历史选取）
     const myMessageHistory = React.useMemo(() => {
@@ -624,6 +790,81 @@ export default function TeamChatRoom({
             .slice(-20) // 最近20条
             .reverse(); // 最新的在前
     }, [messages, mySessionId]);
+
+    // 🆕 Image picker and compression function
+    const handlePickImage = React.useCallback(async () => {
+        try {
+            // Request permission
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Modal.alert('Permission Required', 'Please grant photo library access to send images.');
+                return;
+            }
+
+            // Launch image picker
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                quality: 1,
+                base64: false, // We'll get base64 after compression
+            });
+
+            if (result.canceled || !result.assets?.[0]) {
+                return;
+            }
+
+            const asset = result.assets[0];
+            setIsCompressing(true);
+
+            // Compress image
+            const MAX_WIDTH = 1024;
+            const QUALITY = 0.75; // 0.7-0.8 range
+
+            // Calculate new dimensions maintaining aspect ratio
+            let width = asset.width;
+            let height = asset.height;
+            if (width > MAX_WIDTH) {
+                height = Math.round((height * MAX_WIDTH) / width);
+                width = MAX_WIDTH;
+            }
+
+            const manipulatorResult = await ImageManipulator.manipulateAsync(
+                asset.uri,
+                [{ resize: { width, height } }],
+                {
+                    compress: QUALITY,
+                    format: ImageManipulator.SaveFormat.JPEG,
+                    base64: true,
+                }
+            );
+
+            // Estimate file size (base64 is ~33% larger than binary)
+            const estimatedSize = manipulatorResult.base64
+                ? Math.round((manipulatorResult.base64.length * 3) / 4)
+                : undefined;
+
+            setSelectedImage({
+                uri: manipulatorResult.uri,
+                base64: manipulatorResult.base64,
+                width: manipulatorResult.width,
+                height: manipulatorResult.height,
+                fileSize: estimatedSize,
+            });
+        } catch (error) {
+            console.error('Failed to pick/compress image:', error);
+            Modal.alert('Error', 'Failed to process image. Please try again.');
+        } finally {
+            setIsCompressing(false);
+        }
+    }, []);
+
+    // 🆕 Format file size for display
+    const formatFileSize = React.useCallback((bytes?: number) => {
+        if (!bytes) return 'Unknown size';
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }, []);
 
     const formatRelativeTime = React.useCallback((timestamp?: number) => {
         if (!timestamp) return 'No activity';
@@ -837,10 +1078,59 @@ export default function TeamChatRoom({
 
     const handleSend = async () => {
         const content = inputText.trim();
-        if (!content || isSending) return;
+        const hasImage = !!selectedImage?.base64;
+
+        // Allow sending if there's text or an image
+        if ((!content && !hasImage) || isSending) return;
 
         try {
             setIsSending(true);
+
+            // 🆕 Handle image message
+            if (hasImage && selectedImage) {
+                setUploadProgress(0);
+
+                // Simulate upload progress (real implementation would track actual upload)
+                const progressInterval = setInterval(() => {
+                    setUploadProgress(prev => Math.min(prev + 10, 90));
+                }, 100);
+
+                const messageId = randomUUID();
+                const imageContent = content || '📷 Image';
+
+                // Send message with image data
+                const request: SendTeamMessageRequest = {
+                    id: messageId,
+                    teamId,
+                    content: imageContent,
+                    type: 'chat',
+                    fromSessionId: undefined,
+                    fromRole: 'user',
+                    fromDisplayName: 'User',
+                    metadata: {
+                        image: {
+                            base64: selectedImage.base64,
+                            width: selectedImage.width,
+                            height: selectedImage.height,
+                            mimeType: 'image/jpeg',
+                        },
+                    },
+                };
+
+                await sync.sendTeamMessage(request);
+
+                clearInterval(progressInterval);
+                setUploadProgress(100);
+
+                // Clear states
+                setTimeout(() => {
+                    setSelectedImage(null);
+                    setUploadProgress(0);
+                    setInputText('');
+                }, 200);
+
+                return;
+            }
 
             // 🆕 1. 尝试从消息创建任务
             if (taskChatSync) {
@@ -1175,8 +1465,66 @@ export default function TeamChatRoom({
                 </View>
             )}
 
+            {/* 🆕 Image preview before sending */}
+            {selectedImage && (
+                <View style={styles.imagePreviewContainer}>
+                    <Image
+                        source={{ uri: selectedImage.uri }}
+                        style={styles.imagePreview}
+                        resizeMode="cover"
+                    />
+                    <View style={styles.imagePreviewInfo}>
+                        <Text style={styles.imagePreviewText}>
+                            {selectedImage.width} × {selectedImage.height}
+                        </Text>
+                        <Text style={styles.imagePreviewSize}>
+                            {formatFileSize(selectedImage.fileSize)}
+                        </Text>
+                        {uploadProgress > 0 && uploadProgress < 100 && (
+                            <View style={styles.uploadProgress}>
+                                <View style={[styles.uploadProgressBar, { width: `${uploadProgress}%` }]} />
+                            </View>
+                        )}
+                    </View>
+                    <Pressable
+                        style={styles.removeImageButton}
+                        onPress={() => setSelectedImage(null)}
+                        disabled={isSending}
+                    >
+                        <Ionicons
+                            name="close-circle"
+                            size={24}
+                            color={isSending ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
+                        />
+                    </Pressable>
+                </View>
+            )}
+
+            {/* 🆕 Compressing indicator */}
+            {isCompressing && (
+                <View style={[styles.imagePreviewContainer, { justifyContent: 'center' }]}>
+                    <ActivityIndicator size="small" color={theme.colors.button.primary.background} />
+                    <Text style={[styles.imagePreviewText, { marginLeft: 12 }]}>
+                        Compressing image...
+                    </Text>
+                </View>
+            )}
+
             <View style={styles.inputContainer}>
-                {/* 🆕 历史消息按钮 */}
+                {/* 🆕 Image picker button */}
+                <Pressable
+                    style={styles.attachButton}
+                    onPress={handlePickImage}
+                    disabled={isSending || isCompressing}
+                >
+                    <Ionicons
+                        name="image-outline"
+                        size={24}
+                        color={(isSending || isCompressing) ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
+                    />
+                </Pressable>
+
+                {/* 历史消息按钮 */}
                 <Pressable
                     style={styles.attachButton}
                     onPress={() => setShowHistory(!showHistory)}
@@ -1194,7 +1542,7 @@ export default function TeamChatRoom({
                         style={styles.input}
                         value={inputText}
                         onChangeText={setInputText}
-                        placeholder="Type a message, /task to create tasks, or /help for commands..."
+                        placeholder={selectedImage ? "Add a caption (optional)..." : "Type a message, /task to create tasks, or /help for commands..."}
                         placeholderTextColor={theme.colors.input.placeholder}
                         multiline
                         maxLength={2000}
@@ -1207,12 +1555,12 @@ export default function TeamChatRoom({
                 <Pressable
                     style={[
                         styles.sendButton,
-                        (!inputText.trim() || isSending) && styles.sendButtonDisabled
+                        ((!inputText.trim() && !selectedImage) || isSending) && styles.sendButtonDisabled
                     ]}
                     onPress={handleSend}
-                    disabled={!inputText.trim() || isSending}
+                    disabled={(!inputText.trim() && !selectedImage) || isSending}
                 >
-                    {(!inputText.trim() || isSending) ? (
+                    {((!inputText.trim() && !selectedImage) || isSending) ? (
                         <Ionicons name="arrow-up" size={20} color={theme.colors.textSecondary} />
                     ) : (
                         <LinearGradient
