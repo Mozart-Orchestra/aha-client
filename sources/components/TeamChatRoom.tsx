@@ -257,6 +257,23 @@ const stylesheet = StyleSheet.create((theme) => ({
         marginBottom: 2,
         backgroundColor: theme.colors.groupped.background,
     },
+    // 🆕 Vertical container for image and history buttons
+    verticalButtonContainer: {
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: 2,
+    },
+    // 🆕 Smaller buttons for vertical layout
+    attachButtonSmall: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.groupped.background,
+    },
     emptyState: {
         flex: 1,
         alignItems: 'center',
@@ -821,12 +838,19 @@ export default function TeamChatRoom({
     const [isCheckingClipboard, setIsCheckingClipboard] = React.useState(false);
 
     // 🆕 获取我发送过的消息历史（用于历史选取）
+    // FIX: User messages have fromSessionId=undefined and fromRole='user'
+    // We need to match both: session messages AND user messages from mobile app
     const myMessageHistory = React.useMemo(() => {
         return messages
             .filter(m =>
                 m.type === 'chat' &&
-                m.fromSessionId === mySessionId &&
-                m.content.trim().length > 0
+                m.content.trim().length > 0 &&
+                (
+                    // Match messages from my session (if I'm an agent)
+                    m.fromSessionId === mySessionId ||
+                    // Match user messages from mobile app (fromSessionId is undefined, fromRole is 'user')
+                    (!m.fromSessionId && m.fromRole === 'user')
+                )
             )
             .map(m => m.content)
             .filter((content, index, arr) => arr.indexOf(content) === index) // 去重
@@ -859,9 +883,10 @@ export default function TeamChatRoom({
             const asset = result.assets[0];
             setIsCompressing(true);
 
-            // Compress image
-            const MAX_WIDTH = 1024;
-            const QUALITY = 0.75; // 0.7-0.8 range
+            // Compress image with aggressive settings for mobile/WebSocket
+            const MAX_WIDTH = 800;
+            const MAX_SIZE_KB = 150; // Max 150KB to ensure fast transmission
+            let quality = 0.6;
 
             // Calculate new dimensions maintaining aspect ratio
             let width = asset.width;
@@ -871,20 +896,41 @@ export default function TeamChatRoom({
                 width = MAX_WIDTH;
             }
 
-            const manipulatorResult = await ImageManipulator.manipulateAsync(
+            let manipulatorResult = await ImageManipulator.manipulateAsync(
                 asset.uri,
                 [{ resize: { width, height } }],
                 {
-                    compress: QUALITY,
+                    compress: quality,
                     format: ImageManipulator.SaveFormat.JPEG,
                     base64: true,
                 }
             );
 
-            // Estimate file size (base64 is ~33% larger than binary)
-            const estimatedSize = manipulatorResult.base64
+            // Check size and compress further if needed
+            let estimatedSize = manipulatorResult.base64
                 ? Math.round((manipulatorResult.base64.length * 3) / 4)
-                : undefined;
+                : 0;
+
+            // If still too large, compress more aggressively
+            while (estimatedSize > MAX_SIZE_KB * 1024 && quality > 0.3) {
+                quality -= 0.1;
+                width = Math.round(width * 0.8);
+                height = Math.round(height * 0.8);
+
+                manipulatorResult = await ImageManipulator.manipulateAsync(
+                    asset.uri,
+                    [{ resize: { width, height } }],
+                    {
+                        compress: quality,
+                        format: ImageManipulator.SaveFormat.JPEG,
+                        base64: true,
+                    }
+                );
+
+                estimatedSize = manipulatorResult.base64
+                    ? Math.round((manipulatorResult.base64.length * 3) / 4)
+                    : 0;
+            }
 
             setSelectedImage({
                 uri: manipulatorResult.uri,
@@ -917,13 +963,14 @@ export default function TeamChatRoom({
         }
     }, [selectedImage, isCheckingClipboard]);
 
-    // 🆕 Paste image from clipboard
+    // 🆕 Paste image from clipboard (direct use without ImageManipulator - iOS doesn't support data URI)
     const handlePasteFromClipboard = React.useCallback(async () => {
         try {
             setIsCompressing(true);
             setClipboardHasImage(false);
 
-            const image = await Clipboard.getImageAsync({ format: 'png' });
+            // Request JPEG format for smaller size
+            const image = await Clipboard.getImageAsync({ format: 'jpeg' });
             if (!image || !image.data) {
                 Modal.alert('No Image', 'No image found in clipboard.');
                 return;
@@ -936,8 +983,18 @@ export default function TeamChatRoom({
             // Estimate file size (base64 is ~33% larger than binary)
             const estimatedSize = Math.round((image.data.length * 3) / 4);
 
+            // Check if image is too large (> 500KB)
+            const MAX_SIZE_KB = 500;
+            if (estimatedSize > MAX_SIZE_KB * 1024) {
+                Modal.alert(
+                    'Image Too Large',
+                    `The clipboard image is ${Math.round(estimatedSize / 1024)}KB. Please use the image picker button to select and compress the image.`
+                );
+                return;
+            }
+
             setSelectedImage({
-                uri: `data:image/png;base64,${image.data}`,
+                uri: `data:image/jpeg;base64,${image.data}`,
                 base64: image.data,
                 width,
                 height,
@@ -1491,6 +1548,14 @@ export default function TeamChatRoom({
                     styles.messageListContent,
                     uniqueMessages.length === 0 && { flex: 1 }
                 ]}
+                // FIX: Auto-scroll to latest message when content changes
+                onContentSizeChange={() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                }}
+                // Maintain scroll position behavior on iOS
+                maintainVisibleContentPosition={{
+                    minIndexForVisible: 0,
+                }}
             >
                 {uniqueMessages.length === 0 ? (
                     <View style={styles.emptyState}>
@@ -1637,39 +1702,42 @@ export default function TeamChatRoom({
             )}
 
             <View style={styles.inputContainer}>
-                {/* 🆕 Image picker button */}
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.attachButton,
-                        pressed && { opacity: 0.6 }
-                    ]}
-                    onPress={handlePickImage}
-                    disabled={isSending || isCompressing}
-                    hitSlop={8}
-                >
-                    <Ionicons
-                        name="image-outline"
-                        size={24}
-                        color={(isSending || isCompressing) ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
-                    />
-                </Pressable>
+                {/* 🆕 Vertical button container for image and history buttons */}
+                <View style={styles.verticalButtonContainer}>
+                    {/* Image picker button */}
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.attachButtonSmall,
+                            pressed && { opacity: 0.6 }
+                        ]}
+                        onPress={handlePickImage}
+                        disabled={isSending || isCompressing}
+                        hitSlop={8}
+                    >
+                        <Ionicons
+                            name="image-outline"
+                            size={20}
+                            color={(isSending || isCompressing) ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
+                        />
+                    </Pressable>
 
-                {/* 历史消息按钮 */}
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.attachButton,
-                        pressed && { opacity: 0.6 }
-                    ]}
-                    onPress={() => setShowHistory(!showHistory)}
-                    disabled={myMessageHistory.length === 0}
-                    hitSlop={8}
-                >
-                    <Ionicons
-                        name={showHistory ? "time" : "time-outline"}
-                        size={24}
-                        color={myMessageHistory.length === 0 ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
-                    />
-                </Pressable>
+                    {/* 历史消息按钮 */}
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.attachButtonSmall,
+                            pressed && { opacity: 0.6 }
+                        ]}
+                        onPress={() => setShowHistory(!showHistory)}
+                        disabled={myMessageHistory.length === 0}
+                        hitSlop={8}
+                    >
+                        <Ionicons
+                            name={showHistory ? "time" : "time-outline"}
+                            size={20}
+                            color={myMessageHistory.length === 0 ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
+                        />
+                    </Pressable>
+                </View>
 
                 <View style={[styles.inputWrapper, isInputFocused && styles.inputWrapperFocused]}>
                     <TextInput

@@ -70,6 +70,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         }
     }, [visible]);
 
+    // Reset edit mode when task changes
+    React.useEffect(() => {
+        setIsEditing(false);
+    }, [task?.id]);
+
+    // Early return AFTER all hooks to avoid "Rendered fewer/more hooks" error
     if (!task) return null;
 
     const handleSave = async () => {
@@ -156,11 +162,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         // TODO: Show add subtask modal
         console.log('Add subtask not implemented');
     };
-
-    // Reset edit mode when task changes
-    React.useEffect(() => {
-        setIsEditing(false);
-    }, [task?.id]);
 
     return (
         <Modal

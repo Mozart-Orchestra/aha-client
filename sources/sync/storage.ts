@@ -546,9 +546,53 @@ export const storage = create<StorageState>()((set, get) => {
                     };
                 }
 
+                // If sessions were updated (todos or usage changed), rebuild list data
+                // This ensures UI components re-render with new session data
+                let newSessionsData = state.sessionsData;
+                let newSessionListViewData = state.sessionListViewData;
+
+                if (needsUpdate && updatedSessions !== state.sessions) {
+                    // Rebuild sessionsData (legacy format)
+                    const activeSet = new Set<string>();
+                    Object.values(updatedSessions).forEach(s => {
+                        if (isSessionActive(s)) {
+                            activeSet.add(s.id);
+                        }
+                    });
+
+                    const activeSessions: Session[] = [];
+                    const inactiveSessions: Session[] = [];
+                    Object.values(updatedSessions).forEach(s => {
+                        if (activeSet.has(s.id)) {
+                            activeSessions.push(s);
+                        } else {
+                            inactiveSessions.push(s);
+                        }
+                    });
+
+                    activeSessions.sort((a, b) => b.createdAt - a.createdAt);
+                    inactiveSessions.sort((a, b) => b.createdAt - a.createdAt);
+
+                    const listData: SessionListItem[] = [];
+                    if (activeSessions.length > 0) {
+                        listData.push('online');
+                        listData.push(...activeSessions);
+                    }
+                    if (inactiveSessions.length > 0) {
+                        listData.push('offline');
+                        listData.push(...inactiveSessions);
+                    }
+                    newSessionsData = listData;
+
+                    // Rebuild sessionListViewData
+                    newSessionListViewData = buildSessionListViewData(updatedSessions);
+                }
+
                 return {
                     ...state,
                     sessions: updatedSessions,
+                    sessionsData: newSessionsData,
+                    sessionListViewData: newSessionListViewData,
                     sessionMessages: {
                         ...state.sessionMessages,
                         [sessionId]: {

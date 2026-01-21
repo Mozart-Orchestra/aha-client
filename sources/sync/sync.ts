@@ -790,15 +790,16 @@ class Sync {
         body: string | null,
         sessions?: string[],
         draft?: boolean,
-        type?: 'note' | 'team' | 'kanban'
+        type?: 'note' | 'team' | 'kanban',
+        existingId?: string  // Optional: use existing ID instead of generating new one
     ): Promise<string> {
         if (!this.credentials) {
             throw new Error('Not authenticated');
         }
 
         try {
-            // Generate unique artifact ID
-            const artifactId = this.encryption.generateId();
+            // Use provided ID or generate new unique artifact ID
+            const artifactId = existingId || this.encryption.generateId();
 
             // Generate data encryption key
             const dataEncryptionKey = ArtifactEncryption.generateDataEncryptionKey();
@@ -872,7 +873,8 @@ class Sync {
         body: string | null,
         sessions?: string[],
         draft?: boolean,
-        type?: 'note' | 'team' | 'kanban'
+        type?: 'note' | 'team' | 'kanban',
+        _retryCount: number = 0  // Internal: track retry attempts
     ): Promise<void> {
         if (!this.credentials) {
             throw new Error('Not authenticated');
@@ -1003,6 +1005,14 @@ class Sync {
 
                         storage.getState().updateArtifact(serverArtifact);
                         console.log('✅ updateArtifact: Local state updated to match server version');
+
+                        // Auto-retry up to 3 times after syncing local state (handles high-concurrency multi-agent scenarios)
+                        if (_retryCount < 3) {
+                            console.log(`🔄 updateArtifact: Auto-retrying after version sync (attempt ${_retryCount + 1}/3)...`);
+                            // Add small delay to reduce collision probability
+                            await new Promise(r => setTimeout(r, 100 + Math.random() * 200));
+                            return this.updateArtifact(artifactId, title, body, sessions, draft, type, _retryCount + 1);
+                        }
                     } catch (decryptError) {
                         console.error('Failed to decrypt server version during mismatch handling:', decryptError);
                         // Fallback to invalidation
@@ -1010,7 +1020,16 @@ class Sync {
                     }
                 }
 
-                throw new Error('Artifact was updated by another device. Local state has been refreshed. Please try again.');
+                // Only throw if we've exhausted retries
+                if (_retryCount >= 3) {
+                    throw new Error('Artifact was updated by another device. Local state has been refreshed. Please try again.');
+                }
+
+                // Refresh and retry
+                await this.fetchArtifactsList();
+                // Add small delay to reduce collision probability
+                await new Promise(r => setTimeout(r, 100 + Math.random() * 200));
+                return this.updateArtifact(artifactId, title, body, sessions, draft, type, _retryCount + 1);
             }
 
             if (!response.success) {
@@ -2095,7 +2114,12 @@ class Sync {
             switch (eventType) {
                 case 'member-added':
                 case 'member-removed':
-                    // Refresh the team artifact to get updated members list
+                    // CRITICAL: Fetch full artifact with body to get updated members list
+                    // The members are stored in the artifact body, not header
+                    // Just invalidating artifacts sync only refreshes headers, not bodies
+                    this.fetchArtifactWithBody(teamId).catch(err => {
+                        console.error(`Failed to fetch artifact for member update ${teamId}:`, err);
+                    });
                     this.artifactsSync.invalidate();
                     break;
                 case 'team-archived':

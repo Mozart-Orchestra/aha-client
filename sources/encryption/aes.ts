@@ -7,8 +7,8 @@ export async function encryptAESGCMString(data: string, key64: string): Promise<
 }
 
 export async function decryptAESGCMString(data: string, key64: string): Promise<string | null> {
-    const res = (await crypto.decryptAsyncAES(data, key64)).trim();
-    return res;
+    const res = await crypto.decryptAsyncAES(data, key64);
+    return res ? res.trim() : null;
 }
 
 export async function encryptAESGCM(data: Uint8Array, key64: string): Promise<Uint8Array> {

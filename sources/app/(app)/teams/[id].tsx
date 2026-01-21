@@ -2,7 +2,7 @@ import React from 'react';
 import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { Text } from '@/components/StyledText';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useArtifact, useAllSessions, useProfile } from '@/sync/storage';
+import { useArtifact, useAllSessions, useProfile, useIsDataReady } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -93,11 +93,16 @@ const stylesheet = StyleSheet.create((theme) => ({
         marginBottom: 8,
         borderWidth: 1,
         borderColor: theme.colors.divider,
+        // Ensure card content can wrap within column width
+        overflow: 'hidden',
     },
     taskTitle: {
         fontSize: 14,
         color: theme.colors.text,
         marginBottom: 4,
+        // Text wrapping is automatic in React Native when parent has constrained width
+        // flexShrink ensures text doesn't push card wider than column
+        flexShrink: 1,
     },
     taskAssignee: {
         fontSize: 12,
@@ -304,6 +309,7 @@ export default function TeamDashboardScreen() {
     const artifact = useArtifact(teamId);
     const allSessions = useAllSessions();
     const profile = useProfile();
+    const isDataReady = useIsDataReady();
     const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info'>('chat');
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
@@ -348,6 +354,71 @@ export default function TeamDashboardScreen() {
                 .finally(() => setIsLoading(false));
         }
     }, [artifact, isLoading, desktopBridge]);
+
+    // Auto-initialize Board if artifact doesn't exist (CLI-created teams)
+    const [autoInitAttempted, setAutoInitAttempted] = React.useState(false);
+    React.useEffect(() => {
+        // Wait for data to be ready before auto-initializing
+        if (desktopBridge || isLoading || autoInitAttempted || !isDataReady) {
+            return;
+        }
+        // If artifact is null (data loaded but artifact doesn't exist), auto-initialize
+        if (artifact === null) {
+            setAutoInitAttempted(true);
+            setIsLoading(true);
+            console.log(`🔧 Auto-initializing Board for team ${teamId}...`);
+
+            const initialBoard: KanbanBoard = {
+                ...DEFAULT_KANBAN_BOARD,
+                tasks: [],
+                team: {
+                    roles: DEFAULT_TEAM_ROLES,
+                    agreements: DEFAULT_TEAM_AGREEMENTS,
+                    members: []
+                }
+            };
+
+            sync.createArtifact(
+                'Team',
+                JSON.stringify(initialBoard, null, 2),
+                [],
+                false,
+                'team',
+                teamId
+            )
+            .then(() => {
+                console.log(`✅ Board auto-initialized for team ${teamId}`);
+                return sync.fetchArtifactWithBody(teamId);
+            })
+            .catch((error) => {
+                console.error('Failed to auto-initialize Board:', error);
+            })
+            .finally(() => {
+                setIsLoading(false);
+            });
+        }
+    }, [artifact, teamId, desktopBridge, isLoading, autoInitAttempted, isDataReady]);
+
+    // Subscribe to task events for real-time Board updates (Server-Driven Task Orchestration)
+    React.useEffect(() => {
+        if (desktopBridge) {
+            // Desktop bridge handles its own updates
+            return;
+        }
+
+        // Subscribe to task events for this team
+        const unsubscribe = sync.subscribeToTaskEvents(teamId, (event) => {
+            console.log(`🔄 Board: Received ${event.type} for task ${event.taskId}`);
+            // Refetch artifact to get updated board data
+            sync.fetchArtifactWithBody(teamId).catch(err => {
+                console.error(`Failed to refresh board after ${event.type}:`, err);
+            });
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [teamId, desktopBridge]);
 
     // Helper to get session IDs from artifact body
     const getSessionIds = React.useCallback((): string[] => {
@@ -453,6 +524,55 @@ export default function TeamDashboardScreen() {
             Modal.alert('Error', 'Failed to rename team. Please try again.');
         }
     }, [teamId, artifact]);
+
+    // Initialize missing Team Artifact (P0 fix for teams created without artifact)
+    const handleInitializeArtifact = React.useCallback(async () => {
+        const confirmed = await Modal.confirm(
+            'Initialize Team Board',
+            'This team is missing its Kanban board data. Would you like to initialize it now?',
+            {
+                confirmText: 'Initialize',
+                cancelText: 'Cancel',
+                destructive: false
+            }
+        );
+
+        if (!confirmed) return;
+
+        setIsLoading(true);
+        try {
+            // Create initial board data
+            const initialBoard: KanbanBoard = {
+                ...DEFAULT_KANBAN_BOARD,
+                tasks: [],
+                team: {
+                    roles: DEFAULT_TEAM_ROLES,
+                    agreements: DEFAULT_TEAM_AGREEMENTS,
+                    members: []
+                }
+            };
+
+            // Create artifact with the existing teamId
+            await sync.createArtifact(
+                'Team',  // Default title
+                JSON.stringify(initialBoard, null, 2),
+                [],  // No sessions initially
+                false,  // Not a draft
+                'team',  // Type
+                teamId  // Use existing teamId as artifact ID
+            );
+
+            Modal.alert('Success', 'Team board initialized successfully!');
+
+            // Refresh the artifact
+            await sync.fetchArtifactWithBody(teamId);
+        } catch (error) {
+            console.error('Failed to initialize team artifact:', error);
+            Modal.alert('Error', 'Failed to initialize team board. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [teamId]);
 
     const kanbanData: KanbanBoard = React.useMemo(() => {
         const ensureColumns = (data: any): KanbanBoard => {
@@ -589,7 +709,7 @@ export default function TeamDashboardScreen() {
             'blocked': 'blocked',
             'done': 'done'
         };
-        return statusMap[status] || status.toLowerCase();
+        return statusMap[status] || (status ? status.toLowerCase() : 'todo');
     }, []);
 
     const handleAddTask = async (status: string) => {
@@ -681,7 +801,12 @@ export default function TeamDashboardScreen() {
         const assignedIds = new Set(members.map(m => m.sessionId));
 
         const memberMap = new Map(members.map(m => [m.sessionId, m]));
-        const allSessionIds = Array.from(new Set([...(artifact?.sessions ?? []), ...assignedIds]));
+        // Only show actual team members from artifact.sessions and team.members
+        // Don't auto-add the viewing user - they should be added explicitly via the API
+        const allSessionIds = Array.from(new Set([
+            ...(artifact?.sessions ?? []),
+            ...assignedIds
+        ]));
 
         return allSessionIds.map((sessionId, index) => {
             const session = sessionLookup.get(sessionId);
@@ -760,7 +885,33 @@ export default function TeamDashboardScreen() {
     if (!desktopBridge && !artifact) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" />
+                {isLoading ? (
+                    <ActivityIndicator size="large" />
+                ) : (
+                    <View style={{ alignItems: 'center', padding: 20 }}>
+                        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
+                        <Text style={[styles.title, { marginTop: 16, textAlign: 'center' }]}>
+                            Team Board Not Found
+                        </Text>
+                        <Text style={[styles.subtitle, { marginTop: 8, textAlign: 'center', maxWidth: 300 }]}>
+                            This team doesn't have a Kanban board yet. Initialize one to start tracking tasks.
+                        </Text>
+                        <Pressable
+                            style={{
+                                marginTop: 20,
+                                backgroundColor: theme.colors.button.primary.background,
+                                paddingHorizontal: 24,
+                                paddingVertical: 12,
+                                borderRadius: 8
+                            }}
+                            onPress={handleInitializeArtifact}
+                        >
+                            <Text style={{ color: theme.colors.button.primary.tint, fontWeight: '600' }}>
+                                Initialize Board
+                            </Text>
+                        </Pressable>
+                    </View>
+                )}
             </View>
         );
     }
@@ -921,7 +1072,9 @@ export default function TeamDashboardScreen() {
             return !role || role === 'user';
         });
 
-        const mySessionId = myMember?.member.sessionId;
+        // CRITICAL: Use sync.anonID as fallback if not found in roster
+        // This ensures the user can participate in chat even before they're formally added as a member
+        const mySessionId = myMember?.member.sessionId || sync.anonID;
 
         return (
             <View style={{ flex: 1 }}>
@@ -947,87 +1100,85 @@ export default function TeamDashboardScreen() {
                     headerShown: true,
                     headerTitle: (desktopBridge ? desktopRoom?.name : artifact?.title) || 'Team Dashboard',
                     headerRight: () => (
-                        <View style={{ position: 'relative' }}>
-                            <Pressable
-                                onPress={() => setShowMenu(!showMenu)}
-                                hitSlop={10}
-                                style={{ padding: 8 }}
-                            >
-                                <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
-                            </Pressable>
-                            {showMenu && (
-                                <View style={{
-                                    position: 'absolute',
-                                    top: 40,
-                                    right: 0,
-                                    backgroundColor: theme.colors.surface,
-                                    borderRadius: 12,
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: 4 },
-                                    shadowOpacity: 0.15,
-                                    shadowRadius: 12,
-                                    elevation: 8,
-                                    minWidth: 180,
-                                    borderWidth: 1,
-                                    borderColor: theme.colors.divider,
-                                    zIndex: 1000,
-                                }}>
-                                    <Pressable
-                                        onPress={handleRenameTeam}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            padding: 14,
-                                            borderBottomWidth: 1,
-                                            borderBottomColor: theme.colors.divider,
-                                        }}
-                                    >
-                                        <Ionicons name="pencil-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
-                                        <Text style={{ fontSize: 15, color: theme.colors.text }}>Rename</Text>
-                                    </Pressable>
-                                    <Pressable
-                                        onPress={handleArchiveTeam}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            padding: 14,
-                                            borderBottomWidth: 1,
-                                            borderBottomColor: theme.colors.divider,
-                                        }}
-                                    >
-                                        <Ionicons name="archive-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
-                                        <Text style={{ fontSize: 15, color: theme.colors.text }}>Archive</Text>
-                                    </Pressable>
-                                    <Pressable
-                                        onPress={handleDeleteTeam}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            padding: 14,
-                                        }}
-                                    >
-                                        <Ionicons name="trash-outline" size={18} color={theme.colors.textDestructive} style={{ marginRight: 12 }} />
-                                        <Text style={{ fontSize: 15, color: theme.colors.textDestructive }}>Delete</Text>
-                                    </Pressable>
-                                </View>
-                            )}
-                        </View>
+                        <Pressable
+                            onPress={() => setShowMenu(!showMenu)}
+                            hitSlop={10}
+                            style={{ padding: 8 }}
+                        >
+                            <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
+                        </Pressable>
                     ),
                 }}
             />
-            {/* Menu backdrop */}
+            {/* Menu dropdown - rendered outside header to avoid clipping */}
             {showMenu && (
-                <Pressable
-                    style={{
+                <>
+                    <Pressable
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 999,
+                        }}
+                        onPress={() => setShowMenu(false)}
+                    />
+                    <View style={{
                         position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        zIndex: 999,
-                    }}
-                    onPress={() => setShowMenu(false)}
-                />
+                        top: 50,
+                        right: 8,
+                        backgroundColor: theme.colors.surface,
+                        borderRadius: 12,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 12,
+                        elevation: 8,
+                        minWidth: 180,
+                        borderWidth: 1,
+                        borderColor: theme.colors.divider,
+                        zIndex: 1000,
+                    }}>
+                        <Pressable
+                            onPress={handleRenameTeam}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                padding: 14,
+                                borderBottomWidth: 1,
+                                borderBottomColor: theme.colors.divider,
+                            }}
+                        >
+                            <Ionicons name="pencil-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
+                            <Text style={{ fontSize: 15, color: theme.colors.text }}>Rename</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={handleArchiveTeam}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                padding: 14,
+                                borderBottomWidth: 1,
+                                borderBottomColor: theme.colors.divider,
+                            }}
+                        >
+                            <Ionicons name="archive-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
+                            <Text style={{ fontSize: 15, color: theme.colors.text }}>Archive</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={handleDeleteTeam}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                padding: 14,
+                            }}
+                        >
+                            <Ionicons name="trash-outline" size={18} color={theme.colors.textDestructive} style={{ marginRight: 12 }} />
+                            <Text style={{ fontSize: 15, color: theme.colors.textDestructive }}>Delete</Text>
+                        </Pressable>
+                    </View>
+                </>
             )}
             <View style={styles.container}>
                 <View style={styles.header}>

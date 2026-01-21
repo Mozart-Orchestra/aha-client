@@ -818,6 +818,20 @@ export function reducer(state: ReducerState, messages: NormalizedMessage[], agen
                         }
                     }
 
+                    // Sync TodoWrite result to latestTodos when tool completes successfully
+                    if (message.tool.name === 'TodoWrite' && !c.is_error) {
+                        const resultData = c.content;
+                        if (resultData?.newTodos && Array.isArray(resultData.newTodos)) {
+                            // Only update if newer than existing to prevent race conditions
+                            if (!state.latestTodos || msg.createdAt > state.latestTodos.timestamp) {
+                                state.latestTodos = {
+                                    todos: resultData.newTodos,
+                                    timestamp: msg.createdAt
+                                };
+                            }
+                        }
+                    }
+
                     changed.add(messageId);
                 }
             }
@@ -957,6 +971,20 @@ export function reducer(state: ReducerState, messages: NormalizedMessage[], agen
                                     };
                                 }
                             }
+
+                            // Sync TodoWrite result to latestTodos when sidechain tool completes successfully
+                            if (sidechainMessage.tool.name === 'TodoWrite' && !c.is_error) {
+                                const resultData = c.content;
+                                if (resultData?.newTodos && Array.isArray(resultData.newTodos)) {
+                                    // Only update if newer than existing to prevent race conditions
+                                    if (!state.latestTodos || msg.createdAt > state.latestTodos.timestamp) {
+                                        state.latestTodos = {
+                                            todos: resultData.newTodos,
+                                            timestamp: msg.createdAt
+                                        };
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -994,7 +1022,21 @@ export function reducer(state: ReducerState, messages: NormalizedMessage[], agen
                                     };
                                 }
                             }
-                            
+
+                            // Sync TodoWrite result to latestTodos when permission message tool completes successfully
+                            if (permissionMessage.tool.name === 'TodoWrite' && !c.is_error) {
+                                const resultData = c.content;
+                                if (resultData?.newTodos && Array.isArray(resultData.newTodos)) {
+                                    // Only update if newer than existing to prevent race conditions
+                                    if (!state.latestTodos || msg.createdAt > state.latestTodos.timestamp) {
+                                        state.latestTodos = {
+                                            todos: resultData.newTodos,
+                                            timestamp: msg.createdAt
+                                        };
+                                    }
+                                }
+                            }
+
                             changed.add(permissionMessageId);
                         }
                     }

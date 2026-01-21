@@ -104,7 +104,7 @@ export class ArtifactEncryption {
             // Neither encrypted nor plaintext format worked
         }
 
-        console.error('Failed to decrypt or parse artifact body');
+        console.error('Failed to decrypt or parse artifact body: neither encrypted nor plaintext format succeeded');
         return null;
     }
 }
