@@ -93,16 +93,15 @@ const stylesheet = StyleSheet.create((theme) => ({
         marginBottom: 8,
         borderWidth: 1,
         borderColor: theme.colors.divider,
-        // Ensure card content can wrap within column width
-        overflow: 'hidden',
+        // Force card to fill column width and constrain children
+        width: '100%',
     },
     taskTitle: {
         fontSize: 14,
         color: theme.colors.text,
         marginBottom: 4,
-        // Text wrapping is automatic in React Native when parent has constrained width
-        // flexShrink ensures text doesn't push card wider than column
-        flexShrink: 1,
+        // Explicit width: 100% forces text to wrap within card boundaries
+        width: '100%',
     },
     taskAssignee: {
         fontSize: 12,
