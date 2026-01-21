@@ -83,9 +83,15 @@ export class ArtifactEncryption {
         // Try encrypted format first
         try {
             const decrypted = await this.encryptor.decrypt([decoded]);
-            const parsed = parseBody(decrypted[0]);
-            if (parsed) {
-                return parsed;
+            if (decrypted[0] !== null) {
+                const parsed = parseBody(decrypted[0]);
+                if (parsed) {
+                    return parsed;
+                }
+                // Decryption succeeded but parsing failed - try treating decrypted result as direct body
+                if (typeof decrypted[0] === 'string') {
+                    return { body: decrypted[0] };
+                }
             }
         } catch (decryptError) {
             // Decryption failed, will try plaintext fallback for legacy data
@@ -99,6 +105,10 @@ export class ArtifactEncryption {
             const parsed = parseBody(parsedJson);
             if (parsed) {
                 return parsed;
+            }
+            // Try treating the plain text itself as the body if it's valid JSON but not in expected format
+            if (typeof parsedJson === 'string') {
+                return { body: parsedJson };
             }
         } catch (parseError) {
             // Neither encrypted nor plaintext format worked

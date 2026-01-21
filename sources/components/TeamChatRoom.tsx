@@ -785,6 +785,7 @@ export default function TeamChatRoom({
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const scrollViewRef = React.useRef<ScrollView>(null);
+    const isNearBottomRef = React.useRef(true);  // Track if user is near bottom for auto-scroll
     const router = useRouter();
 
     // 🆕 使用外部 messages（如果提供），否则使用内部状态
@@ -1548,13 +1549,18 @@ export default function TeamChatRoom({
                     styles.messageListContent,
                     uniqueMessages.length === 0 && { flex: 1 }
                 ]}
-                // FIX: Auto-scroll to latest message when content changes
-                onContentSizeChange={() => {
-                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                // Track user scroll position to determine if near bottom
+                onScroll={(event) => {
+                    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+                    const paddingToBottom = 100;  // Threshold for "near bottom"
+                    isNearBottomRef.current = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
                 }}
-                // Maintain scroll position behavior on iOS
-                maintainVisibleContentPosition={{
-                    minIndexForVisible: 0,
+                scrollEventThrottle={16}
+                // Only auto-scroll when user is near bottom (respecting user intent)
+                onContentSizeChange={() => {
+                    if (isNearBottomRef.current) {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                    }
                 }}
             >
                 {uniqueMessages.length === 0 ? (
