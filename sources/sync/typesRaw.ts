@@ -242,9 +242,12 @@ export type NormalizedMessage = ({
 export function normalizeRawMessage(id: string, localId: string | null, createdAt: number, raw: RawRecord): NormalizedMessage | null {
     let parsed = rawRecordSchema.safeParse(raw);
     if (!parsed.success) {
-        console.error('Invalid raw record:');
-        console.error(parsed.error.issues);
-        console.error(raw);
+        console.error('❌ [normalizeRawMessage] Validation failed for message:', id);
+        console.error('   Local ID:', localId);
+        console.error('   Created At:', createdAt);
+        console.error('   Raw role:', (raw as any).role);
+        console.error('   Zod issues:', JSON.stringify(parsed.error.issues, null, 2));
+        console.error('   Raw data:', JSON.stringify(raw, null, 2));
         return null;
     }
     raw = parsed.data;
