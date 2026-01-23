@@ -114,7 +114,22 @@ export class ArtifactEncryption {
             // Neither encrypted nor plaintext format worked
         }
 
-        console.error('Failed to decrypt or parse artifact body: neither encrypted nor plaintext format succeeded');
+        // Enhanced diagnostic logging for troubleshooting
+        console.error('❌ [decryptBody] 双重失败 - 诊断信息:', {
+            inputLength: encryptedBody.length,
+            base64Decoded: decoded !== null && decoded.length > 0,
+            decryptedBranch: decryptError instanceof Error ? {
+                success: false,
+                error: decryptError.message,
+                name: decryptError.constructor.name
+            } : 'unknown',
+            plaintextBranch: parseError instanceof Error ? {
+                success: false,
+                error: parseError.message,
+                name: parseError.constructor.name
+            } : 'unknown',
+            hint: '检查: 1)加密密钥是否正确 2)数据格式是否符合ArtifactBody接口 3)是否需要迁移'
+        });
         return null;
     }
 }
