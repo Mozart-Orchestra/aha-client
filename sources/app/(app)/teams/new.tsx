@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DEFAULT_KANBAN_BOARD, KanbanTeamMember, KanbanBoard, DEFAULT_TEAM_AGREEMENTS, DEFAULT_TEAM_ROLES, KanbanTeamRole } from '@/sync/kanbanTypes';
 import { getRecentPathForMachine, updateRecentMachinePaths, getKnownPathsForMachine } from '@/utils/machinePaths';
 import { getLocalizedTeamRoles } from '@/team-config/i18n';
+import { getSupportedLanguages } from '@/i18n';
 
 // Use localized team roles instead of hardcoded ones
 const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
@@ -317,6 +318,8 @@ export default function NewTeamScreen() {
     const [title, setTitle] = React.useState('');
     const [target, setTarget] = React.useState('');
     const [roleCounts, setRoleCounts] = React.useState<Record<string, number>>(() => ({ ...INITIAL_ROLE_COUNTS }));
+    // Track agent type per role (defaults to global agentType)
+    const [roleAgentTypes, setRoleAgentTypes] = React.useState<Record<string, 'claude' | 'codex'>>({});
 
     const [selectedSessions, setSelectedSessions] = React.useState<Set<string>>(new Set());
     const [sessionRoles, setSessionRoles] = React.useState<Record<string, string>>({});
@@ -338,6 +341,7 @@ export default function NewTeamScreen() {
         return 'claude';
     });
     const [isPathDropdownOpen, setIsPathDropdownOpen] = React.useState(false);
+    const [agentLanguage, setAgentLanguage] = React.useState<'en' | 'zh'>('en');
 
     const defaultRoleId = 'implementer';
 
@@ -458,6 +462,18 @@ export default function NewTeamScreen() {
         });
     }, []);
 
+    const updateRoleAgentType = React.useCallback((roleId: string, type: 'claude' | 'codex') => {
+        setRoleAgentTypes(prev => ({
+            ...prev,
+            [roleId]: type
+        }));
+    }, []);
+
+    // Helper to get agent type for a specific role (falls back to global)
+    const getRoleAgentType = React.useCallback((roleId: string): 'claude' | 'codex' => {
+        return roleAgentTypes[roleId] ?? agentType;
+    }, [roleAgentTypes, agentType]);
+
     const handleSave = React.useCallback(async () => {
         if (isSaving) return;
 
@@ -560,7 +576,9 @@ export default function NewTeamScreen() {
                                 env: {
                                     HAPPY_AGENT_ROLE: roleId,
                                     HAPPY_ROOM_ID: room.id,
-                                    HAPPY_ROOM_NAME: title.trim()
+                                    HAPPY_ROOM_NAME: title.trim(),
+                                    HAPPY_AGENT_LANGUAGE: agentLanguage,
+                                    HAPPY_AGENT_TYPE: getRoleAgentType(roleId)
                                 },
                                 cwd: resolvedCwd || undefined,
                                 cliPath: resolvedAgentBinary || undefined
@@ -635,12 +653,15 @@ export default function NewTeamScreen() {
                                     try {
                                         const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
                                             directory: resolvedCwd,
-                                            agent: agentType,
+                                            agent: getRoleAgentType(roleId),
                                             sessionTag: tag,
                                             teamId: artifactId,
                                             role: roleId,
                                             sessionName: agentTitle,
-                                            sessionPath: resolvedCwd
+                                            sessionPath: resolvedCwd,
+                                            env: {
+                                                HAPPY_AGENT_LANGUAGE: agentLanguage
+                                            }
                                         });
                                         if (spawnedSessionId) {
                                             spawnedMembers.push({
@@ -775,7 +796,7 @@ export default function NewTeamScreen() {
         } finally {
             setIsSaving(false);
         }
-    }, [title, target, roleCounts, selectedSessions, isSaving, router, desktopBridge, sessionRoles, sessionLookup, cwd, agentBinary, selectedMachineId, agentType, recentMachinePaths]);
+    }, [title, target, roleCounts, selectedSessions, isSaving, router, desktopBridge, sessionRoles, sessionLookup, cwd, agentBinary, selectedMachineId, agentType, recentMachinePaths, getRoleAgentType, agentLanguage]);
 
     const HeaderRight = React.useCallback(() => (
         <Pressable
@@ -859,33 +880,115 @@ export default function NewTeamScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
+                        <Text style={styles.label}>{t('settingsVoice.preferredLanguage')}</Text>
+                        <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: theme.colors.divider }}>
+                            {getSupportedLanguages().map((lang) => (
+                                <Pressable
+                                    key={lang.code}
+                                    onPress={() => setAgentLanguage(lang.code as 'en' | 'zh')}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        paddingVertical: 12,
+                                        paddingHorizontal: 8,
+                                        backgroundColor: agentLanguage === lang.code ? theme.colors.input.background : 'transparent',
+                                        borderRadius: 8,
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                        <Text style={{ fontSize: 16, color: theme.colors.text, fontWeight: agentLanguage === lang.code ? '600' : '400' }}>
+                                            {lang.nativeName}
+                                        </Text>
+                                        <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginLeft: 8 }}>
+                                            ({lang.name})
+                                        </Text>
+                                    </View>
+                                    {agentLanguage === lang.code && (
+                                        <Ionicons name="checkmark-circle" size={24} color={theme.colors.button.primary.background} />
+                                    )}
+                                </Pressable>
+                            ))}
+                        </View>
+                        <Text style={styles.helperText}>
+                            {t('settingsVoice.preferredLanguageSubtitle')}
+                        </Text>
+                    </View>
+
+                    <View style={styles.inputGroup}>
                         <Text style={styles.label}>Team Composition (Auto-Spawn)</Text>
                         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: theme.colors.divider }}>
-                            {LOCALIZED_TEAM_ROLES.map((role, index) => (
-                                <View key={role.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: index === LOCALIZED_TEAM_ROLES.length - 1 ? 0 : 16 }}>
-                                    <View style={{ flex: 1, marginRight: 16 }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 4 }}>{role.title}</Text>
-                                        <Text style={{ fontSize: 13, color: theme.colors.textSecondary }} numberOfLines={2}>{role.summary}</Text>
+                            {LOCALIZED_TEAM_ROLES.map((role, index) => {
+                                const count = roleCounts[role.id] || 0;
+                                const currentAgentType = getRoleAgentType(role.id);
+                                return (
+                                    <View key={role.id} style={{ marginBottom: index === LOCALIZED_TEAM_ROLES.length - 1 ? 0 : 16 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <View style={{ flex: 1, marginRight: 16 }}>
+                                                <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 4 }}>{role.title}</Text>
+                                                <Text style={{ fontSize: 13, color: theme.colors.textSecondary }} numberOfLines={2}>{role.summary}</Text>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.groupped.background, borderRadius: 8, padding: 4 }}>
+                                                <Pressable
+                                                    onPress={() => updateRoleCount(role.id, -1)}
+                                                    style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: theme.colors.surface }}
+                                                >
+                                                    <Ionicons name="remove" size={20} color={theme.colors.text} />
+                                                </Pressable>
+                                                <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, minWidth: 24, textAlign: 'center' }}>
+                                                    {count}
+                                                </Text>
+                                                <Pressable
+                                                    onPress={() => updateRoleCount(role.id, 1)}
+                                                    style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: theme.colors.surface }}
+                                                >
+                                                    <Ionicons name="add" size={20} color={theme.colors.text} />
+                                                </Pressable>
+                                            </View>
+                                        </View>
+                                        {/* Agent Type selector - shown when count > 0 */}
+                                        {count > 0 && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginLeft: 4 }}>
+                                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginRight: 8 }}>
+                                                    {t('sessionInfo.aiProvider')}:
+                                                </Text>
+                                                <View style={{ flexDirection: 'row', borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.divider }}>
+                                                    <Pressable
+                                                        onPress={() => updateRoleAgentType(role.id, 'claude')}
+                                                        style={{
+                                                            paddingHorizontal: 12,
+                                                            paddingVertical: 6,
+                                                            backgroundColor: currentAgentType === 'claude' ? theme.colors.button.primary.background : theme.colors.surface,
+                                                        }}
+                                                    >
+                                                        <Text style={{
+                                                            fontSize: 12,
+                                                            fontWeight: '600',
+                                                            color: currentAgentType === 'claude' ? '#FFF' : theme.colors.text,
+                                                        }}>Claude</Text>
+                                                    </Pressable>
+                                                    <Pressable
+                                                        onPress={() => updateRoleAgentType(role.id, 'codex')}
+                                                        style={{
+                                                            paddingHorizontal: 12,
+                                                            paddingVertical: 6,
+                                                            backgroundColor: currentAgentType === 'codex' ? theme.colors.button.primary.background : theme.colors.surface,
+                                                            borderLeftWidth: 1,
+                                                            borderLeftColor: theme.colors.divider,
+                                                        }}
+                                                    >
+                                                        <Text style={{
+                                                            fontSize: 12,
+                                                            fontWeight: '600',
+                                                            color: currentAgentType === 'codex' ? '#FFF' : theme.colors.text,
+                                                        }}>Codex</Text>
+                                                    </Pressable>
+                                                </View>
+                                            </View>
+                                        )}
                                     </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.groupped.background, borderRadius: 8, padding: 4 }}>
-                                        <Pressable
-                                            onPress={() => updateRoleCount(role.id, -1)}
-                                            style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: theme.colors.surface }}
-                                        >
-                                            <Ionicons name="remove" size={20} color={theme.colors.text} />
-                                        </Pressable>
-                                        <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, minWidth: 24, textAlign: 'center' }}>
-                                            {roleCounts[role.id] || 0}
-                                        </Text>
-                                        <Pressable
-                                            onPress={() => updateRoleCount(role.id, 1)}
-                                            style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: theme.colors.surface }}
-                                        >
-                                            <Ionicons name="add" size={20} color={theme.colors.text} />
-                                        </Pressable>
-                                    </View>
-                                </View>
-                            ))}
+                                );
+                            })}
                         </View>
 
                     </View>

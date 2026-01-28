@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, Platform } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +31,7 @@ export default React.memo(() => {
     const [showSecret, setShowSecret] = useState(false);
     const [copiedRecently, setCopiedRecently] = useState(false);
     const [analyticsOptOut, setAnalyticsOptOut] = useSettingMutable('analyticsOptOut');
-    const { connectAccount, isLoading: isConnecting } = useConnectAccount();
+    const { connectAccount, connectWithUrl, isLoading: isConnecting } = useConnectAccount();
     const profile = useProfile();
 
     // Get the current secret key
@@ -127,16 +127,35 @@ export default React.memo(() => {
                         showChevron={false}
                         copy={!!sync.serverID}
                     />
-                    {Platform.OS !== 'web' && (
-                        <Item
-                            title={t('settingsAccount.linkNewDevice')}
-                            subtitle={isConnecting ? t('common.scanning') : t('settingsAccount.linkNewDeviceSubtitle')}
-                            icon={<Ionicons name="qr-code-outline" size={29} color="#007AFF" />}
-                            onPress={connectAccount}
-                            disabled={isConnecting}
-                            showChevron={false}
-                        />
-                    )}
+                    <Item
+                        title={t('settingsAccount.linkNewDevice')}
+                        subtitle={isConnecting ? t('common.scanning') : t('settingsAccount.linkNewDeviceSubtitle')}
+                        icon={<Ionicons name="qr-code-outline" size={29} color="#007AFF" />}
+                        onPress={connectAccount}
+                        disabled={isConnecting}
+                        showChevron={false}
+                    />
+                    <Item
+                        title={t('connect.enterUrlManually')}
+                        icon={<Ionicons name="link-outline" size={29} color="#007AFF" />}
+                        onPress={async () => {
+                            const url = await Modal.prompt(
+                                t('settingsAccount.linkNewDevice'),
+                                undefined,
+                                {
+                                    placeholder: 'happy:///account?...',
+                                    cancelText: t('common.cancel'),
+                                    confirmText: t('common.authenticate')
+                                }
+                            );
+
+                            if (url?.trim()) {
+                                connectWithUrl(url.trim());
+                            }
+                        }}
+                        disabled={isConnecting}
+                        showChevron={false}
+                    />
                 </ItemGroup>
 
                 {/* Profile Section */}

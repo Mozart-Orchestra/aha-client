@@ -1,0 +1,397 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for kanban/sources/sync/settings.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">kanban/sources/sync</a> settings.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/66</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/66</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" >import * as z from 'zod';<span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" ></span></span></span>
+&nbsp;
+//
+// Schema
+//
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const SettingsSchema = z.object({</span>
+<span class="cstat-no" title="statement not covered" >    viewInline: z.boolean().describe('Whether to view inline tool calls'),</span>
+<span class="cstat-no" title="statement not covered" >    inferenceOpenAIKey: z.string().nullish().describe('OpenAI API key for inference'),</span>
+<span class="cstat-no" title="statement not covered" >    expandTodos: z.boolean().describe('Whether to expand todo lists'),</span>
+<span class="cstat-no" title="statement not covered" >    showLineNumbers: z.boolean().describe('Whether to show line numbers in diffs'),</span>
+<span class="cstat-no" title="statement not covered" >    showLineNumbersInToolViews: z.boolean().describe('Whether to show line numbers in tool view diffs'),</span>
+<span class="cstat-no" title="statement not covered" >    wrapLinesInDiffs: z.boolean().describe('Whether to wrap long lines in diff views'),</span>
+<span class="cstat-no" title="statement not covered" >    analyticsOptOut: z.boolean().describe('Whether to opt out of anonymous analytics'),</span>
+<span class="cstat-no" title="statement not covered" >    experiments: z.boolean().describe('Whether to enable experimental features'),</span>
+<span class="cstat-no" title="statement not covered" >    alwaysShowContextSize: z.boolean().describe('Always show context size in agent input'),</span>
+<span class="cstat-no" title="statement not covered" >    avatarStyle: z.string().describe('Avatar display style'),</span>
+<span class="cstat-no" title="statement not covered" >    showFlavorIcons: z.boolean().describe('Whether to show AI provider icons in avatars'),</span>
+<span class="cstat-no" title="statement not covered" >    compactSessionView: z.boolean().describe('Whether to use compact view for active sessions'),</span>
+<span class="cstat-no" title="statement not covered" >    hideInactiveSessions: z.boolean().describe('Hide inactive sessions in the main list'),</span>
+<span class="cstat-no" title="statement not covered" >    reviewPromptAnswered: z.boolean().describe('Whether the review prompt has been answered'),</span>
+<span class="cstat-no" title="statement not covered" >    reviewPromptLikedApp: z.boolean().nullish().describe('Whether user liked the app when asked'),</span>
+<span class="cstat-no" title="statement not covered" >    voiceAssistantLanguage: z.string().nullable().describe('Preferred language for voice assistant (null for auto-detect)'),</span>
+<span class="cstat-no" title="statement not covered" >    preferredLanguage: z.string().nullable().describe('Preferred UI language (null for auto-detect from device locale)'),</span>
+<span class="cstat-no" title="statement not covered" >    recentMachinePaths: z.array(z.object({</span>
+<span class="cstat-no" title="statement not covered" >        machineId: z.string(),</span>
+<span class="cstat-no" title="statement not covered" >        path: z.string()</span>
+<span class="cstat-no" title="statement not covered" >    })).describe('Last 10 machine-path combinations, ordered by most recent first'),</span>
+<span class="cstat-no" title="statement not covered" >    lastUsedAgent: z.string().nullable().describe('Last selected agent type for new sessions'),</span>
+<span class="cstat-no" title="statement not covered" >    lastUsedPermissionMode: z.string().nullable().describe('Last selected permission mode for new sessions'),</span>
+<span class="cstat-no" title="statement not covered" >    lastUsedModelMode: z.string().nullable().describe('Last selected model mode for new sessions'),</span>
+<span class="cstat-no" title="statement not covered" >});</span>
+&nbsp;
+//
+// NOTE: Settings must be a flat object with no to minimal nesting, one field == one setting,
+// you can name them with a prefix if you want to group them, but don't nest them.
+// You can nest if value is a single value (like image with url and width and height)
+// Settings are always merged with defaults and field by field.
+// 
+// This structure must be forward and backward compatible. Meaning that some versions of the app
+// could be missing some fields or have a new fields. Everything must be preserved and client must 
+// only touch the fields it knows about.
+//
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const SettingsSchemaPartial = SettingsSchema.loose().partial();</span>
+&nbsp;
+export type Settings = z.infer&lt;typeof SettingsSchema&gt;;
+&nbsp;
+//
+// Defaults
+//
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const settingsDefaults: Settings = {</span>
+<span class="cstat-no" title="statement not covered" >    viewInline: false,</span>
+<span class="cstat-no" title="statement not covered" >    inferenceOpenAIKey: null,</span>
+<span class="cstat-no" title="statement not covered" >    expandTodos: true,</span>
+<span class="cstat-no" title="statement not covered" >    showLineNumbers: true,</span>
+<span class="cstat-no" title="statement not covered" >    showLineNumbersInToolViews: false,</span>
+<span class="cstat-no" title="statement not covered" >    wrapLinesInDiffs: false,</span>
+<span class="cstat-no" title="statement not covered" >    analyticsOptOut: false,</span>
+<span class="cstat-no" title="statement not covered" >    experiments: false,</span>
+<span class="cstat-no" title="statement not covered" >    alwaysShowContextSize: false,</span>
+<span class="cstat-no" title="statement not covered" >    avatarStyle: 'gradient',</span>
+<span class="cstat-no" title="statement not covered" >    showFlavorIcons: false,</span>
+<span class="cstat-no" title="statement not covered" >    compactSessionView: false,</span>
+<span class="cstat-no" title="statement not covered" >    hideInactiveSessions: false,</span>
+<span class="cstat-no" title="statement not covered" >    reviewPromptAnswered: false,</span>
+<span class="cstat-no" title="statement not covered" >    reviewPromptLikedApp: null,</span>
+<span class="cstat-no" title="statement not covered" >    voiceAssistantLanguage: null,</span>
+<span class="cstat-no" title="statement not covered" >    preferredLanguage: null,</span>
+<span class="cstat-no" title="statement not covered" >    recentMachinePaths: [],</span>
+<span class="cstat-no" title="statement not covered" >    lastUsedAgent: null,</span>
+<span class="cstat-no" title="statement not covered" >    lastUsedPermissionMode: null,</span>
+<span class="cstat-no" title="statement not covered" >    lastUsedModelMode: null,</span>
+<span class="cstat-no" title="statement not covered" >};</span>
+<span class="cstat-no" title="statement not covered" >Object.freeze(settingsDefaults);</span>
+&nbsp;
+//
+// Resolving
+//
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export function settingsParse(settings: unknown): Settings {</span>
+<span class="cstat-no" title="statement not covered" >    const parsed = SettingsSchemaPartial.safeParse(settings);</span>
+<span class="cstat-no" title="statement not covered" >    if (!parsed.success) {</span>
+<span class="cstat-no" title="statement not covered" >        return { ...settingsDefaults };</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    
+    // Migration: Convert old 'zh' language code to 'zh-Hans'
+<span class="cstat-no" title="statement not covered" >    if (parsed.data.preferredLanguage === 'zh') {</span>
+<span class="cstat-no" title="statement not covered" >        console.log('[Settings Migration] Converting language code from "zh" to "zh-Hans"');</span>
+<span class="cstat-no" title="statement not covered" >        parsed.data.preferredLanguage = 'zh-Hans';</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    
+<span class="cstat-no" title="statement not covered" >    return { ...settingsDefaults, ...parsed.data };</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+//
+// Applying changes
+// NOTE: May be something more sophisticated here around defaults and merging, but for now this is fine.
+//
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export function applySettings(settings: Settings, delta: Partial&lt;Settings&gt;): Settings {</span>
+<span class="cstat-no" title="statement not covered" >    return { ...settingsDefaults, ...settings, ...delta };</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-01-27T04:08:39.805Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

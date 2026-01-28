@@ -40,6 +40,41 @@ import { fetchFeed } from './apiFeed';
 import { FeedItem } from './feedTypes';
 import { UserProfile } from './friendTypes';
 import { initializeTodoSync } from '../-zen/model/ops';
+import { DEFAULT_KANBAN_BOARD } from '@/sync/kanbanTypes';
+import type { KanbanBoard, KanbanTeamMember } from '@/sync/kanbanTypes';
+
+const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
+    if (!body) {
+        return undefined;
+    }
+    try {
+        const parsed = JSON.parse(body);
+        if (parsed && typeof parsed === 'object') {
+            if (parsed.team || parsed.tasks || parsed.columns) {
+                return 'team';
+            }
+        }
+    } catch {
+        return undefined;
+    }
+    return undefined;
+};
+
+const extractTeamSessionIds = (body: string | null | undefined): string[] => {
+    if (!body) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(body);
+        const members = parsed?.team?.members;
+        if (!Array.isArray(members)) {
+            return [];
+        }
+        return members.map((member: any) => member.sessionId).filter((id: any) => typeof id === 'string' && id.length > 0);
+    } catch {
+        return [];
+    }
+};
 
 class Sync {
 
@@ -759,14 +794,16 @@ class Sync {
             // Decrypt header and body
             const header = await artifactEncryption.decryptHeader(artifact.header);
             const body = artifact.body ? await artifactEncryption.decryptBody(artifact.body) : null;
+            const bodyText = body?.body || null;
+            const resolvedType = header?.type ?? inferArtifactTypeFromBody(bodyText);
 
             const decryptedArtifact = {
                 id: artifact.id,
                 title: header?.title || null,
-                type: header?.type,          // Include type from header
+                type: resolvedType,          // Include type from header or infer from body
                 sessions: header?.sessions,  // Include sessions from header
                 draft: header?.draft,        // Include draft flag from header
-                body: body?.body || null,
+                body: bodyText,
                 headerVersion: artifact.headerVersion,
                 bodyVersion: artifact.bodyVersion,
                 seq: artifact.seq,
@@ -913,28 +950,37 @@ class Sync {
             // Create artifact encryption instance
             const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
 
+            const inferredType = inferArtifactTypeFromBody(body);
+            const resolvedType = type ?? currentArtifact.type ?? inferredType;
+
             // Prepare update request
             const updateRequest: ArtifactUpdateRequest = {};
 
             // Check if header needs updating (title, sessions, or draft changed)
-            if (title !== currentArtifact.title ||
+            const shouldUpdateHeader = title !== currentArtifact.title ||
                 JSON.stringify(sessions) !== JSON.stringify(currentArtifact.sessions) ||
-                draft !== currentArtifact.draft) {
+                draft !== currentArtifact.draft ||
+                resolvedType !== currentArtifact.type;
+
+            if (shouldUpdateHeader) {
                 const encryptedHeader = await artifactEncryption.encryptHeader({
                     title,
                     sessions,
                     draft,
-                    type
+                    type: resolvedType
                 });
                 updateRequest.header = encryptedHeader;
                 updateRequest.expectedHeaderVersion = headerVersion;
             }
 
             // Only update body if it changed
-            if (body !== currentArtifact.body) {
+            const shouldUpdateBody = body !== currentArtifact.body ||
+                (resolvedType === 'team' && currentArtifact.type !== 'team');
+
+            if (shouldUpdateBody) {
                 // For team artifacts, store body as base64-encoded plaintext (no encryption)
                 let encryptedBody: string;
-                if (type === 'team' || currentArtifact.type === 'team') {
+                if (resolvedType === 'team') {
                     const plainBody = JSON.stringify({ body });
                     encryptedBody = encodeBase64(new TextEncoder().encode(plainBody), 'base64');
                 } else {
@@ -969,7 +1015,7 @@ class Sync {
 
                         if (response.currentBody) {
                             // Handle team artifact plaintext body or encrypted body
-                            if (type === 'team' || currentArtifact.type === 'team') {
+                            if (resolvedType === 'team') {
                                 try {
                                     // Try to parse as plaintext base64 first
                                     const plainText = new TextDecoder().decode(decodeBase64(response.currentBody));
@@ -989,7 +1035,7 @@ class Sync {
                             ...currentArtifact,
                             ...(serverHeader && {
                                 title: serverHeader.title || null,
-                                type: serverHeader.type, // trust server type
+                                type: serverHeader.type ?? resolvedType ?? currentArtifact.type,
                                 sessions: serverHeader.sessions,
                                 draft: serverHeader.draft,
                             }),
@@ -1011,7 +1057,7 @@ class Sync {
                             console.log(`🔄 updateArtifact: Auto-retrying after version sync (attempt ${_retryCount + 1}/3)...`);
                             // Add small delay to reduce collision probability
                             await new Promise(r => setTimeout(r, 100 + Math.random() * 200));
-                            return this.updateArtifact(artifactId, title, body, sessions, draft, type, _retryCount + 1);
+                            return this.updateArtifact(artifactId, title, body, sessions, draft, resolvedType, _retryCount + 1);
                         }
                     } catch (decryptError) {
                         console.error('Failed to decrypt server version during mismatch handling:', decryptError);
@@ -1029,7 +1075,7 @@ class Sync {
                 await this.fetchArtifactsList();
                 // Add small delay to reduce collision probability
                 await new Promise(r => setTimeout(r, 100 + Math.random() * 200));
-                return this.updateArtifact(artifactId, title, body, sessions, draft, type, _retryCount + 1);
+                return this.updateArtifact(artifactId, title, body, sessions, draft, resolvedType, _retryCount + 1);
             }
 
             if (!response.success) {
@@ -1041,7 +1087,7 @@ class Sync {
             const updatedArtifact: DecryptedArtifact = {
                 ...currentArtifact,
                 title,
-                type,
+                type: resolvedType,
                 sessions,
                 draft,
                 body,
@@ -1111,10 +1157,11 @@ class Sync {
                 const decryptedKey = await this.encryption.decryptEncryptionKey(machine.dataEncryptionKey);
                 if (!decryptedKey) {
                     console.error(`Failed to decrypt data encryption key for machine ${machine.id}`);
-                    continue;
+                    machineKeysMap.set(machine.id, null);
+                } else {
+                    machineKeysMap.set(machine.id, decryptedKey);
+                    this.machineDataKeys.set(machine.id, decryptedKey);
                 }
-                machineKeysMap.set(machine.id, decryptedKey);
-                this.machineDataKeys.set(machine.id, decryptedKey);
             } else {
                 machineKeysMap.set(machine.id, null);
             }
@@ -1565,6 +1612,96 @@ class Sync {
      * Sync session to team using Server API (avoids version conflicts)
      * Called when session metadata contains teamId/role information
      */
+    private isTeamNotFoundError(error: unknown): boolean {
+        const message = error instanceof Error ? error.message : String(error);
+        const normalized = message.toLowerCase();
+        return normalized.includes('team not found') || normalized.includes('artifact not found');
+    }
+
+    private getTeamMembersFromSessions(teamId: string): KanbanTeamMember[] {
+        const members: KanbanTeamMember[] = [];
+        const sessions = storage.getState().sessions;
+        for (const session of Object.values(sessions)) {
+            if (!session.metadata) {
+                continue;
+            }
+            let metadata: any = session.metadata;
+            if (typeof metadata === 'string') {
+                try {
+                    metadata = JSON.parse(metadata);
+                } catch {
+                    continue;
+                }
+            }
+            if (metadata?.teamId !== teamId) {
+                continue;
+            }
+            members.push({
+                sessionId: session.id,
+                roleId: metadata.role || 'member',
+                displayName: metadata.displayName
+            });
+        }
+        return members;
+    }
+
+    private async ensureTeamArtifact(teamId: string): Promise<boolean> {
+        if (!this.credentials) {
+            return false;
+        }
+
+        try {
+            await fetchArtifact(this.credentials, teamId);
+            return false;
+        } catch (error) {
+            if (!this.isTeamNotFoundError(error)) {
+                throw error;
+            }
+        }
+
+        const localArtifact = storage.getState().artifacts[teamId];
+        const title = localArtifact?.title ?? 'Team';
+        const draft = localArtifact?.draft ?? false;
+        let body = localArtifact?.body ?? null;
+        let sessions = localArtifact?.sessions ?? [];
+
+        if (!body) {
+            const members = this.getTeamMembersFromSessions(teamId);
+            const baseTeam = DEFAULT_KANBAN_BOARD.team
+                ? { ...DEFAULT_KANBAN_BOARD.team, members: members.length > 0 ? members : [...DEFAULT_KANBAN_BOARD.team.members] }
+                : undefined;
+            const fallbackBoard: KanbanBoard = {
+                ...DEFAULT_KANBAN_BOARD,
+                tasks: [...DEFAULT_KANBAN_BOARD.tasks],
+                team: baseTeam
+            };
+            body = JSON.stringify(fallbackBoard, null, 2);
+        }
+
+        if (sessions.length === 0) {
+            sessions = extractTeamSessionIds(body);
+        }
+
+        await this.createArtifact(title, body, sessions, draft, 'team', teamId);
+        return true;
+    }
+
+    private async withTeamRecovery<T>(teamId: string, action: () => Promise<T>): Promise<T> {
+        try {
+            return await action();
+        } catch (error) {
+            if (!this.isTeamNotFoundError(error)) {
+                throw error;
+            }
+        }
+
+        const recreated = await this.ensureTeamArtifact(teamId);
+        if (!recreated) {
+            throw new Error('Team not found');
+        }
+        return await action();
+    }
+
     private syncSessionToTeam = async (sessionId: string, sessionMetadata: any): Promise<void> => {
         if (!sessionMetadata) {
             return;
@@ -1936,6 +2073,7 @@ class Sync {
         role?: string;
         sessionName?: string;
         sessionPath?: string;
+        env?: Record<string, string>;
     }): Promise<string | null> {
         try {
             const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-happy-session', {
@@ -1945,7 +2083,8 @@ class Sync {
                 teamId: params.teamId,
                 role: params.role,
                 sessionName: params.sessionName,
-                sessionPath: params.sessionPath
+                sessionPath: params.sessionPath,
+                env: params.env
             });
             const sessionId = result?.sessionId || (result?.type === 'success' ? result?.sessionId : null);
             if (result?.type === 'requestToApproveDirectoryCreation') {
@@ -2079,7 +2218,7 @@ class Sync {
                 console.log(`🔄 Sync: Duplicate message ${message.id}, skipping notification`);
             }
 
-        // === Task Events (Server-Driven Task Orchestration) ===
+            // === Task Events (Server-Driven Task Orchestration) ===
         } else if (updateData.body.t === 'task-created' || updateData.body.t === 'task-updated' || updateData.body.t === 'task-deleted') {
             const { teamId, taskId, task } = updateData.body as { teamId: string; taskId: string; task?: any };
             console.log(`🔄 Sync: Received ${updateData.body.t} for team ${teamId}, task ${taskId}`);
@@ -2105,7 +2244,7 @@ class Sync {
                 }));
             }
 
-        // === Team Update Events (Team Management) ===
+            // === Team Update Events (Team Management) ===
         } else if (updateData.body.t === 'team-update') {
             const { teamId, eventType, details } = updateData.body as { teamId: string; eventType: string; details: any };
             log.log(`🏢 Team update received: ${eventType} for team ${teamId}`);
@@ -2140,7 +2279,7 @@ class Sync {
                     break;
             }
 
-        // === Session Update Events (Session Management) ===
+            // === Session Update Events (Session Management) ===
         } else if (updateData.body.t === 'session-update') {
             const { sessionId, eventType, details } = updateData.body as { sessionId: string; eventType: string; details?: any };
             log.log(`📋 Session update received: ${eventType} for session ${sessionId}`);
@@ -2785,7 +2924,7 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { addTeamMember } = await import('./apiTeamManagement');
-        return addTeamMember(this.credentials, teamId, sessionId, roleId, displayName);
+        return this.withTeamRecovery(teamId, () => addTeamMember(this.credentials, teamId, sessionId, roleId, displayName));
     }
 
     /**
@@ -2796,7 +2935,7 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { removeTeamMember } = await import('./apiTeamManagement');
-        return removeTeamMember(this.credentials, teamId, sessionId);
+        return this.withTeamRecovery(teamId, () => removeTeamMember(this.credentials, teamId, sessionId));
     }
 
     /**
@@ -2808,7 +2947,11 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { archiveTeam } = await import('./apiTeamManagement');
-        return archiveTeam(this.credentials, teamId, sessionIds);
+        const result = await this.withTeamRecovery(teamId, () => archiveTeam(this.credentials, teamId, sessionIds));
+        if (result.success) {
+            this.sessionsSync.invalidate();
+        }
+        return result;
     }
 
     /**
@@ -2820,7 +2963,12 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { deleteTeam } = await import('./apiTeamManagement');
-        return deleteTeam(this.credentials, teamId, sessionIds);
+        const result = await this.withTeamRecovery(teamId, () => deleteTeam(this.credentials, teamId, sessionIds));
+        if (result.success) {
+            storage.getState().deleteArtifact(teamId);
+            this.sessionsSync.invalidate();
+        }
+        return result;
     }
 
     /**
@@ -2831,7 +2979,7 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { renameTeam } = await import('./apiTeamManagement');
-        return renameTeam(this.credentials, teamId, newName);
+        return this.withTeamRecovery(teamId, () => renameTeam(this.credentials, teamId, newName));
     }
 
     /**

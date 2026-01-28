@@ -61,7 +61,7 @@ class ApiSocket {
                 token: this.config.token,
                 clientType: 'user-scoped' as const
             },
-            transports: ['websocket'],
+            transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,

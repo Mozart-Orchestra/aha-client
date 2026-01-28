@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getRandomBytesAsync } from "expo-crypto";
+import { authGetToken } from "@/auth/authGetToken";
 import { View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
+import { normalizeSecretKey } from '@/auth/secretKeyBackup';
 import { RoundButton } from '@/components/RoundButton';
 import { Typography } from '@/constants/Typography';
-import { encodeBase64 } from '@/encryption/base64';
+import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { generateAuthKeyPair, authQRStart } from '@/auth/authQRStart';
 import { authQRWait } from '@/auth/authQRWait';
 import { layout } from '@/components/layout';
@@ -131,11 +134,39 @@ export default function Restore() {
         };
     }, [keypair]);
 
+    const handleRestore = async () => {
+        const trimmedKey = restoreKey.trim();
+
+        if (!trimmedKey) {
+            Modal.alert(t('common.error'), t('connect.enterSecretKey'));
+            return;
+        }
+
+        try {
+            const normalizedKey = normalizeSecretKey(trimmedKey);
+            const secretBytes = decodeBase64(normalizedKey, 'base64url');
+            if (secretBytes.length !== 32) {
+                throw new Error('Invalid secret key length');
+            }
+
+            const token = await authGetToken(secretBytes);
+            if (!token) {
+                throw new Error('Failed to authenticate with provided key');
+            }
+
+            await auth.login(token, normalizedKey);
+            router.back();
+        } catch (error) {
+            console.error('Restore error:', error);
+            Modal.alert(t('common.error'), t('connect.invalidSecretKey'));
+        }
+    };
+
     return (
         <ScrollView style={styles.scrollView} contentContainerStyle={{ flexGrow: 1 }}>
             <View style={styles.container}>
 
-                <View style={{justifyContent: 'flex-end' }}>
+                <View style={{ justifyContent: 'flex-end' }}>
                     <Text style={styles.secondInstructionText}>
                         1. Open Happy on your mobile device{'\n'}
                         2. Go to Settings → Account{'\n'}
@@ -157,9 +188,45 @@ export default function Restore() {
                     />
                 )}
                 <View style={{ flexGrow: 4, paddingTop: 30 }}>
-                    <RoundButton title="Restore with Secret Key Instead" display='inverted' onPress={() => {
-                        router.push('/restore/manual');
-                    }} />
+                    <Text style={styles.instructionText}>
+                        {t('navigation.restoreWithSecretKey')}
+                    </Text>
+                    <Text style={styles.qrInstructions}>
+                        {t('connect.enterSecretKey')}
+                    </Text>
+                    <TextInput
+                        style={styles.textInput}
+                        placeholder="XXXXX-XXXXX-XXXXX..."
+                        placeholderTextColor={theme.colors.input.placeholder}
+                        value={restoreKey}
+                        onChangeText={setRestoreKey}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        multiline={true}
+                        numberOfLines={4}
+                    />
+                    <View style={{ marginBottom: 24 }}>
+                        <RoundButton
+                            title={t('connect.restoreAccount')}
+                            action={handleRestore}
+                        />
+                    </View>
+                    <RoundButton
+                        title={t('welcome.createAccount')}
+                        action={async () => {
+                            try {
+                                const secret = await getRandomBytesAsync(32);
+                                const token = await authGetToken(secret);
+                                if (token && secret) {
+                                    await auth.login(token, encodeBase64(secret, 'base64url'));
+                                    router.replace('/');
+                                }
+                            } catch (e) {
+                                console.error(e);
+                                Modal.alert('Error', 'Failed: ' + String(e));
+                            }
+                        }}
+                    />
                 </View>
             </View>
         </ScrollView>

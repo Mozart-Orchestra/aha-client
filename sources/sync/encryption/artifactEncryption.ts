@@ -65,19 +65,44 @@ export class ArtifactEncryption {
      */
     async decryptBody(encryptedBody: string): Promise<ArtifactBody | null> {
         const decoded = decodeBase64(encryptedBody, 'base64');
-        const parseBody = (value: any): ArtifactBody | null => {
-            if (typeof value !== 'object' || value === null) {
+        const safeStringify = (value: unknown): string | null => {
+            try {
+                return JSON.stringify(value);
+            } catch {
                 return null;
             }
-            // Handle both string bodies (legacy notes) and object bodies (team artifacts)
-            const bodyValue = value.body;
-            if (typeof bodyValue === 'string') {
-                return { body: bodyValue };
-            } else if (typeof bodyValue === 'object' && bodyValue !== null) {
-                // Team artifact with object body - serialize it back to JSON string
-                return { body: JSON.stringify(bodyValue) };
+        };
+        const parseBody = (value: any): ArtifactBody | null => {
+            if (value === null) {
+                return { body: null };
             }
-            return null;
+            if (typeof value === 'string') {
+                return { body: value };
+            }
+            if (typeof value !== 'object') {
+                return null;
+            }
+            // Handle both wrapped bodies ({ body: ... }) and direct body objects (legacy/plaintext)
+            if ('body' in value) {
+                const bodyValue = (value as { body?: unknown }).body;
+                if (bodyValue === undefined) {
+                    const fallback = safeStringify(value);
+                    return fallback ? { body: fallback } : null;
+                }
+                if (bodyValue === null) {
+                    return { body: null };
+                }
+                if (typeof bodyValue === 'string') {
+                    return { body: bodyValue };
+                }
+                if (typeof bodyValue === 'object') {
+                    const serialized = safeStringify(bodyValue);
+                    return serialized ? { body: serialized } : null;
+                }
+                return null;
+            }
+            const serialized = safeStringify(value);
+            return serialized ? { body: serialized } : null;
         };
 
         // Try encrypted format first
@@ -95,10 +120,13 @@ export class ArtifactEncryption {
             }
         } catch (decryptError) {
             // Decryption failed, will try plaintext fallback for legacy data
+            // Store error for diagnostic logging
+            var decryptionError = decryptError;
         }
 
         // Fallback to plaintext for legacy artifacts (temporary migration support)
         // TODO: Remove this fallback after all artifacts have been migrated
+        let parseError: Error | undefined;
         try {
             const plainText = new TextDecoder().decode(decoded);
             const parsedJson = JSON.parse(plainText);
@@ -110,18 +138,19 @@ export class ArtifactEncryption {
             if (typeof parsedJson === 'string') {
                 return { body: parsedJson };
             }
-        } catch (parseError) {
+        } catch (error) {
             // Neither encrypted nor plaintext format worked
+            parseError = error instanceof Error ? error : new Error(String(error));
         }
 
         // Enhanced diagnostic logging for troubleshooting
         console.error('❌ [decryptBody] 双重失败 - 诊断信息:', {
             inputLength: encryptedBody.length,
             base64Decoded: decoded !== null && decoded.length > 0,
-            decryptedBranch: decryptError instanceof Error ? {
+            decryptedBranch: (decryptionError as any) instanceof Error ? {
                 success: false,
-                error: decryptError.message,
-                name: decryptError.constructor.name
+                error: (decryptionError as any).message,
+                name: (decryptionError as any).constructor.name
             } : 'unknown',
             plaintextBranch: parseError instanceof Error ? {
                 success: false,

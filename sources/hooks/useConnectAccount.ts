@@ -6,6 +6,7 @@ import { decodeBase64 } from '@/encryption/base64';
 import { encryptBox } from '@/encryption/libsodium';
 import { authAccountApprove } from '@/auth/authAccountApprove';
 import { useCheckScannerPermissions } from '@/hooks/useCheckCameraPermissions';
+import { QrScannerModal } from '@/components/QrScannerModal';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 
@@ -74,7 +75,31 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
         }
     }, [auth.credentials, options]);
 
+    const showScannerModal = React.useCallback(() => {
+        Modal.show({
+            component: QrScannerModal,
+            props: {
+                title: t('settingsAccount.linkNewDevice'),
+                subtitle: t('settingsAccount.linkNewDeviceSubtitle'),
+                permissionMessage: t('modals.cameraPermissionsRequiredToScanQr'),
+                onScan: async (data: string) => {
+                    return await processAuthUrl(data);
+                }
+            }
+        });
+    }, [processAuthUrl]);
+
     const connectAccount = React.useCallback(async () => {
+        if (Platform.OS === 'web') {
+            showScannerModal();
+            return;
+        }
+
+        if (!CameraView.isModernBarcodeScannerAvailable) {
+            showScannerModal();
+            return;
+        }
+
         if (await checkScannerPermissions()) {
             // Use camera scanner
             CameraView.launchScanner({
@@ -83,7 +108,7 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
         } else {
             Modal.alert(t('common.error'), t('modals.cameraPermissionsRequiredToScanQr'), [{ text: t('common.ok') }]);
         }
-    }, [checkScannerPermissions]);
+    }, [checkScannerPermissions, showScannerModal]);
 
     const connectWithUrl = React.useCallback(async (url: string) => {
         return await processAuthUrl(url);
@@ -91,7 +116,7 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
 
     // Set up barcode scanner listener
     React.useEffect(() => {
-        if (CameraView.isModernBarcodeScannerAvailable) {
+        if (Platform.OS !== 'web' && CameraView.isModernBarcodeScannerAvailable) {
             const subscription = CameraView.onModernBarcodeScanned(async (event) => {
                 if (event.data.startsWith('happy:///account?')) {
                     // Dismiss scanner on Android is called automatically when barcode is scanned

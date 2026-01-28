@@ -227,6 +227,17 @@ export const SidebarView = React.memo(() => {
                             )}
                         </Pressable>
                         <Pressable
+                            onPress={() => router.push('/(app)/teams')}
+                            hitSlop={15}
+                        >
+                            <Image
+                                source={require('@/assets/images/brutalist/Brutalism_5.png')}
+                                contentFit="contain"
+                                style={[{ width: 32, height: 32 }]}
+                                tintColor={theme.colors.header.tint}
+                            />
+                        </Pressable>
+                        <Pressable
                             onPress={() => router.push('/settings')}
                             hitSlop={15}
                         >

@@ -6,6 +6,7 @@ import { decodeBase64 } from '@/encryption/base64';
 import { encryptBox } from '@/encryption/libsodium';
 import { authApprove } from '@/auth/authApprove';
 import { useCheckScannerPermissions } from '@/hooks/useCheckCameraPermissions';
+import { QrScannerModal } from '@/components/QrScannerModal';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 import { sync } from '@/sync/sync';
@@ -87,6 +88,20 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     }, [auth.credentials, options]);
 
     const connectTerminal = React.useCallback(async () => {
+        if (Platform.OS === 'web') {
+            Modal.show({
+                component: QrScannerModal,
+                props: {
+                    title: t('settings.scanQrCodeToAuthenticate'),
+                    permissionMessage: t('modals.cameraPermissionsRequiredToConnectTerminal'),
+                    onScan: async (data: string) => {
+                        return await processAuthUrl(data);
+                    }
+                }
+            });
+            return;
+        }
+
         if (await checkScannerPermissions()) {
             // Use camera scanner
             CameraView.launchScanner({
@@ -95,7 +110,7 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
         } else {
             Modal.alert(t('common.error'), t('modals.cameraPermissionsRequiredToConnectTerminal'), [{ text: t('common.ok') }]);
         }
-    }, [checkScannerPermissions]);
+    }, [checkScannerPermissions, processAuthUrl]);
 
     const connectWithUrl = React.useCallback(async (url: string) => {
         return await processAuthUrl(url);
