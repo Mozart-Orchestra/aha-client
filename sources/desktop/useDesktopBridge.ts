@@ -2,9 +2,9 @@ import * as React from 'react';
 import { KanbanBoard } from '@/sync/kanbanTypes';
 
 export type DesktopBridgeEvent =
-    | 'happy-desktop:agent-event'
-    | 'happy-desktop:collaboration-event'
-    | 'happy-desktop:diagnostics-event';
+    | 'aha-desktop:agent-event'
+    | 'aha-desktop:collaboration-event'
+    | 'aha-desktop:diagnostics-event';
 
 export interface DesktopRoomMember {
     id: string;
@@ -65,7 +65,7 @@ export interface DesktopCollaborationSnapshot {
     sessions?: DesktopAgentSession[];
 }
 
-export interface HappyDesktopBridge {
+export interface AhaDesktopBridge {
     getEnvironment(): Promise<{
         isDev: boolean;
         serverUrl: string;
@@ -98,19 +98,19 @@ export interface HappyDesktopBridge {
 
 declare global {
     interface Window {
-        happyDesktopBridge?: HappyDesktopBridge;
+        ahaDesktopBridge?: AhaDesktopBridge;
     }
 }
 
-export function getDesktopBridge(): HappyDesktopBridge | null {
+export function getDesktopBridge(): AhaDesktopBridge | null {
     if (typeof window === 'undefined') {
         return null;
     }
-    return window.happyDesktopBridge ?? null;
+    return window.ahaDesktopBridge ?? null;
 }
 
 export function useDesktopBridge() {
-    const [bridge] = React.useState<HappyDesktopBridge | null>(() => getDesktopBridge());
+    const [bridge] = React.useState<AhaDesktopBridge | null>(() => getDesktopBridge());
     const [collaborationState, setCollaborationState] = React.useState<DesktopCollaborationSnapshot | null>(null);
 
     React.useEffect(() => {
@@ -124,7 +124,7 @@ export function useDesktopBridge() {
             .then((state) => setCollaborationState(state))
             .catch(() => { /* noop */ });
 
-        unsubscribe = bridge.on('happy-desktop:collaboration-event', (event: { snapshot?: DesktopCollaborationSnapshot }) => {
+        unsubscribe = bridge.on('aha-desktop:collaboration-event', (event: { snapshot?: DesktopCollaborationSnapshot }) => {
             if (event?.snapshot) {
                 setCollaborationState(event.snapshot);
             }

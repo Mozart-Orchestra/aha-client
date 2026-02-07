@@ -56,6 +56,7 @@ export const ca: TranslationStructure = {
         fileViewer: 'Visualitzador de fitxers',
         loading: 'Carregant...',
         retry: 'Torna-ho a provar',
+        connect: 'Connectar',
     },
 
     profile: {
@@ -91,6 +92,7 @@ export const ca: TranslationStructure = {
         enterSecretKey: 'Introdueix la teva clau secreta',
         invalidSecretKey: 'Clau secreta no vàlida. Comprova-ho i torna-ho a provar.',
         enterUrlManually: 'Introdueix l\'URL manualment',
+        enterUrlManuallyDescription: 'Introdueix l\'URL d\'un altre dispositiu per enllaçar el teu compte',
     },
 
     settings: {
@@ -671,6 +673,9 @@ export const ca: TranslationStructure = {
         createAccount: 'Crea un compte',
         linkOrRestoreAccount: 'Enllaça o restaura un compte',
         loginWithMobileApp: 'Inicia sessió amb l\'aplicació mòbil',
+        scanToLink: 'O escaneja per enllaçar el dispositiu',
+        scanQrCode: 'Escaneja el codi QR',
+        enterUrlManually: 'Introdueix l\'URL manualment',
     },
 
     review: {
@@ -960,7 +965,7 @@ export const ca: TranslationStructure = {
             responsibilities: ['Break down user requests into actionable tasks', 'Assign tasks to team members based on their roles', 'Monitor team progress and resolve blockers', 'Coordinate handoffs between team members', 'Maintain Kanban board accuracy', 'Make final decisions on task priorities'],
             abilityBoundaries: ['Always use create_task tool to create work items', 'Do not implement features directly - delegate to workers', 'Coordinate major architectural decisions with team'],
             handoffProtocol: ['Create tasks with clear acceptance criteria', 'Assign tasks to appropriate roles (builder, framer, etc.)', 'Monitor progress and unblock team members'],
-            protocol: ['⚠️ CRITICAL: You are the MASTER. You CREATE and ASSIGN tasks.', "⚠️ CRITICAL: Use 'happy__create_task' to create tasks, NOT text plans.", '1. ANALYZE the user request.', '2. BREAK DOWN into specific, actionable tasks.', "3. CALL 'happy__create_task' for EACH item. Set assigneeRole appropriately.", "4. Use 'happy__send_team_message' to notify the team.", "5. Monitor progress with 'happy__list_tasks'.", "6. Resolve blockers with 'happy__resolve_blocker'."]
+            protocol: ['⚠️ CRITICAL: You are the MASTER. You CREATE and ASSIGN tasks.', "⚠️ CRITICAL: Use 'aha__create_task' to create tasks, NOT text plans.", '1. ANALYZE the user request.', '2. BREAK DOWN into specific, actionable tasks.', "3. CALL 'aha__create_task' for EACH item. Set assigneeRole appropriately.", "4. Use 'aha__send_team_message' to notify the team.", "5. Monitor progress with 'aha__list_tasks'.", "6. Resolve blockers with 'aha__resolve_blocker'."]
         },
         orchestrator: {
             title: 'Orchestrator',

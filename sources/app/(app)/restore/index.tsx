@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getRandomBytesAsync } from "expo-crypto";
 import { authGetToken } from "@/auth/authGetToken";
-import { View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
@@ -15,6 +15,8 @@ import { Modal } from '@/modal';
 import { t } from '@/text';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { QRCode } from '@/components/qr/QRCode';
+import { QrScannerModal } from '@/components/QrScannerModal';
+import { Ionicons } from '@expo/vector-icons';
 
 const stylesheet = StyleSheet.create((theme) => ({
     scrollView: {
@@ -62,6 +64,62 @@ const stylesheet = StyleSheet.create((theme) => ({
         minHeight: 120,
         textAlignVertical: 'top',
         color: theme.colors.input.text,
+    },
+    divider: {
+        width: '100%',
+        height: 1,
+        backgroundColor: theme.colors.divider,
+        marginVertical: 24,
+    },
+    orText: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+        marginVertical: 16,
+        ...Typography.default(),
+    },
+    scanButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.primary,
+        marginBottom: 12,
+        width: '100%',
+        maxWidth: 280,
+    },
+    scanButtonText: {
+        fontSize: 16,
+        color: theme.colors.primary,
+        marginLeft: 8,
+        ...Typography.default('semiBold'),
+    },
+    urlButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.textSecondary,
+        width: '100%',
+        maxWidth: 280,
+    },
+    urlButtonText: {
+        fontSize: 16,
+        color: theme.colors.textSecondary,
+        marginLeft: 8,
+        ...Typography.default(),
+    },
+    sectionTitle: {
+        fontSize: 18,
+        color: theme.colors.text,
+        marginBottom: 16,
+        textAlign: 'center',
+        ...Typography.default('semiBold'),
     },
 }));
 
@@ -162,6 +220,157 @@ export default function Restore() {
         }
     };
 
+    // Process terminal URL (happy://terminal?) - creates new account and connects to terminal
+    const processTerminalUrl = React.useCallback(async (url: string) => {
+        console.log('[RESTORE] Processing terminal URL:', url);
+
+        if (!url.startsWith('happy://terminal?')) {
+            console.log('[RESTORE] Invalid terminal URL format');
+            return false;
+        }
+
+        try {
+            const tail = url.slice('happy://terminal?'.length);
+            const publicKey = decodeBase64(tail, 'base64url');
+            console.log('[RESTORE] Terminal publicKey length:', publicKey.length);
+
+            // Create new account
+            const secret = await getRandomBytesAsync(32);
+            const token = await authGetToken(secret);
+            if (!token) {
+                throw new Error('Failed to create account');
+            }
+
+            // Import encryption modules
+            const { encryptBox } = await import('@/encryption/libsodium');
+            const { Encryption } = await import('@/sync/encryption/encryption');
+
+            // Create encryption instance to get contentDataKey
+            const encryption = await Encryption.create(secret);
+            console.log('[RESTORE] Encryption created, contentDataKey length:', encryption.contentDataKey.length);
+
+            // Create V1 response (encrypted secret)
+            const responseV1 = encryptBox(secret, publicKey);
+
+            // Create V2 response (encrypted content data key)
+            const responseV2Bundle = new Uint8Array(encryption.contentDataKey.length + 1);
+            responseV2Bundle[0] = 0; // Version byte
+            responseV2Bundle.set(encryption.contentDataKey, 1);
+            const responseV2 = encryptBox(responseV2Bundle, publicKey);
+
+            // IMPORTANT: Login first to initialize sync
+            const secretString = encodeBase64(secret, 'base64url');
+            await auth.login(token, secretString);
+            console.log('[RESTORE] Logged in, sync initialized');
+
+            // Wait a bit for sync to be ready
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Send approval to terminal
+            const { authApprove } = await import('@/auth/authApprove');
+            await authApprove(token, publicKey, responseV1, responseV2);
+            console.log('[RESTORE] Terminal connected successfully');
+
+            router.replace('/');
+            return true;
+        } catch (error) {
+            console.error('[RESTORE] Error processing terminal URL:', error);
+            Modal.alert(t('common.error'), t('modals.failedToConnectTerminal'), [{ text: t('common.ok') }]);
+            return false;
+        }
+    }, [auth, router]);
+
+    // Process account URL from QR scan or manual input
+    const processAccountUrl = React.useCallback(async (url: string) => {
+        console.log('[RESTORE] Processing URL:', url);
+
+        // Handle terminal URL (happy://terminal?)
+        if (url.startsWith('happy://terminal?')) {
+            return await processTerminalUrl(url);
+        }
+
+        // Handle account URL (happy:///account?)
+        if (!url.startsWith('happy:///account?')) {
+            console.log('[RESTORE] Invalid URL format');
+            Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
+            return false;
+        }
+
+        try {
+            const tail = url.slice('happy:///account?'.length);
+            const publicKey = decodeBase64(tail, 'base64url');
+
+            console.log('[RESTORE] Decoded publicKey length:', publicKey.length);
+
+            // Generate temporary keypair for this device
+            const tempKeypair = generateAuthKeyPair();
+
+            // Start QR authentication with our public key
+            const success = await authQRStart(tempKeypair);
+            if (!success) {
+                Modal.alert(t('common.error'), t('errors.authenticationFailed'));
+                return false;
+            }
+
+            // For now, show loading and wait for authentication
+            setIsWaitingForAuth(true);
+
+            const credentials = await authQRWait(
+                tempKeypair,
+                (dots) => setWaitingDots(dots),
+                () => isCancelledRef.current
+            );
+
+            if (credentials && !isCancelledRef.current) {
+                const secretString = encodeBase64(credentials.secret, 'base64url');
+                await auth.login(credentials.token, secretString);
+                if (!isCancelledRef.current) {
+                    router.back();
+                }
+                return true;
+            } else if (!isCancelledRef.current) {
+                Modal.alert(t('common.error'), t('errors.authenticationFailed'));
+            }
+            return false;
+        } catch (error) {
+            console.error('[RESTORE] Error processing account URL:', error);
+            Modal.alert(t('common.error'), t('errors.authenticationFailed'), [{ text: t('common.ok') }]);
+            return false;
+        } finally {
+            setIsWaitingForAuth(false);
+        }
+    }, [auth, router, processTerminalUrl]);
+
+    const handleScanQrCode = React.useCallback(() => {
+        Modal.show({
+            component: QrScannerModal,
+            props: {
+                title: t('settingsAccount.linkNewDevice'),
+                subtitle: t('settingsAccount.linkNewDeviceSubtitle'),
+                permissionMessage: t('modals.cameraPermissionsRequiredToScanQr'),
+                onScan: async (data: string) => {
+                    return await processAccountUrl(data);
+                }
+            }
+        });
+    }, [processAccountUrl]);
+
+    const handleEnterUrl = React.useCallback(async () => {
+        const url = await Modal.prompt(
+            t('settingsAccount.linkNewDevice'),
+            t('connect.enterUrlManuallyDescription'),
+            {
+                placeholder: 'happy:///account?...',
+                cancelText: t('common.cancel'),
+                confirmText: t('common.connect')
+            }
+        );
+
+        if (url?.trim()) {
+            processAccountUrl(url.trim());
+        }
+    }, [processAccountUrl]);
+
     return (
         <ScrollView style={styles.scrollView} contentContainerStyle={{ flexGrow: 1 }}>
             <View style={styles.container}>
@@ -187,7 +396,31 @@ export default function Restore() {
                         backgroundColor={'white'}
                     />
                 )}
-                <View style={{ flexGrow: 4, paddingTop: 30 }}>
+                {/* Divider */}
+                <View style={styles.divider} />
+
+                {/* Scan QR Code Section */}
+                <Text style={styles.sectionTitle}>
+                    {t('welcome.scanToLink')}
+                </Text>
+                <TouchableOpacity style={styles.scanButton} onPress={handleScanQrCode}>
+                    <Ionicons name="qr-code-outline" size={24} color={theme.colors.primary} />
+                    <Text style={styles.scanButtonText}>
+                        {t('welcome.scanQrCode')}
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.urlButton} onPress={handleEnterUrl}>
+                    <Ionicons name="link-outline" size={20} color={theme.colors.textSecondary} />
+                    <Text style={styles.urlButtonText}>
+                        {t('welcome.enterUrlManually')}
+                    </Text>
+                </TouchableOpacity>
+
+                {/* Divider */}
+                <View style={styles.divider} />
+
+                {/* Restore with Secret Key Section */}
+                <View style={{ flexGrow: 4, paddingTop: 10 }}>
                     <Text style={styles.instructionText}>
                         {t('navigation.restoreWithSecretKey')}
                     </Text>

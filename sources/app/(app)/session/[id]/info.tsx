@@ -18,8 +18,8 @@ import { t } from '@/text';
 import { isVersionSupported, MINIMUM_CLI_VERSION } from '@/utils/versionUtils';
 import { CodeView } from '@/components/CodeView';
 import { Session } from '@/sync/storageTypes';
-import { useHappyAction } from '@/hooks/useHappyAction';
-import { HappyError } from '@/utils/errors';
+import { useAhaAction } from '@/hooks/useAhaAction';
+import { AhaError } from '@/utils/errors';
 
 // Animated status dot component
 function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: boolean; size?: number }) {
@@ -91,10 +91,10 @@ function SessionInfoContent({ session }: { session: Session }) {
     }, [session]);
 
     // Use HappyAction for archiving - it handles errors automatically
-    const [archivingSession, performArchive] = useHappyAction(async () => {
+    const [archivingSession, performArchive] = useAhaAction(async () => {
         const result = await sessionKill(session.id);
         if (!result.success) {
-            throw new HappyError(result.message || t('sessionInfo.failedToArchiveSession'), false);
+            throw new AhaError(result.message || t('sessionInfo.failedToArchiveSession'), false);
         }
         // Success - navigate back
         router.back();
@@ -117,10 +117,10 @@ function SessionInfoContent({ session }: { session: Session }) {
     }, [performArchive]);
 
     // Use HappyAction for deletion - it handles errors automatically
-    const [deletingSession, performDelete] = useHappyAction(async () => {
+    const [deletingSession, performDelete] = useAhaAction(async () => {
         const result = await sessionDelete(session.id);
         if (!result.success) {
-            throw new HappyError(result.message || t('sessionInfo.failedToDeleteSession'), false);
+            throw new AhaError(result.message || t('sessionInfo.failedToDeleteSession'), false);
         }
         // Success - no alert needed, UI will update to show deleted state
     });
@@ -327,10 +327,10 @@ function SessionInfoContent({ session }: { session: Session }) {
                                 showChevron={false}
                             />
                         )}
-                        {session.metadata.happyHomeDir && (
+                        {session.metadata.ahaHomeDir && (
                             <Item
                                 title={t('sessionInfo.happyHome')}
-                                subtitle={formatPathRelativeToHome(session.metadata.happyHomeDir, session.metadata.homeDir)}
+                                subtitle={formatPathRelativeToHome(session.metadata.ahaHomeDir, session.metadata.homeDir)}
                                 icon={<Ionicons name="home-outline" size={29} color="#5856D6" />}
                                 showChevron={false}
                             />

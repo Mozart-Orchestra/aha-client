@@ -574,11 +574,11 @@ export default function NewTeamScreen() {
                                 roomId: room.id,
                                 title: agentTitle,
                                 env: {
-                                    HAPPY_AGENT_ROLE: roleId,
-                                    HAPPY_ROOM_ID: room.id,
-                                    HAPPY_ROOM_NAME: title.trim(),
-                                    HAPPY_AGENT_LANGUAGE: agentLanguage,
-                                    HAPPY_AGENT_TYPE: getRoleAgentType(roleId)
+                                    AHA_AGENT_ROLE: roleId,
+                                    AHA_ROOM_ID: room.id,
+                                    AHA_ROOM_NAME: title.trim(),
+                                    AHA_AGENT_LANGUAGE: agentLanguage,
+                                    AHA_AGENT_TYPE: getRoleAgentType(roleId)
                                 },
                                 cwd: resolvedCwd || undefined,
                                 cliPath: resolvedAgentBinary || undefined

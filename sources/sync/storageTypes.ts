@@ -19,7 +19,7 @@ export const MetadataSchema = z.object({
     tools: z.array(z.string()).optional(),
     slashCommands: z.array(z.string()).optional(),
     homeDir: z.string().optional(), // User's home directory on the machine
-    happyHomeDir: z.string().optional(), // Happy configuration directory 
+    ahaHomeDir: z.string().optional(), // Aha configuration directory 
     hostPid: z.number().optional(), // Process ID of the session
     flavor: z.string().nullish(), // Session flavor/variant identifier
     role: z.string().optional(), // Agent role in team
@@ -101,8 +101,8 @@ export interface DecryptedMessage {
 export const MachineMetadataSchema = z.object({
     host: z.string(),
     platform: z.string(),
-    happyCliVersion: z.string(),
-    happyHomeDir: z.string(), // Directory for Happy auth, settings, logs (usually .happy/ or .happy-dev/)
+    ahaCliVersion: z.string(),
+    ahaHomeDir: z.string(), // Directory for Aha auth, settings, logs (usually .aha/ or .aha-dev/)
     homeDir: z.string(), // User's home directory (matches CLI field name)
     // Optional fields that may be added in future versions
     username: z.string().optional(),
@@ -112,7 +112,7 @@ export const MachineMetadataSchema = z.object({
     daemonLastKnownStatus: z.enum(['running', 'shutting-down']).optional(),
     daemonLastKnownPid: z.number().optional(),
     shutdownRequestedAt: z.number().optional(),
-    shutdownSource: z.enum(['happy-app', 'happy-cli', 'os-signal', 'unknown']).optional()
+    shutdownSource: z.enum(['aha-app', 'aha-cli', 'os-signal', 'unknown']).optional()
 });
 
 export type MachineMetadata = z.infer<typeof MachineMetadataSchema>;

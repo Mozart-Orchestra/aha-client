@@ -56,6 +56,7 @@ export const en = {
         fileViewer: 'File Viewer',
         loading: 'Loading...',
         retry: 'Retry',
+        connect: 'Connect',
     },
 
     profile: {
@@ -91,6 +92,7 @@ export const en = {
         enterSecretKey: 'Please enter a secret key',
         invalidSecretKey: 'Invalid secret key. Please check and try again.',
         enterUrlManually: 'Enter URL manually',
+        enterUrlManuallyDescription: 'Enter the URL from another device to link your account',
     },
 
     settings: {
@@ -671,6 +673,9 @@ export const en = {
         createAccount: 'Create account',
         linkOrRestoreAccount: 'Link or restore account',
         loginWithMobileApp: 'Login with mobile app',
+        scanToLink: 'Or scan to link device',
+        scanQrCode: 'Scan QR Code',
+        enterUrlManually: 'Enter URL Manually',
     },
 
     review: {
@@ -924,13 +929,13 @@ export const en = {
             ],
             protocol: [
                 "⚠️ CRITICAL: You are the MASTER. You CREATE and ASSIGN tasks.",
-                "⚠️ CRITICAL: Use 'happy__create_task' to create tasks, NOT text plans.",
+                "⚠️ CRITICAL: Use 'aha__create_task' to create tasks, NOT text plans.",
                 "1. ANALYZE the user request.",
                 "2. BREAK DOWN into specific, actionable tasks.",
-                "3. CALL 'happy__create_task' for EACH item. Set assigneeRole appropriately.",
-                "4. Use 'happy__send_team_message' to notify the team.",
-                "5. Monitor progress with 'happy__list_tasks'.",
-                "6. Resolve blockers with 'happy__resolve_blocker'."
+                "3. CALL 'aha__create_task' for EACH item. Set assigneeRole appropriately.",
+                "4. Use 'aha__send_team_message' to notify the team.",
+                "5. Monitor progress with 'aha__list_tasks'.",
+                "6. Resolve blockers with 'aha__resolve_blocker'."
             ]
         },
         orchestrator: {

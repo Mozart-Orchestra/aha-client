@@ -19,13 +19,13 @@ graph TB
     end
 
     subgraph "Server Layer"
-        SERVER[Happy Server<br/>../happy-server]
+        SERVER[Aha Server<br/>../aha-server]
         ROUTER[Event Router<br/>eventRouter.ts:238-260]
         KV[KV Store<br/>Encrypted Messages]
     end
 
     subgraph "Agent Layer"
-        CLI[Happy CLI Agents<br/>../happy-cli]
+        CLI[Aha CLI Agents<br/>../aha-cli]
         MASTER[Master Agent<br/>Orchestrator]
         BUILDER[Builder Agent<br/>Implementation]
         FRAMER[Framer Agent<br/>Architecture]
@@ -33,7 +33,7 @@ graph TB
     end
     
     subgraph "Shared Layer"
-        CONFIG[Shared Team Config<br/>@happy/shared-team-config]
+        CONFIG[Shared Team Config<br/>@aha/shared-team-config]
     end
     
     KANBAN <-->|WebSocket /v1/updates<br/>User-Scoped| SERVER
@@ -134,10 +134,10 @@ sequenceDiagram
     
     Router->>AgentWS: emit('update', { t: 'team-message', message })
     AgentWS->>AgentWS: emit('team-message', message)
-    Note over AgentWS: ../happy-cli/src/api/apiSession.ts:144-152
+    Note over AgentWS: ../aha-cli/src/api/apiSession.ts:144-152
 
     AgentWS->>AgentHandler: teamMessageListener(message)
-    Note over AgentHandler: ../happy-cli/src/claude/runClaude.ts:350-460
+    Note over AgentHandler: ../aha-cli/src/claude/runClaude.ts:350-460
     
     AgentHandler->>AgentHandler: Check: should I respond?
     Note over AgentHandler: Based on role, mentions, priority
@@ -394,7 +394,7 @@ graph TB
 
 **Problem:** Workers receive ALL messages, including irrelevant ones.
 
-**File:** `/Users/swmt/happy/happy-server/sources/app/events/eventRouter.ts:309-335`
+**File:** `/Users/swmt/happy/aha-server/sources/app/events/eventRouter.ts:309-335`
 
 ### Gap 3: No Role-Based Message Filtering in Dashboard
 
@@ -467,9 +467,9 @@ graph TB
 
 **Problem:** CLI expects `kv-batch-update` events but server sends explicit `team-message` events.
 
-**Files:** 
-- Server: `/Users/swmt/happy/happy-server/sources/app/api/routes/teamMessagesRoutes.ts:150-163`
-- CLI: `/Users/swmt/happy/happy-cli/src/api/apiSession.ts:138-151`
+**Files:**
+- Server: `/Users/swmt/happy/aha-server/sources/app/api/routes/teamMessagesRoutes.ts:150-163`
+- CLI: `/Users/swmt/happy/aha-cli/src/api/apiSession.ts:138-151`
 
 ### Gap 5: Missing Team Member Presence Tracking
 
@@ -569,7 +569,7 @@ const getMessageRelevance = (message: TeamMessage, myRole?: string): 'high' | 'm
 
 #### 3. Add Team Member Presence Tracking
 
-**File:** `/Users/swmt/happy/happy-server/sources/app/events/eventRouter.ts`
+**File:** `/Users/swmt/happy/aha-server/sources/app/events/eventRouter.ts`
 
 ```typescript
 // Add new method for ephemeral presence events
@@ -592,7 +592,7 @@ emitPresence(params: { userId, sessionId, activity, recipientFilter }): void {
 
 #### 4. Optimize WebSocket Broadcasting
 
-**File:** `/Users/swmt/happy/happy-server/sources/app/api/routes/teamMessagesRoutes.ts:165-178`
+**File:** `/Users/swmt/happy/aha-server/sources/app/api/routes/teamMessagesRoutes.ts:165-178`
 
 ```typescript
 // Create team-specific recipient filter

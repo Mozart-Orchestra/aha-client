@@ -21,7 +21,7 @@ import { useAllMachines } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { useUnistyles } from 'react-native-unistyles';
 import { layout } from '@/components/layout';
-import { useHappyAction } from '@/hooks/useHappyAction';
+import { useAhaAction } from '@/hooks/useAhaAction';
 import { getGitHubOAuthParams, disconnectGitHub } from '@/sync/apiGithub';
 import { disconnectService } from '@/sync/apiServices';
 import { useProfile } from '@/sync/storage';
@@ -92,13 +92,13 @@ export const SettingsView = React.memo(function SettingsView() {
     const isAnthropicConnected = profile.connectedServices?.includes('anthropic') || false;
 
     // GitHub connection
-    const [connectingGitHub, connectGitHub] = useHappyAction(async () => {
+    const [connectingGitHub, connectGitHub] = useAhaAction(async () => {
         const params = await getGitHubOAuthParams(auth.credentials!);
         await Linking.openURL(params.url);
     });
 
     // GitHub disconnection
-    const [disconnectingGitHub, handleDisconnectGitHub] = useHappyAction(async () => {
+    const [disconnectingGitHub, handleDisconnectGitHub] = useAhaAction(async () => {
         const confirmed = await Modal.confirm(
             t('modals.disconnectGithub'),
             t('modals.disconnectGithubConfirm'),
@@ -110,12 +110,12 @@ export const SettingsView = React.memo(function SettingsView() {
     });
 
     // Anthropic connection
-    const [connectingAnthropic, connectAnthropic] = useHappyAction(async () => {
+    const [connectingAnthropic, connectAnthropic] = useAhaAction(async () => {
         router.push('/settings/connect/claude');
     });
 
     // Anthropic disconnection
-    const [disconnectingAnthropic, handleDisconnectAnthropic] = useHappyAction(async () => {
+    const [disconnectingAnthropic, handleDisconnectAnthropic] = useAhaAction(async () => {
         const confirmed = await Modal.confirm(
             t('modals.disconnectService', { service: 'Claude' }),
             t('modals.disconnectServiceConfirm', { service: 'Claude' }),

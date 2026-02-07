@@ -40,6 +40,22 @@ function isSessionActive(session: { active: boolean; activeAt: number }): boolea
     return session.active;
 }
 
+const CLAUDE_PERMISSION_MODES = new Set<PermissionMode>(['default', 'acceptEdits', 'plan', 'bypassPermissions']);
+const CODEX_PERMISSION_MODES = new Set<PermissionMode>(['default', 'read-only', 'safe-yolo', 'yolo']);
+
+function resolvePermissionModeForSession(
+    session: Session,
+    ...candidates: Array<PermissionMode | null | undefined>
+): PermissionMode {
+    const validModes = session.metadata?.flavor === 'codex' ? CODEX_PERMISSION_MODES : CLAUDE_PERMISSION_MODES;
+    for (const candidate of candidates) {
+        if (candidate && validModes.has(candidate)) {
+            return candidate;
+        }
+    }
+    return session.metadata?.flavor === 'codex' ? 'yolo' : 'bypassPermissions';
+}
+
 // Known entitlement IDs
 export type KnownEntitlements = 'pro';
 
@@ -333,7 +349,12 @@ export const storage = create<StorageState>()((set, get) => {
                     ...session,
                     presence,
                     draft: existingDraft || savedDraft || session.draft || null,
-                    permissionMode: existingPermissionMode || savedPermissionMode || session.permissionMode || 'bypassPermissions'
+                    permissionMode: resolvePermissionModeForSession(
+                        session,
+                        existingPermissionMode,
+                        savedPermissionMode,
+                        session.permissionMode
+                    )
                 };
             });
 

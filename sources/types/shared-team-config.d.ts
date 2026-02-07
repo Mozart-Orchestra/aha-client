@@ -1,4 +1,4 @@
-declare module '@happy/shared-team-config' {
+declare module '@aha/shared-team-config' {
     export interface SharedTeamRolePolicy {
         autoStartMaster?: boolean;
         permissionMode?: string;

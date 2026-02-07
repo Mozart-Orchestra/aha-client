@@ -58,6 +58,7 @@ export const zhHans: TranslationStructure = {
         fileViewer: '文件查看器',
         loading: '加载中...',
         retry: '重试',
+        connect: '连接',
     },
 
     profile: {
@@ -93,6 +94,7 @@ export const zhHans: TranslationStructure = {
         enterSecretKey: '请输入密钥',
         invalidSecretKey: '无效的密钥，请检查后重试。',
         enterUrlManually: '手动输入 URL',
+        enterUrlManuallyDescription: '输入另一台设备的 URL 以关联您的账户',
     },
 
     settings: {
@@ -673,6 +675,9 @@ export const zhHans: TranslationStructure = {
         createAccount: '创建账户',
         linkOrRestoreAccount: '链接或恢复账户',
         loginWithMobileApp: '使用移动应用登录',
+        scanToLink: '或扫描以关联设备',
+        scanQrCode: '扫描二维码',
+        enterUrlManually: '手动输入 URL',
     },
 
     review: {
@@ -925,13 +930,13 @@ export const zhHans: TranslationStructure = {
             ],
             protocol: [
                 "⚠️ 关键：您是 MASTER。您创建和分配任务。",
-                "⚠️ 关键：使用 'happy__create_task' 创建任务，不要使用文本计划。",
+                "⚠️ 关键：使用 'aha__create_task' 创建任务，不要使用文本计划。",
                 "1. 分析用户请求。",
                 "2. 分解为具体、可执行的任务。",
-                "3. 为每个项目调用 'happy__create_task'。适当设置 assigneeRole。",
-                "4. 使用 'happy__send_team_message' 通知团队。",
-                "5. 使用 'happy__list_tasks' 监控进度。",
-                "6. 使用 'happy__resolve_blocker' 解决障碍。"
+                "3. 为每个项目调用 'aha__create_task'。适当设置 assigneeRole。",
+                "4. 使用 'aha__send_team_message' 通知团队。",
+                "5. 使用 'aha__list_tasks' 监控进度。",
+                "6. 使用 'aha__resolve_blocker' 解决障碍。"
             ]
         },
         orchestrator: {

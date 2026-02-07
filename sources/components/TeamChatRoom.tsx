@@ -1450,7 +1450,7 @@ export default function TeamChatRoom({
             }
 
             // User messages should NOT use team member's session ID
-            // Leave fromSessionId undefined so Happy-CLI recognizes this as a user message
+            // Leave fromSessionId undefined so Aha-CLI recognizes this as a user message
             const request: SendTeamMessageRequest = {
                 id: messageId,
                 teamId,

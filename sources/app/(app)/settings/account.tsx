@@ -20,7 +20,7 @@ import { Switch } from '@/components/Switch';
 import { useConnectAccount } from '@/hooks/useConnectAccount';
 import { getDisplayName, getAvatarUrl } from '@/sync/profile';
 import { Image } from 'expo-image';
-import { useHappyAction } from '@/hooks/useHappyAction';
+import { useAhaAction } from '@/hooks/useAhaAction';
 import { disconnectGitHub } from '@/sync/apiGithub';
 import { disconnectService } from '@/sync/apiServices';
 
@@ -46,7 +46,7 @@ export default React.memo(() => {
     const githubUsername = profile.github?.login;
 
     // GitHub disconnection
-    const [disconnecting, handleDisconnectGitHub] = useHappyAction(async () => {
+    const [disconnecting, handleDisconnectGitHub] = useAhaAction(async () => {
         const confirmed = await Modal.confirm(
             t('modals.disconnectGithub'),
             t('modals.disconnectGithubConfirm'),

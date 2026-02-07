@@ -7,8 +7,8 @@ const SERVER_KEY = 'custom-server-url';
 const DEFAULT_SERVER_URL = 'https://top1vibe.com';
 
 export function getServerUrl(): string {
-    return serverConfigStorage.getString(SERVER_KEY) || 
-           process.env.EXPO_PUBLIC_HAPPY_SERVER_URL || 
+    return serverConfigStorage.getString(SERVER_KEY) ||
+           process.env.EXPO_PUBLIC_AHA_SERVER_URL ||
            DEFAULT_SERVER_URL;
 }
 

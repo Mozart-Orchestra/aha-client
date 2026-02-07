@@ -4,8 +4,8 @@ import {
     DEFAULT_KANBAN_BOARD as SHARED_KANBAN_BOARD,
     DEFAULT_STATUS_PROPAGATION as SHARED_STATUS_PROPAGATION,
     DEFAULT_NESTED_TASK_SETTINGS as SHARED_NESTED_TASK_SETTINGS
-} from '@happy/shared-team-config';
-import type { SharedNestedTaskSettings, SharedStatusPropagation } from '@happy/shared-team-config';
+} from '@aha/shared-team-config';
+import type { SharedNestedTaskSettings, SharedStatusPropagation } from '@aha/shared-team-config';
 
 export interface KanbanColumn {
     id: string;

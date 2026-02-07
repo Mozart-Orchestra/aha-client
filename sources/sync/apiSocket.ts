@@ -62,6 +62,7 @@ class ApiSocket {
                 clientType: 'user-scoped' as const
             },
             transports: ['websocket', 'polling'],
+            tryAllTransports: true,
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
@@ -243,10 +244,15 @@ class ApiSocket {
 
         // Message handling
         this.socket.onAny((event, data) => {
-            console.log(`📥 SyncSocket: Received event '${event}':`, JSON.stringify(data).substring(0, 200));
+            // Skip logging for frequent ephemeral events to reduce noise
+            if (event !== 'ephemeral') {
+                console.log(`📥 SyncSocket: Received event '${event}':`, JSON.stringify(data).substring(0, 200));
+            }
             const handler = this.messageHandlers.get(event);
             if (handler) {
-                console.log(`📥 SyncSocket: Calling handler for '${event}'`);
+                if (event !== 'ephemeral') {
+                    console.log(`📥 SyncSocket: Calling handler for '${event}'`);
+                }
                 handler(data);
             } else {
                 console.log(`📥 SyncSocket: No handler registered for '${event}'`);

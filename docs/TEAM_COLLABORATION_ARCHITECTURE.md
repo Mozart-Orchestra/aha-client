@@ -16,15 +16,15 @@ graph TB
         STORE[团队状态存储]
     end
 
-    subgraph "Happy-CLI 客户端"
+    subgraph "Aha-CLI 客户端"
         DAEMON[守护进程 - run.ts]
         RUN[runClaude.ts]
         ROLES[roles.ts + roles.config.ts]
-        MCP[MCP 服务器 - startHappyServer.ts]
+        MCP[MCP 服务器 - startAhaServer.ts]
         SDK[Claude SDK]
     end
 
-    subgraph "Happy-Server 后端"
+    subgraph "Aha-Server 后端"
         API[Session 路由]
         WS[WebSocket 服务器]
         RPCSVC[RPC 服务]
@@ -32,14 +32,14 @@ graph TB
     end
 
     subgraph "共享配置"
-        CONFIG[@happy/shared-team-config]
+        CONFIG[@aha/shared-team-config]
     end
 
     UI -->|生成请求| SYNC
     SYNC -->|WebSocket RPC| WS
     WS -->|转发| RPCSVC
-    RPCSVC -->|spawn-happy-session| DAEMON
-    DAEMON -->|环境变量: HAPPY_ROOM_ID, HAPPY_AGENT_ROLE| RUN
+    RPCSVC -->|spawn-aha-session| DAEMON
+    DAEMON -->|环境变量: AHA_ROOM_ID, AHA_AGENT_ROLE| RUN
     RUN -->|加载| ROLES
     ROLES -->|导入| CONFIG
     RUN -->|注册工具| MCP
@@ -62,12 +62,12 @@ sequenceDiagram
     participant C as Claude SDK
 
     K->>S: spawnSessionOnMachine(role, teamId)
-    S->>D: RPC: spawn-happy-session
-    D->>D: 设置环境变量:<br/>HAPPY_ROOM_ID<br/>HAPPY_AGENT_ROLE
+    S->>D: RPC: spawn-aha-session
+    D->>D: 设置环境变量:<br/>AHA_ROOM_ID<br/>AHA_AGENT_ROLE
     D->>R: 启动进程
     R->>R: 读取环境变量
-    R->>R: metadata.role = env.HAPPY_AGENT_ROLE
-    R->>R: metadata.teamId = env.HAPPY_ROOM_ID
+    R->>R: metadata.role = env.AHA_AGENT_ROLE
+    R->>R: metadata.teamId = env.AHA_ROOM_ID
     R->>R: generateRolePrompt(metadata)
     R->>C: 启动，附加系统提示词
     Note over C: Claude 现在知道自己的角色<br/>和团队上下文
@@ -146,14 +146,14 @@ sequenceDiagram
 | `sources/sync/sync.ts` | WebSocket 同步和团队消息处理 |
 | `sources/app/(app)/teams/[id]/new.tsx` | 团队创建和智能体生成 UI |
 
-### Happy-CLI (客户端)
+### Aha-CLI (客户端)
 | 文件 | 描述 |
 |------|------|
 | `src/daemon/run.ts` | 守护进程，使用角色环境变量生成智能体进程 |
 | `src/claude/runClaude.ts` | 主智能体循环，处理角色注入 |
 | `src/claude/team/roles.ts` | 角色提示词生成 |
 | `src/claude/team/roles.config.ts` | 角色定义导入 |
-| `src/claude/utils/startHappyServer.ts` | MCP 工具注册 |
+| `src/claude/utils/startAhaServer.ts` | MCP 工具注册 |
 
 ### 共享配置
 | 文件 | 描述 |
@@ -217,7 +217,7 @@ To start, you SHOULD:
 ## 架构决策
 
 ### 1. 使用环境变量传递角色
-角色和 teamId 通过环境变量（`HAPPY_AGENT_ROLE`、`HAPPY_ROOM_ID`）传递，确保进程启动时立即可用。
+角色和 teamId 通过环境变量（`AHA_AGENT_ROLE`、`AHA_ROOM_ID`）传递，确保进程启动时立即可用。
 
 ### 2. 同步订阅处理
 JavaScript 的单线程特性意味着 Map/Set 操作是原子的。使用异步 Mutex 处理订阅会导致竞态条件。
@@ -226,7 +226,7 @@ JavaScript 的单线程特性意味着 Map/Set 操作是原子的。使用异步
 不同角色有不同的 `disallowedTools`，以强制执行职责分离（例如，只读角色不能编辑文件）。
 
 ### 4. 共享配置包
-角色定义通过 `@happy/shared-team-config` 本地包在 kanban、happy-cli 和 happy-server 之间共享。
+角色定义通过 `@aha/shared-team-config` 本地包在 kanban、aha-cli 和 aha-server 之间共享。
 
 ## 角色完整数据流
 
@@ -254,16 +254,16 @@ sequenceDiagram
     Note over SYNC: sync.ts:1921-1956
 
     %% 3. 服务器转发
-    SYNC->>S: machineRPC("spawn-happy-session",<br/>{role, teamId, ...})
+    SYNC->>S: machineRPC("spawn-aha-session",<br/>{role, teamId, ...})
     S->>D: WebSocket RPC 转发
 
     %% 4. 守护进程处理
-    D->>D: extraEnv.HAPPY_AGENT_ROLE = "master"<br/>extraEnv.HAPPY_ROOM_ID = teamId
+    D->>D: extraEnv.AHA_AGENT_ROLE = "master"<br/>extraEnv.AHA_ROOM_ID = teamId
     Note over D: run.ts:260-267
 
     %% 5. CLI 启动
-    D->>R: spawnHappyCLI with env vars
-    R->>R: role = process.env.HAPPY_AGENT_ROLE
+    D->>R: spawnAhaCLI with env vars
+    R->>R: role = process.env.AHA_AGENT_ROLE
     R->>R: metadata.role = role
     Note over R: runClaude.ts 读取环境变量
 
@@ -290,8 +290,8 @@ sequenceDiagram
 | 1. 用户选择 | `new.tsx` | 302 | `roleCounts["master"] = 1` |
 | 2. Spawn 参数 | `new.tsx` | 597 | `role: roleId` |
 | 3. RPC 调用 | `sync.ts` | 1933 | `{role: "master", teamId: "..."}` |
-| 4. 环境变量 | `run.ts` | 265 | `HAPPY_AGENT_ROLE=master` |
-| 5. 元数据设置 | `runClaude.ts` | - | `metadata.role = env.HAPPY_AGENT_ROLE` |
+| 4. 环境变量 | `run.ts` | 265 | `AHA_AGENT_ROLE=master` |
+| 5. 元数据设置 | `runClaude.ts` | - | `metadata.role = env.AHA_AGENT_ROLE` |
 | 6. 服务器存储 | API | - | `session.metadata.role = "master"` |
 | 7. Dashboard 读取 | `[id].tsx` | 595 | `effectiveRoleId = session?.metadata?.role` |
 | 8. 角色解析 | `[id].tsx` | 597-600 | `roleDefinitions.find(...)` |
@@ -312,7 +312,7 @@ graph TB
         LOCALIZED --> DASHUI[[id].tsx: roleDefinitions]
     end
 
-    subgraph "Happy-CLI"
+    subgraph "Aha-CLI"
         LIB --> CONFIG[roles.config.ts]
         CONFIG --> ROLES[roles.ts]
         ROLES --> PROMPT[generateRolePrompt]

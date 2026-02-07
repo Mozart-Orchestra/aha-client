@@ -119,7 +119,7 @@ export class GitStatusSync {
             if (!gitCheckResult.success || gitCheckResult.exitCode !== 0) {
                 // Not a git repository, clear any existing status
                 storage.getState().applyGitStatus(sessionId, null);
-                
+
                 // Also update the project git status
                 if (session.metadata?.machineId) {
                     const projectKey = createProjectKey(session.metadata.machineId, session.metadata.path);
@@ -137,7 +137,12 @@ export class GitStatusSync {
             });
 
             if (!statusResult.success) {
-                console.error('Failed to get git status:', statusResult.error);
+                // Silently ignore RPC errors - this is expected when the session is offline or disconnected
+                // Use console.log instead of console.error to avoid triggering error boundaries
+                if (__DEV__) {
+                    // eslint-disable-next-line no-console
+                    console.log('Git status fetch failed (session may be offline):', statusResult.error);
+                }
                 return;
             }
 
@@ -172,7 +177,12 @@ export class GitStatusSync {
             }
 
         } catch (error) {
-            console.error('Error fetching git status for session', sessionId, ':', error);
+            // Silently ignore errors - this is expected when the session is offline or disconnected
+            // Use console.log instead of console.error to avoid triggering error boundaries
+            if (__DEV__) {
+                // eslint-disable-next-line no-console
+                console.log('Git status fetch error (session may be offline):', error);
+            }
             // Don't apply error state, just skip this update
         }
     }

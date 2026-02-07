@@ -76,6 +76,19 @@ const extractTeamSessionIds = (body: string | null | undefined): string[] => {
     }
 };
 
+type SessionPermissionMode = NonNullable<Session['permissionMode']>;
+const CLAUDE_PERMISSION_MODES = new Set<SessionPermissionMode>(['default', 'acceptEdits', 'plan', 'bypassPermissions']);
+const CODEX_PERMISSION_MODES = new Set<SessionPermissionMode>(['default', 'read-only', 'safe-yolo', 'yolo']);
+
+const resolvePermissionModeForSession = (session: Session): SessionPermissionMode => {
+    const candidate = session.permissionMode ?? undefined;
+    const validModes = session.metadata?.flavor === 'codex' ? CODEX_PERMISSION_MODES : CLAUDE_PERMISSION_MODES;
+    if (candidate && validModes.has(candidate)) {
+        return candidate;
+    }
+    return session.metadata?.flavor === 'codex' ? 'yolo' : 'bypassPermissions';
+};
+
 class Sync {
 
     encryption!: Encryption;
@@ -264,7 +277,7 @@ class Sync {
         }
 
         // Read permission mode and model mode from session state
-        const permissionMode = session.permissionMode || 'bypassPermissions';
+        const permissionMode = resolvePermissionModeForSession(session);
         const modelMode = session.modelMode || 'default';
 
         // Generate local ID
@@ -324,7 +337,7 @@ class Sync {
             },
             meta: {
                 sentFrom,
-                permissionMode: permissionMode || 'bypassPermissions',
+                permissionMode,
                 model,
                 fallbackModel,
                 appendSystemPrompt: systemPrompt,
@@ -346,7 +359,7 @@ class Sync {
             message: encryptedRawRecord,
             localId,
             sentFrom,
-            permissionMode: permissionMode || 'bypassPermissions'
+            permissionMode
         });
     }
 
@@ -854,7 +867,7 @@ class Sync {
             const encryptedHeader = await artifactEncryption.encryptHeader({ title, sessions, draft, type });
 
             // For team artifacts, store body as base64-encoded plaintext (no encryption)
-            // This allows Happy-CLI to read team context without shared encryption keys
+            // This allows Aha-CLI to read team context without shared encryption keys
             let encryptedBody: string;
             if (type === 'team') {
                 // Store as plaintext JSON (base64 encoded)
@@ -2076,7 +2089,7 @@ class Sync {
         env?: Record<string, string>;
     }): Promise<string | null> {
         try {
-            const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-happy-session', {
+            const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-aha-session', {
                 ...params,
                 machineId,
                 approvedNewDirectoryCreation: true,

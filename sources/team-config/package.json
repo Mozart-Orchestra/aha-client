@@ -1,7 +1,7 @@
 {
-  "name": "@happy/shared-team-config",
+  "name": "@aha/shared-team-config",
   "version": "0.1.0",
-  "description": "Shared team role definitions and Kanban defaults for Happy apps",
+  "description": "Shared team role definitions and Kanban defaults for Aha apps",
   "license": "MIT",
   "types": "./index.d.ts",
   "exports": {

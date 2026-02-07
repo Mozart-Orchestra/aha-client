@@ -96,10 +96,10 @@ export function EmptyMainScreen() {
             <Text style={styles.title}>{t('components.emptyMainScreen.readyToCode')}</Text>
             <View style={styles.terminalBlock}>
                 <Text style={[styles.terminalText, styles.terminalTextFirst]}>
-                    $ npm i -g happy-coder
+                    $ npm i -g aha-cli
                 </Text>
                 <Text style={styles.terminalText}>
-                    $ happy
+                    $ aha
                 </Text>
             </View>
 
@@ -149,7 +149,7 @@ export function EmptyMainScreen() {
                                 t('modals.authenticateTerminal'),
                                 t('modals.pasteUrlFromTerminal'),
                                 {
-                                    placeholder: 'happy://terminal?...',
+                                    placeholder: 'aha://terminal?...',
                                     cancelText: t('common.cancel'),
                                     confirmText: t('common.authenticate')
                                 }
