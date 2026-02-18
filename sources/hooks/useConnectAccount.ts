@@ -23,8 +23,8 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
     const processAuthUrl = React.useCallback(async (url: string) => {
         console.log('[AUTH] 🔍 Processing auth URL:', url);
 
-        if (!url.startsWith('happy:///account?')) {
-            console.log('[AUTH] ❌ Invalid URL format - does not start with "happy:///account?"');
+        if (!url.startsWith('aha:///account?')) {
+            console.log('[AUTH] ❌ Invalid URL format - does not start with "aha:///account?"');
             console.log('[AUTH] URL received:', url);
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
@@ -32,7 +32,7 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
 
         setIsLoading(true);
         try {
-            const tail = url.slice('happy:///account?'.length);
+            const tail = url.slice('aha:///account?'.length);
             console.log('[AUTH] 📊 URL tail (base64url publicKey):', tail.substring(0, 20) + '...');
 
             const publicKey = decodeBase64(tail, 'base64url');
@@ -118,7 +118,7 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
     React.useEffect(() => {
         if (Platform.OS !== 'web' && CameraView.isModernBarcodeScannerAvailable) {
             const subscription = CameraView.onModernBarcodeScanned(async (event) => {
-                if (event.data.startsWith('happy:///account?')) {
+                if (event.data.startsWith('aha:///account?')) {
                     // Dismiss scanner on Android is called automatically when barcode is scanned
                     if (Platform.OS === 'ios') {
                         await CameraView.dismissScanner();

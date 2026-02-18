@@ -114,7 +114,7 @@ export const en = {
         developer: 'Developer',
         developerTools: 'Developer Tools',
         about: 'About',
-        aboutFooter: 'Kanban Coder is a Codex and Claude Code mobile client. It\'s fully end-to-end encrypted and your account is stored only on your device. Not affiliated with Anthropic.',
+        aboutFooter: 'aha is a Codex and Claude Code mobile client. It\'s fully end-to-end encrypted and your account is stored only on your device. Not affiliated with Anthropic.',
         whatsNew: 'What\'s New',
         whatsNewSubtitle: 'See the latest updates and improvements',
         reportIssue: 'Report an Issue',
@@ -248,7 +248,7 @@ export const en = {
     newSession: {
         // Used by new-session screen and launch flows
         title: 'Start New Session',
-        noMachinesFound: 'No machines found. Start a Kanban session on your computer first.',
+        noMachinesFound: 'No machines found. Start an aha session on your computer first.',
         allMachinesOffline: 'All machines appear offline',
         machineDetails: 'View machine details →',
         directoryDoesNotExist: 'Directory Not Found',
@@ -299,7 +299,7 @@ export const en = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Server Configuration',
         enterServerUrl: 'Please enter a server URL',
-        notValidHappyServer: 'Not a valid Kanban Server',
+        notValidHappyServer: 'Not a valid aha server',
         changeServer: 'Change Server',
         continueWithServer: 'Continue with this server?',
         resetToDefault: 'Reset to Default',
@@ -319,9 +319,9 @@ export const en = {
         killSessionConfirm: 'Are you sure you want to terminate this session?',
         archiveSession: 'Archive Session',
         archiveSessionConfirm: 'Are you sure you want to archive this session?',
-        happySessionIdCopied: 'Kanban Session ID copied to clipboard',
-        failedToCopySessionId: 'Failed to copy Kanban Session ID',
-        happySessionId: 'Kanban Session ID',
+        happySessionIdCopied: 'aha session ID copied to clipboard',
+        failedToCopySessionId: 'Failed to copy aha session ID',
+        happySessionId: 'aha session ID',
         claudeCodeSessionId: 'Claude Code Session ID',
         claudeCodeSessionIdCopied: 'Claude Code Session ID copied to clipboard',
         aiProvider: 'AI Provider',
@@ -344,7 +344,7 @@ export const en = {
         path: 'Path',
         operatingSystem: 'Operating System',
         processId: 'Process ID',
-        happyHome: 'Kanban Home',
+        happyHome: 'aha home',
         copyMetadata: 'Copy Metadata',
         agentState: 'Agent State',
         controlledByUser: 'Controlled by User',
@@ -356,7 +356,7 @@ export const en = {
         cliVersionOutdated: 'CLI Update Required',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Version ${currentVersion} installed. Update to ${requiredVersion} or later`,
-        updateCliInstructions: 'Please run npm install -g kanban-coder@latest',
+        updateCliInstructions: 'Please run npm install -g aha-coder@latest',
         deleteSession: 'Delete Session',
         deleteSessionSubtitle: 'Permanently remove this session',
         deleteSessionConfirm: 'Delete Session Permanently?',
@@ -370,7 +370,7 @@ export const en = {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
             readyToCode: 'Ready to code?',
-            installCli: 'Install the Kanban CLI',
+            installCli: 'Install the aha CLI',
             runIt: 'Run it',
             scanQrCode: 'Scan the QR code',
             openCamera: 'Open Camera',
@@ -437,7 +437,7 @@ export const en = {
     },
 
     sidebar: {
-        sessionsTitle: 'Kanban',
+        sessionsTitle: 'aha',
     },
 
     toolView: {
@@ -618,7 +618,7 @@ export const en = {
         invalidConnectionLink: 'Invalid Connection Link',
         invalidConnectionLinkDescription: 'The connection link is missing or invalid. Please check the URL and try again.',
         connectTerminal: 'Connect Terminal',
-        terminalRequestDescription: 'A terminal is requesting to connect to your Kanban Coder account. This will allow the terminal to send and receive messages securely.',
+        terminalRequestDescription: 'A terminal is requesting to connect to your aha account. This will allow the terminal to send and receive messages securely.',
         connectionDetails: 'Connection Details',
         publicKey: 'Public Key',
         encryption: 'Encryption',
@@ -694,7 +694,7 @@ export const en = {
     machine: {
         launchNewSessionInDirectory: 'Launch New Session in Directory',
         offlineUnableToSpawn: 'Launcher disabled while machine is offline',
-        offlineHelp: '• Make sure your computer is online\n• Run `kanban daemon status` to diagnose\n• Are you running the latest CLI version? Upgrade with `npm install -g kanban-coder@latest`',
+        offlineHelp: '• Make sure your computer is online\n• Run `aha daemon status` to diagnose\n• Are you running the latest CLI version? Upgrade with `npm install -g aha-coder@latest`',
         daemon: 'Daemon',
         status: 'Status',
         stopDaemon: 'Stop Daemon',
@@ -1155,7 +1155,7 @@ export const en = {
                 '2. IF you have an idea, propose it to MASTER before implementing.',
                 "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.",
                 "4. WHEN working, update task status to 'in_progress' using 'update_task'.",
-                '5. Focus on server-side code (happy-server, API routes).',
+                '5. Focus on server-side code (aha-server, API routes).',
                 '6. Do NOT respond to general user chat unless explicitly mentioned.'
             ]
         },
@@ -1327,6 +1327,27 @@ export const en = {
         friendRequestGeneric: 'New friend request',
         friendAccepted: ({ name }: { name: string }) => `You are now friends with ${name}`,
         friendAcceptedGeneric: 'Friend request accepted',
+    },
+
+    teams: {
+        // Team management
+        deleteConfirmTitle: 'Delete Team',
+        deleteConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Are you sure you want to delete this team and ${count} associated ${sessionText}? This action cannot be undone.`,
+        batchArchiveTitle: 'Archive Teams',
+        batchArchiveMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Archive ${teamCount} team(s) and ${sessionCount} associated session(s)?`,
+        batchArchiveSuccess: ({ count }: { count: number }) => `Archived ${count} team(s).`,
+        batchArchiveError: 'Failed to archive teams. Please try again.',
+        batchDeleteTitle: 'Delete Teams',
+        batchDeleteMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Permanently delete ${teamCount} team(s) and ${sessionCount} associated session(s)? This cannot be undone.`,
+        batchDeleteSuccess: ({ count }: { count: number }) => `Deleted ${count} team(s).`,
+        batchDeleteError: 'Failed to delete teams. Please try again.',
+        archive: 'Archive',
+        delete: 'Delete',
+        teamNotFound: 'Team not found',
+        deleteError: 'Failed to delete team. Please try again.',
     }
 } as const;
 

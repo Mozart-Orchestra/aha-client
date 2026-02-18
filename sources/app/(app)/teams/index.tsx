@@ -209,16 +209,41 @@ export default function TeamsScreen() {
         setSelectedTeams(new Set(teams.map(t => t.id)));
     }, [teams]);
 
+    // Helper to extract session IDs from team body
+    const extractSessionIds = React.useCallback((teamId: string): string[] => {
+        const team = teams.find(t => t.id === teamId);
+        if (!team?.body || typeof team.body !== 'string') return [];
+
+        try {
+            const parsed = JSON.parse(team.body);
+            const members = parsed?.team?.members || parsed?.members;
+            if (Array.isArray(members)) {
+                return members.map((m: any) => m.sessionId).filter(Boolean);
+            }
+        } catch (e) {
+            // Silent fail - return empty array
+        }
+        return [];
+    }, [teams]);
+
     // Batch archive handler
     const handleBatchArchive = React.useCallback(async () => {
         if (selectedTeams.size === 0) return;
 
+        // Extract session IDs for all selected teams
+        const teamIds = Array.from(selectedTeams);
+        let totalSessions = 0;
+        teamIds.forEach(teamId => {
+            totalSessions += extractSessionIds(teamId).length;
+        });
+
         const confirmed = await Modal.confirm(
-            'Archive Teams',
-            `Archive ${selectedTeams.size} team(s) and all their associated sessions?`,
+            t('teams.batchArchiveTitle') || 'Archive Teams',
+            t('teams.batchArchiveMessage', { teamCount: teamIds.length, sessionCount: totalSessions }) ||
+            `Archive ${teamIds.length} team(s) and ${totalSessions} associated session(s)?`,
             {
-                confirmText: 'Archive',
-                cancelText: 'Cancel',
+                confirmText: t('teams.archive') || 'Archive',
+                cancelText: t('common.cancel') || 'Cancel',
             }
         );
 
@@ -226,29 +251,43 @@ export default function TeamsScreen() {
 
         try {
             setIsBatchProcessing(true);
-            const result = await sync.batchArchiveTeams(Array.from(selectedTeams));
+            const result = await sync.batchArchiveTeams(teamIds);
             if (result.success) {
-                Modal.alert('Success', `Archived ${result.archived} team(s).`);
+                Modal.alert(
+                    t('common.success') || 'Success',
+                    t('teams.batchArchiveSuccess', { count: result.archived }) ||
+                    `Archived ${result.archived} team(s).`
+                );
                 exitSelectionMode();
             }
         } catch (error) {
-            console.error('Failed to batch archive teams:', error);
-            Modal.alert('Error', 'Failed to archive teams. Please try again.');
+            Modal.alert(
+                t('common.error') || 'Error',
+                t('teams.batchArchiveError') || 'Failed to archive teams. Please try again.'
+            );
         } finally {
             setIsBatchProcessing(false);
         }
-    }, [selectedTeams, exitSelectionMode]);
+    }, [selectedTeams, extractSessionIds, exitSelectionMode, t]);
 
     // Batch delete handler
     const handleBatchDelete = React.useCallback(async () => {
         if (selectedTeams.size === 0) return;
 
+        // Extract session IDs for all selected teams
+        const teamIds = Array.from(selectedTeams);
+        let totalSessions = 0;
+        teamIds.forEach(teamId => {
+            totalSessions += extractSessionIds(teamId).length;
+        });
+
         const confirmed = await Modal.confirm(
-            'Delete Teams',
-            `Permanently delete ${selectedTeams.size} team(s) and all their associated sessions? This cannot be undone.`,
+            t('teams.batchDeleteTitle') || 'Delete Teams',
+            t('teams.batchDeleteMessage', { teamCount: teamIds.length, sessionCount: totalSessions }) ||
+            `Permanently delete ${teamIds.length} team(s) and ${totalSessions} associated session(s)? This cannot be undone.`,
             {
-                confirmText: 'Delete',
-                cancelText: 'Cancel',
+                confirmText: t('teams.delete') || 'Delete',
+                cancelText: t('common.cancel') || 'Cancel',
                 destructive: true,
             }
         );
@@ -257,18 +296,24 @@ export default function TeamsScreen() {
 
         try {
             setIsBatchProcessing(true);
-            const result = await sync.batchDeleteTeams(Array.from(selectedTeams));
+            const result = await sync.batchDeleteTeams(teamIds);
             if (result.success) {
-                Modal.alert('Success', `Deleted ${result.deleted} team(s).`);
+                Modal.alert(
+                    t('common.success') || 'Success',
+                    t('teams.batchDeleteSuccess', { count: result.deleted }) ||
+                    `Deleted ${result.deleted} team(s).`
+                );
                 exitSelectionMode();
             }
         } catch (error) {
-            console.error('Failed to batch delete teams:', error);
-            Modal.alert('Error', 'Failed to delete teams. Please try again.');
+            Modal.alert(
+                t('common.error') || 'Error',
+                t('teams.batchDeleteError') || 'Failed to delete teams. Please try again.'
+            );
         } finally {
             setIsBatchProcessing(false);
         }
-    }, [selectedTeams, exitSelectionMode]);
+    }, [selectedTeams, extractSessionIds, exitSelectionMode, t]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -284,7 +329,7 @@ export default function TeamsScreen() {
                 setIsLoading(true);
                 await sync.fetchArtifactsList();
             } catch (error) {
-                console.error('Failed to fetch artifacts:', error);
+                // Silently fail - sync will auto-retry
             } finally {
                 if (isMounted && !cancelled) {
                     setIsLoading(false);
@@ -300,20 +345,38 @@ export default function TeamsScreen() {
 
     const handleDelete = React.useCallback(async (teamId: string, event: any) => {
         event.stopPropagation();
+
+        // Find the team artifact
+        const team = teams.find(t => t.id === teamId);
+        if (!team) {
+            await Modal.alert(
+                t('common.error') || 'Error',
+                t('teams.teamNotFound') || 'Team not found'
+            );
+            return;
+        }
+
+        // Extract associated session IDs
+        const sessionIds = extractSessionIds(teamId);
+        const sessionText = sessionIds.length === 1 ? 'session' : 'sessions';
+
         const confirm = await Modal.confirm(
-            'Delete Team',
-            'Are you sure you want to delete this team? This action cannot be undone.'
+            t('teams.deleteConfirmTitle') || 'Delete Team',
+            t('teams.deleteConfirmMessage', { count: sessionIds.length, sessionText }) ||
+            `Are you sure you want to delete this team and ${sessionIds.length} associated ${sessionText}? This action cannot be undone.`
         );
 
         if (confirm) {
             try {
-                await sync.deleteArtifact(teamId);
+                await sync.deleteTeam(teamId, sessionIds);
             } catch (error) {
-                console.error('Failed to delete team:', error);
-                await Modal.alert(t('common.error'), 'Failed to delete team');
+                await Modal.alert(
+                    t('common.error') || 'Error',
+                    t('teams.deleteError') || 'Failed to delete team. Please try again.'
+                );
             }
         }
-    }, []);
+    }, [teams, extractSessionIds, t]);
 
     const renderItem = React.useCallback(({ item, index }: { item: DecryptedArtifact; index: number }) => {
         const isFirst = index === 0;

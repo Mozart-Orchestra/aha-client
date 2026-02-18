@@ -1,8 +1,8 @@
 const variant = process.env.APP_ENV || 'development';
 const name = {
-    development: "Kanban (dev)",
-    preview: "Kanban (preview)",
-    production: "Kanban"
+    development: "aha (dev)",
+    preview: "aha (preview)",
+    production: "aha"
 }[variant];
 const bundleId = {
     development: "com.slopus.kanban.dev",
@@ -37,7 +37,7 @@ export default {
                 NSLocalNetworkUsageDescription: "Allow $(PRODUCT_NAME) to find and connect to local devices on your network.",
                 NSBonjourServices: ["_http._tcp", "_https._tcp"]
             },
-            associatedDomains: variant === 'production' ? ["applinks:app.happy.engineering"] : []
+            associatedDomains: variant === 'production' ? ["applinks:app.aha.engineering"] : []
         },
         android: {
             adaptiveIcon: {
@@ -63,7 +63,7 @@ export default {
                     "data": [
                         {
                             "scheme": "https",
-                            "host": "app.happy.engineering",
+                            "host": "app.aha.engineering",
                             "pathPrefix": "/"
                         }
                     ],
@@ -162,7 +162,8 @@ export default {
             }
         },
         experiments: {
-            typedRoutes: true
+            typedRoutes: true,
+            ...(process.env.EXPO_BASE_URL ? { baseUrl: process.env.EXPO_BASE_URL } : {})
         },
         extra: {
             router: {

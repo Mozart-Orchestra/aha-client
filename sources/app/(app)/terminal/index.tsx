@@ -36,8 +36,8 @@ export default function TerminalScreen() {
 
     const handleConnect = async () => {
         if (publicKey) {
-            // Use the full happy:// URL format expected by the hook
-            const authUrl = `happy://terminal?${publicKey}`;
+            // Use the full aha:// URL format expected by the hook
+            const authUrl = `aha://terminal?${publicKey}`;
             await processAuthUrl(authUrl);
         }
     };

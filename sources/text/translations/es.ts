@@ -11,7 +11,7 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 }
 
 /**
- * Spanish translations for the Happy app
+ * Spanish translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const es: TranslationStructure = {
@@ -114,7 +114,7 @@ export const es: TranslationStructure = {
         developer: 'Desarrollador',
         developerTools: 'Herramientas de desarrollador',
         about: 'Acerca de',
-        aboutFooter: 'Happy Coder es un cliente móvil para Codex y Claude Code. Todo está cifrado de extremo a extremo y tu cuenta se guarda solo en tu dispositivo. No está afiliado con Anthropic.',
+        aboutFooter: 'aha es un cliente móvil para Codex y Claude Code. Todo está cifrado de extremo a extremo y tu cuenta se guarda solo en tu dispositivo. No está afiliado con Anthropic.',
         whatsNew: 'Novedades',
         whatsNewSubtitle: 'Ve las últimas actualizaciones y mejoras',
         reportIssue: 'Reportar un problema',
@@ -248,7 +248,7 @@ export const es: TranslationStructure = {
     newSession: {
         // Used by new-session screen and launch flows
         title: 'Iniciar nueva sesión',
-        noMachinesFound: 'No se encontraron máquinas. Inicia una sesión de Happy en tu computadora primero.',
+        noMachinesFound: 'No se encontraron máquinas. Inicia una sesión de aha en tu computadora primero.',
         allMachinesOffline: 'Todas las máquinas están desconectadas',
         machineDetails: 'Ver detalles de la máquina →',
         directoryDoesNotExist: 'Directorio no encontrado',
@@ -299,7 +299,7 @@ export const es: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Configuración del servidor',
         enterServerUrl: 'Ingresa una URL de servidor',
-        notValidHappyServer: 'No es un servidor Happy válido',
+        notValidHappyServer: 'No es un aha server válido',
         changeServer: 'Cambiar servidor',
         continueWithServer: '¿Continuar con este servidor?',
         resetToDefault: 'Restablecer por defecto',
@@ -319,9 +319,9 @@ export const es: TranslationStructure = {
         killSessionConfirm: '¿Seguro que quieres terminar esta sesión?',
         archiveSession: 'Archivar sesión',
         archiveSessionConfirm: '¿Seguro que quieres archivar esta sesión?',
-        happySessionIdCopied: 'ID de sesión de Happy copiado al portapapeles',
-        failedToCopySessionId: 'Falló al copiar ID de sesión de Happy',
-        happySessionId: 'ID de sesión de Happy',
+        happySessionIdCopied: 'aha session ID copiado al portapapeles',
+        failedToCopySessionId: 'Falló al copiar aha session ID',
+        happySessionId: 'aha session ID',
         claudeCodeSessionId: 'ID de sesión de Claude Code',
         claudeCodeSessionIdCopied: 'ID de sesión de Claude Code copiado al portapapeles',
         aiProvider: 'Proveedor de IA',
@@ -344,7 +344,7 @@ export const es: TranslationStructure = {
         path: 'Ruta',
         operatingSystem: 'Sistema operativo',
         processId: 'ID del proceso',
-        happyHome: 'Directorio de Happy',
+        happyHome: 'aha home',
         copyMetadata: 'Copiar metadatos',
         agentState: 'Estado del agente',
         controlledByUser: 'Controlado por el usuario',
@@ -356,7 +356,7 @@ export const es: TranslationStructure = {
         cliVersionOutdated: 'Actualización de CLI requerida',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Versión ${currentVersion} instalada. Actualice a ${requiredVersion} o posterior`,
-        updateCliInstructions: 'Por favor ejecute npm install -g happy-coder@latest',
+        updateCliInstructions: 'Por favor ejecute npm install -g aha-coder@latest',
         deleteSession: 'Eliminar sesión',
         deleteSessionSubtitle: 'Eliminar permanentemente esta sesión',
         deleteSessionConfirm: '¿Eliminar sesión permanentemente?',
@@ -370,7 +370,7 @@ export const es: TranslationStructure = {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
             readyToCode: '¿Listo para programar?',
-            installCli: 'Instale el Happy CLI',
+            installCli: 'Instale el aha CLI',
             runIt: 'Ejecútelo',
             scanQrCode: 'Escanee el código QR',
             openCamera: 'Abrir cámara',
@@ -437,7 +437,7 @@ export const es: TranslationStructure = {
     },
 
     sidebar: {
-        sessionsTitle: 'Happy',
+        sessionsTitle: 'aha',
     },
 
     toolView: {
@@ -618,7 +618,7 @@ export const es: TranslationStructure = {
         invalidConnectionLink: 'Enlace de conexión inválido',
         invalidConnectionLinkDescription: 'El enlace de conexión falta o es inválido. Verifica la URL e intenta nuevamente.',
         connectTerminal: 'Conectar terminal',
-        terminalRequestDescription: 'Un terminal está solicitando conectarse a tu cuenta de Happy Coder. Esto permitirá al terminal enviar y recibir mensajes de forma segura.',
+        terminalRequestDescription: 'Un terminal está solicitando conectarse a tu cuenta de aha. Esto permitirá al terminal enviar y recibir mensajes de forma segura.',
         connectionDetails: 'Detalles de conexión',
         publicKey: 'Clave pública',
         encryption: 'Cifrado',
@@ -693,7 +693,7 @@ export const es: TranslationStructure = {
 
     machine: {
         offlineUnableToSpawn: 'El lanzador está deshabilitado mientras la máquina está desconectada',
-        offlineHelp: '• Asegúrate de que tu computadora esté en línea\n• Ejecuta `happy daemon status` para diagnosticar\n• ¿Estás usando la última versión del CLI? Actualiza con `npm install -g happy-coder@latest`',
+        offlineHelp: '• Asegúrate de que tu computadora esté en línea\n• Ejecuta `aha daemon status` para diagnosticar\n• ¿Estás usando la última versión del CLI? Actualiza con `npm install -g aha-coder@latest`',
         launchNewSessionInDirectory: 'Iniciar nueva sesión en directorio',
         daemon: 'Daemon',
         status: 'Estado',
@@ -852,6 +852,26 @@ export const es: TranslationStructure = {
         friendRequestGeneric: 'Nueva solicitud de amistad',
         friendAccepted: ({ name }: { name: string }) => `Ahora eres amigo de ${name}`,
         friendAcceptedGeneric: 'Solicitud de amistad aceptada',
+    },
+
+    teams: {
+        deleteConfirmTitle: 'Eliminar Equipo',
+        deleteConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `¿Estás seguro de que deseas eliminar este equipo y ${count} ${sessionText} asociadas? Esta acción no se puede deshacer.`,
+        batchArchiveTitle: 'Archivar Equipos',
+        batchArchiveMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `¿Archivar ${teamCount} equipo(s) y ${sessionCount} sesión(es) asociadas?`,
+        batchArchiveSuccess: ({ count }: { count: number }) => `Archivado ${count} equipo(s).`,
+        batchArchiveError: 'Error al archivar equipos. Inténtalo de nuevo.',
+        batchDeleteTitle: 'Eliminar Equipos',
+        batchDeleteMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `¿Eliminar permanentemente ${teamCount} equipo(s) y ${sessionCount} sesión(es) asociadas? Esta acción no se puede deshacer.`,
+        batchDeleteSuccess: ({ count }: { count: number }) => `Eliminado ${count} equipo(s).`,
+        batchDeleteError: 'Error al eliminar equipos. Inténtalo de nuevo.',
+        archive: 'Archivar',
+        delete: 'Eliminar',
+        teamNotFound: 'Equipo no encontrado',
+        deleteError: 'Error al eliminar el equipo. Inténtalo de nuevo.',
     },
 
     // TODO: Add Spanish translations for memory, rules, and teamRoles

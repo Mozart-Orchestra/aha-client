@@ -40,6 +40,41 @@ export interface RoleMetadata {
   toolPermissions: RoleToolPermissions;
 }
 
+/**
+ * Available AI models for session/role selection.
+ * Each entry represents a model that can be assigned to a role or session.
+ */
+export interface AvailableModel {
+  id: string;
+  label: string;
+  provider: 'anthropic' | 'openai' | 'google' | 'deepseek' | 'custom';
+  tier: 'opus' | 'sonnet' | 'haiku' | 'premium' | 'standard' | 'economy';
+}
+
+export const AVAILABLE_MODELS: AvailableModel[] = [
+  // Anthropic
+  { id: 'claude-opus-4-5', label: 'Claude Opus 4.5', provider: 'anthropic', tier: 'opus' },
+  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', provider: 'anthropic', tier: 'sonnet' },
+  { id: 'claude-haiku-4', label: 'Claude Haiku 4', provider: 'anthropic', tier: 'haiku' },
+  // OpenAI
+  { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai', tier: 'premium' },
+  { id: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: 'openai', tier: 'economy' },
+  // Google
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: 'google', tier: 'premium' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'google', tier: 'economy' },
+  // DeepSeek
+  { id: 'deepseek-v3', label: 'DeepSeek V3', provider: 'deepseek', tier: 'standard' },
+  { id: 'deepseek-r1', label: 'DeepSeek R1', provider: 'deepseek', tier: 'premium' },
+];
+
+/**
+ * Get human-readable label for a model ID.
+ */
+export function getModelLabel(modelId: string): string {
+  const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+  return model?.label ?? modelId;
+}
+
 const ROLE_MODEL_CONFIG: Record<string, RoleModelConfig> = {
   user: { model: 'human', temperature: 0, maxTokens: 0 },  // Human user, no AI model
   master: { model: 'claude-opus-4-5', temperature: 0.3, maxTokens: 32000, thinkingBudget: 32000 },
@@ -62,8 +97,12 @@ const ROLE_TOOL_PERMISSIONS: Record<string, RoleToolPermissions> = {
   observer: { read: true, write: true, edit: true, bash: false, runTests: false, documentation: true, teamChat: true },
 }
 
-export function getRoleModelConfig(roleId: string): RoleModelConfig {
-  return ROLE_MODEL_CONFIG[roleId] || { model: 'claude-sonnet-4-5', temperature: 0.2, maxTokens: 32000 };
+export function getRoleModelConfig(roleId: string, modelOverride?: string): RoleModelConfig {
+  const base = ROLE_MODEL_CONFIG[roleId] || { model: 'claude-sonnet-4-5', temperature: 0.2, maxTokens: 32000 };
+  if (modelOverride) {
+    return { ...base, model: modelOverride };
+  }
+  return base;
 }
 
 export function getRoleToolPermissions(roleId: string): RoleToolPermissions {

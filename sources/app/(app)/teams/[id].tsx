@@ -26,7 +26,9 @@ import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
 import Color from 'color';
 import { syncKanbanStatusToTodo } from '@/-zen/model/ops';
 import { getCurrentAuth } from '@/auth/AuthContext';
+import { getRoleModelConfig, getModelLabel } from '@/team-config/i18n';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
+import RalphControlPanel, { RalphLoopState } from '@/components/RalphControlPanel';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -317,6 +319,17 @@ export default function TeamDashboardScreen() {
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const [showMenu, setShowMenu] = React.useState(false);
 
+    // Ralph Loop state
+    const [ralphState, setRalphState] = React.useState<RalphLoopState>({
+        status: 'idle',
+        currentTask: null,
+        iterationCount: 0,
+        completedStories: 0,
+        totalStories: 0,
+        lastHeartbeat: null,
+    });
+    const [ralphLoading, setRalphLoading] = React.useState(false);
+
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const artifactRoomId = React.useMemo(() => {
         if (!artifact?.body) return undefined;
@@ -424,7 +437,7 @@ export default function TeamDashboardScreen() {
         if (!artifact?.body) return [];
         try {
             const parsed = JSON.parse(artifact.body);
-            const members = parsed.team?.members || [];
+            const members = parsed.team?.members || parsed?.members || [];
             return members.map((m: any) => m.sessionId).filter(Boolean);
         } catch {
             return [];
@@ -572,6 +585,75 @@ export default function TeamDashboardScreen() {
             setIsLoading(false);
         }
     }, [teamId]);
+
+    // Ralph Loop Handlers
+    const handleRalphStart = React.useCallback(async () => {
+        setRalphLoading(true);
+        try {
+            // TODO: Call MCP tool to start Ralph Loop
+            // For now, simulate starting
+            setRalphState(prev => ({
+                ...prev,
+                status: 'running',
+                totalStories: kanbanData.tasks?.length || 0,
+            }));
+            console.log('[Ralph] Starting loop for team:', teamId);
+        } catch (error) {
+            console.error('[Ralph] Failed to start:', error);
+            setRalphState(prev => ({
+                ...prev,
+                status: 'error',
+                errorMessage: error instanceof Error ? error.message : 'Failed to start',
+            }));
+        } finally {
+            setRalphLoading(false);
+        }
+    }, [teamId, kanbanData.tasks?.length]);
+
+    const handleRalphStop = React.useCallback(async () => {
+        setRalphLoading(true);
+        try {
+            // TODO: Write .ralph-stop sentinel file via MCP
+            setRalphState(prev => ({
+                ...prev,
+                status: 'idle',
+            }));
+            console.log('[Ralph] Stopping loop for team:', teamId);
+        } catch (error) {
+            console.error('[Ralph] Failed to stop:', error);
+        } finally {
+            setRalphLoading(false);
+        }
+    }, [teamId]);
+
+    const handleRalphRefresh = React.useCallback(async () => {
+        setRalphLoading(true);
+        try {
+            // TODO: Fetch master-state.json via MCP
+            // For now, update with current kanban data
+            const completedTasks = kanbanData.tasks?.filter(t => t.status === 'done').length || 0;
+            setRalphState(prev => ({
+                ...prev,
+                totalStories: kanbanData.tasks?.length || 0,
+                completedStories: completedTasks,
+            }));
+            console.log('[Ralph] Refreshed state for team:', teamId);
+        } catch (error) {
+            console.error('[Ralph] Failed to refresh:', error);
+        } finally {
+            setRalphLoading(false);
+        }
+    }, [teamId, kanbanData.tasks]);
+
+    // Update Ralph state when kanban data changes
+    React.useEffect(() => {
+        const completedTasks = kanbanData.tasks?.filter(t => t.status === 'done').length || 0;
+        setRalphState(prev => ({
+            ...prev,
+            totalStories: kanbanData.tasks?.length || 0,
+            completedStories: completedTasks,
+        }));
+    }, [kanbanData.tasks]);
 
     const kanbanData: KanbanBoard = React.useMemo(() => {
         const ensureColumns = (data: any): KanbanBoard => {
@@ -1056,6 +1138,58 @@ export default function TeamDashboardScreen() {
                     <Text style={styles.roleTitle}>Definition of Done</Text>
                     <Text style={styles.roleSummary}>{agreements.definitionOfDone}</Text>
                 </View>
+
+                <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Members & Models</Text>
+                {roster.map(({ member, session, role }) => {
+                    const effectiveRoleId = member.roleId || session?.metadata?.role || '';
+                    const roleConfig = getRoleModelConfig(effectiveRoleId);
+                    const modelOverride = (session as any)?.modelOverride as string | undefined;
+                    const activeModel = modelOverride || roleConfig.model;
+                    const isHuman = effectiveRoleId === 'user' || roleConfig.model === 'human';
+
+                    return (
+                        <View key={member.sessionId} style={styles.roleCard}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.roleTitle}>
+                                        {member.displayName || session?.metadata?.name || member.sessionId.slice(0, 8)}
+                                    </Text>
+                                    <Text style={[styles.roleSummary, { fontSize: 12, marginTop: 2 }]}>
+                                        {role?.title || effectiveRoleId || 'No role'}
+                                    </Text>
+                                </View>
+                                {!isHuman && (
+                                    <View style={{
+                                        backgroundColor: theme.colors.surfacePressed || '#1a1a2e',
+                                        paddingHorizontal: 10,
+                                        paddingVertical: 4,
+                                        borderRadius: 12,
+                                    }}>
+                                        <Text style={{
+                                            fontSize: 11,
+                                            color: theme.colors.textSecondary,
+                                            fontWeight: '500',
+                                        }}>
+                                            {getModelLabel(activeModel)}
+                                            {modelOverride ? ' ●' : ''}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    );
+                })}
+            </View>
+
+            {/* Ralph Loop Control Panel */}
+            <View style={styles.section}>
+                <RalphControlPanel
+                    state={ralphState}
+                    onStart={handleRalphStart}
+                    onStop={handleRalphStop}
+                    onRefresh={handleRalphRefresh}
+                    isLoading={ralphLoading}
+                />
             </View>
         </ScrollView>
     );

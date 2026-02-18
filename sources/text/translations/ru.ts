@@ -22,7 +22,7 @@ function plural({ count, one, few, many }: { count: number; one: string; few: st
 }
 
 /**
- * Russian translations for the Happy app
+ * Russian translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const ru: TranslationStructure = {
@@ -97,7 +97,7 @@ export const ru: TranslationStructure = {
         developer: 'Разработчик',
         developerTools: 'Инструменты разработчика',
         about: 'О программе',
-        aboutFooter: 'Happy Coder — мобильное приложение для работы с Codex и Claude Code. Использует сквозное шифрование, все данные аккаунта хранятся только на вашем устройстве. Не связано с Anthropic.',
+        aboutFooter: 'aha — мобильное приложение для работы с Codex и Claude Code. Использует сквозное шифрование, все данные аккаунта хранятся только на вашем устройстве. Не связано с Anthropic.',
         whatsNew: 'Что нового',
         whatsNewSubtitle: 'Посмотреть последние обновления и улучшения',
         reportIssue: 'Сообщить о проблеме',
@@ -231,7 +231,7 @@ export const ru: TranslationStructure = {
     newSession: {
         // Used by new-session screen and launch flows
         title: 'Начать новую сессию',
-        noMachinesFound: 'Машины не найдены. Сначала запустите сессию Happy на вашем компьютере.',
+        noMachinesFound: 'Машины не найдены. Сначала запустите сессию aha на вашем компьютере.',
         allMachinesOffline: 'Все машины находятся offline',
         machineDetails: 'Посмотреть детали машины →',
         directoryDoesNotExist: 'Директория не найдена',
@@ -274,7 +274,7 @@ export const ru: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Настройка сервера',
         enterServerUrl: 'Пожалуйста, введите URL сервера',
-        notValidHappyServer: 'Это не валидный сервер Happy',
+        notValidHappyServer: 'Это не валидный aha server',
         changeServer: 'Изменить сервер',
         continueWithServer: 'Продолжить с этим сервером?',
         resetToDefault: 'Сбросить по умолчанию',
@@ -294,9 +294,9 @@ export const ru: TranslationStructure = {
         killSessionConfirm: 'Вы уверены, что хотите завершить эту сессию?',
         archiveSession: 'Архивировать сессию',
         archiveSessionConfirm: 'Вы уверены, что хотите архивировать эту сессию?',
-        happySessionIdCopied: 'ID сессии Happy скопирован в буфер обмена',
-        failedToCopySessionId: 'Не удалось скопировать ID сессии Happy',
-        happySessionId: 'ID сессии Happy',
+        happySessionIdCopied: 'aha session ID скопирован в буфер обмена',
+        failedToCopySessionId: 'Не удалось скопировать aha session ID',
+        happySessionId: 'aha session ID',
         claudeCodeSessionId: 'ID сессии Claude Code',
         claudeCodeSessionIdCopied: 'ID сессии Claude Code скопирован в буфер обмена',
         aiProvider: 'Поставщик ИИ',
@@ -319,7 +319,7 @@ export const ru: TranslationStructure = {
         path: 'Путь',
         operatingSystem: 'Операционная система',
         processId: 'ID процесса',
-        happyHome: 'Домашний каталог Happy',
+        happyHome: 'aha home',
         copyMetadata: 'Копировать метаданные',
         agentState: 'Состояние агента',
         controlledByUser: 'Управляется пользователем',
@@ -331,7 +331,7 @@ export const ru: TranslationStructure = {
         cliVersionOutdated: 'Требуется обновление CLI',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Установлена версия ${currentVersion}. Обновите до ${requiredVersion} или новее`,
-        updateCliInstructions: 'Пожалуйста, выполните npm install -g happy-coder@latest',
+        updateCliInstructions: 'Пожалуйста, выполните npm install -g aha-coder@latest',
         deleteSession: 'Удалить сессию',
         deleteSessionSubtitle: 'Удалить эту сессию навсегда',
         deleteSessionConfirm: 'Удалить сессию навсегда?',
@@ -344,7 +344,7 @@ export const ru: TranslationStructure = {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
             readyToCode: 'Готовы к программированию?',
-            installCli: 'Установите Happy CLI',
+            installCli: 'Установите aha CLI',
             runIt: 'Запустите его',
             scanQrCode: 'Отсканируйте QR-код',
             openCamera: 'Открыть камеру',
@@ -447,7 +447,7 @@ export const ru: TranslationStructure = {
     },
 
     sidebar: {
-        sessionsTitle: 'Happy',
+        sessionsTitle: 'aha',
     },
 
     toolView: {
@@ -616,7 +616,7 @@ export const ru: TranslationStructure = {
         invalidConnectionLink: 'Неверная ссылка подключения',
         invalidConnectionLinkDescription: 'Ссылка подключения отсутствует или неверна. Проверьте URL и попробуйте снова.',
         connectTerminal: 'Подключить терминал',
-        terminalRequestDescription: 'Терминал запрашивает подключение к вашему аккаунту Happy Coder. Это позволит терминалу безопасно отправлять и получать сообщения.',
+        terminalRequestDescription: 'Терминал запрашивает подключение к вашему аккаунту aha. Это позволит терминалу безопасно отправлять и получать сообщения.',
         connectionDetails: 'Детали подключения',
         publicKey: 'Публичный ключ',
         encryption: 'Шифрование',
@@ -691,7 +691,7 @@ export const ru: TranslationStructure = {
 
     machine: {
         offlineUnableToSpawn: 'Запуск отключен: машина offline',
-        offlineHelp: '• Убедитесь, что компьютер online\n• Выполните `happy daemon status` для диагностики\n• Используете последнюю версию CLI? Обновите командой `npm install -g happy-coder@latest`',
+        offlineHelp: '• Убедитесь, что компьютер online\n• Выполните `aha daemon status` для диагностики\n• Используете последнюю версию CLI? Обновите командой `npm install -g aha-coder@latest`',
         launchNewSessionInDirectory: 'Запустить новую сессию в папке',
         daemon: 'Daemon',
         status: 'Статус',
@@ -874,6 +874,26 @@ export const ru: TranslationStructure = {
         friendRequestGeneric: 'Новый запрос в друзья',
         friendAccepted: ({ name }: { name: string }) => `Вы теперь друзья с ${name}`,
         friendAcceptedGeneric: 'Запрос в друзья принят',
+    },
+
+    teams: {
+        deleteConfirmTitle: 'Удалить команду',
+        deleteConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Вы уверены, что хотите удалить эту команду и ${count} связанных ${sessionText}? Это действие нельзя отменить.`,
+        batchArchiveTitle: 'Архивировать команды',
+        batchArchiveMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Архивировать ${teamCount} команд(ы) и ${sessionCount} связанных сессий?`,
+        batchArchiveSuccess: ({ count }: { count: number }) => `Архивировано ${count} команд(ы).`,
+        batchArchiveError: 'Не удалось архивировать команды. Попробуйте снова.',
+        batchDeleteTitle: 'Удалить команды',
+        batchDeleteMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Удалить навсегда ${teamCount} команд(ы) и ${sessionCount} связанных сессий? Это действие нельзя отменить.`,
+        batchDeleteSuccess: ({ count }: { count: number }) => `Удалено ${count} команд(ы).`,
+        batchDeleteError: 'Не удалось удалить команды. Попробуйте снова.',
+        archive: 'Архивировать',
+        delete: 'Удалить',
+        teamNotFound: 'Команда не найдена',
+        deleteError: 'Не удалось удалить команду. Попробуйте снова.',
     },
 
     // TODO: Add Russian translations for memory, rules, and teamRoles

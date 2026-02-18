@@ -24,15 +24,15 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     const processAuthUrl = React.useCallback(async (url: string) => {
         console.log('[TERMINAL AUTH] 🔍 Processing terminal auth URL:', url);
 
-        if (!url.startsWith('happy://terminal?')) {
-            console.log('[TERMINAL AUTH] ❌ Invalid URL format - does not start with "happy://terminal?"');
+        if (!url.startsWith('aha://terminal?')) {
+            console.log('[TERMINAL AUTH] ❌ Invalid URL format - does not start with "aha://terminal?"');
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
         }
 
         setIsLoading(true);
         try {
-            const tail = url.slice('happy://terminal?'.length);
+            const tail = url.slice('aha://terminal?'.length);
             console.log('[TERMINAL AUTH] 📊 URL tail (base64url publicKey):', tail.substring(0, 20) + '...');
 
             const publicKey = decodeBase64(tail, 'base64url');
@@ -120,7 +120,7 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     React.useEffect(() => {
         if (CameraView.isModernBarcodeScannerAvailable) {
             const subscription = CameraView.onModernBarcodeScanned(async (event) => {
-                if (event.data.startsWith('happy://terminal?')) {
+                if (event.data.startsWith('aha://terminal?')) {
                     // Dismiss scanner on Android is called automatically when barcode is scanned
                     if (Platform.OS === 'ios') {
                         await CameraView.dismissScanner();

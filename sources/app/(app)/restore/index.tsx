@@ -220,17 +220,17 @@ export default function Restore() {
         }
     };
 
-    // Process terminal URL (happy://terminal?) - creates new account and connects to terminal
+    // Process terminal URL (aha://terminal?) - creates new account and connects to terminal
     const processTerminalUrl = React.useCallback(async (url: string) => {
         console.log('[RESTORE] Processing terminal URL:', url);
 
-        if (!url.startsWith('happy://terminal?')) {
+        if (!url.startsWith('aha://terminal?')) {
             console.log('[RESTORE] Invalid terminal URL format');
             return false;
         }
 
         try {
-            const tail = url.slice('happy://terminal?'.length);
+            const tail = url.slice('aha://terminal?'.length);
             const publicKey = decodeBase64(tail, 'base64url');
             console.log('[RESTORE] Terminal publicKey length:', publicKey.length);
 
@@ -284,20 +284,20 @@ export default function Restore() {
     const processAccountUrl = React.useCallback(async (url: string) => {
         console.log('[RESTORE] Processing URL:', url);
 
-        // Handle terminal URL (happy://terminal?)
-        if (url.startsWith('happy://terminal?')) {
+        // Handle terminal URL (aha://terminal?)
+        if (url.startsWith('aha://terminal?')) {
             return await processTerminalUrl(url);
         }
 
-        // Handle account URL (happy:///account?)
-        if (!url.startsWith('happy:///account?')) {
+        // Handle account URL (aha:///account?)
+        if (!url.startsWith('aha:///account?')) {
             console.log('[RESTORE] Invalid URL format');
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
         }
 
         try {
-            const tail = url.slice('happy:///account?'.length);
+            const tail = url.slice('aha:///account?'.length);
             const publicKey = decodeBase64(tail, 'base64url');
 
             console.log('[RESTORE] Decoded publicKey length:', publicKey.length);
@@ -360,7 +360,7 @@ export default function Restore() {
             t('settingsAccount.linkNewDevice'),
             t('connect.enterUrlManuallyDescription'),
             {
-                placeholder: 'happy:///account?...',
+                placeholder: 'aha:///account?...',
                 cancelText: t('common.cancel'),
                 confirmText: t('common.connect')
             }
@@ -377,7 +377,7 @@ export default function Restore() {
 
                 <View style={{ justifyContent: 'flex-end' }}>
                     <Text style={styles.secondInstructionText}>
-                        1. Open Happy on your mobile device{'\n'}
+                        1. Open aha on your mobile device{'\n'}
                         2. Go to Settings → Account{'\n'}
                         3. Tap "Link New Device"{'\n'}
                         4. Scan this QR code
@@ -390,7 +390,7 @@ export default function Restore() {
                 )}
                 {authReady && (
                     <QRCode
-                        data={'happy:///account?' + encodeBase64(keypair.publicKey, 'base64url')}
+                        data={'aha:///account?' + encodeBase64(keypair.publicKey, 'base64url')}
                         size={300}
                         foregroundColor={'black'}
                         backgroundColor={'white'}

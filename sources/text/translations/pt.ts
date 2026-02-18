@@ -11,7 +11,7 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 }
 
 /**
- * Portuguese (Brazilian) translations for the Happy app
+ * Portuguese (Brazilian) translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const pt: TranslationStructure = {
@@ -114,7 +114,7 @@ export const pt: TranslationStructure = {
         developer: 'Desenvolvedor',
         developerTools: 'Ferramentas de desenvolvedor',
         about: 'Sobre',
-        aboutFooter: 'Happy Coder é um cliente móvel para Codex e Claude Code. É totalmente criptografado ponta a ponta e sua conta é armazenada apenas no seu dispositivo. Não é afiliado à Anthropic.',
+        aboutFooter: 'aha é um cliente móvel para Codex e Claude Code. É totalmente criptografado ponta a ponta e sua conta é armazenada apenas no seu dispositivo. Não é afiliado à Anthropic.',
         whatsNew: 'Novidades',
         whatsNewSubtitle: 'Veja as atualizações e melhorias mais recentes',
         reportIssue: 'Relatar um problema',
@@ -248,7 +248,7 @@ export const pt: TranslationStructure = {
     newSession: {
         // Used by new-session screen and launch flows
         title: 'Iniciar nova sessão',
-        noMachinesFound: 'Nenhuma máquina encontrada. Inicie uma sessão Happy no seu computador primeiro.',
+        noMachinesFound: 'Nenhuma máquina encontrada. Inicie uma sessão aha no seu computador primeiro.',
         allMachinesOffline: 'Todas as máquinas estão offline',
         machineDetails: 'Ver detalhes da máquina →',
         directoryDoesNotExist: 'Diretório não encontrado',
@@ -299,7 +299,7 @@ export const pt: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Configuração do servidor',
         enterServerUrl: 'Por favor, insira uma URL do servidor',
-        notValidHappyServer: 'Não é um servidor Happy válido',
+        notValidHappyServer: 'Não é um aha server válido',
         changeServer: 'Alterar servidor',
         continueWithServer: 'Continuar com este servidor?',
         resetToDefault: 'Redefinir para padrão',
@@ -319,9 +319,9 @@ export const pt: TranslationStructure = {
         killSessionConfirm: 'Tem certeza de que deseja encerrar esta sessão?',
         archiveSession: 'Arquivar sessão',
         archiveSessionConfirm: 'Tem certeza de que deseja arquivar esta sessão?',
-        happySessionIdCopied: 'ID da sessão Happy copiado para a área de transferência',
-        failedToCopySessionId: 'Falha ao copiar ID da sessão Happy',
-        happySessionId: 'ID da sessão Happy',
+        happySessionIdCopied: 'aha session ID copiado para a área de transferência',
+        failedToCopySessionId: 'Falha ao copiar aha session ID',
+        happySessionId: 'aha session ID',
         claudeCodeSessionId: 'ID da sessão Claude Code',
         claudeCodeSessionIdCopied: 'ID da sessão Claude Code copiado para a área de transferência',
         aiProvider: 'Provedor de IA',
@@ -344,7 +344,7 @@ export const pt: TranslationStructure = {
         path: 'Caminho',
         operatingSystem: 'Sistema operacional',
         processId: 'ID do processo',
-        happyHome: 'Diretório Happy',
+        happyHome: 'aha home',
         copyMetadata: 'Copiar metadados',
         agentState: 'Estado do agente',
         controlledByUser: 'Controlado pelo usuário',
@@ -356,7 +356,7 @@ export const pt: TranslationStructure = {
         cliVersionOutdated: 'Atualização do CLI necessária',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Versão ${currentVersion} instalada. Atualize para ${requiredVersion} ou posterior`,
-        updateCliInstructions: 'Por favor execute npm install -g happy-coder@latest',
+        updateCliInstructions: 'Por favor execute npm install -g aha-coder@latest',
         deleteSession: 'Excluir sessão',
         deleteSessionSubtitle: 'Remover permanentemente esta sessão',
         deleteSessionConfirm: 'Excluir sessão permanentemente?',
@@ -370,7 +370,7 @@ export const pt: TranslationStructure = {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
             readyToCode: 'Pronto para programar?',
-            installCli: 'Instale o Happy CLI',
+            installCli: 'Instale o aha CLI',
             runIt: 'Execute',
             scanQrCode: 'Escaneie o código QR',
             openCamera: 'Abrir câmera',
@@ -437,7 +437,7 @@ export const pt: TranslationStructure = {
     },
 
     sidebar: {
-        sessionsTitle: 'Happy',
+        sessionsTitle: 'aha',
     },
 
     toolView: {
@@ -618,7 +618,7 @@ export const pt: TranslationStructure = {
         invalidConnectionLink: 'Link de conexão inválido',
         invalidConnectionLinkDescription: 'O link de conexão está ausente ou inválido. Verifique a URL e tente novamente.',
         connectTerminal: 'Conectar terminal',
-        terminalRequestDescription: 'Um terminal está solicitando conexão à sua conta Happy Coder. Isso permitirá que o terminal envie e receba mensagens com segurança.',
+        terminalRequestDescription: 'Um terminal está solicitando conexão à sua conta aha. Isso permitirá que o terminal envie e receba mensagens com segurança.',
         connectionDetails: 'Detalhes da conexão',
         publicKey: 'Chave pública',
         encryption: 'Criptografia',
@@ -693,7 +693,7 @@ export const pt: TranslationStructure = {
 
     machine: {
         offlineUnableToSpawn: 'Inicializador desativado enquanto a máquina está offline',
-        offlineHelp: '• Verifique se seu computador está online\n• Execute `happy daemon status` para diagnosticar\n• Você está usando a versão mais recente do CLI? Atualize com `npm install -g happy-coder@latest`',
+        offlineHelp: '• Verifique se seu computador está online\n• Execute `aha daemon status` para diagnosticar\n• Você está usando a versão mais recente do CLI? Atualize com `npm install -g aha-coder@latest`',
         launchNewSessionInDirectory: 'Iniciar nova sessão no diretório',
         daemon: 'Daemon',
         status: 'Status',
@@ -853,6 +853,26 @@ export const pt: TranslationStructure = {
         friendAcceptedGeneric: 'Pedido de amizade aceito',
     },
 
+    teams: {
+        deleteConfirmTitle: 'Excluir Equipe',
+        deleteConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Tem certeza de que deseja excluir esta equipe e ${count} ${sessionText} associadas? Esta ação não pode ser desfeita.`,
+        batchArchiveTitle: 'Arquivar equipes',
+        batchArchiveMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Arquivar ${teamCount} equipe(s) e ${sessionCount} sessão(ões) associadas?`,
+        batchArchiveSuccess: ({ count }: { count: number }) => `${count} equipe(s) arquivada(s).`,
+        batchArchiveError: 'Falha ao arquivar equipes. Tente novamente.',
+        batchDeleteTitle: 'Excluir equipes',
+        batchDeleteMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Excluir permanentemente ${teamCount} equipe(s) e ${sessionCount} sessão(ões) associadas? Esta ação não pode ser desfeita.`,
+        batchDeleteSuccess: ({ count }: { count: number }) => `${count} equipe(s) excluída(s).`,
+        batchDeleteError: 'Falha ao excluir equipes. Tente novamente.',
+        archive: 'Arquivar',
+        delete: 'Excluir',
+        teamNotFound: 'Equipe não encontrada',
+        deleteError: 'Falha ao excluir equipe. Tente novamente.',
+    },
+
     // TODO: Add Portuguese translations for memory, rules, and teamRoles
     // Using English placeholders for now
     memory: {
@@ -960,7 +980,7 @@ export const pt: TranslationStructure = {
         'qa-engineer': { title: 'Quality Assurance Engineer', summary: 'Tests features, validates functionality, and ensures quality standards', responsibilities: ['Write and run tests to verify implementations', 'Check edge cases and report bugs', 'Validate that acceptance criteria are met'], abilityBoundaries: ['Does not merge code to production', 'Reports issues through proper channels (team chat, task comments)', 'Creates test files only in /tests/ or /__tests__/'], handoffProtocol: ['Coordinate with implementer to reproduce issues', 'Provide detailed bug reports with steps to reproduce'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers.', '2. Run tests and check functionality.', '3. Report findings via team message or task comments.'] },
         observer: { title: 'Project Observer', summary: 'Maintains project documentation, changelogs, and knowledge base', responsibilities: ['Update README files, API docs, and inline documentation', 'Maintain changelog and project history', 'Document decisions, architecture patterns, and workflows', 'Request context from implementers for accurate documentation', 'Tag relevant team members for review of documentation changes'], abilityBoundaries: ['Does not edit implementation code', 'Only edits documentation files (README.md, docs/, etc.)'], handoffProtocol: ['Request context from implementers for accurate documentation', 'Tag relevant team members for review of documentation changes'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers.', '2. Focus on documentation (.md files, docs/, comments).', '3. Use view/edit tools to update documentation.'] },
         framer: { title: 'Framing Engineer', summary: 'Turns goals into implementation-ready designs, spikes, and pull requests.', responsibilities: ['Break work into actionable steps, prepare scaffolding, and align dependencies.', 'Partner with builders to review technical decisions before delivery begins.'], abilityBoundaries: ['Do not merge to production; hand off finished work to builders for polish and verification.', 'Avoid redefining priorities; raise scope changes back to the master role.'], handoffProtocol: ['Document design decisions and constraints directly on the task before handoff.', 'Pair with the assigned builder for the first implementation turn.'], protocol: ['⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. IF you have an idea, propose it to MASTER before touching code.', "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.", "4. WHEN working, update task status to 'in_progress' using 'update_task'.", '5. Focus on client-side code (kanban app, React Native).', '6. Do NOT respond to general user chat unless explicitly mentioned.'] },
-        builder: { title: 'Builder / Executor', summary: 'Owns implementation, testing, and integration for the slices coming out of framing.', responsibilities: ['Implement the scoped work, keep diffs small, and drive tasks to completion.', 'Keep the Kanban history current: in-progress updates, blockers, and completion notes.'], abilityBoundaries: ['Do not redefine architecture alone—loop in framers when changes exceed the agreed outline.', 'Avoid reprioritizing cards or changing acceptance criteria without master sign-off.'], handoffProtocol: ['Signal when code is ready for review, include validation steps, and request a verifier.', 'If blocked for >30 minutes, leave a Kanban update tagging the master role.'], protocol: ['⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. IF you have an idea, propose it to MASTER before implementing.', "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.", "4. WHEN working, update task status to 'in_progress' using 'update_task'.", '5. Focus on server-side code (happy-server, API routes).', '6. Do NOT respond to general user chat unless explicitly mentioned.'] },
+        builder: { title: 'Builder / Executor', summary: 'Owns implementation, testing, and integration for the slices coming out of framing.', responsibilities: ['Implement the scoped work, keep diffs small, and drive tasks to completion.', 'Keep the Kanban history current: in-progress updates, blockers, and completion notes.'], abilityBoundaries: ['Do not redefine architecture alone—loop in framers when changes exceed the agreed outline.', 'Avoid reprioritizing cards or changing acceptance criteria without master sign-off.'], handoffProtocol: ['Signal when code is ready for review, include validation steps, and request a verifier.', 'If blocked for >30 minutes, leave a Kanban update tagging the master role.'], protocol: ['⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. IF you have an idea, propose it to MASTER before implementing.', "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.", "4. WHEN working, update task status to 'in_progress' using 'update_task'.", '5. Focus on server-side code (aha-server, API routes).', '6. Do NOT respond to general user chat unless explicitly mentioned.'] },
         scout: { title: 'Scout / Explorer', summary: 'Explores codebase, gathers information, and provides context for team decisions.', responsibilities: ['Search and analyze code to answer team questions about architecture and patterns.', 'Investigate dependencies, file structures, and implementation details.', 'Provide quick reconnaissance before tasks are assigned.'], abilityBoundaries: ['Does not make changes to the codebase.', 'Read-only access to files and documentation.'], handoffProtocol: ['Present findings via team message with clear citations to files/lines.', 'Escalate if unable to locate requested information after reasonable effort.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Use search tools (grep, find) to explore the codebase.', '3. Provide clear, concise answers with file paths and line numbers.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
         scribe: { title: 'Scribe / Documenter', summary: 'Maintains project documentation, changelogs, and knowledge base.', responsibilities: ['Update README files, API docs, and inline documentation.', 'Maintain changelog and project history.', 'Document decisions, architecture patterns, and workflows.'], abilityBoundaries: ['Does not edit implementation code.', 'Only edits documentation files (README.md, docs/, etc.)'], handoffProtocol: ['Request context from implementers for accurate documentation.', 'Tag relevant team members for review of documentation changes.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Focus on documentation (.md files, docs/, comments).', '3. Use view/edit tools to update documentation.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
         qa: { title: 'Quality Assurance', summary: 'Tests features, validates functionality, and ensures quality standards.', responsibilities: ['Write and run tests to verify implementations.', 'Check edge cases and report bugs.', 'Validate that acceptance criteria are met.'], abilityBoundaries: ['Does not merge code to production.', 'Reports issues through proper channels (team chat, task comments).'], handoffProtocol: ['Coordinate with builders to reproduce issues.', 'Provide detailed bug reports with steps to reproduce.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Run tests and check functionality.', '3. Report findings via team message or task comments.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },

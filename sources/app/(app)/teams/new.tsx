@@ -13,31 +13,8 @@ import { DEFAULT_KANBAN_BOARD, KanbanTeamMember, KanbanBoard, DEFAULT_TEAM_AGREE
 import { getRecentPathForMachine, updateRecentMachinePaths, getKnownPathsForMachine } from '@/utils/machinePaths';
 import { getLocalizedTeamRoles } from '@/team-config/i18n';
 import { getSupportedLanguages } from '@/i18n';
-
-// Use localized team roles instead of hardcoded ones
-const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
-const ROLE_LIBRARY: Record<string, KanbanTeamRole> = LOCALIZED_TEAM_ROLES.reduce((acc, role) => {
-    acc[role.id] = role;
-    return acc;
-}, {} as Record<string, KanbanTeamRole>);
-const INITIAL_ROLE_COUNTS: Record<string, number> = LOCALIZED_TEAM_ROLES.reduce((acc, role) => {
-    if (role.id === 'master') {
-        acc[role.id] = 1;  // Master 是团队的核心协调者
-    } else if (role.id === 'orchestrator') {
-        acc[role.id] = 0;  // Orchestrator 与 Master 类似，默认不启用
-    } else if (role.id === 'architect') {
-        acc[role.id] = 1;
-    } else if (role.id === 'implementer') {
-        acc[role.id] = 1;
-    } else if (role.id === 'qa-engineer') {
-        acc[role.id] = 1;
-    } else if (role.id === 'observer') {
-        acc[role.id] = 1;
-    } else {
-        acc[role.id] = 0;
-    }
-    return acc;
-}, {} as Record<string, number>);
+import { fetchCustomRoles, CustomRole } from '@/sync/apiRoles';
+import { useAuth } from '@/auth/AuthContext';
 import { useDesktopBridge, DesktopRoomMemberInput } from '@/desktop/useDesktopBridge';
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -317,7 +294,7 @@ export default function NewTeamScreen() {
 
     const [title, setTitle] = React.useState('');
     const [target, setTarget] = React.useState('');
-    const [roleCounts, setRoleCounts] = React.useState<Record<string, number>>(() => ({ ...INITIAL_ROLE_COUNTS }));
+    const [roleCounts, setRoleCounts] = React.useState<Record<string, number>>({});
     // Track agent type per role (defaults to global agentType)
     const [roleAgentTypes, setRoleAgentTypes] = React.useState<Record<string, 'claude' | 'codex'>>({});
 
@@ -343,7 +320,85 @@ export default function NewTeamScreen() {
     const [isPathDropdownOpen, setIsPathDropdownOpen] = React.useState(false);
     const [agentLanguage, setAgentLanguage] = React.useState<'en' | 'zh'>('en');
 
+    // Custom roles state
+    const [customRoles, setCustomRoles] = React.useState<CustomRole[]>([]);
+    const [customRolesLoading, setCustomRolesLoading] = React.useState(false);
+    const { credentials } = useAuth();
+
     const defaultRoleId = 'implementer';
+
+    // Fetch custom roles on mount
+    React.useEffect(() => {
+        if (!credentials) return;
+
+        const loadCustomRoles = async () => {
+            setCustomRolesLoading(true);
+            try {
+                const roles = await fetchCustomRoles(credentials);
+                setCustomRoles(roles);
+            } catch (error) {
+                console.warn('Failed to fetch custom roles:', error);
+            } finally {
+                setCustomRolesLoading(false);
+            }
+        };
+
+        loadCustomRoles();
+    }, [credentials]);
+
+    // Merge built-in + custom roles
+    const mergedRoles = React.useMemo(() => {
+        const builtIn = getLocalizedTeamRoles();
+        const custom: KanbanTeamRole[] = customRoles.map(role => ({
+            id: role.id,
+            title: role.title,
+            summary: role.summary || 'Custom role',
+            icon: role.icon,
+            // Mark as custom for UI differentiation
+            isCustom: true,
+            assignedSkills: role.assignedSkills,
+            modelConfig: role.modelConfig,
+        } as any)); // Use 'as any' to extend KanbanTeamRole
+        return [...builtIn, ...custom];
+    }, [customRoles]);
+
+    // Build merged role library
+    const ROLE_LIBRARY: Record<string, KanbanTeamRole> = React.useMemo(() => {
+        return mergedRoles.reduce((acc, role) => {
+            acc[role.id] = role;
+            return acc;
+        }, {} as Record<string, KanbanTeamRole>);
+    }, [mergedRoles]);
+
+    // Initial role counts (built-in only for defaults)
+    const INITIAL_ROLE_COUNTS: Record<string, number> = React.useMemo(() => {
+        const counts: Record<string, number> = {};
+        mergedRoles.forEach(role => {
+            if (role.id === 'master') {
+                counts[role.id] = 1;
+            } else if (role.id === 'orchestrator') {
+                counts[role.id] = 0;
+            } else if (role.id === 'architect') {
+                counts[role.id] = 1;
+            } else if (role.id === 'implementer') {
+                counts[role.id] = 1;
+            } else if (role.id === 'qa-engineer') {
+                counts[role.id] = 1;
+            } else if (role.id === 'observer') {
+                counts[role.id] = 1;
+            } else {
+                counts[role.id] = 0;
+            }
+        });
+        return counts;
+    }, [mergedRoles]);
+
+    // Initialize role counts when merged roles change (first load)
+    React.useEffect(() => {
+        if (Object.keys(roleCounts).length === 0 && Object.keys(INITIAL_ROLE_COUNTS).length > 0) {
+            setRoleCounts(INITIAL_ROLE_COUNTS);
+        }
+    }, [INITIAL_ROLE_COUNTS, roleCounts]);
 
     // Track if machine change was user-initiated (not from machines array refresh)
     const userChangedMachineRef = React.useRef(false);
@@ -660,7 +715,7 @@ export default function NewTeamScreen() {
                                             sessionName: agentTitle,
                                             sessionPath: resolvedCwd,
                                             env: {
-                                                HAPPY_AGENT_LANGUAGE: agentLanguage
+                                                AHA_AGENT_LANGUAGE: agentLanguage
                                             }
                                         });
                                         if (spawnedSessionId) {
@@ -917,16 +972,47 @@ export default function NewTeamScreen() {
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Team Composition (Auto-Spawn)</Text>
+                        {customRolesLoading && (
+                            <Text style={{ color: theme.colors.textSecondary, marginBottom: 8, fontStyle: 'italic' }}>
+                                Loading custom roles...
+                            </Text>
+                        )}
                         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: theme.colors.divider }}>
-                            {LOCALIZED_TEAM_ROLES.map((role, index) => {
+                            {mergedRoles.map((role, index) => {
                                 const count = roleCounts[role.id] || 0;
                                 const currentAgentType = getRoleAgentType(role.id);
+                                const isCustom = (role as any).isCustom;
+                                const skills = (role as any).assignedSkills as string[] | undefined;
                                 return (
-                                    <View key={role.id} style={{ marginBottom: index === LOCALIZED_TEAM_ROLES.length - 1 ? 0 : 16 }}>
+                                    <View key={role.id} style={{ marginBottom: index === mergedRoles.length - 1 ? 0 : 16 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <View style={{ flex: 1, marginRight: 16 }}>
-                                                <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 4 }}>{role.title}</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 4 }}>
+                                                        {role.icon ? `${role.icon} ` : ''}{role.title}
+                                                    </Text>
+                                                    {isCustom && (
+                                                        <View style={{ backgroundColor: theme.colors.button.primary.background, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 4 }}>
+                                                            <Text style={{ fontSize: 10, color: '#FFF', fontWeight: '600' }}>CUSTOM</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
                                                 <Text style={{ fontSize: 13, color: theme.colors.textSecondary }} numberOfLines={2}>{role.summary}</Text>
+                                                {/* Show skill badges for custom roles */}
+                                                {isCustom && skills && skills.length > 0 && (
+                                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                                                        {skills.slice(0, 3).map(skillId => (
+                                                            <View key={skillId} style={{ backgroundColor: theme.colors.groupped.background, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{skillId}</Text>
+                                                            </View>
+                                                        ))}
+                                                        {skills.length > 3 && (
+                                                            <View style={{ backgroundColor: theme.colors.groupped.background, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>+{skills.length - 3}</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                )}
                                             </View>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.groupped.background, borderRadius: 8, padding: 4 }}>
                                                 <Pressable
@@ -1000,7 +1086,7 @@ export default function NewTeamScreen() {
                                 <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>Machine</Text>
                                 {machines.length === 0 ? (
                                     <Text style={styles.helperText}>
-                                        Start the Happy CLI on your computer to spawn teammates automatically.
+                                        Start the aha CLI on your computer to spawn teammates automatically.
                                     </Text>
                                 ) : (
                                     <View style={styles.machineList}>
@@ -1129,7 +1215,7 @@ export default function NewTeamScreen() {
                                     ]}
                                     value={agentBinary}
                                     onChangeText={setAgentBinary}
-                                    placeholder="e.g. happy, codex, claudecode"
+                                    placeholder="e.g. aha, codex, claudecode"
                                     placeholderTextColor={theme.colors.input.placeholder}
                                     editable={!isSaving}
                                 />

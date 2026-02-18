@@ -90,7 +90,7 @@ function SessionInfoContent({ session }: { session: Session }) {
         }
     }, [session]);
 
-    // Use HappyAction for archiving - it handles errors automatically
+    // Use AhaAction for archiving - it handles errors automatically
     const [archivingSession, performArchive] = useAhaAction(async () => {
         const result = await sessionKill(session.id);
         if (!result.success) {
@@ -116,7 +116,7 @@ function SessionInfoContent({ session }: { session: Session }) {
         );
     }, [performArchive]);
 
-    // Use HappyAction for deletion - it handles errors automatically
+    // Use AhaAction for deletion - it handles errors automatically
     const [deletingSession, performDelete] = useAhaAction(async () => {
         const result = await sessionDelete(session.id);
         if (!result.success) {
@@ -145,7 +145,7 @@ function SessionInfoContent({ session }: { session: Session }) {
     }, []);
 
     const handleCopyUpdateCommand = useCallback(async () => {
-        const updateCommand = 'npm install -g happy-coder@latest';
+        const updateCommand = 'npm install -g aha-coder@latest';
         try {
             await Clipboard.setStringAsync(updateCommand);
             Modal.alert(t('common.success'), updateCommand);

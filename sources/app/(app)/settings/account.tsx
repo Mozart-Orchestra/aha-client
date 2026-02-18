@@ -143,7 +143,7 @@ export default React.memo(() => {
                                 t('settingsAccount.linkNewDevice'),
                                 undefined,
                                 {
-                                    placeholder: 'happy:///account?...',
+                                    placeholder: 'aha:///account?...',
                                     cancelText: t('common.cancel'),
                                     confirmText: t('common.authenticate')
                                 }
