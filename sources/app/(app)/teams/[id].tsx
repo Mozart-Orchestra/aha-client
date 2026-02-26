@@ -29,6 +29,19 @@ import { getCurrentAuth } from '@/auth/AuthContext';
 import { getRoleModelConfig, getModelLabel } from '@/team-config/i18n';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
 import RalphControlPanel, { RalphLoopState } from '@/components/RalphControlPanel';
+import { useAuth } from '@/auth/AuthContext';
+import {
+    fetchRolePool,
+    fetchRoleReviews,
+    fetchTeamReviews,
+    fetchTeamScore,
+    submitRoleReview,
+    submitTeamReview,
+    PublicRole,
+    RoleReview,
+    TeamReview,
+    TeamScorecard,
+} from '@/sync/apiRoles';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -245,6 +258,49 @@ const stylesheet = StyleSheet.create((theme) => ({
         marginTop: 6,
         lineHeight: 20,
     },
+    scoreRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 8,
+    },
+    scorePill: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    scorePillText: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        fontWeight: '500',
+    },
+    actionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 10,
+    },
+    actionButton: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+    },
+    actionButtonPrimary: {
+        backgroundColor: theme.colors.button.primary.background,
+        borderColor: theme.colors.button.primary.background,
+    },
+    actionButtonText: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+    },
+    actionButtonTextPrimary: {
+        color: theme.colors.button.primary.tint,
+    },
     metaLabel: {
         marginTop: 12,
         fontSize: 12,
@@ -301,12 +357,22 @@ const withAlpha = (color: string, alpha: number): string => {
     }
 };
 
+const AUTO_ROLE_REVIEW_PREFIX = '[auto-role-complete]';
+const AUTO_TEAM_REVIEW_PREFIX = '[auto-team-complete]';
+
+const buildAutoRoleReviewComment = (teamId: string, roleId: string) =>
+    `${AUTO_ROLE_REVIEW_PREFIX} team:${teamId} role:${roleId}`;
+
+const buildAutoTeamReviewComment = (teamId: string) =>
+    `${AUTO_TEAM_REVIEW_PREFIX} team:${teamId}`;
+
 export default function TeamDashboardScreen() {
     const { id, roomId: roomIdParam } = useLocalSearchParams();
     const teamId = id as string;
     const router = useRouter();
     const { theme } = useUnistyles();
     const styles = stylesheet;
+    const { credentials } = useAuth();
     const artifact = useArtifact(teamId);
     const allSessions = useAllSessions();
     const profile = useProfile();
@@ -318,6 +384,12 @@ export default function TeamDashboardScreen() {
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const [showMenu, setShowMenu] = React.useState(false);
+    const [publicRolePool, setPublicRolePool] = React.useState<PublicRole[]>([]);
+    const [roleReviewsById, setRoleReviewsById] = React.useState<Record<string, RoleReview[]>>({});
+    const [teamReviews, setTeamReviews] = React.useState<TeamReview[]>([]);
+    const [teamScorecard, setTeamScorecard] = React.useState<TeamScorecard | null>(null);
+    const [isReviewSyncing, setIsReviewSyncing] = React.useState(false);
+    const autoReviewInFlight = React.useRef(false);
 
     // Ralph Loop state
     const [ralphState, setRalphState] = React.useState<RalphLoopState>({
@@ -586,6 +658,36 @@ export default function TeamDashboardScreen() {
         }
     }, [teamId]);
 
+    const kanbanData: KanbanBoard = React.useMemo(() => {
+        const ensureColumns = (data: any): KanbanBoard => {
+            const baseColumns = Array.isArray(data?.columns) && data.columns.length > 0
+                ? data.columns
+                : DEFAULT_KANBAN_BOARD.columns;
+
+            const mergedColumns = [...baseColumns];
+            DEFAULT_KANBAN_BOARD.columns.forEach((column) => {
+                if (!mergedColumns.some((c: KanbanColumn) => c.id === column.id)) {
+                    mergedColumns.push(column);
+                }
+            });
+
+            const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+            return { ...data, tasks, columns: mergedColumns };
+        };
+
+        if (desktopBridge) {
+            return ensureColumns(desktopBoard || DEFAULT_KANBAN_BOARD);
+        }
+        if (!artifact?.body) return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
+        try {
+            const parsed = JSON.parse(artifact.body);
+            return ensureColumns(parsed);
+        } catch (e) {
+            console.error('Failed to parse kanban data', e);
+            return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
+        }
+    }, [artifact?.body, desktopBoard, desktopBridge]);
+
     // Ralph Loop Handlers
     const handleRalphStart = React.useCallback(async () => {
         setRalphLoading(true);
@@ -654,36 +756,6 @@ export default function TeamDashboardScreen() {
             completedStories: completedTasks,
         }));
     }, [kanbanData.tasks]);
-
-    const kanbanData: KanbanBoard = React.useMemo(() => {
-        const ensureColumns = (data: any): KanbanBoard => {
-            const baseColumns = Array.isArray(data?.columns) && data.columns.length > 0
-                ? data.columns
-                : DEFAULT_KANBAN_BOARD.columns;
-
-            const mergedColumns = [...baseColumns];
-            DEFAULT_KANBAN_BOARD.columns.forEach((column) => {
-                if (!mergedColumns.some((c: KanbanColumn) => c.id === column.id)) {
-                    mergedColumns.push(column);
-                }
-            });
-
-            const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
-            return { ...data, tasks, columns: mergedColumns };
-        };
-
-        if (desktopBridge) {
-            return ensureColumns(desktopBoard || DEFAULT_KANBAN_BOARD);
-        }
-        if (!artifact?.body) return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
-        try {
-            const parsed = JSON.parse(artifact.body);
-            return ensureColumns(parsed);
-        } catch (e) {
-            console.error('Failed to parse kanban data', e);
-            return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
-        }
-    }, [artifact?.body, desktopBoard, desktopBridge]);
 
     // 🆕 Chat-Board 双向同步 Hook
     const taskChatSync = useTaskChatSync({
@@ -876,6 +948,9 @@ export default function TeamDashboardScreen() {
 
     const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
     const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
+    const publicRoleById = React.useMemo(() => {
+        return new Map(publicRolePool.map((role) => [role.id, role]));
+    }, [publicRolePool]);
 
     const roster = React.useMemo(() => {
         const members = kanbanData.team?.members ?? [];
@@ -919,6 +994,380 @@ export default function TeamDashboardScreen() {
         });
     }, [kanbanData.team?.members, artifact?.sessions, sessionLookup, roleDefinitions, kanbanData.tasks]);
 
+    const getRoleScoreSnapshot = React.useCallback((roleId?: string) => {
+        if (!roleId) {
+            return null;
+        }
+
+        const publicRole = publicRoleById.get(roleId);
+        if (publicRole?.stats) {
+            return publicRole.stats;
+        }
+
+        const reviews = roleReviewsById[roleId] || [];
+        if (reviews.length === 0) {
+            return null;
+        }
+
+        const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+        const codeTotal = reviews.reduce((sum, review) => sum + (review.codeScore || 0), 0);
+        const qualityTotal = reviews.reduce((sum, review) => sum + (review.qualityScore || 0), 0);
+
+        const sourceTotals = reviews.reduce((acc, review) => {
+            if (review.sourceScores) {
+                acc.user += review.sourceScores.user || 0;
+                acc.master += review.sourceScores.master || 0;
+                acc.system += review.sourceScores.system || 0;
+            } else {
+                const source = review.source || 'user';
+                acc[source] += review.rating * 20;
+            }
+            return acc;
+        }, { user: 0, master: 0, system: 0 });
+
+        return {
+            reviewCount: reviews.length,
+            completionCount: reviews.length,
+            totalRating,
+            averageRating: totalRating / reviews.length,
+            cumulativeCode: codeTotal,
+            cumulativeQuality: qualityTotal,
+            sourceScoreTotals: sourceTotals,
+        };
+    }, [publicRoleById, roleReviewsById]);
+
+    const roleIdsForReviews = React.useMemo(() => {
+        const ids = new Set<string>();
+        for (const role of roleDefinitions) {
+            if (role.id) {
+                ids.add(role.id);
+            }
+        }
+        for (const member of roster) {
+            const roleId = member.role?.id || member.member.roleId || member.session?.metadata?.role;
+            if (roleId) {
+                ids.add(roleId);
+            }
+        }
+        return Array.from(ids);
+    }, [roleDefinitions, roster]);
+
+    const reviewableTasks = React.useMemo(() => {
+        return kanbanData.tasks.filter((task) => !taskNeedsApproval(task));
+    }, [kanbanData.tasks]);
+
+    const roleCompletionById = React.useMemo(() => {
+        const bySession = new Map<string, string>();
+        for (const member of roster) {
+            const roleId = member.role?.id || member.member.roleId || member.session?.metadata?.role;
+            if (roleId) {
+                bySession.set(member.member.sessionId, roleId);
+            }
+        }
+
+        const completionMap: Record<string, { total: number; completed: number }> = {};
+        for (const task of reviewableTasks) {
+            const roleId = task.assigneeId ? bySession.get(task.assigneeId) : undefined;
+            if (!roleId) {
+                continue;
+            }
+
+            const current = completionMap[roleId] || { total: 0, completed: 0 };
+            current.total += 1;
+            if (normalizeStatus(task.status) === 'done') {
+                current.completed += 1;
+            }
+            completionMap[roleId] = current;
+        }
+
+        return completionMap;
+    }, [roster, reviewableTasks, normalizeStatus]);
+
+    const isTeamFullyCompleted = React.useMemo(() => {
+        return reviewableTasks.length > 0 && reviewableTasks.every((task) => normalizeStatus(task.status) === 'done');
+    }, [reviewableTasks, normalizeStatus]);
+
+    const triggerAutoCompletionReviews = React.useCallback(async (
+        currentRoleReviews: Record<string, RoleReview[]>,
+        currentTeamReviews: TeamReview[]
+    ) => {
+        if (!credentials || autoReviewInFlight.current) {
+            return false;
+        }
+
+        const completedRoleIds = Object.entries(roleCompletionById)
+            .filter(([, stat]) => stat.total > 0 && stat.completed === stat.total)
+            .map(([roleId]) => roleId);
+
+        const pendingRoleIds = completedRoleIds.filter((roleId) => {
+            const reviews = currentRoleReviews[roleId] || [];
+            const autoComment = buildAutoRoleReviewComment(teamId, roleId);
+            return !reviews.some((review) => review.comment === autoComment);
+        });
+
+        const teamAutoComment = buildAutoTeamReviewComment(teamId);
+        const shouldSubmitTeamReview = isTeamFullyCompleted &&
+            !currentTeamReviews.some((review) => review.comment === teamAutoComment);
+
+        if (pendingRoleIds.length === 0 && !shouldSubmitTeamReview) {
+            return false;
+        }
+
+        autoReviewInFlight.current = true;
+        try {
+            await Promise.all(pendingRoleIds.map(async (roleId) => {
+                const stat = roleCompletionById[roleId];
+                if (!stat) {
+                    return;
+                }
+
+                const progress = stat.total > 0 ? stat.completed / stat.total : 0;
+                const rating = Number((4 + progress).toFixed(2));
+                const codeScore = Math.min(100, 70 + stat.completed * 6);
+                const qualityScore = Math.min(100, 72 + stat.completed * 5);
+
+                await submitRoleReview(credentials, roleId, {
+                    rating,
+                    codeScore,
+                    qualityScore,
+                    source: 'system',
+                    sourceScores: { system: Math.round(rating * 20) },
+                    teamId,
+                    comment: buildAutoRoleReviewComment(teamId, roleId),
+                });
+            }));
+
+            if (shouldSubmitTeamReview) {
+                const completedCount = reviewableTasks.length;
+                const teamCodeScore = Math.min(100, 72 + completedCount * 3);
+                const teamQualityScore = Math.min(100, 74 + completedCount * 2);
+
+                await submitTeamReview(credentials, teamId, {
+                    rating: 5,
+                    codeScore: teamCodeScore,
+                    qualityScore: teamQualityScore,
+                    source: 'system',
+                    sourceScores: { system: 100 },
+                    roleIds: completedRoleIds,
+                    comment: teamAutoComment,
+                });
+            }
+
+            return true;
+        } catch (error) {
+            console.warn('Failed to auto-submit completion reviews:', error);
+            return false;
+        } finally {
+            autoReviewInFlight.current = false;
+        }
+    }, [credentials, isTeamFullyCompleted, reviewableTasks, roleCompletionById, teamId]);
+
+    const loadReviewData = React.useCallback(async () => {
+        if (!credentials) {
+            return;
+        }
+
+        try {
+            const [pool, score, teamReviewList] = await Promise.all([
+                fetchRolePool(credentials, { limit: 200 }),
+                fetchTeamScore(credentials, teamId),
+                fetchTeamReviews(credentials, teamId, 20),
+            ]);
+            let reviewMap: Record<string, RoleReview[]> = {};
+            if (roleIdsForReviews.length > 0) {
+                const reviewEntries = await Promise.all(
+                    roleIdsForReviews.map(async (roleId) => {
+                        try {
+                            const reviews = await fetchRoleReviews(credentials, roleId, 50);
+                            return [roleId, reviews] as const;
+                        } catch {
+                            return [roleId, [] as RoleReview[]] as const;
+                        }
+                    })
+                );
+
+                reviewMap = Object.fromEntries(reviewEntries);
+            }
+
+            const hasAutoSubmitted = await triggerAutoCompletionReviews(reviewMap, teamReviewList);
+            if (hasAutoSubmitted) {
+                const [nextPool, nextScore, nextTeamReviews] = await Promise.all([
+                    fetchRolePool(credentials, { limit: 200 }),
+                    fetchTeamScore(credentials, teamId),
+                    fetchTeamReviews(credentials, teamId, 20),
+                ]);
+
+                setPublicRolePool(nextPool);
+                setTeamScorecard(nextScore);
+                setTeamReviews(nextTeamReviews);
+
+                if (roleIdsForReviews.length > 0) {
+                    const nextRoleReviews = await Promise.all(
+                        roleIdsForReviews.map(async (roleId) => {
+                            try {
+                                const reviews = await fetchRoleReviews(credentials, roleId, 50);
+                                return [roleId, reviews] as const;
+                            } catch {
+                                return [roleId, [] as RoleReview[]] as const;
+                            }
+                        })
+                    );
+                    setRoleReviewsById(Object.fromEntries(nextRoleReviews));
+                } else {
+                    setRoleReviewsById({});
+                }
+
+                return;
+            }
+
+            setPublicRolePool(pool);
+            setTeamScorecard(score);
+            setTeamReviews(teamReviewList);
+            setRoleReviewsById(reviewMap);
+        } catch (error) {
+            console.warn('Failed to load review data:', error);
+        }
+    }, [credentials, teamId, roleIdsForReviews, triggerAutoCompletionReviews]);
+
+    React.useEffect(() => {
+        if (activeTab !== 'info') {
+            return;
+        }
+        void loadReviewData();
+    }, [activeTab, loadReviewData]);
+
+    const parseScoreInput = React.useCallback((raw: string | null, label: string, min: number, max: number): number | null => {
+        if (raw === null) {
+            return null;
+        }
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < min || value > max) {
+            Modal.alert('Invalid input', `${label} must be between ${min} and ${max}.`);
+            return null;
+        }
+        return value;
+    }, []);
+
+    const promptReviewPayload = React.useCallback(async () => {
+        const ratingRaw = await Modal.prompt(
+            'Rate',
+            'Rating (1-5)',
+            { defaultValue: '4', inputType: 'numeric', confirmText: 'Next' }
+        );
+        const rating = parseScoreInput(ratingRaw, 'Rating', 1, 5);
+        if (rating === null) {
+            return null;
+        }
+
+        const codeRaw = await Modal.prompt(
+            'Code Score',
+            'Code score (0-100)',
+            { defaultValue: '80', inputType: 'numeric', confirmText: 'Next' }
+        );
+        const codeScore = parseScoreInput(codeRaw, 'Code score', 0, 100);
+        if (codeScore === null) {
+            return null;
+        }
+
+        const qualityRaw = await Modal.prompt(
+            'Quality Score',
+            'Quality score (0-100)',
+            { defaultValue: '80', inputType: 'numeric', confirmText: 'Next' }
+        );
+        const qualityScore = parseScoreInput(qualityRaw, 'Quality score', 0, 100);
+        if (qualityScore === null) {
+            return null;
+        }
+
+        const sourceRaw = await Modal.prompt(
+            'Score Source',
+            'Source: user / master / system',
+            { defaultValue: 'user', confirmText: 'Next' }
+        );
+
+        if (sourceRaw === null) {
+            return null;
+        }
+
+        const source = sourceRaw.trim().toLowerCase();
+        if (!['user', 'master', 'system'].includes(source)) {
+            Modal.alert('Invalid input', 'Source must be user, master, or system.');
+            return null;
+        }
+
+        const comment = await Modal.prompt(
+            'Comment',
+            'Optional comment',
+            { placeholder: 'Great collaboration', confirmText: 'Submit' }
+        );
+
+        if (comment === null) {
+            return null;
+        }
+
+        return {
+            rating,
+            codeScore,
+            qualityScore,
+            source: source as 'user' | 'master' | 'system',
+            comment: comment.trim() ? comment.trim() : undefined,
+        };
+    }, [parseScoreInput]);
+
+    const handleRoleReview = React.useCallback(async (roleId?: string) => {
+        if (!credentials || !roleId) {
+            Modal.alert('Unavailable', 'Cannot review this role right now.');
+            return;
+        }
+
+        const payload = await promptReviewPayload();
+        if (!payload) {
+            return;
+        }
+
+        setIsReviewSyncing(true);
+        try {
+            await submitRoleReview(credentials, roleId, {
+                ...payload,
+                teamId,
+            });
+            await loadReviewData();
+            Modal.alert('Thanks!', 'Role review submitted.');
+        } catch (error) {
+            console.error('Failed to submit role review:', error);
+            Modal.alert('Error', 'Failed to submit role review.');
+        } finally {
+            setIsReviewSyncing(false);
+        }
+    }, [credentials, promptReviewPayload, loadReviewData, teamId]);
+
+    const handleTeamReview = React.useCallback(async () => {
+        if (!credentials) {
+            Modal.alert('Unavailable', 'Cannot review this team right now.');
+            return;
+        }
+
+        const payload = await promptReviewPayload();
+        if (!payload) {
+            return;
+        }
+
+        setIsReviewSyncing(true);
+        try {
+            await submitTeamReview(credentials, teamId, {
+                ...payload,
+                roleIds: roleIdsForReviews,
+            });
+            await loadReviewData();
+            Modal.alert('Thanks!', 'Team review submitted.');
+        } catch (error) {
+            console.error('Failed to submit team review:', error);
+            Modal.alert('Error', 'Failed to submit team review.');
+        } finally {
+            setIsReviewSyncing(false);
+        }
+    }, [credentials, promptReviewPayload, teamId, roleIdsForReviews, loadReviewData]);
+
     const timelineEvents = React.useMemo(() => {
         return [...kanbanData.tasks]
             .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -929,9 +1378,7 @@ export default function TeamDashboardScreen() {
     }, [kanbanData.tasks, roster]);
 
     // 🆕 Filter out pending tasks (only show approved tasks on board)
-    const approvedTasks = React.useMemo(() => {
-        return kanbanData.tasks.filter(task => !taskNeedsApproval(task));
-    }, [kanbanData.tasks]);
+    const approvedTasks = reviewableTasks;
 
     // 🆕 Pending tasks for approval UI
     const pendingTasks = React.useMemo(() => {
@@ -1121,6 +1568,62 @@ export default function TeamDashboardScreen() {
                     </Text>
                 </View>
 
+                <View style={styles.roleCard}>
+                    <Text style={styles.roleTitle}>Team Public Score</Text>
+                    <Text style={styles.roleSummary}>
+                        Community rating and cumulative quality metrics for this team.
+                    </Text>
+                    <View style={styles.scoreRow}>
+                        <View style={styles.scorePill}>
+                            <Text style={styles.scorePillText}>Rating {teamScorecard?.averageRating?.toFixed(2) || '0.00'}</Text>
+                        </View>
+                        <View style={styles.scorePill}>
+                            <Text style={styles.scorePillText}>Reviews {teamScorecard?.reviewCount || 0}</Text>
+                        </View>
+                        <View style={styles.scorePill}>
+                            <Text style={styles.scorePillText}>Code Σ {teamScorecard?.cumulativeCode || 0}</Text>
+                        </View>
+                        <View style={styles.scorePill}>
+                            <Text style={styles.scorePillText}>Quality Σ {teamScorecard?.cumulativeQuality || 0}</Text>
+                        </View>
+                    </View>
+                    <View style={styles.scoreRow}>
+                        <View style={styles.scorePill}>
+                            <Text style={styles.scorePillText}>User {teamScorecard?.sourceScoreTotals?.user || 0}</Text>
+                        </View>
+                        <View style={styles.scorePill}>
+                            <Text style={styles.scorePillText}>Master {teamScorecard?.sourceScoreTotals?.master || 0}</Text>
+                        </View>
+                        <View style={styles.scorePill}>
+                            <Text style={styles.scorePillText}>System {teamScorecard?.sourceScoreTotals?.system || 0}</Text>
+                        </View>
+                    </View>
+                    <View style={styles.actionRow}>
+                        <Pressable
+                            style={styles.actionButton}
+                            onPress={() => void loadReviewData()}
+                            disabled={isReviewSyncing}
+                        >
+                            <Text style={styles.actionButtonText}>Refresh</Text>
+                        </Pressable>
+                        <Pressable
+                            style={[styles.actionButton, styles.actionButtonPrimary]}
+                            onPress={() => void handleTeamReview()}
+                            disabled={isReviewSyncing}
+                        >
+                            <Text style={[styles.actionButtonText, styles.actionButtonTextPrimary]}>
+                                {isReviewSyncing ? 'Submitting...' : 'Rate Team'}
+                            </Text>
+                        </Pressable>
+                    </View>
+                    {teamReviews.slice(0, 3).map((review) => (
+                        <Text key={review.id} style={styles.roleSummary}>
+                            • {review.source || 'user'} rated {review.rating} ({new Date(review.createdAt).toLocaleDateString()})
+                            {review.comment ? `: ${review.comment}` : ''}
+                        </Text>
+                    ))}
+                </View>
+
                 <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Agreements</Text>
                 <View style={styles.roleCard}>
                     <Text style={styles.roleTitle}>Status Updates</Text>
@@ -1146,6 +1649,8 @@ export default function TeamDashboardScreen() {
                     const modelOverride = (session as any)?.modelOverride as string | undefined;
                     const activeModel = modelOverride || roleConfig.model;
                     const isHuman = effectiveRoleId === 'user' || roleConfig.model === 'human';
+                    const reviewRoleId = role?.id || effectiveRoleId || undefined;
+                    const roleStats = getRoleScoreSnapshot(reviewRoleId);
 
                     return (
                         <View key={member.sessionId} style={styles.roleCard}>
@@ -1176,6 +1681,35 @@ export default function TeamDashboardScreen() {
                                     </View>
                                 )}
                             </View>
+                            {roleStats && (
+                                <View style={styles.scoreRow}>
+                                    <View style={styles.scorePill}>
+                                        <Text style={styles.scorePillText}>Rating {roleStats.averageRating.toFixed(2)}</Text>
+                                    </View>
+                                    <View style={styles.scorePill}>
+                                        <Text style={styles.scorePillText}>Reviews {roleStats.reviewCount}</Text>
+                                    </View>
+                                    <View style={styles.scorePill}>
+                                        <Text style={styles.scorePillText}>Code Σ {roleStats.cumulativeCode}</Text>
+                                    </View>
+                                    <View style={styles.scorePill}>
+                                        <Text style={styles.scorePillText}>Quality Σ {roleStats.cumulativeQuality}</Text>
+                                    </View>
+                                </View>
+                            )}
+                            {reviewRoleId && (
+                                <View style={styles.actionRow}>
+                                    <Pressable
+                                        style={[styles.actionButton, styles.actionButtonPrimary]}
+                                        onPress={() => void handleRoleReview(reviewRoleId)}
+                                        disabled={isReviewSyncing}
+                                    >
+                                        <Text style={[styles.actionButtonText, styles.actionButtonTextPrimary]}>
+                                            {isReviewSyncing ? 'Submitting...' : 'Rate Role'}
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                            )}
                         </View>
                     );
                 })}
