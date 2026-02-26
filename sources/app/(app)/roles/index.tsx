@@ -4,6 +4,7 @@ import { Text } from '@/components/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { RoleCard } from '@/components/roles/RoleCard';
 import { useAuth } from '@/auth/AuthContext';
 import { Modal } from '@/modal';
@@ -32,32 +33,64 @@ export default function RolesScreen() {
     const [refreshing, setRefreshing] = React.useState(false);
 
     const loadRoles = React.useCallback(async (showLoading = true) => {
-        if (!credentials) return;
+        if (!credentials) {
+            setCustomRoles([]);
+            setPoolRoles([]);
+            setDefaultRoles([]);
+            setIsLoading(false);
+            setRefreshing(false);
+            return;
+        }
 
         if (showLoading) setIsLoading(true);
         setRefreshing(true);
 
         try {
-            const [custom, pool, defaults] = await Promise.all([
+            const [customResult, poolResult, defaultsResult] = await Promise.allSettled([
                 fetchCustomRoles(credentials),
                 fetchRolePool(credentials, { limit: 50 }),
                 fetchDefaultRoles(credentials),
             ]);
-            setCustomRoles(custom);
-            setPoolRoles(pool);
-            setDefaultRoles(defaults);
-        } catch (error) {
-            console.error('Failed to load roles:', error);
-            Modal.alert('Error', 'Failed to load roles. Please try again.');
+
+            if (customResult.status === 'fulfilled') {
+                setCustomRoles(customResult.value);
+            } else {
+                setCustomRoles([]);
+                console.error('Failed to load custom roles:', customResult.reason);
+            }
+
+            if (poolResult.status === 'fulfilled') {
+                setPoolRoles(poolResult.value);
+            } else {
+                setPoolRoles([]);
+                console.warn('Failed to load role pool:', poolResult.reason);
+            }
+
+            if (defaultsResult.status === 'fulfilled') {
+                setDefaultRoles(defaultsResult.value);
+            } else {
+                setDefaultRoles([]);
+                console.warn('Failed to load default roles:', defaultsResult.reason);
+            }
+
+            if (
+                customResult.status === 'rejected' &&
+                poolResult.status === 'rejected' &&
+                defaultsResult.status === 'rejected'
+            ) {
+                Modal.alert('Error', 'Failed to load roles. Please try again.');
+            }
         } finally {
             setIsLoading(false);
             setRefreshing(false);
         }
     }, [credentials]);
 
-    React.useEffect(() => {
-        loadRoles();
-    }, [loadRoles]);
+    useFocusEffect(
+        React.useCallback(() => {
+            loadRoles(false);
+        }, [loadRoles])
+    );
 
     const handleDeleteRole = (roleId: string) => {
         Modal.alert(

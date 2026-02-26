@@ -2,6 +2,7 @@ import React from 'react';
 import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Platform, Switch } from 'react-native';
 import { Text } from '@/components/StyledText';
 import { useRouter, Stack } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
 import { layout } from '@/components/layout';
@@ -372,30 +373,53 @@ export default function NewTeamScreen() {
 
     const defaultRoleId = 'implementer';
 
-    // Fetch custom roles on mount
-    React.useEffect(() => {
-        if (!credentials) return;
+    const loadCustomRoles = React.useCallback(async () => {
+        if (!credentials) {
+            setCustomRoles([]);
+            setDefaultRoles([]);
+            setPoolRoles([]);
+            setCustomRolesLoading(false);
+            return;
+        }
 
-        const loadCustomRoles = async () => {
-            setCustomRolesLoading(true);
-            try {
-                const [roles, defaults, pool] = await Promise.all([
-                    fetchCustomRoles(credentials),
-                    fetchDefaultRoles(credentials),
-                    fetchRolePool(credentials, { limit: 100 }),
-                ]);
-                setCustomRoles(roles);
-                setDefaultRoles(defaults);
-                setPoolRoles(pool);
-            } catch (error) {
-                console.warn('Failed to fetch custom roles:', error);
-            } finally {
-                setCustomRolesLoading(false);
+        setCustomRolesLoading(true);
+        try {
+            const [rolesResult, defaultsResult, poolResult] = await Promise.allSettled([
+                fetchCustomRoles(credentials),
+                fetchDefaultRoles(credentials),
+                fetchRolePool(credentials, { limit: 100 }),
+            ]);
+
+            if (rolesResult.status === 'fulfilled') {
+                setCustomRoles(rolesResult.value);
+            } else {
+                setCustomRoles([]);
+                console.error('Failed to fetch custom roles:', rolesResult.reason);
             }
-        };
 
-        loadCustomRoles();
+            if (defaultsResult.status === 'fulfilled') {
+                setDefaultRoles(defaultsResult.value);
+            } else {
+                setDefaultRoles([]);
+                console.warn('Failed to fetch default roles:', defaultsResult.reason);
+            }
+
+            if (poolResult.status === 'fulfilled') {
+                setPoolRoles(poolResult.value);
+            } else {
+                setPoolRoles([]);
+                console.warn('Failed to fetch public role pool:', poolResult.reason);
+            }
+        } finally {
+            setCustomRolesLoading(false);
+        }
     }, [credentials]);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            loadCustomRoles();
+        }, [loadCustomRoles])
+    );
 
     // Merge built-in + server defaults + custom + public pool roles
     const mergedRoles = React.useMemo<TeamRoleOption[]>(() => {
