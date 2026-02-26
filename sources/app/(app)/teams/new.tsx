@@ -144,6 +144,39 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.textSecondary,
         marginTop: 8,
     },
+    roleActions: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 12,
+    },
+    roleActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    roleActionPrimary: {
+        backgroundColor: theme.colors.button.primary.background,
+        borderColor: theme.colors.button.primary.background,
+    },
+    roleActionSecondary: {
+        backgroundColor: theme.colors.surface,
+    },
+    roleActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    roleActionTextPrimary: {
+        color: '#FFF',
+    },
+    roleActionTextSecondary: {
+        color: theme.colors.text,
+    },
     machineList: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -1035,6 +1068,29 @@ export default function NewTeamScreen() {
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Team Composition (Auto-Spawn)</Text>
+                        <View style={styles.roleActions}>
+                            <Pressable
+                                onPress={() => router.push('/roles/new' as any)}
+                                style={[styles.roleActionButton, styles.roleActionPrimary]}
+                            >
+                                <Ionicons name="add-circle-outline" size={14} color="#FFF" />
+                                <Text style={[styles.roleActionText, styles.roleActionTextPrimary]}>
+                                    创建角色
+                                </Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => router.push('/roles' as any)}
+                                style={[styles.roleActionButton, styles.roleActionSecondary]}
+                            >
+                                <Ionicons name="library-outline" size={14} color={theme.colors.text} />
+                                <Text style={[styles.roleActionText, styles.roleActionTextSecondary]}>
+                                    角色中心
+                                </Text>
+                            </Pressable>
+                        </View>
+                        <Text style={styles.helperText}>
+                            找不到角色创建入口时，可直接点上方“创建角色”。
+                        </Text>
                         {customRolesLoading && (
                             <Text style={{ color: theme.colors.textSecondary, marginBottom: 8, fontStyle: 'italic' }}>
                                 Loading custom roles...
