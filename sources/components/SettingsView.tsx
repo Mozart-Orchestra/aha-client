@@ -297,6 +297,16 @@ export const SettingsView = React.memo(function SettingsView() {
                 </ItemGroup>
             )}
 
+            {/* Role Management */}
+            <ItemGroup title="Role Management">
+                <Item
+                    title="Custom Roles"
+                    subtitle="Create and manage custom AI roles"
+                    icon={<Ionicons name="shield-outline" size={29} color="#9B59B6" />}
+                    onPress={() => router.push('/roles')}
+                />
+            </ItemGroup>
+
             {/* Features */}
             <ItemGroup title={t('settings.features')}>
                 <Item

@@ -54,9 +54,10 @@ class ApiSocket {
         }
 
         this.updateStatus('connecting');
+        const socketPath = this.resolveSocketPath('/v1/updates');
 
         this.socket = io(this.config.endpoint, {
-            path: '/v1/updates',
+            path: socketPath,
             auth: {
                 token: this.config.token,
                 clientType: 'user-scoped' as const
@@ -205,6 +206,21 @@ class ApiSocket {
     //
     // Private Methods
     //
+
+    private resolveSocketPath(pathSuffix: string): string {
+        if (!this.config) {
+            return pathSuffix;
+        }
+
+        try {
+            const url = new URL(this.config.endpoint);
+            const basePath = url.pathname.replace(/\/+$/, '');
+            const combined = `${basePath}${pathSuffix.startsWith('/') ? pathSuffix : `/${pathSuffix}`}`;
+            return combined.replace(/\/{2,}/g, '/');
+        } catch {
+            return pathSuffix;
+        }
+    }
 
     private updateStatus(status: 'disconnected' | 'connecting' | 'connected' | 'error') {
         if (this.currentStatus !== status) {

@@ -4,12 +4,33 @@ import { MMKV } from 'react-native-mmkv';
 const serverConfigStorage = new MMKV({ id: 'server-config' });
 
 const SERVER_KEY = 'custom-server-url';
-const DEFAULT_SERVER_URL = 'https://top1vibe.com';
+const LEGACY_V1_SERVER_URL = 'https://top1vibe.com';
+
+function isWebappV2Route(): boolean {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+    return window.location.pathname.startsWith('/webappv2');
+}
+
+function getDefaultServerUrl(): string {
+    return isWebappV2Route()
+        ? 'https://top1vibe.com/api/v2'
+        : LEGACY_V1_SERVER_URL;
+}
 
 export function getServerUrl(): string {
-    return serverConfigStorage.getString(SERVER_KEY) ||
-           process.env.EXPO_PUBLIC_AHA_SERVER_URL ||
-           DEFAULT_SERVER_URL;
+    const storedUrl = serverConfigStorage.getString(SERVER_KEY)?.trim();
+
+    // Avoid reusing legacy v1 sticky config when loading the v2 web app route.
+    if (storedUrl) {
+        if (isWebappV2Route() && storedUrl === LEGACY_V1_SERVER_URL) {
+            return process.env.EXPO_PUBLIC_AHA_SERVER_URL || getDefaultServerUrl();
+        }
+        return storedUrl;
+    }
+
+    return process.env.EXPO_PUBLIC_AHA_SERVER_URL || getDefaultServerUrl();
 }
 
 export function setServerUrl(url: string | null): void {
@@ -21,7 +42,7 @@ export function setServerUrl(url: string | null): void {
 }
 
 export function isUsingCustomServer(): boolean {
-    return getServerUrl() !== DEFAULT_SERVER_URL;
+    return getServerUrl() !== getDefaultServerUrl();
 }
 
 export function getServerInfo(): { hostname: string; port?: number; isCustom: boolean } {

@@ -1333,5 +1333,19 @@ export const zhHans: TranslationStructure = {
         deleteConfirmTitle: '删除团队',
         deleteConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
             `确定要删除此团队和 ${count} 个关联的${sessionText}吗？此操作无法撤销。`,
+        batchArchiveTitle: '归档团队',
+        batchArchiveMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `归档 ${teamCount} 个团队及其关联的 ${sessionCount} 个会话？`,
+        batchArchiveSuccess: ({ count }: { count: number }) => `已归档 ${count} 个团队。`,
+        batchArchiveError: '归档团队失败，请重试。',
+        batchDeleteTitle: '删除团队',
+        batchDeleteMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `永久删除 ${teamCount} 个团队及其关联的 ${sessionCount} 个会话？此操作无法撤销。`,
+        batchDeleteSuccess: ({ count }: { count: number }) => `已删除 ${count} 个团队。`,
+        batchDeleteError: '删除团队失败，请重试。',
+        archive: '归档',
+        delete: '删除',
+        teamNotFound: '未找到团队',
+        deleteError: '删除团队失败，请重试。',
     }
 } as const;

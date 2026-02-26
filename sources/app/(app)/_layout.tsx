@@ -363,6 +363,26 @@ export default function RootLayout() {
                     headerShown: false,
                 }}
             />
+            <Stack.Screen
+                name="roles/index"
+                options={{
+                    headerShown: false,
+                }}
+            />
+            <Stack.Screen
+                name="roles/new"
+                options={{
+                    headerShown: true,
+                    headerTitle: 'Create Role',
+                    headerBackTitle: t('common.cancel'),
+                }}
+            />
+            <Stack.Screen
+                name="roles/[id]"
+                options={{
+                    headerShown: false,
+                }}
+            />
         </Stack>
     );
 }

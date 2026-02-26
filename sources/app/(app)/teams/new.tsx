@@ -13,7 +13,7 @@ import { DEFAULT_KANBAN_BOARD, KanbanTeamMember, KanbanBoard, DEFAULT_TEAM_AGREE
 import { getRecentPathForMachine, updateRecentMachinePaths, getKnownPathsForMachine } from '@/utils/machinePaths';
 import { getLocalizedTeamRoles } from '@/team-config/i18n';
 import { getSupportedLanguages } from '@/i18n';
-import { fetchCustomRoles, CustomRole } from '@/sync/apiRoles';
+import { fetchCustomRoles, fetchDefaultRoles, fetchRolePool, CustomRole, PublicRole, RoleTemplate } from '@/sync/apiRoles';
 import { useAuth } from '@/auth/AuthContext';
 import { useDesktopBridge, DesktopRoomMemberInput } from '@/desktop/useDesktopBridge';
 
@@ -272,6 +272,16 @@ const stylesheet = StyleSheet.create((theme) => ({
     }
 }));
 
+type TeamRoleOption = KanbanTeamRole & {
+    icon?: string;
+    isCustom?: boolean;
+    isPool?: boolean;
+    isServerDefault?: boolean;
+    ownerId?: string;
+    assignedSkills?: string[];
+    stats?: PublicRole['stats'];
+};
+
 export default function NewTeamScreen() {
     const { theme } = useUnistyles();
     const styles = stylesheet;
@@ -322,6 +332,8 @@ export default function NewTeamScreen() {
 
     // Custom roles state
     const [customRoles, setCustomRoles] = React.useState<CustomRole[]>([]);
+    const [defaultRoles, setDefaultRoles] = React.useState<RoleTemplate[]>([]);
+    const [poolRoles, setPoolRoles] = React.useState<PublicRole[]>([]);
     const [customRolesLoading, setCustomRolesLoading] = React.useState(false);
     const { credentials } = useAuth();
 
@@ -334,8 +346,14 @@ export default function NewTeamScreen() {
         const loadCustomRoles = async () => {
             setCustomRolesLoading(true);
             try {
-                const roles = await fetchCustomRoles(credentials);
+                const [roles, defaults, pool] = await Promise.all([
+                    fetchCustomRoles(credentials),
+                    fetchDefaultRoles(credentials),
+                    fetchRolePool(credentials, { limit: 100 }),
+                ]);
                 setCustomRoles(roles);
+                setDefaultRoles(defaults);
+                setPoolRoles(pool);
             } catch (error) {
                 console.warn('Failed to fetch custom roles:', error);
             } finally {
@@ -346,28 +364,73 @@ export default function NewTeamScreen() {
         loadCustomRoles();
     }, [credentials]);
 
-    // Merge built-in + custom roles
-    const mergedRoles = React.useMemo(() => {
-        const builtIn = getLocalizedTeamRoles();
-        const custom: KanbanTeamRole[] = customRoles.map(role => ({
+    // Merge built-in + server defaults + custom + public pool roles
+    const mergedRoles = React.useMemo<TeamRoleOption[]>(() => {
+        const builtIn: TeamRoleOption[] = getLocalizedTeamRoles().map((role) => ({
+            ...(role as KanbanTeamRole),
+            icon: (role as any).icon,
+        }));
+
+        const builtInIds = new Set(builtIn.map((role) => role.id));
+
+        const defaultsFromServer: TeamRoleOption[] = defaultRoles
+            .filter((role) => !builtInIds.has(role.id))
+            .map((role) => ({
+                id: role.id,
+                title: role.title,
+                summary: role.summary || 'Default role',
+                responsibilities: [],
+                abilityBoundaries: [],
+                handoffProtocol: [],
+                protocol: [],
+                icon: role.icon,
+                isServerDefault: true,
+            }));
+
+        const custom: TeamRoleOption[] = customRoles.map((role) => ({
             id: role.id,
             title: role.title,
             summary: role.summary || 'Custom role',
+            responsibilities: role.responsibilities || [],
+            abilityBoundaries: role.abilityBoundaries || [],
+            handoffProtocol: role.handoffProtocol || [],
+            protocol: role.protocol || [],
             icon: role.icon,
-            // Mark as custom for UI differentiation
             isCustom: true,
             assignedSkills: role.assignedSkills,
-            modelConfig: role.modelConfig,
-        } as any)); // Use 'as any' to extend KanbanTeamRole
-        return [...builtIn, ...custom];
-    }, [customRoles]);
+            policy: role.policy as any,
+        }));
+
+        const customIds = new Set(custom.map((role) => role.id));
+        const defaultIds = new Set(defaultsFromServer.map((role) => role.id));
+
+        const pool: TeamRoleOption[] = poolRoles
+            .filter((role) => !builtInIds.has(role.id) && !customIds.has(role.id) && !defaultIds.has(role.id))
+            .map((role) => ({
+                id: role.id,
+                title: role.title,
+                summary: role.summary || 'Public role',
+                responsibilities: role.responsibilities || [],
+                abilityBoundaries: role.abilityBoundaries || [],
+                handoffProtocol: role.handoffProtocol || [],
+                protocol: role.protocol || [],
+                icon: role.icon,
+                isPool: true,
+                ownerId: role.ownerId,
+                assignedSkills: role.assignedSkills,
+                stats: role.stats,
+                policy: role.policy as any,
+            }));
+
+        return [...builtIn, ...defaultsFromServer, ...custom, ...pool];
+    }, [customRoles, defaultRoles, poolRoles]);
 
     // Build merged role library
-    const ROLE_LIBRARY: Record<string, KanbanTeamRole> = React.useMemo(() => {
+    const ROLE_LIBRARY: Record<string, TeamRoleOption> = React.useMemo(() => {
         return mergedRoles.reduce((acc, role) => {
             acc[role.id] = role;
             return acc;
-        }, {} as Record<string, KanbanTeamRole>);
+        }, {} as Record<string, TeamRoleOption>);
     }, [mergedRoles]);
 
     // Initial role counts (built-in only for defaults)
@@ -981,8 +1044,10 @@ export default function NewTeamScreen() {
                             {mergedRoles.map((role, index) => {
                                 const count = roleCounts[role.id] || 0;
                                 const currentAgentType = getRoleAgentType(role.id);
-                                const isCustom = (role as any).isCustom;
-                                const skills = (role as any).assignedSkills as string[] | undefined;
+                                const isCustom = role.isCustom;
+                                const isPool = role.isPool;
+                                const isServerDefault = role.isServerDefault;
+                                const skills = role.assignedSkills;
                                 return (
                                     <View key={role.id} style={{ marginBottom: index === mergedRoles.length - 1 ? 0 : 16 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -994,6 +1059,16 @@ export default function NewTeamScreen() {
                                                     {isCustom && (
                                                         <View style={{ backgroundColor: theme.colors.button.primary.background, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 4 }}>
                                                             <Text style={{ fontSize: 10, color: '#FFF', fontWeight: '600' }}>CUSTOM</Text>
+                                                        </View>
+                                                    )}
+                                                    {isPool && (
+                                                        <View style={{ backgroundColor: '#4A90E2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 4 }}>
+                                                            <Text style={{ fontSize: 10, color: '#FFF', fontWeight: '600' }}>POOL</Text>
+                                                        </View>
+                                                    )}
+                                                    {isServerDefault && (
+                                                        <View style={{ backgroundColor: '#6C7A89', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 4 }}>
+                                                            <Text style={{ fontSize: 10, color: '#FFF', fontWeight: '600' }}>DEFAULT</Text>
                                                         </View>
                                                     )}
                                                 </View>
@@ -1012,6 +1087,11 @@ export default function NewTeamScreen() {
                                                             </View>
                                                         )}
                                                     </View>
+                                                )}
+                                                {isPool && role.stats && (
+                                                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>
+                                                        Rating {role.stats.averageRating.toFixed(2)} · Reviews {role.stats.reviewCount}
+                                                    </Text>
                                                 )}
                                             </View>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.groupped.background, borderRadius: 8, padding: 4 }}>

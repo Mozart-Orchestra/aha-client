@@ -44,7 +44,7 @@ const CLAUDE_PERMISSION_MODES = new Set<PermissionMode>(['default', 'acceptEdits
 const CODEX_PERMISSION_MODES = new Set<PermissionMode>(['default', 'read-only', 'safe-yolo', 'yolo']);
 
 function resolvePermissionModeForSession(
-    session: Session,
+    session: { metadata?: Session['metadata'] },
     ...candidates: Array<PermissionMode | null | undefined>
 ): PermissionMode {
     const validModes = session.metadata?.flavor === 'codex' ? CODEX_PERMISSION_MODES : CLAUDE_PERMISSION_MODES;

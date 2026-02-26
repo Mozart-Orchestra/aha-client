@@ -242,7 +242,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
 }));
 
-const getStatusStyles = (status: RalphLoopStatus, styles: ReturnType<typeof stylesheet.useStyles>['styles']) => {
+const getStatusStyles = (status: RalphLoopStatus, styles: typeof stylesheet) => {
     switch (status) {
         case 'running':
             return {
@@ -283,7 +283,7 @@ export function RalphControlPanel({
     isLoading = false,
 }: RalphControlPanelProps) {
     const { theme } = useUnistyles();
-    const styles = stylesheet.useStyles().styles;
+    const styles = stylesheet;
     const statusStyles = getStatusStyles(state.status, styles);
 
     const progressPercent = state.totalStories > 0

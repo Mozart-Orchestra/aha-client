@@ -85,14 +85,14 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 24,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: theme.colors.primary,
+        borderColor: theme.colors.button.primary.background,
         marginBottom: 12,
         width: '100%',
         maxWidth: 280,
     },
     scanButtonText: {
         fontSize: 16,
-        color: theme.colors.primary,
+        color: theme.colors.button.primary.background,
         marginLeft: 8,
         ...Typography.default('semiBold'),
     },
@@ -404,7 +404,7 @@ export default function Restore() {
                     {t('welcome.scanToLink')}
                 </Text>
                 <TouchableOpacity style={styles.scanButton} onPress={handleScanQrCode}>
-                    <Ionicons name="qr-code-outline" size={24} color={theme.colors.primary} />
+                    <Ionicons name="qr-code-outline" size={24} color={theme.colors.button.primary.background} />
                     <Text style={styles.scanButtonText}>
                         {t('welcome.scanQrCode')}
                     </Text>
