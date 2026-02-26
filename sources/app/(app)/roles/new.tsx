@@ -29,7 +29,8 @@ export default function NewRoleScreen() {
             ]);
         } catch (error) {
             console.error('Failed to create role:', error);
-            Modal.alert('Error', 'Failed to create role. Please try again.');
+            const message = error instanceof Error ? error.message : 'Failed to create role. Please try again.';
+            Modal.alert('Error', message);
         } finally {
             setIsLoading(false);
         }

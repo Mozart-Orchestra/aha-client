@@ -130,6 +130,15 @@ export interface TeamScorecard {
     lastReviewedAt?: number;
 }
 
+async function parseApiError(response: Response): Promise<string | null> {
+    try {
+        const payload = await response.clone().json() as { error?: string; message?: string };
+        return payload.error || payload.message || null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Fetch custom roles for the current user
  */
@@ -199,7 +208,8 @@ export async function createCustomRole(
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to create role: ${response.status}`);
+            const errorMessage = await parseApiError(response);
+            throw new Error(errorMessage || `Failed to create role: ${response.status}`);
         }
 
         const data = await response.json() as { success: boolean; role: CustomRole };
@@ -228,7 +238,8 @@ export async function updateCustomRole(
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to update role: ${response.status}`);
+            const errorMessage = await parseApiError(response);
+            throw new Error(errorMessage || `Failed to update role: ${response.status}`);
         }
 
         const data = await response.json() as { success: boolean; role: CustomRole };

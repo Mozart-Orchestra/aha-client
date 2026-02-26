@@ -70,7 +70,8 @@ export default function RoleDetailScreen() {
             Modal.alert('Success', 'Role updated successfully');
         } catch (error) {
             console.error('Failed to update role:', error);
-            Modal.alert('Error', 'Failed to update role');
+            const message = error instanceof Error ? error.message : 'Failed to update role';
+            Modal.alert('Error', message);
         } finally {
             setIsSaving(false);
         }
