@@ -31,7 +31,7 @@ export interface RoleStatsCardProps {
  * - [x] 显示完成任务数
  * - [x] 显示成功率
  * - [x] 统计数据实时更新
- * - [ ] Typecheck passes
+ * - [x] Typecheck passes
  *
  * 使用示例:
  * ```tsx

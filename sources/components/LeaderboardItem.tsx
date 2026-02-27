@@ -24,7 +24,7 @@ export interface LeaderboardItemProps {
  * - [x] "我的排名"金色边框高亮
  * - [x] 显示排名变化趋势（🔺/🔻/➡️）
  * - [x] 点击可查看详细数据
- * - [ ] Typecheck passes
+ * - [x] Typecheck passes
  */
 export function LeaderboardItem({
   rank,

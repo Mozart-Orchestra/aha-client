@@ -25,7 +25,7 @@ export interface RoleComparisonProps {
  * - [x] 支持选择 2-3 个角色对比
  * - [x] 并排显示评分雷达图
  * - [x] 显示评分差异对比
- * - [ ] Typecheck passes
+ * - [x] Typecheck passes
  *
  * 使用示例:
  * ```tsx

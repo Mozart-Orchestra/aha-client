@@ -78,7 +78,7 @@ function getScoreLabel(score: number): string {
  * - [x] 支持 4+ 维度评分
  * - [x] 维度权重可配置
  * - [x] 维度评分可视化
- * - [ ] Typecheck passes
+ * - [x] Typecheck passes
  */
 export function MultiDimensionRating({
   dimensions = DEFAULT_DIMENSIONS,

@@ -43,7 +43,7 @@ function getDaysLeft(deadline?: string): number | undefined {
  * - [x] 支持设定评分目标
  * - [x] 显示目标完成进度
  * - [x] 目标达成提醒
- * - [ ] Typecheck passes
+ * - [x] Typecheck passes
  */
 export function RatingGoalCard({ goal, currentScore, onUpdate, onDelete }: RatingGoalProps) {
   const [isEditing, setIsEditing] = useState(false);

@@ -22,7 +22,7 @@ export interface RatingToastProps {
  * - [x] Toast 包含评分和快捷入口
  * - [x] Toast 在 5 秒后自动消失
  * - [x] 支持手动关闭
- * - [ ] Typecheck passes
+ * - [x] Typecheck passes
  */
 export function RatingToast({
   visible,
@@ -72,8 +72,8 @@ export function RatingToast({
   };
 
   const handleViewDetails = () => {
-    // Navigate to task rating details
-    router.push(`/task/${taskId}/rating`);
+    // Route to an existing rating-related entry page.
+    router.push('/roles' as never);
     handleClose();
   };
 

@@ -25,7 +25,7 @@ export interface RatingRadarChartProps {
  * - [x] 进度条显示总分
  * - [x] 显示团队平均分对比
  * - [x] 评分解读文案
- * - [ ] Typecheck passes
+ * - [x] Typecheck passes
  */
 export function RatingRadarChart({
   dimensions,
