@@ -23,9 +23,13 @@ export interface ProjectRequirement {
 export interface RoleRecommendation {
     role: {
         id: string;
-        title: string;
-        summary?: string;
-        icon?: string;
+        name: string;
+        category: string;
+        assignedSkills: string[];
+        description: string;
+        rating?: number;
+        completedTasks?: number;
+        successRate?: number;
     };
     matchScore: number;
     reasons: string[];
@@ -40,7 +44,11 @@ export interface RoleRecommendation {
  * Recommendation API request
  */
 export interface RecommendationRequest {
-    requirement: ProjectRequirement;
+    techStack: string[];
+    teamSize: number;
+    projectType: string;
+    description?: string;
+    timeline?: string;
     maxRecommendations?: number;
 }
 
@@ -48,8 +56,8 @@ export interface RecommendationRequest {
  * Recommendation API response
  */
 export interface RecommendationResponse {
+    success: boolean;
     recommendations: RoleRecommendation[];
-    total: number;
 }
 
 /**
@@ -201,14 +209,11 @@ async function parseApiError(response: Response): Promise<string | null> {
 
 function buildV5UrlCandidates(apiEndpoint: string, path: string): string[] {
     const base = apiEndpoint.replace(/\/+$/, '');
+    const withoutApiV2 = base.endsWith('/api/v2') ? base.slice(0, -7) : base;
 
-    // V5 endpoints should be under /api/v2 path
-    if (base.includes('/api/v2')) {
-        return [`${base}${path}`];
-    }
-
-    // Fallback to /api/v2 path if not already included
-    return [`${base}/api/v2${path}`];
+    // Some environments expose V5 as /api/v5 directly, others via /api/v2 prefix.
+    const candidates = [`${withoutApiV2}${path}`, `${withoutApiV2}/api/v2${path}`];
+    return [...new Set(candidates)];
 }
 
 async function fetchJsonWithStatusFallback<T>(

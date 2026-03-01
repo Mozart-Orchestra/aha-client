@@ -44,7 +44,7 @@ export function RoleRecommendationPanel({ credentials, onApplyRecommendation }: 
         description: description || undefined,
       };
 
-      const result = await getRoleRecommendations(credentials, { requirement });
+      const result = await getRoleRecommendations(credentials, requirement);
 
       if (result.recommendations.length > 0) {
         setRecommendations(result.recommendations);
@@ -147,16 +147,14 @@ export function RoleRecommendationPanel({ credentials, onApplyRecommendation }: 
       {recommendations.length > 0 && (
         <ScrollView style={styles.recommendationsList}>
           <Text style={styles.sectionTitle}>Recommended Roles ({recommendations.length})</Text>
-          {recommendations.map((rec, index) => (
+          {recommendations.map((rec) => (
             <View key={rec.role.id} style={styles.recommendationCard}>
               <View style={styles.cardHeader}>
-                <Text style={styles.roleName}>{rec.role.title}</Text>
+                <Text style={styles.roleName}>{rec.role.name}</Text>
                 <Text style={styles.matchScore}>{rec.matchScore}% Match</Text>
               </View>
 
-              {rec.role.summary ? (
-                <Text style={styles.roleSummary}>{rec.role.summary}</Text>
-              ) : null}
+              <Text style={styles.roleSummary}>{rec.role.category}</Text>
 
               {/* Matched Skills */}
               <View style={styles.skillSection}>

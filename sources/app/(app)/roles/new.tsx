@@ -19,12 +19,13 @@ export default function NewRoleScreen() {
     const handleApplyRecommendation = (recommendation: RoleRecommendation) => {
         // Pre-fill form with recommended role data
         setRecommendedRole({
-            title: recommendation.role.title,
-            icon: recommendation.role.icon || '🤖',
-            assignedSkills: recommendation.skillMatch?.matched || [],
-            summary: recommendation.role.summary || recommendation.reasons?.[0] || '',
+            title: recommendation.role.name,
+            assignedSkills: recommendation.role.assignedSkills?.length
+                ? recommendation.role.assignedSkills
+                : (recommendation.skillMatch?.matched || []),
+            summary: recommendation.role.description || recommendation.reasons?.[0] || '',
         });
-        Modal.alert('Applied', `Applied recommendation: ${recommendation.role.title}`);
+        Modal.alert('Applied', `Applied recommendation: ${recommendation.role.name}`);
     };
 
     const handleSubmit = async (formData: any) => {
