@@ -7,6 +7,17 @@
 import type { KanbanTask } from '@/sync/kanbanTypes';
 import type { TeamMessage, TeamMessageMetadata } from '@/sync/teamMessageTypes';
 
+function createUuid(): string {
+    if (typeof globalThis !== 'undefined' && typeof globalThis.crypto?.randomUUID === 'function') {
+        return globalThis.crypto.randomUUID();
+    }
+    const bytes = Array.from({ length: 16 }, () => Math.floor(Math.random() * 256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 /**
  * 从消息内容中提取任务信息
  * 支持的格式：
@@ -185,7 +196,7 @@ export function createTaskUpdateMessage(
         .join(', ');
 
     return {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        id: createUuid(),
         teamId: '', // 需要外部设置
         content: generateTaskMessage('updated', task, actorName) + `\n\n变更: ${changeDetails}`,
         type: 'task-update',

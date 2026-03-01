@@ -142,6 +142,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         if (!mergedTask) return;
 
         const message = createTaskUpdateMessage(mergedTask, updates, actorName);
+        message.id = randomUUID();
         message.teamId = teamId;
 
         await onMessageSend?.(message);
@@ -177,7 +178,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
 
         // 发送确认消息到聊天
         const confirmationMessage: TeamMessage = {
-            id: `msg-confirm-${randomUUID()}`,
+            id: randomUUID(),
             teamId,
             fromDisplayName: creatorName,
             content: `✅ 已创建任务：**${task.title}**\n\n${formatTaskReference(task)}`,
@@ -217,11 +218,12 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
 
         const typeLabel = created.taskType === 'internal' ? '内部任务' : '用户任务';
         const notificationMessage: TeamMessage = {
-            id: `msg-task-direct-${randomUUID()}`,
+            id: randomUUID(),
             teamId,
             fromDisplayName: creatorName,
             content: `✅ 已创建任务：**${created.title}**\n\n类型: ${typeLabel}\n优先级: ${created.priority || 'medium'}\n${formatTaskReference(created)}`,
-            type: 'task-created',
+            // Keep server compatibility: backend message schema currently accepts task-update.
+            type: 'task-update',
             timestamp: Date.now(),
             mentions: created.assigneeId ? [created.assigneeId] : undefined,
             metadata: {
@@ -276,7 +278,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
 
         // 发送通知
         const notification: TeamMessage = {
-            id: `msg-link-${randomUUID()}`,
+            id: randomUUID(),
             teamId,
             fromDisplayName: actorName,
             content: `关联了消息到任务：**${task.title}**`,
