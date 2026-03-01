@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "sources/unistyles.ts",
+    "sources/app/(app)/roles/index.tsx",
+    "sources/app/(app)/roles/new.tsx",
+    "sources/app/(app)/roles/[id].tsx",
+    "sources/components/roles/RoleCard.tsx",
+    "sources/components/roles/RoleForm.tsx",
+    "sources/sync/apiRoles.ts",
+    "sources/app/(app)/teams/[id].tsx"
+  ],
+  "exclude": []
+}

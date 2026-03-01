@@ -188,156 +188,166 @@ export function RoleRecommendationPanel({ credentials, onApplyRecommendation }: 
   );
 }
 
-const styles = StyleSheet.create((theme) => ({
-  container: {
-    padding: 16,
-    backgroundColor: theme.colors.groupped.background,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text.secondary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: theme.colors.groupped.cell,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    color: theme.colors.text.primary,
-    borderWidth: 1,
-    borderColor: theme.colors.border.primary,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  typeButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: theme.colors.groupped.cell,
-    borderWidth: 1,
-    borderColor: theme.colors.border.primary,
-    alignItems: 'center',
-  },
-  typeButtonActive: {
-    backgroundColor: theme.colors.accent.primary,
-    borderColor: theme.colors.accent.primary,
-  },
-  typeButtonText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-  },
-  typeButtonTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  button: {
-    backgroundColor: theme.colors.accent.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  errorContainer: {
-    backgroundColor: '#fee',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 12,
-  },
-  errorText: {
-    color: '#c00',
-    fontSize: 14,
-  },
-  recommendationsList: {
-    marginTop: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-    marginBottom: 12,
-  },
-  recommendationCard: {
-    backgroundColor: theme.colors.groupped.cell,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border.primary,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  roleName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-    flex: 1,
-  },
-  matchScore: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.accent.primary,
-  },
-  roleCategory: {
-    fontSize: 14,
-    color: theme.colors.text.tertiary,
-    marginBottom: 12,
-    textTransform: 'capitalize',
-  },
-  skillSection: {
-    marginBottom: 12,
-  },
-  skillLabel: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-  },
-  reasonsSection: {
-    marginBottom: 12,
-  },
-  reason: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  applyButton: {
-    backgroundColor: theme.colors.accent.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  applyButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-  },
-}));
+const styles = StyleSheet.create((theme: any) => {
+  const textPrimary = theme?.colors?.text?.primary ?? theme?.colors?.text ?? '#111111';
+  const textSecondary = theme?.colors?.text?.secondary ?? theme?.colors?.textSecondary ?? '#666666';
+  const textTertiary = theme?.colors?.text?.tertiary ?? textSecondary;
+  const groupedBackground = theme?.colors?.groupped?.background ?? theme?.colors?.surface ?? '#FFFFFF';
+  const groupedCell = theme?.colors?.groupped?.cell ?? theme?.colors?.surfaceHigh ?? theme?.colors?.surface ?? '#F5F5F5';
+  const borderPrimary = theme?.colors?.border?.primary ?? theme?.colors?.divider ?? '#E0E0E0';
+  const accentPrimary = theme?.colors?.accent?.primary ?? theme?.colors?.button?.primary?.background ?? '#007AFF';
+
+  return {
+    container: {
+      padding: 16,
+      backgroundColor: groupedBackground,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: textPrimary,
+      marginBottom: 16,
+    },
+    inputGroup: {
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: textSecondary,
+      marginBottom: 8,
+    },
+    input: {
+      backgroundColor: groupedCell,
+      borderRadius: 12,
+      padding: 12,
+      fontSize: 16,
+      color: textPrimary,
+      borderWidth: 1,
+      borderColor: borderPrimary,
+    },
+    textArea: {
+      minHeight: 80,
+      textAlignVertical: 'top',
+    },
+    typeSelector: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    typeButton: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: groupedCell,
+      borderWidth: 1,
+      borderColor: borderPrimary,
+      alignItems: 'center',
+    },
+    typeButtonActive: {
+      backgroundColor: accentPrimary,
+      borderColor: accentPrimary,
+    },
+    typeButtonText: {
+      fontSize: 14,
+      color: textSecondary,
+    },
+    typeButtonTextActive: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+    button: {
+      backgroundColor: accentPrimary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    buttonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#fff',
+    },
+    errorContainer: {
+      backgroundColor: '#fee',
+      borderRadius: 10,
+      padding: 12,
+      marginTop: 12,
+    },
+    errorText: {
+      color: '#c00',
+      fontSize: 14,
+    },
+    recommendationsList: {
+      marginTop: 24,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: textPrimary,
+      marginBottom: 12,
+    },
+    recommendationCard: {
+      backgroundColor: groupedCell,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: borderPrimary,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    roleName: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: textPrimary,
+      flex: 1,
+    },
+    matchScore: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: accentPrimary,
+    },
+    roleCategory: {
+      fontSize: 14,
+      color: textTertiary,
+      marginBottom: 12,
+      textTransform: 'capitalize',
+    },
+    skillSection: {
+      marginBottom: 12,
+    },
+    skillLabel: {
+      fontSize: 14,
+      color: textSecondary,
+    },
+    reasonsSection: {
+      marginBottom: 12,
+    },
+    reason: {
+      fontSize: 14,
+      color: textSecondary,
+      lineHeight: 20,
+      marginBottom: 4,
+    },
+    applyButton: {
+      backgroundColor: accentPrimary,
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    applyButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: '#fff',
+    },
+  };
+});
