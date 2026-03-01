@@ -3,7 +3,7 @@ import { View, Pressable } from 'react-native';
 import { Text } from '@/components/StyledText';
 import { StyleSheet } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
-import type { CustomRole, PublicRole, RoleTemplate } from '@/sync/apiRoles';
+import type { CustomRole, PublicRole, RoleTemplate, RoleStats } from '@/sync/apiRoles';
 
 interface RoleCardProps {
     role: CustomRole | PublicRole | RoleTemplate;
@@ -14,11 +14,13 @@ interface RoleCardProps {
 }
 
 export function RoleCard({ role, onPress, onEdit, onDelete, showActions = false }: RoleCardProps) {
-    const isCustom = 'isCustom' in role && role.isCustom;
-    const isPool = 'isPool' in role && role.isPool;
-    const isServerDefault = 'isServerDefault' in role && role.isServerDefault;
-    const stats = role.stats;
-    const skills = 'assignedSkills' in role ? role.assignedSkills : undefined;
+    const isCustom = Boolean((role as any).isCustom);
+    const isPool = Boolean((role as any).isPool);
+    const isServerDefault = Boolean((role as any).isServerDefault);
+    const stats: RoleStats | undefined = 'stats' in role ? (role as PublicRole).stats : undefined;
+    const skills: string[] = Array.isArray((role as any).assignedSkills)
+        ? ((role as any).assignedSkills as string[])
+        : [];
 
     return (
         <Pressable
@@ -76,7 +78,7 @@ export function RoleCard({ role, onPress, onEdit, onDelete, showActions = false 
                 )}
             </View>
 
-            {isCustom && skills && skills.length > 0 && (
+            {isCustom && skills.length > 0 && (
                 <View style={styles.skillsContainer}>
                     {skills.slice(0, 3).map((skill, index) => (
                         <View key={index} style={styles.skillBadge}>

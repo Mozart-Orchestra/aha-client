@@ -11,13 +11,10 @@ import * as React from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { StyleSheet } from 'react-native-unistyles';
 import { getRoleRecommendations, RoleRecommendation, ProjectRequirement } from '@/sync/apiV5';
+import type { AuthCredentials } from '@/auth/tokenStorage';
 
 interface RoleRecommendationPanelProps {
-  credentials: {
-    serverUrl: string;
-    teamId: string;
-    apiKey: string;
-  };
+  credentials: AuthCredentials;
   onApplyRecommendation?: (recommendation: RoleRecommendation) => void;
 }
 
@@ -47,9 +44,9 @@ export function RoleRecommendationPanel({ credentials, onApplyRecommendation }: 
         description: description || undefined,
       };
 
-      const result = await getRoleRecommendations(credentials, requirement);
+      const result = await getRoleRecommendations(credentials, { requirement });
 
-      if (result.success && result.recommendations) {
+      if (result.recommendations.length > 0) {
         setRecommendations(result.recommendations);
       } else {
         setError('No recommendations available');
@@ -153,11 +150,13 @@ export function RoleRecommendationPanel({ credentials, onApplyRecommendation }: 
           {recommendations.map((rec, index) => (
             <View key={rec.role.id} style={styles.recommendationCard}>
               <View style={styles.cardHeader}>
-                <Text style={styles.roleName}>{rec.role.name}</Text>
+                <Text style={styles.roleName}>{rec.role.title}</Text>
                 <Text style={styles.matchScore}>{rec.matchScore}% Match</Text>
               </View>
 
-              <Text style={styles.roleCategory}>{rec.role.category}</Text>
+              {rec.role.summary ? (
+                <Text style={styles.roleSummary}>{rec.role.summary}</Text>
+              ) : null}
 
               {/* Matched Skills */}
               <View style={styles.skillSection}>
@@ -315,11 +314,10 @@ const styles = StyleSheet.create((theme: any) => {
       fontWeight: '600',
       color: accentPrimary,
     },
-    roleCategory: {
+    roleSummary: {
       fontSize: 14,
       color: textTertiary,
       marginBottom: 12,
-      textTransform: 'capitalize',
     },
     skillSection: {
       marginBottom: 12,

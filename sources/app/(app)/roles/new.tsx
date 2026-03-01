@@ -8,22 +8,23 @@ import { useAuth } from '@/auth/AuthContext';
 import { createCustomRole } from '@/sync/apiRoles';
 import { Modal } from '@/modal';
 import { RoleRecommendation } from '@/sync/apiV5';
+import type { CustomRole } from '@/sync/apiRoles';
 
 export default function NewRoleScreen() {
     const router = useRouter();
     const { credentials } = useAuth();
     const [isLoading, setIsLoading] = React.useState(false);
-    const [recommendedRole, setRecommendedRole] = React.useState<any>(null);
+    const [recommendedRole, setRecommendedRole] = React.useState<Partial<CustomRole> | undefined>(undefined);
 
     const handleApplyRecommendation = (recommendation: RoleRecommendation) => {
         // Pre-fill form with recommended role data
         setRecommendedRole({
-            title: recommendation.role.name,
-            category: recommendation.role.category,
-            assignedSkills: recommendation.role.assignedSkills,
-            summary: recommendation.role.description,
+            title: recommendation.role.title,
+            icon: recommendation.role.icon || '🤖',
+            assignedSkills: recommendation.skillMatch?.matched || [],
+            summary: recommendation.role.summary || recommendation.reasons?.[0] || '',
         });
-        Modal.alert('Applied', `Applied recommendation: ${recommendation.role.name}`);
+        Modal.alert('Applied', `Applied recommendation: ${recommendation.role.title}`);
     };
 
     const handleSubmit = async (formData: any) => {
