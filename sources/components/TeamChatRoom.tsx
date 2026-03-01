@@ -11,16 +11,13 @@ import { useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import {
   parseCommand,
-  executeCreateTask,
-  executeUpdateTask,
-  executeCompleteTask,
   getCommandHelp,
   type TaskCommandResult,
   type ParsedCommand
 } from '@/utils/teamCommandParser';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { KanbanTask } from '@/sync/kanbanTypes';
-import { parseTaskCommand, createTaskFromCommand } from '@/utils/taskHelpers';
+import { parseTaskCommand } from '@/utils/taskHelpers';
 import { extractTaskIds } from '@/utils/taskChatSync';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -1227,6 +1224,41 @@ export default function TeamChatRoom({
         };
     }, [teamId, setMessages]);
 
+    const resolveMentionToSessionId = React.useCallback((mention: string): string | undefined => {
+        const normalized = mention.trim().replace(/^@/, '').toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+
+        const normalize = (value?: string): string => value?.trim().toLowerCase() || '';
+
+        const target = members.find((memberEntry) => {
+            const displayName = normalize(memberEntry.member.displayName);
+            const roleId = normalize(memberEntry.member.roleId);
+            const roleTitle = normalize(memberEntry.role?.title);
+            const sessionId = normalize(memberEntry.member.sessionId);
+            return (
+                displayName === normalized ||
+                roleId === normalized ||
+                roleTitle === normalized ||
+                sessionId === normalized
+            );
+        });
+
+        return target?.member.sessionId;
+    }, [members]);
+
+    const defaultUserTaskAssigneeId = React.useMemo(() => {
+        return resolveMentionToSessionId('master');
+    }, [resolveMentionToSessionId]);
+
+    const normalizeTaskId = React.useCallback((rawTaskId?: string): string => {
+        if (!rawTaskId) {
+            return '';
+        }
+        return rawTaskId.replace(/^#?task-/i, '').trim();
+    }, []);
+
     const handleSend = async () => {
         const content = inputText.trim();
         const hasImage = !!selectedImage?.base64;
@@ -1283,101 +1315,82 @@ export default function TeamChatRoom({
                 return;
             }
 
-            // 🆕 1. 尝试从消息创建任务
-            if (taskChatSync) {
-                const createdTask = await taskChatSync.createTaskFromMessage(
-                    content,
-                    mySessionId || 'user',
-                    myDisplayName || 'User'
-                );
+            // 1. 帮助命令
+            if (content === '/help') {
+                const helpMessage: TeamMessage = {
+                    id: `help-${Date.now()}`,
+                    teamId,
+                    content: getCommandHelp(),
+                    type: 'chat',
+                    timestamp: Date.now(),
+                    fromDisplayName: 'System',
+                };
+                setMessages(prev => [...prev, helpMessage]);
+                setInputText('');
+                return;
+            }
 
-                if (createdTask) {
-                    // 创建成功，Hook 已经自动发送了通知消息
+            // 2. /task 命令：直接落到看板并同步聊天
+            const taskCommand = parseTaskCommand(content);
+            if (taskCommand) {
+                if (!taskChatSync) {
+                    setMessages(prev => [...prev, {
+                        id: `task_error_${Date.now()}`,
+                        teamId,
+                        content: '❌ 当前团队未启用任务同步，无法创建任务。',
+                        type: 'system',
+                        timestamp: Date.now(),
+                        fromRole: 'system',
+                        fromDisplayName: 'System'
+                    }]);
                     setInputText('');
                     return;
                 }
-            }
 
-            // 🆕 3. 检查是否是 /task 命令（Master要求的格式）
-            const taskCommand = parseTaskCommand(content);
-            if (taskCommand && taskChatSync) {
                 try {
-                    // 创建新任务
-                    const taskId = randomUUID();
-                    const sourceMessageId = randomUUID();
-                    const newTask = createTaskFromCommand(
-                        taskCommand,
-                        taskId,
-                        mySessionId || 'user',
-                        sourceMessageId
+                    const requestedAssignee = taskCommand.task.assigneeId || '';
+                    const resolvedAssigneeId = requestedAssignee
+                        ? resolveMentionToSessionId(requestedAssignee)
+                        : undefined;
+                    const { assigneeId: _assigneeHint, ...taskPayload } = taskCommand.task;
+                    const source = taskCommand.task.source || 'user';
+                    const taskType = taskCommand.task.taskType || (source === 'ai' ? 'internal' : 'user');
+
+                    const createdTask = await taskChatSync.createTaskDirect(
+                        {
+                            ...taskPayload,
+                            source,
+                            taskType,
+                            reporterId: mySessionId || 'user',
+                            sourceMessageId: randomUUID(),
+                            ...(resolvedAssigneeId ? { assigneeId: resolvedAssigneeId } : {}),
+                        },
+                        myDisplayName || '用户'
                     );
 
-                    // 发送 task-created 通知到聊天
-                    const notificationMessage: TeamMessage = {
-                        id: `task_created_${randomUUID()}`,
-                        teamId,
-                        fromDisplayName: myDisplayName || 'User',
-                        content: `✅ Created task: **${newTask.title}**\n\n${newTask.description ? `Description: ${newTask.description}\n\n` : ''}Priority: ${newTask.priority}\nStatus: ${newTask.status}\n\n#task-${newTask.id}`,
-                        type: 'notification',
-                        timestamp: Date.now(),
-                        metadata: {
-                            taskId: newTask.id,
-                            taskChange: {
-                                field: 'status',
-                                oldValue: null,
-                                newValue: 'created'
-                            }
-                        },
-                        shortContent: `Task created: ${newTask.title}`
-                    };
-
-                    await sync.sendTeamMessage({
-                        teamId,
-                        content: notificationMessage.content,
-                        type: 'notification',
-                        metadata: notificationMessage.metadata,
-                        fromDisplayName: myDisplayName || 'User'
-                    });
-
-                    // 如果指定了 assignee，发送 @mention 通知
-                    if (newTask.assigneeId) {
-                        const assigneeMention = `@${newTask.assigneeId}`;
-                        await sync.sendTeamMessage({
-                            teamId,
-                            content: `${assigneeMention} You have been assigned a new task: ${newTask.title}`,
-                            type: 'notification',
-                            mentions: [newTask.assigneeId],
-                            metadata: {
-                                taskId: newTask.id,
-                                taskChange: {
-                                    field: 'assigneeId',
-                                    oldValue: null,
-                                    newValue: newTask.assigneeId
-                                }
-                            }
-                        });
+                    if (!createdTask) {
+                        throw new Error('task sync returned null');
                     }
 
                     setInputText('');
                     return;
                 } catch (error) {
                     console.error('Failed to create task from /task command:', error);
-                    const errorMessage: TeamMessage = {
+                    setMessages(prev => [...prev, {
                         id: `task_error_${Date.now()}`,
                         teamId,
-                        content: `❌ Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        content: `❌ 创建任务失败：${error instanceof Error ? error.message : '未知错误'}`,
                         type: 'system',
                         timestamp: Date.now(),
                         fromRole: 'system',
                         fromDisplayName: 'System'
-                    };
-                    setMessages(prev => [...prev, errorMessage]);
+                    }]);
                     setInputText('');
                     return;
                 }
             }
 
-            // 4. 检查是否是其他命令
+            // 3. 其他命令
             const command = parseCommand(content);
 
             if (command) {
@@ -1396,27 +1409,25 @@ export default function TeamChatRoom({
                 };
 
                 setMessages(prev => [...prev, resultMessage]);
-
-                // 如果是帮助命令，显示帮助信息
-                if (command.type === 'unknown' && content.trim() === '/help') {
-                    const helpMessage: TeamMessage = {
-                        id: `help-${Date.now()}`,
-                        teamId,
-                        content: getCommandHelp(),
-                        type: 'chat',
-                        timestamp: Date.now(),
-                        fromDisplayName: 'System',
-                    };
-                    setMessages(prev => [...prev, helpMessage]);
-                    setInputText('');
-                    return;
-                }
-
                 setInputText('');
                 return;
             }
 
-            // 4. 普通聊天消息
+            // 4. 自然语言触发任务创建
+            if (taskChatSync) {
+                const createdTask = await taskChatSync.createTaskFromMessage(
+                    content,
+                    mySessionId || 'user',
+                    myDisplayName || '用户'
+                );
+
+                if (createdTask) {
+                    setInputText('');
+                    return;
+                }
+            }
+
+            // 5. 普通聊天消息
             const mentions = extractMentions(content);
             const taskIds = taskChatSync ? extractTaskIds(content) : [];
             const messageId = randomUUID();
@@ -1476,54 +1487,191 @@ export default function TeamChatRoom({
      * 执行命令
      */
     const executeCommand = async (command: ParsedCommand): Promise<TaskCommandResult> => {
-        if (!mySessionId) {
+        if (!taskChatSync) {
             return {
                 success: false,
-                message: '❌ Cannot execute command: No active session'
+                message: '❌ 当前团队未启用任务同步，无法执行任务命令。'
             };
         }
 
+        const actorName = myDisplayName || '用户';
+
         switch (command.type) {
-            case 'createTask':
-                return await executeCreateTask(
-                    command.params,
-                    mySessionId,
-                    teamId,
-                    myDisplayName || 'User'
+            case 'createTask': {
+                const title = String(command.params.title || '').trim();
+                if (!title) {
+                    return {
+                        success: false,
+                        message: '❌ 任务标题不能为空。'
+                    };
+                }
+
+                const assigneeMention = command.params.assignee
+                    ? String(command.params.assignee)
+                    : '';
+                const resolvedAssignee = assigneeMention
+                    ? resolveMentionToSessionId(assigneeMention)
+                    : defaultUserTaskAssigneeId;
+
+                if (assigneeMention && !resolvedAssignee) {
+                    return {
+                        success: false,
+                        message: `❌ 未找到成员 @${assigneeMention}。`
+                    };
+                }
+
+                const createdTask = await taskChatSync.createTaskDirect(
+                    {
+                        title,
+                        description: String(command.params.description || '').trim() || undefined,
+                        priority: command.params.priority || 'medium',
+                        status: 'todo',
+                        source: 'user',
+                        taskType: 'user',
+                        approvalStatus: 'approved',
+                        reporterId: mySessionId || 'user',
+                        ...(resolvedAssignee ? { assigneeId: resolvedAssignee } : {}),
+                    },
+                    actorName
                 );
 
-            case 'updateTask':
-                return await executeUpdateTask(command.params);
+                if (!createdTask) {
+                    return {
+                        success: false,
+                        message: '❌ 创建任务失败。'
+                    };
+                }
 
-            case 'assignTask':
-                // TODO: 实现分配逻辑
                 return {
-                    success: false,
-                    message: '⚠️ Task assignment feature coming soon'
+                    success: true,
+                    message: `✅ 任务已创建：${createdTask.title} (#task-${createdTask.id})`,
+                    taskId: createdTask.id,
+                    data: createdTask,
                 };
+            }
 
-            case 'completeTask':
-                return await executeCompleteTask(command.params.taskId);
+            case 'updateTask': {
+                const taskId = normalizeTaskId(String(command.params.taskId || ''));
+                if (!taskId) {
+                    return {
+                        success: false,
+                        message: '❌ 请提供任务 ID。'
+                    };
+                }
+
+                const task = taskChatSync.getTaskById(taskId);
+                if (!task) {
+                    return {
+                        success: false,
+                        message: `❌ 未找到任务：${taskId}`
+                    };
+                }
+
+                const updates: Partial<KanbanTask> = {};
+                if (command.params.status) {
+                    updates.status = command.params.status;
+                }
+                if (command.params.priority) {
+                    updates.priority = command.params.priority;
+                }
+                if (Object.keys(updates).length === 0) {
+                    return {
+                        success: false,
+                        message: '❌ 请提供至少一个更新字段（status 或 priority）。'
+                    };
+                }
+
+                await taskChatSync.updateTaskWithSync(taskId, updates, actorName);
+                return {
+                    success: true,
+                    message: `✅ 任务已更新：${task.title}`
+                };
+            }
+
+            case 'assignTask': {
+                const taskId = normalizeTaskId(String(command.params.taskId || ''));
+                if (!taskId) {
+                    return {
+                        success: false,
+                        message: '❌ 请提供任务 ID。'
+                    };
+                }
+
+                const mention = String(command.params.assignee || '').trim();
+                if (!mention) {
+                    return {
+                        success: false,
+                        message: '❌ 请提供要分配的成员（如 @master）。'
+                    };
+                }
+
+                const assigneeId = resolveMentionToSessionId(mention);
+                if (!assigneeId) {
+                    return {
+                        success: false,
+                        message: `❌ 未找到成员 @${mention.replace(/^@/, '')}。`
+                    };
+                }
+
+                const task = taskChatSync.getTaskById(taskId);
+                if (!task) {
+                    return {
+                        success: false,
+                        message: `❌ 未找到任务：${taskId}`
+                    };
+                }
+
+                await taskChatSync.updateTaskWithSync(
+                    taskId,
+                    { assigneeId, taskType: task.taskType || 'user' },
+                    actorName
+                );
+
+                return {
+                    success: true,
+                    message: `✅ 任务已分配：${task.title} -> @${mention.replace(/^@/, '')}`
+                };
+            }
+
+            case 'completeTask': {
+                const taskId = normalizeTaskId(String(command.params.taskId || ''));
+                if (!taskId) {
+                    return {
+                        success: false,
+                        message: '❌ 请提供任务 ID。'
+                    };
+                }
+
+                const task = taskChatSync.getTaskById(taskId);
+                if (!task) {
+                    return {
+                        success: false,
+                        message: `❌ 未找到任务：${taskId}`
+                    };
+                }
+
+                await taskChatSync.updateTaskWithSync(taskId, { status: 'done' }, actorName);
+                return {
+                    success: true,
+                    message: `✅ 任务已完成：${task.title}`
+                };
+            }
 
             default:
                 return {
                     success: false,
-                    message: `❌ Unknown command. Type /help for available commands.`
+                    message: '❌ 未知命令，请输入 /help 查看可用命令。'
                 };
         }
     };
 
     const extractMentions = (text: string): string[] => {
-        const mentionRegex = /@([a-zA-Z0-9-]+)/g;
+        const mentionRegex = /@([a-zA-Z0-9_-]+)/g;
         const matches = [...text.matchAll(mentionRegex)];
-        return matches.map(m => {
-            const name = m[1].toLowerCase();
-            const member = members.find(mem =>
-                (mem.member.displayName && mem.member.displayName.toLowerCase() === name) ||
-                (mem.member.roleId && mem.member.roleId.toLowerCase() === name)
-            );
-            return member ? member.member.sessionId : null;
-        }).filter(id => id !== null) as string[];
+        const resolved = matches
+            .map((match) => resolveMentionToSessionId(match[1]))
+            .filter((id): id is string => !!id);
+        return Array.from(new Set(resolved));
     };
 
     if (isLoading) {

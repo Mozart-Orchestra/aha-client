@@ -108,6 +108,7 @@ export interface KanbanTask {
 
     // 🆕 任务来源和审批
     source?: 'ai' | 'user' | 'todo';  // 任务来源
+    taskType?: 'user' | 'internal';   // 任务类型（用户任务 / 内部任务）
     sourceMessageId?: string;         // 来源消息 ID（如果从聊天创建）
     approvalStatus?: 'pending' | 'approved' | 'rejected'; // 审批状态
     rejectionReason?: string;         // 拒绝原因

@@ -757,11 +757,56 @@ export default function TeamDashboardScreen() {
         }));
     }, [kanbanData.tasks]);
 
+    const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
+    const resolveMentionToSessionId = React.useCallback((mention: string): string | undefined => {
+        const normalizedMention = mention.trim().replace(/^@/, '').toLowerCase();
+        if (!normalizedMention) {
+            return undefined;
+        }
+
+        const members = kanbanData.team?.members ?? [];
+        const normalize = (value?: string): string => value?.trim().toLowerCase() || '';
+
+        for (const member of members) {
+            const session = allSessions.find((entry) => entry.id === member.sessionId);
+            const roleId = normalize(member.roleId || session?.metadata?.role);
+            const roleTitle = normalize(
+                roleDefinitions.find((role) =>
+                    role.id === member.roleId || role.title.toLowerCase() === roleId
+                )?.title
+            );
+            const displayName = normalize(member.displayName || session?.metadata?.name || session?.metadata?.host);
+
+            if (
+                normalize(member.sessionId) === normalizedMention ||
+                roleId === normalizedMention ||
+                roleTitle === normalizedMention ||
+                displayName === normalizedMention
+            ) {
+                return member.sessionId;
+            }
+        }
+
+        const fallbackSession = allSessions.find((session) => {
+            const role = normalize(session.metadata?.role);
+            const name = normalize(session.metadata?.name || session.metadata?.host);
+            return role === normalizedMention || name === normalizedMention;
+        });
+
+        return fallbackSession?.id;
+    }, [kanbanData.team?.members, allSessions, roleDefinitions]);
+
+    const defaultUserTaskAssigneeId = React.useMemo(() => {
+        return resolveMentionToSessionId('master');
+    }, [resolveMentionToSessionId]);
+
     // 🆕 Chat-Board 双向同步 Hook
     const taskChatSync = useTaskChatSync({
         teamId,
         tasks: kanbanData.tasks,
         messages: teamMessages,
+        defaultUserTaskAssigneeId,
+        resolveMentionToSessionId,
         onTaskUpdate: async (taskId, updates) => {
             if (desktopBridge && roomId) {
                 await desktopBridge.updateTask(taskId, updates);
@@ -810,12 +855,25 @@ export default function TeamDashboardScreen() {
             if (!artifact) {
                 throw new Error('No artifact available for task creation.');
             }
+            const now = Date.now();
+            const source = taskData.source || 'user';
+            const taskType = taskData.taskType || (source === 'ai' ? 'internal' : 'user');
+            const assigneeId = taskData.assigneeId || (taskType === 'user' ? defaultUserTaskAssigneeId : undefined);
+            const approvalStatus = taskData.approvalStatus || (source === 'ai' ? 'pending' : 'approved');
+            const title = taskData.title?.trim() || 'Untitled task';
+
             const newTask: KanbanTask = {
                 id: Math.random().toString(36).substring(2, 11),
                 ...taskData,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            } as KanbanTask;
+                title,
+                status: taskData.status || 'todo',
+                createdAt: taskData.createdAt ?? now,
+                updatedAt: now,
+                source,
+                taskType,
+                approvalStatus,
+                ...(assigneeId ? { assigneeId } : {}),
+            };
 
             const newData: KanbanBoard = {
                 ...kanbanData,
@@ -946,7 +1004,6 @@ export default function TeamDashboardScreen() {
         return map;
     }, [allSessions]);
 
-    const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
     const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
     const publicRoleById = React.useMemo(() => {
         return new Map(publicRolePool.map((role) => [role.id, role]));
@@ -1496,7 +1553,7 @@ export default function TeamDashboardScreen() {
                                         )}
 
                                         {/* 🆕 Linked sessions 显示 */}
-                                        {(sessionCount > 0 || task.priority) && (
+                                        {(sessionCount > 0 || task.priority || task.taskType) && (
                                             <View style={styles.taskMeta}>
                                                 {sessionCount > 0 && (
                                                     <View style={styles.taskSessionsLink}>
@@ -1508,6 +1565,27 @@ export default function TeamDashboardScreen() {
                                                         />
                                                         <Text style={styles.taskSessionsText}>
                                                             {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                {task.taskType && (
+                                                    <View style={[
+                                                        styles.taskPriority,
+                                                        {
+                                                            backgroundColor: task.taskType === 'internal'
+                                                                ? withAlpha(theme.colors.textSecondary, 0.15)
+                                                                : withAlpha(theme.colors.button.primary.background, 0.12)
+                                                        }
+                                                    ]}>
+                                                        <Text style={[
+                                                            styles.taskSessionsText,
+                                                            {
+                                                                color: task.taskType === 'internal'
+                                                                    ? theme.colors.textSecondary
+                                                                    : theme.colors.button.primary.background
+                                                            }
+                                                        ]}>
+                                                            {task.taskType}
                                                         </Text>
                                                     </View>
                                                 )}

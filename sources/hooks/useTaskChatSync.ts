@@ -24,6 +24,8 @@ interface UseTaskChatSyncOptions {
     onMessageSend?: (message: TeamMessage) => Promise<void>;
     onMessageUpdate?: (message: TeamMessage) => Promise<void>;
     onTaskCreate?: (task: Partial<KanbanTask>) => Promise<KanbanTask>;
+    defaultUserTaskAssigneeId?: string;
+    resolveMentionToSessionId?: (mention: string) => string | undefined;
 }
 
 interface TaskChatLink {
@@ -33,7 +35,17 @@ interface TaskChatLink {
 }
 
 export function useTaskChatSync(options: UseTaskChatSyncOptions) {
-    const { teamId, tasks, messages, onTaskUpdate, onMessageSend, onMessageUpdate, onTaskCreate } = options;
+    const {
+        teamId,
+        tasks,
+        messages,
+        onTaskUpdate,
+        onMessageSend,
+        onMessageUpdate,
+        onTaskCreate,
+        defaultUserTaskAssigneeId,
+        resolveMentionToSessionId,
+    } = options;
 
     // 任务-消息映射
     const [taskLinks, setTaskLinks] = useState<Map<string, TaskChatLink>>(new Map());
@@ -108,6 +120,10 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         return tasks.filter(task => taskIds.includes(task.id));
     }, [messages, tasks]);
 
+    const getTaskById = useCallback((taskId: string): KanbanTask | undefined => {
+        return tasks.find(task => task.id === taskId);
+    }, [tasks]);
+
     /**
      * 更新任务并同步到聊天
      */
@@ -144,8 +160,17 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
             return null;
         }
 
+        const assigneeFromMention = taskData.assigneeHint
+            ? resolveMentionToSessionId?.(taskData.assigneeHint)
+            : undefined;
+        const assigneeId = assigneeFromMention || defaultUserTaskAssigneeId;
+        const { assigneeHint: _assigneeHint, ...taskPayload } = taskData;
+
         // 创建任务
-        const task = await onTaskCreate?.(taskData);
+        const task = await onTaskCreate?.({
+            ...taskPayload,
+            ...(assigneeId ? { assigneeId } : {}),
+        });
         if (!task) {
             return null;
         }
@@ -168,7 +193,49 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         await onMessageSend?.(confirmationMessage);
 
         return task;
-    }, [teamId, onTaskCreate, onMessageSend]);
+    }, [teamId, onTaskCreate, onMessageSend, defaultUserTaskAssigneeId, resolveMentionToSessionId]);
+
+    const createTaskDirect = useCallback(async (
+        taskData: Partial<KanbanTask>,
+        creatorName: string = '用户'
+    ): Promise<KanbanTask | null> => {
+        if (!onTaskCreate) return null;
+
+        const source = taskData.source || 'user';
+        const taskType = taskData.taskType || (source === 'ai' ? 'internal' : 'user');
+        const assigneeId = taskData.assigneeId || (taskType === 'user' ? defaultUserTaskAssigneeId : undefined);
+
+        const created = await onTaskCreate({
+            ...taskData,
+            source,
+            taskType,
+            status: taskData.status || 'todo',
+            priority: taskData.priority || 'medium',
+            approvalStatus: taskData.approvalStatus || (source === 'ai' ? 'pending' : 'approved'),
+            ...(assigneeId ? { assigneeId } : {}),
+        });
+
+        const typeLabel = created.taskType === 'internal' ? '内部任务' : '用户任务';
+        const notificationMessage: TeamMessage = {
+            id: `msg-task-direct-${randomUUID()}`,
+            teamId,
+            fromDisplayName: creatorName,
+            content: `✅ 已创建任务：**${created.title}**\n\n类型: ${typeLabel}\n优先级: ${created.priority || 'medium'}\n${formatTaskReference(created)}`,
+            type: 'task-created',
+            timestamp: Date.now(),
+            mentions: created.assigneeId ? [created.assigneeId] : undefined,
+            metadata: {
+                taskId: created.id,
+                _action: 'created',
+                taskType: created.taskType,
+                source: created.source,
+            },
+            shortContent: `任务已创建: ${created.title}`,
+        };
+
+        await onMessageSend?.(notificationMessage);
+        return created;
+    }, [onTaskCreate, onMessageSend, teamId, defaultUserTaskAssigneeId]);
 
     /**
      * 将消息关联到现有任务
@@ -260,8 +327,10 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         // 操作
         getMessagesForTask,
         getTasksForMessage,
+        getTaskById,
         updateTaskWithSync,
         createTaskFromMessage,
+        createTaskDirect,
         linkMessageToTask,
         shouldCreateTaskFromMessage,
         extractTaskIds,

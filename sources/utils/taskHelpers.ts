@@ -34,14 +34,23 @@ export function parseTaskCommand(content: string): ParsedTaskCommand | null {
     const commandMatch = firstLine.match(commandRegex);
     if (!commandMatch) return null;
 
+    let titleLine = commandMatch[1].trim();
+    const inlineAssigneeMatch = titleLine.match(/\s@([a-zA-Z0-9_-]+)\b/);
+
     const task: Partial<KanbanTask> = {
-        title: commandMatch[1].trim(),
+        title: titleLine,
         source: 'user',
         createdAt: Date.now(),
         updatedAt: Date.now(),
         status: 'todo',
         priority: 'medium'
     };
+
+    if (inlineAssigneeMatch?.[1]) {
+        task.assigneeId = inlineAssigneeMatch[1];
+        titleLine = titleLine.replace(/\s@([a-zA-Z0-9_-]+)\b/, '').trim();
+        task.title = titleLine;
+    }
 
     let description = '';
 
@@ -54,6 +63,16 @@ export function parseTaskCommand(content: string): ParsedTaskCommand | null {
         } else if (line.startsWith('#assign ')) {
             const assignee = line.slice(8).trim();
             task.assigneeId = assignee.replace('@', '');
+        } else if (line.startsWith('#type ')) {
+            const taskType = line.slice(6).trim().toLowerCase();
+            if (taskType === 'user' || taskType === 'internal') {
+                task.taskType = taskType;
+            }
+        } else if (line.startsWith('#source ')) {
+            const source = line.slice(8).trim().toLowerCase();
+            if (source === 'ai' || source === 'user' || source === 'todo') {
+                task.source = source;
+            }
         } else if (line.startsWith('#priority ')) {
             const priority = line.slice(10).trim();
             if (['low', 'medium', 'high', 'urgent'].includes(priority)) {
@@ -84,6 +103,8 @@ export function createTaskFromCommand(
     sourceMessageId?: string
 ): KanbanTask {
     const relatedMessageIds = sourceMessageId ? [sourceMessageId] : undefined;
+    const source = parsed.task.source || 'user';
+    const taskType = parsed.task.taskType || (source === 'ai' ? 'internal' : 'user');
     return {
         id: taskId,
         title: parsed.task.title!,
@@ -94,7 +115,8 @@ export function createTaskFromCommand(
         priority: parsed.task.priority,
         dueDate: parsed.task.dueDate,
         tags: parsed.task.tags,
-        source: parsed.task.source,
+        source,
+        taskType,
         sourceMessageId,
         createdAt: parsed.task.createdAt!,
         updatedAt: parsed.task.updatedAt!,

@@ -129,6 +129,14 @@ export function shouldCreateTaskFromMessage(message: string): boolean {
 }
 
 /**
+ * 提取消息中的首个 @mention（用于任务默认分配）
+ */
+export function extractAssigneeMention(message: string): string | undefined {
+    const match = message.match(/@([a-zA-Z0-9_-]+)/);
+    return match?.[1];
+}
+
+/**
  * 从消息中提取任务标题和描述
  */
 export function extractTaskFromMessage(message: string): {
@@ -143,7 +151,7 @@ export function extractTaskFromMessage(message: string): {
     // Strip all task creation keywords/prefixes
     const title = lines[0]
         .replace(/^\s*\[(?:todo|task)\]\s*/i, '')
-        .replace(/^(创建任务|新建任务|待办|todo|new\s+task|create\s+task)\s*:/i, '')
+        .replace(/^(创建任务|新建任务|待办|todo|new\s+task|create\s+task)\s*[:：]/i, '')
         .replace(/^(创建任务|新建任务)\s*/i, '')
         .trim();
 
@@ -237,7 +245,9 @@ export async function syncTaskStatusToChat(
 export function createTaskFromChatMessage(
     messageContent: string,
     creatorId: string
-): Pick<KanbanTask, 'title' | 'description' | 'reporterId' | 'createdAt' | 'updatedAt'> | null {
+): (Pick<KanbanTask, 'title' | 'description' | 'reporterId' | 'createdAt' | 'updatedAt' | 'source' | 'taskType'> & {
+    assigneeHint?: string;
+}) | null {
     if (!shouldCreateTaskFromMessage(messageContent)) {
         return null;
     }
@@ -257,6 +267,9 @@ export function createTaskFromChatMessage(
         title,
         description: extracted.description,
         reporterId: creatorId,
+        source: 'user',
+        taskType: 'user',
+        assigneeHint: extractAssigneeMention(messageContent),
         createdAt: now,
         updatedAt: now,
     };
