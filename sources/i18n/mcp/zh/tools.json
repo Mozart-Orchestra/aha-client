@@ -1,0 +1,20 @@
+{
+  "tools": {
+    "create_task": {
+      "name": "create_task",
+      "description": "在看板上创建新任务"
+    },
+    "update_task": {
+      "name": "update_task",
+      "description": "更新任务状态和详情"
+    },
+    "list_tasks": {
+      "name": "list_tasks",
+    "description": "列出看板上的所有任务"
+    },
+    "send_team_message": {
+      "name": "send_team_message",
+      "description": "向团队发送消息"
+    }
+  }
+}

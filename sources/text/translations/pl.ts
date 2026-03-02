@@ -1,0 +1,1015 @@
+import type { TranslationStructure } from '../_default';
+
+/**
+ * Polish plural helper function
+ * Polish has 3 plural forms: one, few, many
+ * @param options - Object containing count and the three plural forms
+ * @returns The appropriate form based on Polish plural rules
+ */
+function plural({ count, one, few, many }: { count: number; one: string; few: string; many: string }): string {
+    const n = Math.abs(count);
+    const n10 = n % 10;
+    const n100 = n % 100;
+    
+    // Rule: 1 (but not 11)
+    if (n === 1) return one;
+    
+    // Rule: 2-4 but not 12-14
+    if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+    
+    // Rule: everything else (0, 5-19, 11, 12-14, etc.)
+    return many;
+}
+
+/**
+ * Polish translations for the Aha app
+ * Must match the exact structure of the English translations
+ */
+export const pl: TranslationStructure = {
+    tabs: {
+        // Tab navigation labels
+        inbox: 'Skrzynka',
+        sessions: 'Terminale',
+        settings: 'Ustawienia',
+    },
+
+    inbox: {
+        // Inbox screen
+        emptyTitle: 'Pusta skrzynka',
+        emptyDescription: 'Połącz się z przyjaciółmi, aby zacząć udostępniać sesje',
+        updates: 'Aktualizacje',
+    },
+
+    common: {
+        // Simple string constants
+        cancel: 'Anuluj',
+        authenticate: 'Uwierzytelnij',
+        save: 'Zapisz',
+        error: 'Błąd',
+        success: 'Sukces',
+        ok: 'OK',
+        continue: 'Kontynuuj',
+        back: 'Wstecz',
+        create: 'Utwórz',
+        rename: 'Zmień nazwę',
+        reset: 'Resetuj',
+        logout: 'Wyloguj',
+        yes: 'Tak',
+        no: 'Nie',
+        discard: 'Odrzuć',
+        version: 'Wersja',
+        copied: 'Skopiowano',
+        scanning: 'Skanowanie...',
+        urlPlaceholder: 'https://example.com',
+        home: 'Główna',
+        message: 'Wiadomość',
+        files: 'Pliki',
+        fileViewer: 'Przeglądarka plików',
+        loading: 'Ładowanie...',
+        retry: 'Ponów',
+        connect: 'Połącz',
+    },
+
+    profile: {
+        userProfile: 'Profil użytkownika',
+        details: 'Szczegóły',
+        firstName: 'Imię',
+        lastName: 'Nazwisko',
+        username: 'Nazwa użytkownika',
+        status: 'Status',
+    },
+
+    status: {
+        connected: 'połączono',
+        connecting: 'łączenie',
+        disconnected: 'rozłączono',
+        error: 'błąd',
+        online: 'online',
+        offline: 'offline',
+        lastSeen: ({ time }: { time: string }) => `ostatnio widziano ${time}`,
+        permissionRequired: 'wymagane uprawnienie',
+        activeNow: 'Aktywny teraz',
+        unknown: 'nieznane',
+    },
+
+    time: {
+        justNow: 'teraz',
+        minutesAgo: ({ count }: { count: number }) => `${count} ${plural({ count, one: 'minuta', few: 'minuty', many: 'minut' })} temu`,
+        hoursAgo: ({ count }: { count: number }) => `${count} ${plural({ count, one: 'godzina', few: 'godziny', many: 'godzin' })} temu`,
+    },
+
+    connect: {
+        restoreAccount: 'Przywróć konto',
+        enterSecretKey: 'Proszę wprowadzić klucz tajny',
+        invalidSecretKey: 'Nieprawidłowy klucz tajny. Sprawdź i spróbuj ponownie.',
+        enterUrlManually: 'Wprowadź URL ręcznie',
+        enterUrlManuallyDescription: 'Wprowadź URL z innego urządzenia, aby połączyć swoje konto',
+    },
+
+    settings: {
+        title: 'Ustawienia',
+        connectedAccounts: 'Połączone konta',
+        connectAccount: 'Połącz konto',
+        github: 'GitHub',
+        machines: 'Maszyny',
+        features: 'Funkcje',
+        social: 'Społeczność',
+        account: 'Konto',
+        accountSubtitle: 'Zarządzaj szczegółami konta',
+        appearance: 'Wygląd',
+        appearanceSubtitle: 'Dostosuj wygląd aplikacji',
+        voiceAssistant: 'Asystent głosowy',
+        voiceAssistantSubtitle: 'Konfiguruj preferencje interakcji głosowej',
+        featuresTitle: 'Funkcje',
+        featuresSubtitle: 'Włącz lub wyłącz funkcje aplikacji',
+        developer: 'Deweloper',
+        developerTools: 'Narzędzia deweloperskie',
+        about: 'O aplikacji',
+        aboutFooter: 'aha to mobilny klient Codex i Claude Code. Jest w pełni szyfrowany end-to-end, a Twoje konto jest przechowywane tylko na Twoim urządzeniu. Nie jest powiązany z Anthropic.',
+        whatsNew: 'Co nowego',
+        whatsNewSubtitle: 'Zobacz najnowsze aktualizacje i ulepszenia',
+        reportIssue: 'Zgłoś problem',
+        privacyPolicy: 'Polityka prywatności',
+        termsOfService: 'Warunki użytkowania',
+        eula: 'EULA',
+        supportUs: 'Wesprzyj nas',
+        supportUsSubtitlePro: 'Dziękujemy za wsparcie!',
+        supportUsSubtitle: 'Wesprzyj rozwój projektu',
+        scanQrCodeToAuthenticate: 'Zeskanuj kod QR, aby się uwierzytelnić',
+        githubConnected: ({ login }: { login: string }) => `Połączono jako @${login}`,
+        connectGithubAccount: 'Połącz konto GitHub',
+        claudeAuthSuccess: 'Pomyślnie połączono z Claude',
+        exchangingTokens: 'Wymiana tokenów...',
+        usage: 'Użycie',
+        usageSubtitle: 'Zobacz użycie API i koszty',
+
+        // Dynamic settings messages
+        accountConnected: ({ service }: { service: string }) => `Konto ${service} połączone`,
+        machineStatus: ({ name, status }: { name: string; status: 'online' | 'offline' }) =>
+            `${name} jest ${status === 'online' ? 'online' : 'offline'}`,
+        featureToggled: ({ feature, enabled }: { feature: string; enabled: boolean }) =>
+            `${feature} ${enabled ? 'włączona' : 'wyłączona'}`,
+    },
+
+    settingsAppearance: {
+        // Appearance settings screen
+        theme: 'Motyw',
+        themeDescription: 'Wybierz preferowaną kolorystykę',
+        themeOptions: {
+            adaptive: 'Adaptacyjny',
+            light: 'Jasny',
+            dark: 'Ciemny',
+        },
+        themeDescriptions: {
+            adaptive: 'Dopasuj do ustawień systemu',
+            light: 'Zawsze używaj jasnego motywu',
+            dark: 'Zawsze używaj ciemnego motywu',
+        },
+        display: 'Wyświetlanie',
+        displayDescription: 'Kontroluj układ i odstępy',
+        inlineToolCalls: 'Wbudowane wywołania narzędzi',
+        inlineToolCallsDescription: 'Wyświetlaj wywołania narzędzi bezpośrednio w wiadomościach czatu',
+        expandTodoLists: 'Rozwiń listy zadań',
+        expandTodoListsDescription: 'Pokazuj wszystkie zadania zamiast tylko zmian',
+        showLineNumbersInDiffs: 'Pokaż numery linii w różnicach',
+        showLineNumbersInDiffsDescription: 'Wyświetlaj numery linii w różnicach kodu',
+        showLineNumbersInToolViews: 'Pokaż numery linii w widokach narzędzi',
+        showLineNumbersInToolViewsDescription: 'Wyświetlaj numery linii w różnicach widoków narzędzi',
+        wrapLinesInDiffs: 'Zawijanie linii w różnicach',
+        wrapLinesInDiffsDescription: 'Zawijaj długie linie zamiast przewijania poziomego w widokach różnic',
+        alwaysShowContextSize: 'Zawsze pokazuj rozmiar kontekstu',
+        alwaysShowContextSizeDescription: 'Wyświetlaj użycie kontekstu nawet gdy nie jest blisko limitu',
+        avatarStyle: 'Styl awatara',
+        avatarStyleDescription: 'Wybierz wygląd awatara sesji',
+        avatarOptions: {
+            pixelated: 'Pikselowy',
+            gradient: 'Gradientowy',
+            brutalist: 'Brutalistyczny',
+        },
+        showFlavorIcons: 'Pokaż ikony dostawcy AI',
+        showFlavorIconsDescription: 'Wyświetlaj ikony dostawcy AI na awatarach sesji',
+        compactSessionView: 'Kompaktowy widok sesji',
+        compactSessionViewDescription: 'Pokazuj aktywne sesje w bardziej zwartym układzie',
+    },
+
+    settingsFeatures: {
+        // Features settings screen
+        experiments: 'Eksperymenty',
+        experimentsDescription: 'Włącz eksperymentalne funkcje, które są nadal w rozwoju. Te funkcje mogą być niestabilne lub zmienić się bez ostrzeżenia.',
+        experimentalFeatures: 'Funkcje eksperymentalne',
+        experimentalFeaturesEnabled: 'Funkcje eksperymentalne włączone',
+        experimentalFeaturesDisabled: 'Używane tylko stabilne funkcje',
+        webFeatures: 'Funkcje webowe',
+        webFeaturesDescription: 'Funkcje dostępne tylko w wersji webowej aplikacji.',
+        commandPalette: 'Paleta poleceń',
+        commandPaletteEnabled: 'Naciśnij ⌘K, aby otworzyć',
+        commandPaletteDisabled: 'Szybki dostęp do poleceń wyłączony',
+        markdownCopyV2: 'Markdown Copy v2',
+        markdownCopyV2Subtitle: 'Długie naciśnięcie otwiera modal kopiowania',
+        hideInactiveSessions: 'Ukryj nieaktywne sesje',
+        hideInactiveSessionsSubtitle: 'Wyświetlaj tylko aktywne czaty na liście',
+    },
+
+    errors: {
+        networkError: 'Wystąpił błąd sieci',
+        serverError: 'Wystąpił błąd serwera',
+        unknownError: 'Wystąpił nieznany błąd',
+        connectionTimeout: 'Przekroczono czas oczekiwania na połączenie',
+        authenticationFailed: 'Uwierzytelnienie nie powiodło się',
+        permissionDenied: 'Brak uprawnień',
+        fileNotFound: 'Plik nie został znaleziony',
+        invalidFormat: 'Nieprawidłowy format',
+        operationFailed: 'Operacja nie powiodła się',
+        tryAgain: 'Spróbuj ponownie',
+        contactSupport: 'Skontaktuj się z pomocą techniczną, jeśli problem będzie się powtarzał',
+        sessionNotFound: 'Sesja nie została znaleziona',
+        voiceSessionFailed: 'Nie udało się uruchomić sesji głosowej',
+        oauthInitializationFailed: 'Nie udało się zainicjować przepływu OAuth',
+        tokenStorageFailed: 'Nie udało się zapisać tokenów uwierzytelniania',
+        oauthStateMismatch: 'Weryfikacja bezpieczeństwa nie powiodła się. Spróbuj ponownie',
+        tokenExchangeFailed: 'Nie udało się wymienić kodu autoryzacji',
+        oauthAuthorizationDenied: 'Autoryzacja została odrzucona',
+        webViewLoadFailed: 'Nie udało się załadować strony uwierzytelniania',
+        failedToLoadProfile: 'Nie udało się załadować profilu użytkownika',
+        userNotFound: 'Użytkownik nie został znaleziony',
+        sessionDeleted: 'Sesja została usunięta',
+        sessionDeletedDescription: 'Ta sesja została trwale usunięta',
+
+        // Error functions with context
+        fieldError: ({ field, reason }: { field: string; reason: string }) =>
+            `${field}: ${reason}`,
+        validationError: ({ field, min, max }: { field: string; min: number; max: number }) =>
+            `${field} musi być między ${min} a ${max}`,
+        retryIn: ({ seconds }: { seconds: number }) =>
+            `Ponów próbę za ${seconds} ${plural({ count: seconds, one: 'sekundę', few: 'sekundy', many: 'sekund' })}`,
+        errorWithCode: ({ message, code }: { message: string; code: number | string }) =>
+            `${message} (Błąd ${code})`,
+        disconnectServiceFailed: ({ service }: { service: string }) => 
+            `Nie udało się rozłączyć ${service}`,
+        connectServiceFailed: ({ service }: { service: string }) =>
+            `Nie udało się połączyć z ${service}. Spróbuj ponownie.`,
+        failedToLoadFriends: 'Nie udało się załadować listy przyjaciół',
+        failedToAcceptRequest: 'Nie udało się zaakceptować zaproszenia do znajomych',
+        failedToRejectRequest: 'Nie udało się odrzucić zaproszenia do znajomych',
+        failedToRemoveFriend: 'Nie udało się usunąć przyjaciela',
+        searchFailed: 'Wyszukiwanie nie powiodło się. Spróbuj ponownie.',
+        failedToSendRequest: 'Nie udało się wysłać zaproszenia do znajomych',
+    },
+
+    newSession: {
+        // Used by new-session screen and launch flows
+        title: 'Rozpocznij nową sesję',
+        noMachinesFound: 'Nie znaleziono maszyn. Najpierw uruchom sesję aha na swoim komputerze.',
+        allMachinesOffline: 'Wszystkie maszyny są offline',
+        machineDetails: 'Zobacz szczegóły maszyny →',
+        directoryDoesNotExist: 'Katalog nie został znaleziony',
+        createDirectoryConfirm: ({ directory }: { directory: string }) => `Katalog ${directory} nie istnieje. Czy chcesz go utworzyć?`,
+        sessionStarted: 'Sesja rozpoczęta',
+        sessionStartedMessage: 'Sesja została pomyślnie rozpoczęta.',
+        sessionSpawningFailed: 'Tworzenie sesji nie powiodło się - nie zwrócono ID sesji.',
+        failedToStart: 'Nie udało się uruchomić sesji. Upewnij się, że daemon działa na docelowej maszynie.',
+        sessionTimeout: 'Przekroczono czas uruchamiania sesji. Maszyna może działać wolno lub daemon może nie odpowiadać.',
+        notConnectedToServer: 'Brak połączenia z serwerem. Sprawdź połączenie internetowe.',
+        startingSession: 'Rozpoczynanie sesji...',
+        startNewSessionInFolder: 'Nowa sesja tutaj',
+        noMachineSelected: 'Proszę wybrać maszynę do rozpoczęcia sesji',
+        noPathSelected: 'Proszę wybrać katalog do rozpoczęcia sesji',
+        sessionType: {
+            title: 'Typ sesji',
+            simple: 'Prosta',
+            worktree: 'Worktree',
+            comingSoon: 'Wkrótce dostępne',
+        },
+        worktree: {
+            creating: ({ name }: { name: string }) => `Tworzenie worktree '${name}'...`,
+            notGitRepo: 'Worktree wymaga repozytorium git',
+            failed: ({ error }: { error: string }) => `Nie udało się utworzyć worktree: ${error}`,
+            success: 'Worktree został utworzony pomyślnie',
+        }
+    },
+
+    sessionHistory: {
+        // Used by session history screen
+        title: 'Historia sesji',
+        empty: 'Nie znaleziono sesji',
+        today: 'Dzisiaj',
+        yesterday: 'Wczoraj',
+        daysAgo: ({ count }: { count: number }) => `${count} ${plural({ count, one: 'dzień', few: 'dni', many: 'dni' })} temu`,
+        viewAll: 'Zobacz wszystkie sesje',
+    },
+
+    session: {
+        inputPlaceholder: 'Wpisz wiadomość...',
+    },
+
+    commandPalette: {
+        placeholder: 'Wpisz polecenie lub wyszukaj...',
+    },
+
+    server: {
+        // Used by Server Configuration screen (app/(app)/server.tsx)
+        serverConfiguration: 'Konfiguracja serwera',
+        enterServerUrl: 'Proszę wprowadzić URL serwera',
+        notValidHappyServer: 'To nie jest prawidłowy aha server',
+        changeServer: 'Zmień serwer',
+        continueWithServer: 'Kontynuować z tym serwerem?',
+        resetToDefault: 'Resetuj do domyślnego',
+        resetServerDefault: 'Zresetować serwer do domyślnego?',
+        validating: 'Sprawdzanie...',
+        validatingServer: 'Sprawdzanie serwera...',
+        serverReturnedError: 'Serwer zwrócił błąd',
+        failedToConnectToServer: 'Nie udało się połączyć z serwerem',
+        currentlyUsingCustomServer: 'Aktualnie używany jest niestandardowy serwer',
+        customServerUrlLabel: 'URL niestandardowego serwera',
+        advancedFeatureFooter: 'To jest zaawansowana funkcja. Zmieniaj serwer tylko jeśli wiesz, co robisz. Po zmianie serwera będziesz musiał się wylogować i zalogować ponownie.'
+    },
+
+    sessionInfo: {
+        // Used by Session Info screen (app/(app)/session/[id]/info.tsx)
+        killSession: 'Zakończ sesję',
+        killSessionConfirm: 'Czy na pewno chcesz zakończyć tę sesję?',
+        archiveSession: 'Zarchiwizuj sesję',
+        archiveSessionConfirm: 'Czy na pewno chcesz zarchiwizować tę sesję?',
+        happySessionIdCopied: 'aha session ID skopiowane do schowka',
+        failedToCopySessionId: 'Nie udało się skopiować aha session ID',
+        happySessionId: 'aha session ID',
+        claudeCodeSessionId: 'ID sesji Claude Code',
+        claudeCodeSessionIdCopied: 'ID sesji Claude Code skopiowane do schowka',
+        aiProvider: 'Dostawca AI',
+        failedToCopyClaudeCodeSessionId: 'Nie udało się skopiować ID sesji Claude Code',
+        metadataCopied: 'Metadane skopiowane do schowka',
+        failedToCopyMetadata: 'Nie udało się skopiować metadanych',
+        failedToKillSession: 'Nie udało się zakończyć sesji',
+        failedToArchiveSession: 'Nie udało się zarchiwizować sesji',
+        connectionStatus: 'Status połączenia',
+        created: 'Utworzono',
+        lastUpdated: 'Ostatnia aktualizacja',
+        sequence: 'Sekwencja',
+        quickActions: 'Szybkie akcje',
+        viewMachine: 'Zobacz maszynę',
+        viewMachineSubtitle: 'Zobacz szczegóły maszyny i sesje',
+        killSessionSubtitle: 'Natychmiastowo zakończ sesję',
+        archiveSessionSubtitle: 'Zarchiwizuj tę sesję i zatrzymaj ją',
+        metadata: 'Metadane',
+        host: 'Host',
+        path: 'Ścieżka',
+        operatingSystem: 'System operacyjny',
+        processId: 'ID procesu',
+        happyHome: 'aha home',
+        copyMetadata: 'Kopiuj metadane',
+        agentState: 'Stan agenta',
+        controlledByUser: 'Kontrolowany przez użytkownika',
+        pendingRequests: 'Oczekujące żądania',
+        activity: 'Aktywność',
+        thinking: 'Myśli',
+        thinkingSince: 'Myśli od',
+        cliVersion: 'Wersja CLI',
+        cliVersionOutdated: 'Wymagana aktualizacja CLI',
+        cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
+            `Zainstalowana wersja ${currentVersion}. Zaktualizuj do ${requiredVersion} lub nowszej`,
+        updateCliInstructions: 'Proszę uruchomić npm install -g aha-coder@latest',
+        deleteSession: 'Usuń sesję',
+        deleteSessionSubtitle: 'Trwale usuń tę sesję',
+        deleteSessionConfirm: 'Usunąć sesję na stałe?',
+        deleteSessionWarning: 'Ta operacja jest nieodwracalna. Wszystkie wiadomości i dane powiązane z tą sesją zostaną trwale usunięte.',
+        failedToDeleteSession: 'Nie udało się usunąć sesji',
+        sessionDeleted: 'Sesja została pomyślnie usunięta',
+    },
+
+    components: {
+        emptyMainScreen: {
+            // Used by EmptyMainScreen component
+            readyToCode: 'Gotowy do kodowania?',
+            installCli: 'Zainstaluj aha CLI',
+            runIt: 'Uruchom je',
+            scanQrCode: 'Zeskanuj kod QR',
+            openCamera: 'Otwórz kamerę',
+        },
+    },
+
+    agentInput: {
+        permissionMode: {
+            title: 'TRYB UPRAWNIEŃ',
+            default: 'Domyślny',
+            acceptEdits: 'Akceptuj edycje',
+            plan: 'Tryb planowania',
+            bypassPermissions: 'Tryb YOLO',
+            badgeAcceptAllEdits: 'Akceptuj wszystkie edycje',
+            badgeBypassAllPermissions: 'Omiń wszystkie uprawnienia',
+            badgePlanMode: 'Tryb planowania',
+        },
+        agent: {
+            claude: 'Claude',
+            codex: 'Codex',
+        },
+        model: {
+            title: 'MODEL',
+            default: 'Użyj ustawień CLI',
+            adaptiveUsage: 'Opus do 50% użycia, potem Sonnet',
+            sonnet: 'Sonnet',
+            opus: 'Opus',
+        },
+        codexPermissionMode: {
+            title: 'TRYB UPRAWNIEŃ CODEX',
+            default: 'Ustawienia CLI',
+            readOnly: 'Read Only Mode',
+            safeYolo: 'Safe YOLO',
+            yolo: 'YOLO',
+            badgeReadOnly: 'Read Only Mode',
+            badgeSafeYolo: 'Safe YOLO',
+            badgeYolo: 'YOLO',
+        },
+        codexModel: {
+            title: 'MODEL CODEX',
+            gpt5CodexLow: 'gpt-5-codex low',
+            gpt5CodexMedium: 'gpt-5-codex medium',
+            gpt5CodexHigh: 'gpt-5-codex high',
+            gpt5Minimal: 'GPT-5 Minimalny',
+            gpt5Low: 'GPT-5 Niski',
+            gpt5Medium: 'GPT-5 Średni',
+            gpt5High: 'GPT-5 Wysoki',
+        },
+        context: {
+            remaining: ({ percent }: { percent: number }) => `Pozostało ${percent}%`,
+        },
+        suggestion: {
+            fileLabel: 'PLIK',
+            folderLabel: 'FOLDER',
+        },
+        noMachinesAvailable: 'Brak maszyn',
+    },
+
+    machineLauncher: {
+        showLess: 'Pokaż mniej',
+        showAll: ({ count }: { count: number }) => `Pokaż wszystkie (${count} ${plural({ count, one: 'ścieżka', few: 'ścieżki', many: 'ścieżek' })})`,
+        enterCustomPath: 'Wprowadź niestandardową ścieżkę',
+        offlineUnableToSpawn: 'Nie można utworzyć nowej sesji, offline',
+    },
+
+    sidebar: {
+        sessionsTitle: 'aha',
+    },
+
+    toolView: {
+        input: 'Wejście',
+        output: 'Wyjście',
+    },
+
+    tools: {
+        fullView: {
+            description: 'Opis',
+            inputParams: 'Parametry wejściowe',
+            output: 'Wyjście',
+            error: 'Błąd',
+            completed: 'Narzędzie ukończone pomyślnie',
+            noOutput: 'Nie wygenerowano żadnego wyjścia',
+            running: 'Narzędzie działa...',
+            rawJsonDevMode: 'Surowy JSON (tryb deweloperski)',
+        },
+        taskView: {
+            initializing: 'Inicjalizacja agenta...',
+            moreTools: ({ count }: { count: number }) => `+${count} ${plural({ count, one: 'więcej narzędzie', few: 'więcej narzędzia', many: 'więcej narzędzi' })}`,
+        },
+        multiEdit: {
+            editNumber: ({ index, total }: { index: number; total: number }) => `Edycja ${index} z ${total}`,
+            replaceAll: 'Zamień wszystkie',
+        },
+        names: {
+            task: 'Zadanie',
+            terminal: 'Terminal',
+            searchFiles: 'Wyszukaj pliki',
+            search: 'Wyszukaj',
+            searchContent: 'Wyszukaj zawartość',
+            listFiles: 'Lista plików',
+            planProposal: 'Propozycja planu',
+            readFile: 'Czytaj plik',
+            editFile: 'Edytuj plik',
+            writeFile: 'Zapisz plik',
+            fetchUrl: 'Pobierz URL',
+            readNotebook: 'Czytaj notatnik',
+            editNotebook: 'Edytuj notatnik',
+            todoList: 'Lista zadań',
+            webSearch: 'Wyszukiwanie w sieci',
+            reasoning: 'Rozumowanie',
+            applyChanges: 'Zaktualizuj plik',
+            viewDiff: 'Bieżące zmiany pliku',
+        },
+        desc: {
+            terminalCmd: ({ cmd }: { cmd: string }) => `Terminal(cmd: ${cmd})`,
+            searchPattern: ({ pattern }: { pattern: string }) => `Wyszukaj(wzorzec: ${pattern})`,
+            searchPath: ({ basename }: { basename: string }) => `Wyszukaj(ścieżka: ${basename})`,
+            fetchUrlHost: ({ host }: { host: string }) => `Pobierz URL(url: ${host})`,
+            editNotebookMode: ({ path, mode }: { path: string; mode: string }) => `Edytuj notatnik(plik: ${path}, tryb: ${mode})`,
+            todoListCount: ({ count }: { count: number }) => `Lista zadań(liczba: ${count})`,
+            webSearchQuery: ({ query }: { query: string }) => `Wyszukiwanie w sieci(zapytanie: ${query})`,
+            grepPattern: ({ pattern }: { pattern: string }) => `grep(wzorzec: ${pattern})`,
+            multiEditEdits: ({ path, count }: { path: string; count: number }) => `${path} (${count} ${plural({ count, one: 'edycja', few: 'edycje', many: 'edycji' })})`,
+            readingFile: ({ file }: { file: string }) => `Odczytywanie ${file}`,
+            writingFile: ({ file }: { file: string }) => `Zapisywanie ${file}`,
+            modifyingFile: ({ file }: { file: string }) => `Modyfikowanie ${file}`,
+            modifyingFiles: ({ count }: { count: number }) => `Modyfikowanie ${count} ${plural({ count, one: 'pliku', few: 'plików', many: 'plików' })}`,
+            modifyingMultipleFiles: ({ file, count }: { file: string; count: number }) => `${file} i ${count} ${plural({ count, one: 'więcej', few: 'więcej', many: 'więcej' })}`,
+            showingDiff: 'Pokazywanie zmian',
+        }
+    },
+
+    files: {
+        searchPlaceholder: 'Wyszukaj pliki...',
+        detachedHead: 'odłączony HEAD',
+        summary: ({ staged, unstaged }: { staged: number; unstaged: number }) => `${staged} przygotowanych • ${unstaged} nieprzygotowanych`,
+        notRepo: 'To nie jest repozytorium git',
+        notUnderGit: 'Ten katalog nie jest pod kontrolą wersji git',
+        searching: 'Wyszukiwanie plików...',
+        noFilesFound: 'Nie znaleziono plików',
+        noFilesInProject: 'Brak plików w projekcie',
+        tryDifferentTerm: 'Spróbuj innego terminu wyszukiwania',
+        searchResults: ({ count }: { count: number }) => `Wyniki wyszukiwania (${count})`,
+        projectRoot: 'Katalog główny projektu',
+        stagedChanges: ({ count }: { count: number }) => `Przygotowane zmiany (${count})`,
+        unstagedChanges: ({ count }: { count: number }) => `Nieprzygotowane zmiany (${count})`,
+        // File viewer strings
+        loadingFile: ({ fileName }: { fileName: string }) => `Ładowanie ${fileName}...`,
+        binaryFile: 'Plik binarny',
+        cannotDisplayBinary: 'Nie można wyświetlić zawartości pliku binarnego',
+        diff: 'Różnice',
+        file: 'Plik',
+        fileEmpty: 'Plik jest pusty',
+        noChanges: 'Brak zmian do wyświetlenia',
+    },
+
+    settingsVoice: {
+        // Voice settings screen
+        languageTitle: 'Język',
+        languageDescription: 'Wybierz preferowany język dla interakcji z asystentem głosowym. To ustawienie synchronizuje się na wszystkich Twoich urządzeniach.',
+        preferredLanguage: 'Preferowany język',
+        preferredLanguageSubtitle: 'Język używany do odpowiedzi asystenta głosowego',
+        language: {
+            searchPlaceholder: 'Wyszukaj języki...',
+            title: 'Języki',
+            footer: ({ count }: { count: number }) => `Dostępnych ${count} ${plural({ count, one: 'język', few: 'języki', many: 'języków' })}`,
+            autoDetect: 'Automatyczne wykrywanie',
+        }
+    },
+
+    settingsAccount: {
+        // Account settings screen
+        accountInformation: 'Informacje o koncie',
+        status: 'Status',
+        statusActive: 'Aktywny',
+        statusNotAuthenticated: 'Nie uwierzytelniony',
+        anonymousId: 'ID anonimowe',
+        publicId: 'ID publiczne',
+        notAvailable: 'Niedostępne',
+        linkNewDevice: 'Połącz nowe urządzenie',
+        linkNewDeviceSubtitle: 'Zeskanuj kod QR, aby połączyć urządzenie',
+        profile: 'Profil',
+        name: 'Nazwa',
+        github: 'GitHub',
+        tapToDisconnect: 'Dotknij, aby rozłączyć',
+        server: 'Serwer',
+        backup: 'Kopia zapasowa',
+        backupDescription: 'Twój klucz tajny to jedyny sposób na odzyskanie konta. Zapisz go w bezpiecznym miejscu, takim jak menedżer haseł.',
+        secretKey: 'Klucz tajny',
+        tapToReveal: 'Dotknij, aby pokazać',
+        tapToHide: 'Dotknij, aby ukryć',
+        secretKeyLabel: 'KLUCZ TAJNY (DOTKNIJ, ABY SKOPIOWAĆ)',
+        secretKeyCopied: 'Klucz tajny skopiowany do schowka. Przechowuj go w bezpiecznym miejscu!',
+        secretKeyCopyFailed: 'Nie udało się skopiować klucza tajnego',
+        privacy: 'Prywatność',
+        privacyDescription: 'Pomóż ulepszyć aplikację, udostępniając anonimowe dane o użytkowaniu. Nie zbieramy żadnych informacji osobistych.',
+        analytics: 'Analityka',
+        analyticsDisabled: 'Dane nie są udostępniane',
+        analyticsEnabled: 'Anonimowe dane o użytkowaniu są udostępniane',
+        dangerZone: 'Strefa niebezpieczna',
+        logout: 'Wyloguj',
+        logoutSubtitle: 'Wyloguj się i wyczyść dane lokalne',
+        logoutConfirm: 'Czy na pewno chcesz się wylogować? Upewnij się, że masz kopię zapasową klucza tajnego!',
+    },
+
+    settingsLanguage: {
+        // Language settings screen
+        title: 'Język',
+        description: 'Wybierz preferowany język interfejsu aplikacji. To ustawienie zostanie zsynchronizowane na wszystkich Twoich urządzeniach.',
+        currentLanguage: 'Aktualny język',
+        automatic: 'Automatycznie',
+        automaticSubtitle: 'Wykrywaj na podstawie ustawień urządzenia',
+        needsRestart: 'Język zmieniony',
+        needsRestartMessage: 'Aplikacja musi zostać uruchomiona ponownie, aby zastosować nowe ustawienia języka.',
+        restartNow: 'Uruchom ponownie',
+    },
+
+    connectButton: {
+        authenticate: 'Uwierzytelnij terminal',
+        authenticateWithUrlPaste: 'Uwierzytelnij terminal poprzez wklejenie URL',
+        pasteAuthUrl: 'Wklej URL uwierzytelnienia z terminala',
+    },
+
+    updateBanner: {
+        updateAvailable: 'Dostępna aktualizacja',
+        pressToApply: 'Naciśnij, aby zastosować aktualizację',
+        whatsNew: 'Co nowego',
+        seeLatest: 'Zobacz najnowsze aktualizacje i ulepszenia',
+        nativeUpdateAvailable: 'Dostępna aktualizacja aplikacji',
+        tapToUpdateAppStore: 'Naciśnij, aby zaktualizować w App Store',
+        tapToUpdatePlayStore: 'Naciśnij, aby zaktualizować w Sklepie Play',
+    },
+
+    changelog: {
+        // Used by the changelog screen
+        version: ({ version }: { version: number }) => `Wersja ${version}`,
+        noEntriesAvailable: 'Brak dostępnych wpisów dziennika zmian.',
+    },
+
+    terminal: {
+        // Used by terminal connection screens
+        webBrowserRequired: 'Wymagana przeglądarka internetowa',
+        webBrowserRequiredDescription: 'Linki połączenia terminala można otwierać tylko w przeglądarce internetowej ze względów bezpieczeństwa. Użyj skanera kodów QR lub otwórz ten link na komputerze.',
+        processingConnection: 'Przetwarzanie połączenia...',
+        invalidConnectionLink: 'Nieprawidłowy link połączenia',
+        invalidConnectionLinkDescription: 'Link połączenia jest nieprawidłowy lub go brakuje. Sprawdź URL i spróbuj ponownie.',
+        connectTerminal: 'Połącz terminal',
+        terminalRequestDescription: 'Terminal żąda połączenia z Twoim kontem aha. Pozwoli to terminalowi bezpiecznie wysyłać i odbierać wiadomości.',
+        connectionDetails: 'Szczegóły połączenia',
+        publicKey: 'Klucz publiczny',
+        encryption: 'Szyfrowanie',
+        endToEndEncrypted: 'Szyfrowanie end-to-end',
+        acceptConnection: 'Akceptuj połączenie',
+        connecting: 'Łączenie...',
+        reject: 'Odrzuć',
+        security: 'Bezpieczeństwo',
+        securityFooter: 'Ten link połączenia został bezpiecznie przetworzony w Twojej przeglądarce i nigdy nie został wysłany na żaden serwer. Twoje prywatne dane pozostaną bezpieczne i tylko Ty możesz odszyfrować wiadomości.',
+        securityFooterDevice: 'To połączenie zostało bezpiecznie przetworzone na Twoim urządzeniu i nigdy nie zostało wysłane na żaden serwer. Twoje prywatne dane pozostaną bezpieczne i tylko Ty możesz odszyfrować wiadomości.',
+        clientSideProcessing: 'Przetwarzanie po stronie klienta',
+        linkProcessedLocally: 'Link przetworzony lokalnie w przeglądarce',
+        linkProcessedOnDevice: 'Link przetworzony lokalnie na urządzeniu',
+    },
+
+    modals: {
+        // Used across connect flows and settings
+        authenticateTerminal: 'Uwierzytelnij terminal',
+        pasteUrlFromTerminal: 'Wklej URL uwierzytelnienia z terminala',
+        deviceLinkedSuccessfully: 'Urządzenie połączone pomyślnie',
+        terminalConnectedSuccessfully: 'Terminal połączony pomyślnie',
+        invalidAuthUrl: 'Nieprawidłowy URL uwierzytelnienia',
+        developerMode: 'Tryb deweloperski',
+        developerModeEnabled: 'Tryb deweloperski włączony',
+        developerModeDisabled: 'Tryb deweloperski wyłączony',
+        disconnectGithub: 'Rozłącz GitHub',
+        disconnectGithubConfirm: 'Czy na pewno chcesz rozłączyć swoje konto GitHub?',
+        disconnectService: ({ service }: { service: string }) => 
+            `Rozłącz ${service}`,
+        disconnectServiceConfirm: ({ service }: { service: string }) => 
+            `Czy na pewno chcesz rozłączyć ${service} ze swojego konta?`,
+        disconnect: 'Rozłącz',
+        failedToConnectTerminal: 'Nie udało się połączyć terminala',
+        cameraPermissionsRequiredToConnectTerminal: 'Uprawnienia do kamery są wymagane do połączenia terminala',
+        failedToLinkDevice: 'Nie udało się połączyć urządzenia',
+        cameraPermissionsRequiredToScanQr: 'Uprawnienia do kamery są wymagane do skanowania kodów QR'
+    },
+
+    navigation: {
+        // Navigation titles and screen headers
+        connectTerminal: 'Połącz terminal',
+        linkNewDevice: 'Połącz nowe urządzenie',
+        restoreWithSecretKey: 'Przywróć kluczem tajnym',
+        whatsNew: 'Co nowego',
+        friends: 'Przyjaciele',
+    },
+
+    welcome: {
+        // Main welcome screen for unauthenticated users
+        title: 'Mobilny klient Codex i Claude Code',
+        subtitle: 'Szyfrowanie end-to-end, a Twoje konto jest przechowywane tylko na Twoim urządzeniu.',
+        createAccount: 'Utwórz konto',
+        linkOrRestoreAccount: 'Połącz lub przywróć konto',
+        loginWithMobileApp: 'Zaloguj się przez aplikację mobilną',
+        scanToLink: 'Lub zeskanuj, aby połączyć urządzenie',
+        scanQrCode: 'Zeskanuj kod QR',
+        enterUrlManually: 'Wprowadź URL ręcznie',
+    },
+
+    review: {
+        // Used by utils/requestReview.ts
+        enjoyingApp: 'Podoba Ci się aplikacja?',
+        feedbackPrompt: 'Chcielibyśmy usłyszeć Twoją opinię!',
+        yesILoveIt: 'Tak, uwielbiam ją!',
+        notReally: 'Nie bardzo'
+    },
+
+    items: {
+        // Used by Item component for copy toast
+        copiedToClipboard: ({ label }: { label: string }) => `${label} skopiowano do schowka`
+    },
+
+    machine: {
+        offlineUnableToSpawn: 'Launcher wyłączony, gdy maszyna jest offline',
+        offlineHelp: '• Upewnij się, że komputer jest online\n• Uruchom `aha daemon status`, aby zdiagnozować\n• Czy używasz najnowszej wersji CLI? Zaktualizuj poleceniem `npm install -g aha-coder@latest`',
+        launchNewSessionInDirectory: 'Uruchom nową sesję w katalogu',
+        daemon: 'Daemon',
+        status: 'Status',
+        stopDaemon: 'Zatrzymaj daemon',
+        lastKnownPid: 'Ostatni znany PID',
+        lastKnownHttpPort: 'Ostatni znany port HTTP',
+        startedAt: 'Uruchomiony o',
+        cliVersion: 'Wersja CLI',
+        daemonStateVersion: 'Wersja stanu daemon',
+        activeSessions: ({ count }: { count: number }) => `Aktywne sesje (${count})`,
+        machineGroup: 'Maszyna',
+        host: 'Host',
+        machineId: 'ID maszyny',
+        username: 'Nazwa użytkownika',
+        homeDirectory: 'Katalog domowy',
+        platform: 'Platforma',
+        architecture: 'Architektura',
+        lastSeen: 'Ostatnio widziana',
+        never: 'Nigdy',
+        metadataVersion: 'Wersja metadanych',
+        untitledSession: 'Sesja bez nazwy',
+        back: 'Wstecz',
+    },
+
+    message: {
+        switchedToMode: ({ mode }: { mode: string }) => `Przełączono na tryb ${mode}`,
+        unknownEvent: 'Nieznane zdarzenie',
+        usageLimitUntil: ({ time }: { time: string }) => `Osiągnięto limit użycia do ${time}`,
+        unknownTime: 'nieznany czas',
+    },
+
+    codex: {
+        // Codex permission dialog buttons
+        permissions: {
+            yesForSession: 'Tak, i nie pytaj dla tej sesji',
+            stopAndExplain: 'Zatrzymaj i wyjaśnij, co zrobić',
+        }
+    },
+
+    claude: {
+        // Claude permission dialog buttons
+        permissions: {
+            yesAllowAllEdits: 'Tak, zezwól na wszystkie edycje podczas tej sesji',
+            yesForTool: 'Tak, nie pytaj ponownie dla tego narzędzia',
+            noTellClaude: 'Nie, i powiedz Claude co zrobić inaczej',
+        }
+    },
+
+    textSelection: {
+        // Text selection screen
+        selectText: 'Wybierz zakres tekstu',
+        title: 'Wybierz tekst',
+        noTextProvided: 'Nie podano tekstu',
+        textNotFound: 'Tekst nie został znaleziony lub wygasł',
+        textCopied: 'Tekst skopiowany do schowka',
+        failedToCopy: 'Nie udało się skopiować tekstu do schowka',
+        noTextToCopy: 'Brak tekstu do skopiowania',
+    },
+
+    artifacts: {
+        // Artifacts feature
+        title: 'Artefakty',
+        countSingular: '1 artefakt',
+        countPlural: ({ count }: { count: number }) => {
+            const n = Math.abs(count);
+            const n10 = n % 10;
+            const n100 = n % 100;
+            
+            // Polish plural rules: 1 (singular), 2-4 (few), 5+ (many)
+            if (n === 1) {
+                return `${count} artefakt`;
+            }
+            if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) {
+                return `${count} artefakty`;
+            }
+            return `${count} artefaktów`;
+        },
+        empty: 'Brak artefaktów',
+        emptyDescription: 'Utwórz pierwszy artefakt, aby rozpocząć',
+        new: 'Nowy artefakt',
+        edit: 'Edytuj artefakt',
+        delete: 'Usuń',
+        updateError: 'Nie udało się zaktualizować artefaktu. Spróbuj ponownie.',
+        notFound: 'Artefakt nie został znaleziony',
+        discardChanges: 'Odrzucić zmiany?',
+        discardChangesDescription: 'Masz niezapisane zmiany. Czy na pewno chcesz je odrzucić?',
+        deleteConfirm: 'Usunąć artefakt?',
+        deleteConfirmDescription: 'Tej operacji nie można cofnąć',
+        titleLabel: 'TYTUŁ',
+        titlePlaceholder: 'Wprowadź tytuł dla swojego artefaktu',
+        bodyLabel: 'TREŚĆ',
+        bodyPlaceholder: 'Napisz swoją treść tutaj...',
+        emptyFieldsError: 'Proszę wprowadzić tytuł lub treść',
+        createError: 'Nie udało się utworzyć artefaktu. Spróbuj ponownie.',
+        save: 'Zapisz',
+        saving: 'Zapisywanie...',
+        loading: 'Ładowanie artefaktów...',
+        error: 'Nie udało się załadować artefaktu',
+    },
+
+    friends: {
+        // Friends feature
+        title: 'Przyjaciele',
+        manageFriends: 'Zarządzaj swoimi przyjaciółmi i połączeniami',
+        searchTitle: 'Znajdź przyjaciół',
+        pendingRequests: 'Zaproszenia do znajomych',
+        myFriends: 'Moi przyjaciele',
+        noFriendsYet: 'Nie masz jeszcze żadnych przyjaciół',
+        findFriends: 'Znajdź przyjaciół',
+        remove: 'Usuń',
+        pendingRequest: 'Oczekujące',
+        sentOn: ({ date }: { date: string }) => `Wysłano ${date}`,
+        accept: 'Akceptuj',
+        reject: 'Odrzuć',
+        addFriend: 'Dodaj do znajomych',
+        alreadyFriends: 'Już jesteście znajomymi',
+        requestPending: 'Zaproszenie oczekuje',
+        searchInstructions: 'Wprowadź nazwę użytkownika, aby znaleźć przyjaciół',
+        searchPlaceholder: 'Wprowadź nazwę użytkownika...',
+        searching: 'Szukanie...',
+        userNotFound: 'Nie znaleziono użytkownika',
+        noUserFound: 'Nie znaleziono użytkownika o tej nazwie',
+        checkUsername: 'Sprawdź nazwę użytkownika i spróbuj ponownie',
+        howToFind: 'Jak znaleźć przyjaciół',
+        findInstructions: 'Szukaj przyjaciół po nazwie użytkownika. Zarówno ty, jak i twój przyjaciel musicie mieć połączony GitHub, aby wysyłać zaproszenia do znajomych.',
+        requestSent: 'Zaproszenie do znajomych wysłane!',
+        requestAccepted: 'Zaproszenie do znajomych zaakceptowane!',
+        requestRejected: 'Zaproszenie do znajomych odrzucone',
+        friendRemoved: 'Przyjaciel usunięty',
+        confirmRemove: 'Usuń przyjaciela',
+        confirmRemoveMessage: 'Czy na pewno chcesz usunąć tego przyjaciela?',
+        cannotAddYourself: 'Nie możesz wysłać zaproszenia do siebie',
+        bothMustHaveGithub: 'Obaj użytkownicy muszą mieć połączony GitHub, aby zostać przyjaciółmi',
+        status: {
+            none: 'Nie połączono',
+            requested: 'Zaproszenie wysłane',
+            pending: 'Zaproszenie oczekuje',
+            friend: 'Przyjaciele',
+            rejected: 'Odrzucone',
+        },
+        acceptRequest: 'Zaakceptuj zaproszenie',
+        removeFriend: 'Usuń z przyjaciół',
+        removeFriendConfirm: ({ name }: { name: string }) => `Czy na pewno chcesz usunąć ${name} z przyjaciół?`,
+        requestSentDescription: ({ name }: { name: string }) => `Twoje zaproszenie do grona przyjaciół zostało wysłane do ${name}`,
+        requestFriendship: 'Wyślij zaproszenie do znajomych',
+        cancelRequest: 'Anuluj zaproszenie do znajomych',
+        cancelRequestConfirm: ({ name }: { name: string }) => `Anulować zaproszenie do znajomych wysłane do ${name}?`,
+        denyRequest: 'Odrzuć zaproszenie',
+        nowFriendsWith: ({ name }: { name: string }) => `Teraz jesteś w gronie znajomych z ${name}`,
+    },
+
+    usage: {
+        // Usage panel strings
+        today: 'Dzisiaj',
+        last7Days: 'Ostatnie 7 dni',
+        last30Days: 'Ostatnie 30 dni',
+        totalTokens: 'Łącznie tokenów',
+        totalCost: 'Całkowity koszt',
+        tokens: 'Tokeny',
+        cost: 'Koszt',
+        usageOverTime: 'Użycie w czasie',
+        byModel: 'Według modelu',
+        noData: 'Brak danych o użyciu',
+    },
+
+    feed: {
+        // Feed notifications for friend requests and acceptances
+        friendRequestFrom: ({ name }: { name: string }) => `${name} wysłał Ci zaproszenie do znajomych`,
+        friendRequestGeneric: 'Nowe zaproszenie do znajomych',
+        friendAccepted: ({ name }: { name: string }) => `Jesteś teraz znajomym z ${name}`,
+        friendAcceptedGeneric: 'Zaproszenie do znajomych zaakceptowane',
+    },
+
+    teams: {
+        deleteConfirmTitle: 'Usuń Zespół',
+        deleteConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Czy na pewno chcesz usunąć ten zespół i ${count} powiązanych ${sessionText}? Tej operacji nie można cofnąć.`,
+        batchArchiveTitle: 'Archiwizuj zespoły',
+        batchArchiveMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Archiwizować ${teamCount} zespół(y) i ${sessionCount} powiązanych sesji?`,
+        batchArchiveSuccess: ({ count }: { count: number }) => `Zarchiwizowano ${count} zespół(y).`,
+        batchArchiveError: 'Nie udało się zarchiwizować zespołów. Spróbuj ponownie.',
+        batchDeleteTitle: 'Usuń zespoły',
+        batchDeleteMessage: ({ teamCount, sessionCount }: { teamCount: number; sessionCount: number }) =>
+            `Trwale usunąć ${teamCount} zespół(y) i ${sessionCount} powiązanych sesji? Tej akcji nie można cofnąć.`,
+        batchDeleteSuccess: ({ count }: { count: number }) => `Usunięto ${count} zespół(y).`,
+        batchDeleteError: 'Nie udało się usunąć zespołów. Spróbuj ponownie.',
+        archive: 'Archiwizuj',
+        delete: 'Usuń',
+        teamNotFound: 'Nie znaleziono zespołu',
+        deleteError: 'Nie udało się usunąć zespołu. Spróbuj ponownie.',
+    },
+
+    // TODO: Add Polish translations for memory, rules, and teamRoles
+    // Using English placeholders for now
+    memory: {
+        title: 'Memory Library',
+        memory: 'Memory',
+        createMemory: 'Create Memory',
+        editMemory: 'Edit Memory',
+        deleteMemory: 'Delete Memory',
+        memoryDetails: 'Memory Details',
+        searchMemories: 'Search Memories',
+        filterMemories: 'Filter Memories',
+        memoryType: 'Type',
+        memoryCategory: 'Category',
+        memoryTags: 'Tags',
+        memoryImportance: 'Importance',
+        memoryContent: 'Content',
+        memoryCreated: 'Created',
+        memoryUpdated: 'Updated',
+        memoryAccessCount: 'Access Count',
+        typeFact: 'Fact',
+        typePreference: 'Preference',
+        typeDecision: 'Decision',
+        typeKnowledge: 'Knowledge',
+        scopeGlobal: 'Global',
+        scopeTeam: 'Team',
+        scopeAgent: 'Agent',
+        noMemories: 'No Memories',
+        addMemoryTag: 'Add Tag',
+        searchPlaceholder: 'Search memories by keyword, tag, or category...',
+        importanceLevel: 'Importance',
+        accessPattern: 'Access Pattern',
+        recentlyAccessed: 'Recently Accessed',
+        mostAccessed: 'Most Accessed',
+        relatedMemories: 'Related Memories',
+        linkMemory: 'Link Memory',
+        memorySettings: 'Memory Settings',
+        exportMemory: 'Export Memory',
+        importMemory: 'Import Memory',
+        createSuccess: 'Memory created successfully',
+        updateSuccess: 'Memory updated successfully',
+        deleteSuccess: 'Memory deleted successfully',
+        deleteConfirm: 'Are you sure you want to delete this memory?',
+        createError: 'Failed to create memory. Please try again.',
+        updateError: 'Failed to update memory. Please try again.',
+        deleteError: 'Failed to delete memory. Please try again.',
+    },
+
+    rules: {
+        title: 'Global Rules',
+        rule: 'Rule',
+        createRule: 'Create Rule',
+        editRule: 'Edit Rule',
+        deleteRule: 'Delete Rule',
+        ruleDetails: 'Rule Details',
+        enableRule: 'Enable Rule',
+        disableRule: 'Disable Rule',
+        ruleCategory: 'Category',
+        rulePriority: 'Priority',
+        ruleDescription: 'Description',
+        ruleEnabled: 'Enabled',
+        ruleDisabled: 'Disabled',
+        categoryCommunication: 'Communication',
+        categoryBehavior: 'Behavior',
+        categoryCoding: 'Coding',
+        categorySecurity: 'Security',
+        priorityLow: 'Low',
+        priorityMedium: 'Medium',
+        priorityHigh: 'High',
+        scopeGlobal: 'Global',
+        scopeTeam: 'Team',
+        scopeAgent: 'Agent',
+        scopeSession: 'Session',
+        noRules: 'No Rules',
+        addRule: 'Add Rule',
+        ruleSettings: 'Rule Settings',
+        ruleCompliance: 'Rule Compliance',
+        compliant: 'Compliant',
+        nonCompliant: 'Non-Compliant',
+        activeRules: 'Active Rules',
+        inactiveRules: 'Inactive Rules',
+        ruleHistory: 'Rule History',
+        ruleTemplate: 'Rule Template',
+        saveAsTemplate: 'Save as Template',
+        fromTemplate: 'From Template',
+        createSuccess: 'Rule created successfully',
+        updateSuccess: 'Rule updated successfully',
+        deleteSuccess: 'Rule deleted successfully',
+        enableSuccess: 'Rule enabled successfully',
+        disableSuccess: 'Rule disabled successfully',
+        deleteConfirm: 'Are you sure you want to delete this rule?',
+        createError: 'Failed to create rule. Please try again.',
+        updateError: 'Failed to update rule. Please try again.',
+        deleteError: 'Failed to delete rule. Please try again.',
+        enableError: 'Failed to enable rule. Please try again.',
+        disableError: 'Failed to disable rule. Please try again.',
+    },
+
+    teamRoles: {
+        user: { title: 'User', summary: 'Human user who provides requirements, reviews results, and makes final decisions', responsibilities: ['Provide project requirements and goals', 'Review team output and work results', 'Make key decisions and approvals', 'Provide feedback and guidance', 'Answer team member questions'], abilityBoundaries: ['Does not directly use MCP tools', 'Interacts with team through chat interface'], handoffProtocol: ['Provide clear requirement descriptions to Master', 'Respond promptly to team questions and requests', 'Review completed work and provide feedback'], protocol: ['You are the human user, the ultimate decision maker for the team.', '1. Provide clear requirements to Master.', '2. Respond to team member questions.', '3. Review work results and provide feedback.'] },
+        master: { title: 'Master', summary: 'Team leader who creates tasks, assigns work, and coordinates the team', responsibilities: ['Break down user requests into actionable tasks', 'Assign tasks to team members based on their roles', 'Monitor team progress and resolve blockers', 'Coordinate handoffs between team members', 'Maintain Kanban board accuracy', 'Make final decisions on task priorities'], abilityBoundaries: ['Always use create_task tool to create work items', 'Do not implement features directly - delegate to workers', 'Coordinate major architectural decisions with team'], handoffProtocol: ['Create tasks with clear acceptance criteria', 'Assign tasks to appropriate roles (builder, framer, etc.)', 'Monitor progress and unblock team members'], protocol: ['⚠️ CRITICAL: You are the MASTER. You CREATE and ASSIGN tasks.', "⚠️ CRITICAL: Use 'aha__create_task' to create tasks, NOT text plans.", '1. ANALYZE the user request.', '2. BREAK DOWN into specific, actionable tasks.', "3. CALL 'aha__create_task' for EACH item. Set assigneeRole appropriately.", "4. Use 'aha__send_team_message' to notify the team.", "5. Monitor progress with 'aha__list_tasks'.", "6. Resolve blockers with 'aha__resolve_blocker'."] },
+        orchestrator: { title: 'Orchestrator', summary: 'Plans, delegates, and coordinates team workflows', responsibilities: ['Break down user requests into actionable tasks', 'Assign tasks based on role expertise', 'Monitor team progress and coordinate handoffs', 'Unblock team members and resolve conflicts', 'Maintain Kanban board accuracy', 'Consult architect for complex decisions'], abilityBoundaries: ['Never implement features without creating tasks first', 'Do not make unilateral architectural decisions without architect consultation', 'Coordinate with architect before major changes to code structure', 'Consult architect on complex decisions'], handoffProtocol: ['Present task distribution to architect for review before execution begins', 'Document decisions and rationale for all major changes', 'Coordinate testing strategy with qa-engineer'], protocol: ['⚠️ CRITICAL: You are the ONLY agent allowed to plan and distribute work.', "⚠️ CRITICAL: Text-based plans in chat are USELESS. You MUST use the 'create_task' tool.", '1. ANALYZE the user request.', '2. BREAK DOWN into specific, actionable tasks.', "3. CALL 'create_task' for EACH item. Assign to 'implementer' (backend) or 'architect' (frontend).", "4. ONLY AFTER creating tasks, use 'send_team_message' to notify the team: 'Tasks created. Please check Kanban.'", '5. IF you see a Worker trying to plan or assign tasks, STOP THEM immediately.', '6. IF the Kanban board is empty, you are failing. Create tasks immediately.'] },
+        architect: { title: 'Technical Architect', summary: 'Makes high-level architectural decisions and ensures technical coherence', responsibilities: ['Review code architecture and propose improvements', 'Define technical standards and best practices', 'Validate architectural decisions before implementation', 'Coordinate with implementer on design handoffs', 'Identify and resolve technical blockers', 'Document architectural decisions and rationale'], abilityBoundaries: ['Does not implement features without architect approval', 'Never merge to production without implementer sign-off', 'Focus on architecture, not implementation details', 'Coordinate all major changes through orchestrator'], handoffProtocol: ['Provide technical specifications and constraints', 'Review implementer design proposals before approval', 'Validate that acceptance criteria are met', 'Coordinate testing strategy with qa-engineer'], protocol: ['⚠️ CRITICAL: You are an ADVISORY role. You provide technical guidance.', '1. Review architectural proposals from implementer and orchestrator.', '2. Validate designs against best practices and performance requirements.', '3. APPROVE or REQUEST CHANGES before implementation begins.', '4. Document architectural decisions with clear rationale.', '5. Coordinate with qa-engineer for testing strategy.', '6. Focus on system architecture, libraries, and data flow.'] },
+        researcher: { title: 'Code Researcher', summary: 'Explores codebase, gathers information, and provides context for decisions', responsibilities: ['Search and analyze codebase to answer team questions', 'Investigate dependencies, file structures, and implementation details', 'Provide quick reconnaissance before tasks are assigned', 'Research external documentation and APIs', 'Document findings with clear citations to files/lines'], abilityBoundaries: ['Does not make changes to codebase', 'Read-only access to files and documentation', 'Use search tools (grep, find) to explore codebase'], handoffProtocol: ['Present findings via team message with clear citations to files/lines', 'Escalate if unable to locate requested information after reasonable effort'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers.', '2. Use search tools (grep, find, ast-grep) to explore codebase.', '3. Provide clear, concise answers with file paths and line numbers.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
+        implementer: { title: 'Implementation Engineer', summary: 'Owns implementation, testing, and integration of features', responsibilities: ['Implement scoped work, keep diffs small, and drive tasks to completion', 'Keep Kanban history current: in-progress updates, blockers, and completion notes', 'Signal when code is ready for review with validation steps', 'Coordinate with architect for technical decisions', 'If blocked for >30 minutes, leave Kanban update tagging orchestrator'], abilityBoundaries: ['Do not redefine architecture alone—loop in architect when changes exceed agreed outline', 'Avoid reprioritizing cards or changing acceptance criteria without architect sign-off', 'Focus on clean, maintainable code that follows architectural guidelines'], handoffProtocol: ['Signal when code is ready for review, include validation steps, and request verifier', 'If blocked for >30 minutes, leave Kanban update tagging architect', 'Coordinate with architect for technical decisions'], protocol: ['⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.', '1. IGNORE requests from other Workers.', '2. IF you have an idea, propose it to ARCHITECT before implementing.', "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.", "4. WHEN working, update task status to 'in_progress' using 'update_task'.", '5. Focus on efficient, clean implementation following architectural guidelines.'] },
+        'qa-engineer': { title: 'Quality Assurance Engineer', summary: 'Tests features, validates functionality, and ensures quality standards', responsibilities: ['Write and run tests to verify implementations', 'Check edge cases and report bugs', 'Validate that acceptance criteria are met'], abilityBoundaries: ['Does not merge code to production', 'Reports issues through proper channels (team chat, task comments)', 'Creates test files only in /tests/ or /__tests__/'], handoffProtocol: ['Coordinate with implementer to reproduce issues', 'Provide detailed bug reports with steps to reproduce'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers.', '2. Run tests and check functionality.', '3. Report findings via team message or task comments.'] },
+        observer: { title: 'Project Observer', summary: 'Maintains project documentation, changelogs, and knowledge base', responsibilities: ['Update README files, API docs, and inline documentation', 'Maintain changelog and project history', 'Document decisions, architecture patterns, and workflows', 'Request context from implementers for accurate documentation', 'Tag relevant team members for review of documentation changes'], abilityBoundaries: ['Does not edit implementation code', 'Only edits documentation files (README.md, docs/, etc.)'], handoffProtocol: ['Request context from implementers for accurate documentation', 'Tag relevant team members for review of documentation changes'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers.', '2. Focus on documentation (.md files, docs/, comments).', '3. Use view/edit tools to update documentation.'] },
+        framer: { title: 'Framing Engineer', summary: 'Turns goals into implementation-ready designs, spikes, and pull requests.', responsibilities: ['Break work into actionable steps, prepare scaffolding, and align dependencies.', 'Partner with builders to review technical decisions before delivery begins.'], abilityBoundaries: ['Do not merge to production; hand off finished work to builders for polish and verification.', 'Avoid redefining priorities; raise scope changes back to the master role.'], handoffProtocol: ['Document design decisions and constraints directly on the task before handoff.', 'Pair with the assigned builder for the first implementation turn.'], protocol: ['⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. IF you have an idea, propose it to MASTER before touching code.', "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.", "4. WHEN working, update task status to 'in_progress' using 'update_task'.", '5. Focus on client-side code (kanban app, React Native).', '6. Do NOT respond to general user chat unless explicitly mentioned.'] },
+        builder: { title: 'Builder / Executor', summary: 'Owns implementation, testing, and integration for the slices coming out of framing.', responsibilities: ['Implement the scoped work, keep diffs small, and drive tasks to completion.', 'Keep the Kanban history current: in-progress updates, blockers, and completion notes.'], abilityBoundaries: ['Do not redefine architecture alone—loop in framers when changes exceed the agreed outline.', 'Avoid reprioritizing cards or changing acceptance criteria without master sign-off.'], handoffProtocol: ['Signal when code is ready for review, include validation steps, and request a verifier.', 'If blocked for >30 minutes, leave a Kanban update tagging the master role.'], protocol: ['⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. IF you have an idea, propose it to MASTER before implementing.', "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.", "4. WHEN working, update task status to 'in_progress' using 'update_task'.", '5. Focus on server-side code (aha-server, API routes).', '6. Do NOT respond to general user chat unless explicitly mentioned.'] },
+        scout: { title: 'Scout / Explorer', summary: 'Explores codebase, gathers information, and provides context for team decisions.', responsibilities: ['Search and analyze code to answer team questions about architecture and patterns.', 'Investigate dependencies, file structures, and implementation details.', 'Provide quick reconnaissance before tasks are assigned.'], abilityBoundaries: ['Does not make changes to the codebase.', 'Read-only access to files and documentation.'], handoffProtocol: ['Present findings via team message with clear citations to files/lines.', 'Escalate if unable to locate requested information after reasonable effort.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Use search tools (grep, find) to explore the codebase.', '3. Provide clear, concise answers with file paths and line numbers.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
+        scribe: { title: 'Scribe / Documenter', summary: 'Maintains project documentation, changelogs, and knowledge base.', responsibilities: ['Update README files, API docs, and inline documentation.', 'Maintain changelog and project history.', 'Document decisions, architecture patterns, and workflows.'], abilityBoundaries: ['Does not edit implementation code.', 'Only edits documentation files (README.md, docs/, etc.)'], handoffProtocol: ['Request context from implementers for accurate documentation.', 'Tag relevant team members for review of documentation changes.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Focus on documentation (.md files, docs/, comments).', '3. Use view/edit tools to update documentation.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
+        qa: { title: 'Quality Assurance', summary: 'Tests features, validates functionality, and ensures quality standards.', responsibilities: ['Write and run tests to verify implementations.', 'Check edge cases and report bugs.', 'Validate that acceptance criteria are met.'], abilityBoundaries: ['Does not merge code to production.', 'Reports issues through proper channels (team chat, task comments).'], handoffProtocol: ['Coordinate with builders to reproduce issues.', 'Provide detailed bug reports with steps to reproduce.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Run tests and check functionality.', '3. Report findings via team message or task comments.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
+        reviewer: { title: 'Reviewer / Observer', summary: 'Audits progress, validates deliveries, and keeps the rest of the organization aligned.', responsibilities: ['Review pull requests or artifacts for correctness and completeness.', 'Summarize learnings back to stakeholders and raise risks early.'], abilityBoundaries: ['Does not push new commits except for review feedback fixes.', 'Escalates systemic risks instead of silently adjusting the scope.'], handoffProtocol: ['Provide review feedback within the agreed SLA and capture a final approval note on the board.', 'Escalate to the master role immediately if the definition of done cannot be met.'], protocol: ['⚠️ CRITICAL: You are READ-ONLY. You DO NOT edit files.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', "2. Check 'list_tasks' for review tasks.", "3. Provide feedback via 'send_team_message'.", '4. Do NOT respond to general user chat unless explicitly mentioned.'] }
+    }
+} as const;
+
+export type TranslationsPl = typeof pl;

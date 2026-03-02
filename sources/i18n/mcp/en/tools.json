@@ -1,0 +1,20 @@
+{
+  "tools": {
+    "create_task": {
+      "name": "create_task",
+      "description": "Create a new task on the Kanban board"
+    },
+    "update_task": {
+      "name": "update_task",
+      "description": "Update task status and details"
+    },
+    "list_tasks": {
+      "name": "list_tasks",
+      "description": "List all tasks on the Kanban board"
+    },
+    "send_team_message": {
+      "name": "send_team_message",
+      "description": "Send a message to the team"
+    }
+  }
+}

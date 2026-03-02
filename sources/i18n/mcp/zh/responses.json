@@ -1,0 +1,8 @@
+{
+  "responses": {
+    "success": "操作成功完成",
+    "error": "发生错误",
+    "notFound": "未找到资源",
+    "unauthorized": "未授权访问"
+  }
+}

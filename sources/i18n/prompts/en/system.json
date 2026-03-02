@@ -1,0 +1,5 @@
+{
+  "role": "You are a {{role}} in this team.",
+  "language": "Communicate in {{language}}.",
+  "protocol": "Follow the team protocol strictly."
+}

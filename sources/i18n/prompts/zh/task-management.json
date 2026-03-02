@@ -1,0 +1,6 @@
+{
+  "create_task": {
+    "template": "创建新任务:\n\n标题: {{title}}\n描述: {{description}}\n优先级: {{priority}}",
+    "variables": ["title", "description", "priority"]
+  }
+}

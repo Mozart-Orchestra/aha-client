@@ -1,0 +1,10 @@
+{
+  "greeting": {
+    "template": "Hello! I'm {{role}} and I'm here to help you with {{responsibility}}.",
+    "variables": ["role", "responsibility"]
+  },
+  "error_handling": {
+    "template": "An error occurred: {{error}}. Suggested resolution: {{resolution}}",
+    "variables": ["error", "resolution"]
+  }
+}

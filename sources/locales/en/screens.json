@@ -1,0 +1,64 @@
+{
+  "home": {
+    "title": "Home",
+    "welcome": "Welcome to Aha Kanban"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "myTasks": "My Tasks",
+    "allTasks": "All Tasks",
+    "assignedToMe": "Assigned to Me",
+    "createdByMe": "Created by Me"
+  },
+  "team": {
+    "title": "Team",
+    "myTeam": "My Team",
+    "teamBoard": "Team Board",
+    "teamChat": "Team Chat",
+    "teamSettings": "Team Settings"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": "Profile Settings",
+    "account": "Account Settings",
+    "preferences": "Preferences",
+    "notifications": "Notifications",
+    "privacy": "Privacy",
+    "language": "Language",
+    "theme": "Theme",
+    "about": "About"
+  },
+  "profile": {
+    "title": "Profile",
+    "editProfile": "Edit Profile",
+    "changeAvatar": "Change Avatar",
+    "displayName": "Display Name",
+    "email": "Email",
+    "bio": "Bio",
+    "location": "Location",
+    "website": "Website",
+    "saveChanges": "Save Changes"
+  },
+  "login": {
+    "title": "Login",
+    "subtitle": "Welcome back! Please login to your account.",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?",
+    "noAccount": "Don't have an account?",
+    "signUp": "Sign Up",
+    "loginButton": "Login"
+  },
+  "signup": {
+    "title": "Sign Up",
+    "subtitle": "Create your account to get started.",
+    "displayName": "Display Name",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "agreeTerms": "I agree to the Terms of Service",
+    "haveAccount": "Already have an account?",
+    "login": "Login",
+    "signupButton": "Sign Up"
+  }
+}

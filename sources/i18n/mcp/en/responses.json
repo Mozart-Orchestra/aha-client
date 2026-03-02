@@ -1,0 +1,8 @@
+{
+  "responses": {
+    "success": "Operation completed successfully",
+    "error": "An error occurred",
+    "notFound": "Resource not found",
+    "unauthorized": "Unauthorized access"
+  }
+}

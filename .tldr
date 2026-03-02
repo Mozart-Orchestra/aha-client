@@ -1,0 +1,16 @@
+kanban - Aha 移动应用 (React Native + Expo)
+
+STACK:
+- React Native 0.81.4 + Expo SDK 54
+- TypeScript, Unistyles, Socket.io
+- tweetnacl 加密, Zustand
+
+FEATURES:
+- QR 码认证
+- 实时同步
+- 端到端加密
+- iOS/Android/Web
+
+DEPS:
+- happy-server (API)
+- @aha/shared-team-config

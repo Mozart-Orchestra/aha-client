@@ -1,0 +1,64 @@
+{
+  "home": {
+    "title": "首页",
+    "welcome": "欢迎使用 Aha 看板"
+  },
+  "tasks": {
+    "title": "任务",
+    "myTasks": "我的任务",
+    "allTasks": "所有任务",
+    "assignedToMe": "分配给我",
+    "createdByMe": "我创建的"
+  },
+  "team": {
+    "title": "团队",
+    "myTeam": "我的团队",
+    "teamBoard": "团队看板",
+    "teamChat": "团队聊天",
+    "teamSettings": "团队设置"
+  },
+  "settings": {
+    "title": "设置",
+    "profile": "个人资料设置",
+    "account": "账户设置",
+    "preferences": "偏好设置",
+    "notifications": "通知",
+    "privacy": "隐私",
+    "language": "语言",
+    "theme": "主题",
+    "about": "关于"
+  },
+  "profile": {
+    "title": "个人资料",
+    "editProfile": "编辑资料",
+    "changeAvatar": "更改头像",
+    "displayName": "显示名称",
+    "email": "电子邮件",
+    "bio": "简介",
+    "location": "位置",
+    "website": "网站",
+    "saveChanges": "保存更改"
+  },
+  "login": {
+    "title": "登录",
+    "subtitle": "欢迎回来!请登录您的账户。",
+    "email": "电子邮件",
+    "password": "密码",
+    "forgotPassword": "忘记密码?",
+    "noAccount": "还没有账户?",
+    "signUp": "注册",
+    "loginButton": "登录"
+  },
+  "signup": {
+    "title": "注册",
+    "subtitle": "创建您的账户以开始使用。",
+    "displayName": "显示名称",
+    "email": "电子邮件",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "agreeTerms": "我同意服务条款",
+    "haveAccount": "已有账户?",
+    "login": "登录",
+    "signupButton": "注册"
+  }
+}

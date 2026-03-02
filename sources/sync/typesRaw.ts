@@ -1,0 +1,655 @@
+import * as z from 'zod';
+import { MessageMetaSchema, MessageMeta } from './typesMessageMeta';
+
+//
+// Raw types
+//
+
+// Usage data type from Claude API
+const usageDataSchema = z.object({
+    input_tokens: z.number(),
+    cache_creation_input_tokens: z.number().optional(),
+    cache_read_input_tokens: z.number().optional(),
+    output_tokens: z.number(),
+    service_tier: z.string().nullish(),
+});
+
+export type UsageData = z.infer<typeof usageDataSchema>;
+
+const rawTextContentSchema = z.object({
+    type: z.literal('text'),
+    text: z.string(),
+});
+export type RawTextContent = z.infer<typeof rawTextContentSchema>;
+
+const rawToolUseContentSchema = z.object({
+    type: z.literal('tool_use'),
+    id: z.string(),
+    name: z.string(),
+    input: z.any(),
+});
+export type RawToolUseContent = z.infer<typeof rawToolUseContentSchema>;
+
+const rawToolResultContentSchema = z.object({
+    type: z.literal('tool_result'),
+    tool_use_id: z.string(),
+    content: z.any(),
+    is_error: z.boolean().optional(),
+    permissions: z.object({
+        date: z.number(),
+        result: z.enum(['approved', 'denied']),
+        mode: z.string().optional(),
+        allowedTools: z.array(z.string()).optional(),
+        decision: z.enum(['approved', 'approved_for_session', 'denied', 'abort']).optional(),
+    }).optional(),
+});
+export type RawToolResultContent = z.infer<typeof rawToolResultContentSchema>;
+
+const rawAgentContentSchema = z.discriminatedUnion('type', [
+    rawTextContentSchema,
+    rawToolUseContentSchema,
+    rawToolResultContentSchema
+]);
+export type RawAgentContent = z.infer<typeof rawAgentContentSchema>;
+
+const rawCliAssistantRecordSchema = z.object({
+    type: z.literal('assistant'),
+    uuid: z.string().optional(),
+    parentUuid: z.string().nullish().optional(),
+    isSidechain: z.boolean().nullish(),
+    message: z.object({
+        role: z.literal('assistant'),
+        model: z.string().optional(),
+        content: z.any(),
+        usage: usageDataSchema.optional()
+    }),
+});
+
+const rawCliUserRecordSchema = z.object({
+    type: z.literal('user'),
+    uuid: z.string().optional(),
+    parentUuid: z.string().nullish().optional(),
+    isSidechain: z.boolean().nullish(),
+    message: z.object({
+        role: z.literal('user'),
+        content: z.any()
+    }),
+    toolUseResult: z.any().nullable().optional()
+});
+
+const rawCliSummaryRecordSchema = z.object({
+    type: z.literal('summary'),
+    summary: z.string().optional(),
+    leafUuid: z.string().optional(),
+    uuid: z.string().optional()
+});
+
+const rawCliSystemRecordSchema = z.object({
+    type: z.literal('system'),
+    uuid: z.string().optional()
+});
+
+const agentEventSchema = z.discriminatedUnion('type', [z.object({
+    type: z.literal('switch'),
+    mode: z.enum(['local', 'remote'])
+}), z.object({
+    type: z.literal('message'),
+    message: z.string(),
+}), z.object({
+    type: z.literal('limit-reached'),
+    endsAt: z.number(),
+}), z.object({
+    type: z.literal('ready'),
+}), rawCliAssistantRecordSchema, rawCliUserRecordSchema, rawCliSummaryRecordSchema, rawCliSystemRecordSchema]);
+export type AgentEvent = z.infer<typeof agentEventSchema>;
+
+const rawAgentRecordSchema = z.discriminatedUnion('type', [z.object({
+    type: z.literal('output'),
+    data: z.intersection(z.discriminatedUnion('type', [
+        z.object({ type: z.literal('system') }),
+        z.object({ type: z.literal('result') }),
+        z.object({ type: z.literal('summary'), summary: z.string() }),
+        z.object({ type: z.literal('assistant'), message: z.object({ role: z.literal('assistant'), model: z.string(), content: z.array(rawAgentContentSchema), usage: usageDataSchema.optional() }), parent_tool_use_id: z.string().nullable().optional() }),
+        z.object({ type: z.literal('user'), message: z.object({ role: z.literal('user'), content: z.union([z.string(), z.array(rawAgentContentSchema)]) }), parent_tool_use_id: z.string().nullable().optional(), toolUseResult: z.any().nullable().optional() }),
+    ]), z.object({
+        isSidechain: z.boolean().nullish(),
+        isCompactSummary: z.boolean().nullish(),
+        isMeta: z.boolean().nullish(),
+        uuid: z.string().nullish(),
+        parentUuid: z.string().nullish(),
+        userType: z.string().nullish(),
+        cwd: z.string().nullish(),
+        sessionId: z.string().nullish(),
+        version: z.string().nullish(),
+        gitBranch: z.string().nullish(),
+    })),
+}), z.object({
+    type: z.literal('event'),
+    id: z.string(),
+    data: agentEventSchema
+}), z.object({
+    type: z.literal('codex'),
+    data: z.discriminatedUnion('type', [
+        z.object({ type: z.literal('reasoning'), message: z.string() }),
+        z.object({ type: z.literal('message'), message: z.string() }),
+        z.object({
+            type: z.literal('tool-call'),
+            callId: z.string(),
+            input: z.any(),
+            name: z.string(),
+            id: z.string()
+        }),
+        z.object({
+            type: z.literal('tool-call-result'),
+            callId: z.string(),
+            output: z.any(),
+            id: z.string()
+        }),
+        z.object({
+            type: z.literal('token_count'),
+            id: z.string().optional(),
+            info: z.any(),
+            rate_limits: z.any().optional()
+        })
+    ])
+}), rawCliAssistantRecordSchema, rawCliUserRecordSchema, rawCliSummaryRecordSchema, rawCliSystemRecordSchema]);
+
+const rawRecordSchema = z.discriminatedUnion('role', [
+    z.object({
+        role: z.literal('agent'),
+        content: rawAgentRecordSchema,
+        meta: MessageMetaSchema.optional()
+    }),
+    z.object({
+        role: z.literal('user'),
+        content: z.object({
+            type: z.literal('text'),
+            text: z.string()
+        }),
+        meta: MessageMetaSchema.optional()
+    }),
+    z.object({
+        role: z.literal('assistant'),
+        content: z.union([
+            z.object({
+                type: z.literal('assistant'),
+                message: z.object({
+                    role: z.literal('assistant'),
+                    model: z.string(),
+                    content: z.array(rawAgentContentSchema),
+                    usage: usageDataSchema.optional()
+                }),
+                parent_tool_use_id: z.string().nullable().optional()
+            }),
+            z.object({
+                type: z.literal('assistant'),
+                message: z.object({
+                    role: z.literal('assistant'),
+                    model: z.string(),
+                    content: z.object({
+                        role: z.literal('assistant'),
+                        model: z.string(),
+                        content: z.union([
+                            z.array(rawAgentContentSchema),
+                            z.object({
+                                role: z.literal('assistant'),
+                                model: z.string(),
+                                content: z.array(rawAgentContentSchema),
+                                usage: usageDataSchema.optional()
+                            })
+                        ])
+                    }),
+                    usage: usageDataSchema.optional()
+                }),
+                parent_tool_use_id: z.string().nullable().optional()
+            })
+        ]),
+        meta: MessageMetaSchema.optional()
+    })
+]);
+
+export type RawRecord = z.infer<typeof rawRecordSchema>;
+
+// Export schemas for validation
+export const RawRecordSchema = rawRecordSchema;
+
+
+//
+// Normalized types
+//
+
+type NormalizedAgentContent =
+    {
+        type: 'text';
+        text: string;
+        uuid: string;
+        parentUUID: string | null;
+    } | {
+        type: 'tool-call';
+        id: string;
+        name: string;
+        input: any;
+        description: string | null;
+        uuid: string;
+        parentUUID: string | null;
+    } | {
+        type: 'tool-result'
+        tool_use_id: string;
+        content: any;
+        is_error: boolean;
+        uuid: string;
+        parentUUID: string | null;
+        permissions?: {
+            date: number;
+            result: 'approved' | 'denied';
+            mode?: string;
+            allowedTools?: string[];
+            decision?: 'approved' | 'approved_for_session' | 'denied' | 'abort';
+        };
+    } | {
+        type: 'summary',
+        summary: string;
+    } | {
+        type: 'sidechain'
+        uuid: string;
+        prompt: string
+    };
+
+export type NormalizedMessage = ({
+    role: 'user'
+    content: {
+        type: 'text';
+        text: string;
+    }
+} | {
+    role: 'agent'
+    content: NormalizedAgentContent[]
+} | {
+    role: 'event'
+    content: AgentEvent
+}) & {
+    id: string,
+    localId: string | null,
+    createdAt: number,
+    isSidechain: boolean,
+    meta?: MessageMeta,
+    usage?: UsageData,
+};
+
+function resolveToolResultContent(content: unknown): unknown {
+    if (typeof content === 'string') {
+        return content;
+    }
+    if (Array.isArray(content)) {
+        const firstText = content.find((item) => {
+            if (!item || typeof item !== 'object') {
+                return false;
+            }
+            const candidate = item as { type?: unknown; text?: unknown };
+            return candidate.type === 'text' && typeof candidate.text === 'string';
+        }) as { text?: string } | undefined;
+        if (firstText?.text) {
+            return firstText.text;
+        }
+    }
+    return content;
+}
+
+export function normalizeRawMessage(id: string, localId: string | null, createdAt: number, raw: RawRecord): NormalizedMessage | null {
+    let parsed = rawRecordSchema.safeParse(raw);
+    if (!parsed.success) {
+        console.error('❌ [normalizeRawMessage] Validation failed for message:', id);
+        console.error('   Local ID:', localId);
+        console.error('   Created At:', createdAt);
+        console.error('   Raw role:', (raw as any).role);
+        console.error('   Zod issues:', JSON.stringify(parsed.error.issues, null, 2));
+        console.error('   Raw data:', JSON.stringify(raw, null, 2));
+        return null;
+    }
+    raw = parsed.data;
+    if (raw.role === 'user') {
+        return {
+            id,
+            localId,
+            createdAt,
+            role: 'user',
+            content: raw.content,
+            isSidechain: false,
+            meta: raw.meta,
+        };
+    }
+    if (raw.role === 'agent') {
+        if (raw.content.type === 'output') {
+
+            // Skip Meta messages
+            if (raw.content.data.isMeta) {
+                return null;
+            }
+
+            // Skip compact summary messages
+            if (raw.content.data.isCompactSummary) {
+                return null;
+            }
+
+            // Handle Assistant messages (including sidechains)
+            if (raw.content.data.type === 'assistant') {
+                if (!raw.content.data.uuid) {
+                    return null;
+                }
+                let content: NormalizedAgentContent[] = [];
+                for (let c of raw.content.data.message.content) {
+                    if (c.type === 'text') {
+                        content.push({ type: 'text', text: c.text, uuid: raw.content.data.uuid, parentUUID: raw.content.data.parentUuid ?? null });
+                    } else if (c.type === 'tool_use') {
+                        let description: string | null = null;
+                        if (typeof c.input === 'object' && c.input !== null && 'description' in c.input && typeof c.input.description === 'string') {
+                            description = c.input.description;
+                        }
+                        content.push({
+                            type: 'tool-call',
+                            id: c.id,
+                            name: c.name,
+                            input: c.input,
+                            description, uuid: raw.content.data.uuid,
+                            parentUUID: raw.content.data.parentUuid ?? null
+                        });
+                    }
+                }
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'agent',
+                    isSidechain: raw.content.data.isSidechain ?? false,
+                    content,
+                    meta: raw.meta,
+                    usage: raw.content.data.message.usage
+                };
+            } else if (raw.content.data.type === 'user') {
+                if (!raw.content.data.uuid) {
+                    return null;
+                }
+
+                // Handle sidechain user messages
+                if (raw.content.data.isSidechain && raw.content.data.message && typeof raw.content.data.message.content === 'string') {
+                    // Return as a special agent message with sidechain content
+                    return {
+                        id,
+                        localId,
+                        createdAt,
+                        role: 'agent',
+                        isSidechain: true,
+                        content: [{
+                            type: 'sidechain',
+                            uuid: raw.content.data.uuid,
+                            prompt: raw.content.data.message.content
+                        }]
+                    };
+                }
+
+                // Handle regular user messages
+                if (raw.content.data.message && typeof raw.content.data.message.content === 'string') {
+                    return {
+                        id,
+                        localId,
+                        createdAt,
+                        role: 'user',
+                        isSidechain: false,
+                        content: {
+                            type: 'text',
+                            text: raw.content.data.message.content
+                        }
+                    };
+                }
+
+                // Handle tool results
+                let content: NormalizedAgentContent[] = [];
+                if (typeof raw.content.data.message.content === 'string') {
+                    content.push({
+                        type: 'text',
+                        text: raw.content.data.message.content,
+                        uuid: raw.content.data.uuid,
+                        parentUUID: raw.content.data.parentUuid ?? null
+                    });
+                } else {
+                    for (let c of raw.content.data.message.content) {
+                        if (c.type === 'tool_result') {
+                            content.push({
+                                type: 'tool-result',
+                                tool_use_id: c.tool_use_id,
+                                content: raw.content.data.toolUseResult ? raw.content.data.toolUseResult : resolveToolResultContent(c.content),
+                                is_error: c.is_error || false,
+                                uuid: raw.content.data.uuid,
+                                parentUUID: raw.content.data.parentUuid ?? null,
+                                permissions: c.permissions ? {
+                                    date: c.permissions.date,
+                                    result: c.permissions.result,
+                                    mode: c.permissions.mode,
+                                    allowedTools: c.permissions.allowedTools,
+                                    decision: c.permissions.decision
+                                } : undefined
+                            });
+                        }
+                    }
+                }
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'agent',
+                    isSidechain: raw.content.data.isSidechain ?? false,
+                    content,
+                    meta: raw.meta
+                };
+            }
+        }
+        if (raw.content.type === 'assistant') {
+            const messageContent = raw.content.message?.content;
+            const contentItems = Array.isArray(messageContent)
+                ? messageContent
+                : (typeof messageContent === 'string' ? [{ type: 'text', text: messageContent }] : []);
+            const uuid = raw.content.uuid ?? id;
+            const parentUUID = raw.content.parentUuid ?? null;
+            let content: NormalizedAgentContent[] = [];
+            for (let c of contentItems) {
+                if (c && c.type === 'text' && typeof c.text === 'string') {
+                    content.push({ type: 'text', text: c.text, uuid, parentUUID });
+                } else if (c && c.type === 'tool_use' && typeof c.id === 'string' && typeof c.name === 'string') {
+                    let description: string | null = null;
+                    if (typeof c.input === 'object' && c.input !== null && 'description' in c.input && typeof c.input.description === 'string') {
+                        description = c.input.description;
+                    }
+                    content.push({
+                        type: 'tool-call',
+                        id: c.id,
+                        name: c.name,
+                        input: c.input,
+                        description,
+                        uuid,
+                        parentUUID
+                    });
+                }
+            }
+            if (content.length === 0) {
+                return null;
+            }
+            return {
+                id,
+                localId,
+                createdAt,
+                role: 'agent',
+                isSidechain: raw.content.isSidechain ?? false,
+                content,
+                meta: raw.meta,
+                usage: raw.content.message?.usage
+            };
+        }
+        if (raw.content.type === 'user') {
+            const messageContent = raw.content.message?.content;
+            const uuid = raw.content.uuid ?? id;
+            const parentUUID = raw.content.parentUuid ?? null;
+            if (raw.content.isSidechain && typeof messageContent === 'string') {
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'agent',
+                    isSidechain: true,
+                    content: [{
+                        type: 'sidechain',
+                        uuid,
+                        prompt: messageContent
+                    }]
+                };
+            }
+            if (typeof messageContent === 'string') {
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'user',
+                    isSidechain: false,
+                    content: {
+                        type: 'text',
+                        text: messageContent
+                    }
+                };
+            }
+            let content: NormalizedAgentContent[] = [];
+            if (Array.isArray(messageContent)) {
+                for (let c of messageContent) {
+                    if (c && c.type === 'tool_result' && typeof c.tool_use_id === 'string') {
+                        content.push({
+                            type: 'tool-result',
+                            tool_use_id: c.tool_use_id,
+                            content: raw.content.toolUseResult ? raw.content.toolUseResult : resolveToolResultContent(c.content),
+                            is_error: c.is_error || false,
+                            uuid,
+                            parentUUID,
+                            permissions: c.permissions ? {
+                                date: c.permissions.date,
+                                result: c.permissions.result,
+                                mode: c.permissions.mode,
+                                allowedTools: c.permissions.allowedTools,
+                                decision: c.permissions.decision
+                            } : undefined
+                        });
+                    }
+                }
+            }
+            if (content.length === 0) {
+                return null;
+            }
+            return {
+                id,
+                localId,
+                createdAt,
+                role: 'agent',
+                isSidechain: raw.content.isSidechain ?? false,
+                content,
+                meta: raw.meta
+            };
+        }
+        if (raw.content.type === 'summary' || raw.content.type === 'system') {
+            return null;
+        }
+        if (raw.content.type === 'event') {
+            return {
+                id,
+                localId,
+                createdAt,
+                role: 'event',
+                content: raw.content.data,
+                isSidechain: false,
+            };
+        }
+        if (raw.content.type === 'codex') {
+            if (raw.content.data.type === 'token_count') {
+                return null;
+            }
+            if (raw.content.data.type === 'message') {
+                // Cast codex messages to agent text messages
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'agent',
+                    isSidechain: false,
+                    content: [{
+                        type: 'text',
+                        text: raw.content.data.message,
+                        uuid: id,
+                        parentUUID: null
+                    }],
+                    meta: raw.meta
+                };
+            }
+            if (raw.content.data.type === 'reasoning') {
+                // Cast codex messages to agent text messages
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'agent',
+                    isSidechain: false,
+                    content: [{
+                        type: 'text',
+                        text: raw.content.data.message,
+                        uuid: id,
+                        parentUUID: null
+                    }],
+                    meta: raw.meta
+                } satisfies NormalizedMessage;
+            }
+            if (raw.content.data.type === 'tool-call') {
+                // Cast tool calls to agent tool-call messages
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'agent',
+                    isSidechain: false,
+                    content: [{
+                        type: 'tool-call',
+                        id: raw.content.data.callId,
+                        name: raw.content.data.name || 'unknown',
+                        input: raw.content.data.input,
+                        description: null,
+                        uuid: raw.content.data.id,
+                        parentUUID: null
+                    }],
+                    meta: raw.meta
+                } satisfies NormalizedMessage;
+            }
+            if (raw.content.data.type === 'tool-call-result') {
+                // Cast tool call results to agent tool-result messages
+                return {
+                    id,
+                    localId,
+                    createdAt,
+                    role: 'agent',
+                    isSidechain: false,
+                    content: [{
+                        type: 'tool-result',
+                        tool_use_id: raw.content.data.callId,
+                        content: raw.content.data.output,
+                        is_error: false,
+                        uuid: raw.content.data.id,
+                        parentUUID: null
+                    }],
+                    meta: raw.meta
+                } satisfies NormalizedMessage;
+            }
+
+        }
+    }
+    const isAgentOutputRecord = raw.role === 'agent' && raw.content.type === 'output';
+    if (isAgentOutputRecord) {
+        // Ignore unsupported agent-output variants (e.g., non-assistant/tool payloads) to avoid hard failures.
+        console.debug('[sync] Ignoring unsupported agent output record', {
+            role: raw.role,
+            contentType: raw.content.type
+        });
+    }
+    return null;
+}

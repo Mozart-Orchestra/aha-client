@@ -1,0 +1,14 @@
+diff --git a/node_modules/react-native-nitro-modules/cpp/utils/NitroDefines.hpp b/node_modules/react-native-nitro-modules/cpp/utils/NitroDefines.hpp
+index 5ef7987..be310b4 100644
+--- a/node_modules/react-native-nitro-modules/cpp/utils/NitroDefines.hpp
++++ b/node_modules/react-native-nitro-modules/cpp/utils/NitroDefines.hpp
+@@ -52,4 +52,9 @@
+ #define SWIFT_NONCOPYABLE
+ #endif
+ 
++// Nullability annotations used by generated bridges
++#ifndef NON_NULL
++#define NON_NULL _Nonnull
++#endif
++
+ #endif /* NitroDefines_h */

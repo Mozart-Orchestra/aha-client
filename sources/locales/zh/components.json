@@ -1,0 +1,51 @@
+{
+  "languageSelector": {
+    "title": "选择语言",
+    "current": "当前语言",
+    "change": "更改语言"
+  },
+  "taskCard": {
+    "created": "创建于",
+    "updated": "更新于",
+    "due": "截止",
+    "assignee": "负责人",
+    "noAssignee": "未分配",
+    "subtasks": "{{count}} 个子任务",
+    "subtasks_plural": "{{count}} 个子任务",
+    "comments": "{{count}} 条评论",
+    "comments_plural": "{{count}} 条评论"
+  },
+  "teamMember": {
+    "online": "在线",
+    "offline": "离线",
+    "away": "离开",
+    "busy": "忙碌",
+    "lastSeen": "上次活跃 {{time}}",
+    "role": "角色"
+  },
+  "kanbanBoard": {
+    "addColumn": "添加列",
+    "editColumn": "编辑列",
+    "deleteColumn": "删除列",
+    "moveColumn": "移动列",
+    "columnTitle": "列标题",
+    "noTasksInColumn": "此列中没有任务",
+    "totalTasks": "{{count}} 个任务",
+    "totalTasks_plural": "{{count}} 个任务"
+  },
+  "messageInput": {
+    "placeholder": "输入消息...",
+    "send": "发送",
+    "attach": "附件",
+    "emoji": "表情",
+    "typing": "正在输入..."
+  },
+  "searchBar": {
+    "placeholder": "搜索...",
+    "noResults": "未找到结果",
+    "results": "{{count}} 个结果",
+    "results_plural": "{{count}} 个结果",
+    "filters": "筛选",
+    "sortBy": "排序方式"
+  }
+}

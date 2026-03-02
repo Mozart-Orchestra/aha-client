@@ -1,0 +1,51 @@
+{
+  "languageSelector": {
+    "title": "Select Language",
+    "current": "Current Language",
+    "change": "Change Language"
+  },
+  "taskCard": {
+    "created": "Created",
+    "updated": "Updated",
+    "due": "Due",
+    "assignee": "Assignee",
+    "noAssignee": "Unassigned",
+    "subtasks": "{{count}} subtask",
+    "subtasks_plural": "{{count}} subtasks",
+    "comments": "{{count}} comment",
+    "comments_plural": "{{count}} comments"
+  },
+  "teamMember": {
+    "online": "Online",
+    "offline": "Offline",
+    "away": "Away",
+    "busy": "Busy",
+    "lastSeen": "Last seen {{time}}",
+    "role": "Role"
+  },
+  "kanbanBoard": {
+    "addColumn": "Add Column",
+    "editColumn": "Edit Column",
+    "deleteColumn": "Delete Column",
+    "moveColumn": "Move Column",
+    "columnTitle": "Column Title",
+    "noTasksInColumn": "No tasks in this column",
+    "totalTasks": "{{count}} task",
+    "totalTasks_plural": "{{count}} tasks"
+  },
+  "messageInput": {
+    "placeholder": "Type a message...",
+    "send": "Send",
+    "attach": "Attach",
+    "emoji": "Emoji",
+    "typing": "Typing..."
+  },
+  "searchBar": {
+    "placeholder": "Search...",
+    "noResults": "No results found",
+    "results": "{{count}} result",
+    "results_plural": "{{count}} results",
+    "filters": "Filters",
+    "sortBy": "Sort by"
+  }
+}

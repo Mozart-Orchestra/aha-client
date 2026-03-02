@@ -1,0 +1,7 @@
+{
+  "resources": {
+    "context": "Context information",
+    "rules": "Global rules",
+    "preferences": "User preferences"
+  }
+}

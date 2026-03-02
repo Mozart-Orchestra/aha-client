@@ -1,0 +1,7 @@
+{
+  "create": "Create a task",
+  "update": "Update task status",
+  "assign": "Assign task to agent",
+  "complete": "Mark task as complete",
+  "block": "Report a blocker"
+}

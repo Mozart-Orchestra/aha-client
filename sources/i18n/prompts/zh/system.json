@@ -1,0 +1,5 @@
+{
+  "role": "你是这个团队中的{{role}}。",
+  "language": "使用{{language}}进行交流。",
+  "protocol": "严格遵守团队协议。"
+}
