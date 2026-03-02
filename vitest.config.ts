@@ -6,6 +6,11 @@ export default defineConfig({
         globals: false,
         environment: 'node',
         include: ['sources/**/*.{spec,test}.{ts,tsx}'],
+        // Use inline config for TSX files to get jsdom-like environment
+        environmentMatchGlobs: [
+            ['sources/**/*.spec.tsx', 'happy-dom'],
+            ['sources/**/*.test.tsx', 'happy-dom'],
+        ],
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
@@ -22,5 +27,8 @@ export default defineConfig({
         alias: {
             '@': resolve('./sources'),
         },
+    },
+    esbuild: {
+        jsx: 'automatic',
     },
 })
