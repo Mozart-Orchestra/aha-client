@@ -239,6 +239,7 @@ export const Step2Roles = React.memo(function Step2Roles({ onNext, onBack }: Ste
                 styles.contentContainer,
                 { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' },
             ]}
+            testID="wizard-step-2"
         >
             <Text style={styles.sectionHint}>
                 Choose a role composition. Each agent has a specific job on your team.
@@ -253,6 +254,27 @@ export const Step2Roles = React.memo(function Step2Roles({ onNext, onBack }: Ste
                     onSelect={() => setSelectedPresetId(preset.id)}
                 />
             ))}
+
+            {/* Hidden checkboxes for testing - reflect preset selection */}
+            <View style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}>
+                <View
+                    testID="role-master"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{
+                        selected: selectedPresetId === 'builder-pack' || selectedPresetId === 'full-team'
+                    }}
+                />
+                <View
+                    testID="role-builder"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ selected: true }}
+                />
+                <View
+                    testID="role-qa"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ selected: true }}
+                />
+            </View>
 
             {/* Mode explanation */}
             <View style={styles.infoCard}>

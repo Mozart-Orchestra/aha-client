@@ -4,6 +4,7 @@
  * Based on Mom Test finding: 9/10 users want a "Quick Start" default path
  */
 
+import { Dimensions, Platform, Pressable, ActivityIndicator } from 'react-native';
 import React from 'react';
 import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -21,6 +22,7 @@ import { Step1Name } from './wizard/step1-name';
 import { Step2Roles } from './wizard/step2-roles';
 import { Step3Confirm } from './wizard/step3-confirm';
 
+const QUICK_START_MASTER_ROLE_ID = 'master';
 const QUICK_START_BUILDER_ROLE_ID = 'builder';
 const QUICK_START_QA_ROLE_ID = 'qa';
 
@@ -29,6 +31,53 @@ const WIZARD_STEPS = [
     { id: 'roles', title: 'Roles' },
     { id: 'confirm', title: 'Deploy' },
 ] as const;
+
+// ---- Web Modal Wrapper ----
+
+function WebModalWrapper({ children }: { children: React.ReactNode }) {
+    const { width } = Dimensions.get('window');
+    const isLargeScreen = width >= 768;
+    const styles = stylesheet;
+
+    if (!isLargeScreen) return <>{children}</>;
+
+    return (
+        <View style={styles.modalOverlay} testID="main-layout">
+            <View style={styles.modalContent} accessibilityRole="dialog" aria-modal="true">
+                <View style={styles.wizardContainer}>
+                    {children}
+                </View>
+            </View>
+        </View>
+    );
+}
+
+const QUICK_START_MASTER_ROLE_ID = 'master';
+const QUICK_START_BUILDER_ROLE_ID = 'builder';
+const QUICK_START_QA_ROLE_ID = 'qa';
+
+const WIZARD_STEPS = [
+    { id: 'name', title: 'Name' },
+    { id: 'roles', title: 'Roles' },
+    { id: 'confirm', title: 'Deploy' },
+] as const;
+
+// ---- Web Modal Wrapper ----
+
+function WebModalWrapper({ children }: { children: React.ReactNode }) {
+    const { width } = Dimensions.get('window');
+    const isLargeScreen = width >= 768;
+
+    if (!isLargeScreen) return <>{children}</>;
+
+    return (
+        <View style={styles.modalOverlay} testID="main-layout">
+            <View style={styles.modalContent} role="dialog" aria-modal="true">
+                {children}
+            </View>
+        </View>
+    );
+}
 
 // ---- Quick Start Entry Screen ----
 
@@ -84,7 +133,7 @@ const EntryScreen = React.memo(function EntryScreen({
                 </View>
                 <Text style={styles.pathTitle}>Quick Start</Text>
                 <Text style={styles.pathDescription}>
-                    Create a team instantly with smart defaults. 1 Builder + 1 QA agent on your current machine.
+                    Create a team instantly with smart defaults. 1 Master + 1 Builder + 1 QA agent on your current machine.
                     You can customize later.
                 </Text>
                 <View style={styles.pathDetails}>
@@ -185,6 +234,14 @@ function NewTeamRoot() {
                 roles: [
                     {
                         id: generateRoleId(),
+                        roleId: QUICK_START_MASTER_ROLE_ID,
+                        roleName: 'Master',
+                        quantity: 1,
+                        mode: 'claude-code',
+                        machineId: firstMachineId,
+                    },
+                    {
+                        id: generateRoleId(),
                         roleId: QUICK_START_BUILDER_ROLE_ID,
                         roleName: 'Builder',
                         quantity: 1,
@@ -214,20 +271,22 @@ function NewTeamRoot() {
 
     if (viewMode === 'wizard') {
         return (
-            <WizardProvider>
-                <Stack.Screen
-                    options={{
-                        headerTitle: 'New Team',
-                        headerBackTitle: 'Teams',
-                    }}
-                />
-                <WizardContent />
-            </WizardProvider>
+            <WebModalWrapper>
+                <WizardProvider>
+                    <Stack.Screen
+                        options={{
+                            headerTitle: 'New Team',
+                            headerBackTitle: 'Teams',
+                        }}
+                    />
+                    <WizardContent />
+                </WizardProvider>
+            </WebModalWrapper>
         );
     }
 
     return (
-        <>
+        <WebModalWrapper>
             <Stack.Screen
                 options={{
                     headerTitle: 'New Team',
@@ -239,7 +298,7 @@ function NewTeamRoot() {
                 onCustomSetup={handleCustomSetup}
                 isQuickStartLoading={isQuickStartLoading}
             />
-        </>
+        </WebModalWrapper>
     );
 }
 
@@ -386,5 +445,32 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 12,
         color: theme.colors.textSecondary,
         fontWeight: '500',
+    },
+    // Web modal styles
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    modalContent: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 16,
+        width: 600,
+        maxWidth: '90%',
+        maxHeight: '80%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    wizardContainer: {
+        flex: 1,
     },
 }));

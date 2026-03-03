@@ -83,6 +83,7 @@ export const Step1Name = React.memo(function Step1Name({ onNext, onCancel }: Ste
                 { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' },
             ]}
             keyboardShouldPersistTaps="handled"
+            testID="wizard-step-1"
         >
             <Text style={styles.sectionHint}>
                 Give your team a name that reflects its purpose. The goal helps AI understand the mission.

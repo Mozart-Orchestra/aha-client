@@ -101,6 +101,7 @@ export const Step3Confirm = React.memo(function Step3Confirm({ onBack }: Step3Co
                 styles.contentContainer,
                 { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' },
             ]}
+            testID="wizard-step-3"
         >
             {/* Deploy summary header */}
             <View style={styles.deployBanner}>
