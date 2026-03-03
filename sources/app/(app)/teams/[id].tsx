@@ -31,6 +31,7 @@ import { getRoleModelConfig, getModelLabel } from '@/team-config/i18n';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
 import RalphControlPanel, { RalphLoopState } from '@/components/RalphControlPanel';
 import { useAuth } from '@/auth/AuthContext';
+import { AgentManagementModal } from '@/components/AgentManagementModal';
 import {
     fetchRolePool,
     fetchRoleReviews,
@@ -591,6 +592,7 @@ export default function TeamDashboardScreen() {
     const [ratingPeriod, setRatingPeriod] = React.useState<RatingPeriod>('month');
     const [ratingCategory, setRatingCategory] = React.useState<'all' | 'user' | 'master' | 'system'>('all');
     const autoReviewInFlight = React.useRef(false);
+    const [showAgentModal, setShowAgentModal] = React.useState(false);
 
     // Ralph Loop state
     const [ralphState, setRalphState] = React.useState<RalphLoopState>({
@@ -2284,6 +2286,22 @@ export default function TeamDashboardScreen() {
                             <Text style={{ fontSize: 15, color: theme.colors.text }}>Archive</Text>
                         </Pressable>
                         <Pressable
+                            onPress={() => {
+                                setShowMenu(false);
+                                setShowAgentModal(true);
+                            }}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                padding: 14,
+                                borderBottomWidth: 1,
+                                borderBottomColor: theme.colors.divider,
+                            }}
+                        >
+                            <Ionicons name="people-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
+                            <Text style={{ fontSize: 15, color: theme.colors.text }}>Manage Agents</Text>
+                        </Pressable>
+                        <Pressable
                             onPress={handleDeleteTeam}
                             style={{
                                 flexDirection: 'row',
@@ -2360,6 +2378,19 @@ export default function TeamDashboardScreen() {
                 }}
                 onTaskRejected={(task, reason) => {
                     console.log('Task rejected:', task.title, 'Reason:', reason);
+                }}
+            />
+
+            {/* R6: Agent Management Modal */}
+            <AgentManagementModal
+                teamId={teamId}
+                visible={showAgentModal}
+                onClose={() => setShowAgentModal(false)}
+                onAgentAdded={(sessionId) => {
+                    console.log('Agent added:', sessionId);
+                }}
+                onAgentRemoved={(sessionId) => {
+                    console.log('Agent removed:', sessionId);
                 }}
             />
         </>

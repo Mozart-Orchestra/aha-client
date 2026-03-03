@@ -163,10 +163,11 @@ export default function DeviceCodeRestore() {
         setError(null);
 
         try {
-            // Call the verify endpoint
+            // Format code as XXX-XXX for the server
             const formattedCode = `${userCode.slice(0, 3)}-${userCode.slice(3)}`;
 
-            const response = await axios.post(`${configuration.serverUrl}/v1/auth/device-code/verify`, {
+            // Call the verify endpoint (matches server route: POST /v1/device/verify)
+            const response = await axios.post(`${configuration.serverUrl}/v1/device/verify`, {
                 userCode: formattedCode
             }, {
                 headers: {
@@ -174,7 +175,7 @@ export default function DeviceCodeRestore() {
                 }
             });
 
-            if (response.data.status === 'approved') {
+            if (response.data.success) {
                 Modal.alert(
                     t('common.success'),
                     t('modals.deviceVerified'),
@@ -182,7 +183,7 @@ export default function DeviceCodeRestore() {
                 );
             }
         } catch (err: any) {
-            const errorMessage = err.response?.data?.error || t('modals.failedToVerifyDevice');
+            const errorMessage = err.response?.data?.message || err.response?.data?.error || t('modals.failedToVerifyDevice');
             setError(errorMessage);
         } finally {
             setIsLoading(false);
