@@ -18,14 +18,16 @@ import { test, expect } from '@playwright/test'
 test.describe('R4 — Team Creation Wizard', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
+    // Navigate to teams tab
+    await page.getByRole('button', { name: /teams/i }).click()
   })
 
-  test.skip('dashboard shows "Connect Repository" not "Create Legion"', async ({ page }) => {
+  test('dashboard shows "Connect Repository" not "Create Legion"', async ({ page }) => {
     await expect(page.getByText('Connect Repository')).toBeVisible()
     await expect(page.getByText('Create Legion')).not.toBeVisible()
   })
 
-  test.skip('Quick Start creates default team with one tap', async ({ page }) => {
+  test('Quick Start creates default team with one tap', async ({ page }) => {
     const quickStart = page.getByRole('button', { name: /quick start/i })
     await expect(quickStart).toBeVisible()
 
@@ -37,7 +39,7 @@ test.describe('R4 — Team Creation Wizard', () => {
     await expect(page.getByText(/QA/i)).toBeVisible()
   })
 
-  test.skip('wizard step 1: enter repository/team name', async ({ page }) => {
+  test('wizard step 1: enter repository/team name', async ({ page }) => {
     await page.getByRole('button', { name: /connect repository/i }).click()
 
     // Step 1: Name
@@ -48,7 +50,7 @@ test.describe('R4 — Team Creation Wizard', () => {
     await expect(page.getByTestId('wizard-step-2')).toBeVisible()
   })
 
-  test.skip('wizard step 2: configure roles with smart defaults', async ({ page }) => {
+  test('wizard step 2: configure roles with smart defaults', async ({ page }) => {
     await page.getByRole('button', { name: /connect repository/i }).click()
 
     await page.getByPlaceholder(/team name|repository/i).fill('My Test Team')
@@ -59,7 +61,7 @@ test.describe('R4 — Team Creation Wizard', () => {
     await expect(page.getByTestId('role-master')).toBeChecked()
   })
 
-  test.skip('wizard step 3: confirm and deploy within 5 seconds', async ({ page }) => {
+  test('wizard step 3: confirm and deploy within 5 seconds', async ({ page }) => {
     // Navigate through wizard quickly
     await page.getByRole('button', { name: /connect repository/i }).click()
     await page.getByPlaceholder(/team name|repository/i).fill('Speed Test Team')
@@ -77,7 +79,7 @@ test.describe('R4 — Team Creation Wizard', () => {
     expect(Date.now() - start).toBeLessThan(5000)
   })
 
-  test.skip('web: wizard opens as modal overlay at ≥768px', async ({ page }) => {
+  test('web: wizard opens as modal overlay at ≥768px', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.getByRole('button', { name: /connect repository/i }).click()
 
@@ -88,7 +90,7 @@ test.describe('R4 — Team Creation Wizard', () => {
     await expect(page.getByTestId('main-layout')).toBeVisible()
   })
 
-  test.skip('mobile: wizard uses full-screen flow at <768px', async ({ page }) => {
+  test('mobile: wizard uses full-screen flow at <768px', async ({ page }) => {
     await page.setViewportSize({ width: 402, height: 874 })
     await page.getByRole('button', { name: /connect repository/i }).click()
 

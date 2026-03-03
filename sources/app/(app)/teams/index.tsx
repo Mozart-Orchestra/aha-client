@@ -151,6 +151,35 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 14,
         color: theme.colors.textSecondary,
     },
+    quickStartButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: theme.colors.button.primary.background,
+        borderRadius: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        marginTop: 24,
+        minWidth: 200,
+    },
+    quickStartButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    connectRepoButton: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        marginTop: 12,
+    },
+    connectRepoButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
 }));
 
 export default function TeamsScreen() {
@@ -466,9 +495,24 @@ export default function TeamsScreen() {
                 <Text style={styles.emptyDescription}>
                     Create a team to collaborate with multiple agents.
                 </Text>
+                <Pressable
+                    style={styles.quickStartButton}
+                    onPress={() => router.push('/teams/new')}
+                    accessibilityRole="button"
+                >
+                    <Ionicons name="flash" size={20} color="#FFFFFF" />
+                    <Text style={styles.quickStartButtonText}>Quick Start</Text>
+                </Pressable>
+                <Pressable
+                    style={styles.connectRepoButton}
+                    onPress={() => router.push('/teams/new')}
+                    accessibilityRole="button"
+                >
+                    <Text style={styles.connectRepoButtonText}>Connect Repository</Text>
+                </Pressable>
             </View>
         );
-    }, [isLoading, styles, teams, theme]);
+    }, [isLoading, styles, theme, router]);
 
     return (
         <>
