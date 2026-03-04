@@ -11,7 +11,6 @@ import { Text } from '@/components/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/auth/AuthContext';
-import { useAhaAction } from '@/hooks/useAhaAction';
 import {
     listAgents,
     spawnAgents,
@@ -21,7 +20,7 @@ import {
     AgentInfo,
     AgentMode,
     AgentStatus,
-} from '@/sync/apiRuntimeAgents';
+} from '@/sync/apiRuntimeAgent';
 
 // === Props ===
 
@@ -62,7 +61,7 @@ function StatusBadge({ status }: { status: AgentStatus }) {
     return (
         <View style={[styles.statusBadge, { backgroundColor: `${color}20` }]}>
             <View style={[styles.statusDot, { backgroundColor: color }]} />
-            <Text style={[styles.statusText, { color }}>
+            <Text style={[styles.statusText, { color }]}>
                 {status.charAt(0).toUpperCase() + status.slice(1)}
             </Text>
         </View>
@@ -161,22 +160,34 @@ function AgentCard({ agent, onPause, onResume, onStop, isOperating }: AgentCardP
 // === Add Agent Form ===
 
 interface AddAgentFormProps {
-    onAdd: (roleId: string, mode: AgentMode) => Promise<void>;
+    onAdd: (roleId: string, mode: AgentMode, count: number) => Promise<void>;
     isAdding: boolean;
 }
 
 function AddAgentForm({ onAdd, isAdding }: AddAgentFormProps) {
     const styles = stylesheet;
     const [selectedRole, setSelectedRole] = React.useState('builder');
-    const [selectedMode, setSelectedMode] = React.useState<AgentMode>('claude');
+    const [selectedMode, setSelectedMode] = React.useState<AgentMode>('codex');
+    const [quantity, setQuantity] = React.useState(2);
 
     const handleAdd = async () => {
-        await onAdd(selectedRole, selectedMode);
+        await onAdd(selectedRole, selectedMode, quantity);
     };
 
     return (
         <View style={styles.addForm}>
             <Text style={styles.addFormTitle}>Add Agent</Text>
+
+            <View style={styles.recommendedCard}>
+                <View style={styles.recommendedHeader}>
+                    <Ionicons name="sparkles" size={14} color="#3D8A5A" />
+                    <Text style={styles.recommendedHeaderText}>Recommended</Text>
+                </View>
+                <View style={styles.recommendedBadge}>
+                    <Text style={styles.recommendedName}>Builder</Text>
+                    <Text style={styles.recommendedWhy}>Best for writing code</Text>
+                </View>
+            </View>
 
             <Text style={styles.addFormLabel}>Role</Text>
             <View style={styles.roleOptions}>
@@ -199,18 +210,40 @@ function AddAgentForm({ onAdd, isAdding }: AddAgentFormProps) {
             </View>
 
             <Text style={styles.addFormLabel}>Mode</Text>
-            <View style={styles.modeOptions}>
+            <View style={styles.modeCards}>
                 {MODE_OPTIONS.map((mode) => (
                     <Pressable
                         key={mode.id}
-                        style={[styles.modeOption, selectedMode === mode.id && styles.modeOptionSelected]}
+                        style={[styles.modeCard, selectedMode === mode.id && styles.modeCardActive]}
                         onPress={() => setSelectedMode(mode.id)}
                     >
-                        <Text style={[styles.modeOptionText, selectedMode === mode.id && styles.modeOptionTextSelected]}>
-                            {mode.label}
+                        <Ionicons
+                            name={mode.id === 'codex' ? 'code-slash' : 'chatbubble-ellipses'}
+                            size={20}
+                            color={selectedMode === mode.id ? '#3D8A5A' : '#8E8E93'}
+                        />
+                        <Text style={[styles.modeCardText, selectedMode === mode.id && styles.modeCardTextActive]}>
+                            {mode.id === 'claude' ? 'Claude' : 'Codex'}
                         </Text>
                     </Pressable>
                 ))}
+            </View>
+
+            <Text style={styles.addFormLabel}>Quantity</Text>
+            <View style={styles.quantityRow}>
+                <Pressable
+                    style={styles.quantityButton}
+                    onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                >
+                    <Text style={styles.quantityButtonText}>-</Text>
+                </Pressable>
+                <Text style={styles.quantityValue}>{quantity}</Text>
+                <Pressable
+                    style={styles.quantityButtonPrimary}
+                    onPress={() => setQuantity((prev) => Math.min(9, prev + 1))}
+                >
+                    <Text style={styles.quantityButtonPrimaryText}>+</Text>
+                </Pressable>
             </View>
 
             <Pressable
@@ -223,7 +256,7 @@ function AddAgentForm({ onAdd, isAdding }: AddAgentFormProps) {
                 ) : (
                     <>
                         <Ionicons name="add" size={20} color="#FFF" />
-                        <Text style={styles.addButtonText}>Add Agent</Text>
+                        <Text style={styles.addButtonText}>Spawn Agent</Text>
                     </>
                 )}
             </Pressable>
@@ -270,17 +303,17 @@ export function AgentManagementModal({
         }
     };
 
-    const handleAddAgent = async (roleId: string, mode: AgentMode) => {
+    const handleAddAgent = async (roleId: string, mode: AgentMode, count: number) => {
         if (!auth?.credentials) return;
         setError(null);
         try {
             const result = await spawnAgents(auth.credentials, teamId, {
                 roleId,
                 mode,
-                count: 1,
+                count,
             });
-            if (result.sessions[0]) {
-                onAgentAdded?.(result.sessions[0].sessionId);
+            for (const session of result.sessions) {
+                onAgentAdded?.(session.sessionId);
             }
             await loadAgents();
         } catch (err: any) {
@@ -335,7 +368,7 @@ export function AgentManagementModal({
             <Pressable style={styles.backdrop} onPress={onClose} />
             <View style={styles.modal}>
                 <View style={styles.header}>
-                    <Text style={styles.title}>Manage Agents</Text>
+                    <Text style={styles.title}>Add Agent</Text>
                     <Pressable style={styles.closeButton} onPress={onClose}>
                         <Ionicons name="close" size={24} color={theme.colors.text} />
                     </Pressable>
@@ -595,7 +628,45 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontWeight: '600',
         color: theme.colors.textSecondary,
         marginBottom: 8,
+        marginTop: 12,
         textTransform: 'uppercase',
+    },
+    recommendedCard: {
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#C7E5D1',
+        backgroundColor: '#EAF5EE',
+        padding: 12,
+        marginBottom: 8,
+    },
+    recommendedHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8,
+    },
+    recommendedHeaderText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#3D8A5A',
+    },
+    recommendedBadge: {
+        borderRadius: 10,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#D8E7DD',
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+    },
+    recommendedName: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1A1918',
+    },
+    recommendedWhy: {
+        marginTop: 2,
+        fontSize: 12,
+        color: theme.colors.textSecondary,
     },
     roleOptions: {
         flexDirection: 'row',
@@ -626,30 +697,73 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: '#3D8A5A',
         fontWeight: '600',
     },
-    modeOptions: {
+    modeCards: {
         flexDirection: 'row',
         gap: 8,
         marginBottom: 16,
     },
-    modeOption: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 8,
+    modeCard: {
+        flex: 1,
+        minHeight: 84,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.colors.divider,
         backgroundColor: theme.colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
     },
-    modeOptionSelected: {
-        borderColor: theme.colors.button.primary.background,
-        backgroundColor: `${theme.colors.button.primary.background}10`,
+    modeCardActive: {
+        borderColor: '#3D8A5A',
+        backgroundColor: '#EAF5EE',
     },
-    modeOptionText: {
-        fontSize: 13,
+    modeCardText: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+    },
+    modeCardTextActive: {
+        color: '#3D8A5A',
+    },
+    quantityRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 14,
+        marginBottom: 16,
+    },
+    quantityButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: theme.colors.groupped.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    quantityButtonPrimary: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#3D8A5A',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    quantityButtonText: {
+        fontSize: 20,
+        lineHeight: 20,
         color: theme.colors.textSecondary,
     },
-    modeOptionTextSelected: {
-        color: theme.colors.button.primary.background,
-        fontWeight: '600',
+    quantityButtonPrimaryText: {
+        fontSize: 20,
+        lineHeight: 20,
+        color: '#FFF',
+    },
+    quantityValue: {
+        minWidth: 24,
+        textAlign: 'center',
+        fontSize: 22,
+        fontWeight: '700',
+        color: theme.colors.text,
     },
     addButton: {
         flexDirection: 'row',

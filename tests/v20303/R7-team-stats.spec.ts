@@ -3,7 +3,7 @@
  * R7 — Team Statistics Aggregation & Visualization
  *
  * TDD STUB — tests are skipped until R7 is implemented.
- * Implementer: remove `test.skip` and make these pass.
+ * Implementer: remove `test` and make these pass.
  *
  * Acceptance criteria (from PRD R7):
  * - Stats accessible from team screen
@@ -20,7 +20,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     await page.goto('/team/stats')
   })
 
-  test.skip('stats page shows key metrics cards', async ({ page }) => {
+  test('stats page shows key metrics cards', async ({ page }) => {
     await expect(page.getByTestId('stats-tasks-completed')).toBeVisible()
     await expect(page.getByTestId('stats-completion-rate')).toBeVisible()
     await expect(page.getByTestId('stats-active-agents')).toBeVisible()
@@ -28,7 +28,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     await expect(page.getByTestId('stats-estimated-cost')).toBeVisible()
   })
 
-  test.skip('task completion rate shows percentage', async ({ page }) => {
+  test('task completion rate shows percentage', async ({ page }) => {
     const rateCard = page.getByTestId('stats-completion-rate')
     await expect(rateCard).toBeVisible()
 
@@ -36,7 +36,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     await expect(percentage).toBeVisible()
   })
 
-  test.skip('time range filter has 7d, 30d, 90d options', async ({ page }) => {
+  test('time range filter has 7d, 30d, 90d options', async ({ page }) => {
     const filter = page.getByTestId('stats-time-filter')
     await expect(filter).toBeVisible()
 
@@ -46,7 +46,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     await expect(page.getByText('90 days')).toBeVisible()
   })
 
-  test.skip('selecting time range updates stats data', async ({ page }) => {
+  test('selecting time range updates stats data', async ({ page }) => {
     const filter = page.getByTestId('stats-time-filter')
     await filter.click()
 
@@ -62,7 +62,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     await expect(page.getByTestId('stats-loading')).not.toBeVisible()
   })
 
-  test.skip('token usage shows formatted number', async ({ page }) => {
+  test('token usage shows formatted number', async ({ page }) => {
     const tokenCard = page.getByTestId('stats-token-usage')
     await expect(tokenCard).toBeVisible()
 
@@ -71,7 +71,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     expect(tokenText).toMatch(/\d+[K|M]?/)
   })
 
-  test.skip('estimated cost shows dollar amount', async ({ page }) => {
+  test('estimated cost shows dollar amount', async ({ page }) => {
     const costCard = page.getByTestId('stats-estimated-cost')
     await expect(costCard).toBeVisible()
 
@@ -80,12 +80,12 @@ test.describe('R7 — Team Stats Dashboard', () => {
     expect(costText).toMatch(/\$[\d,.]+/)
   })
 
-  test.skip('activity chart is visible', async ({ page }) => {
+  test('activity chart is visible', async ({ page }) => {
     const chart = page.getByTestId('stats-activity-chart')
     await expect(chart).toBeVisible()
   })
 
-  test.skip('export button opens export options', async ({ page }) => {
+  test('export button opens export options', async ({ page }) => {
     const exportBtn = page.getByRole('button', { name: /export/i })
     await exportBtn.click()
 
@@ -94,7 +94,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     await expect(page.getByText('CSV')).toBeVisible()
   })
 
-  test.skip('export as JSON triggers download', async ({ page }) => {
+  test('export as JSON triggers download', async ({ page }) => {
     const downloadPromise = page.waitForEvent('download')
 
     await page.getByRole('button', { name: /export/i }).click()
@@ -104,7 +104,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     expect(download.suggestedFilename()).toMatch(/\.json$/)
   })
 
-  test.skip('web: stats dashboard uses full width at 1280px', async ({ page }) => {
+  test('web: stats dashboard uses full width at 1280px', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
 
     const dashboard = page.getByTestId('stats-dashboard')
@@ -112,7 +112,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     expect(box?.width).toBeGreaterThan(1000)
   })
 
-  test.skip('mobile: stats show as stacked cards at <768px', async ({ page }) => {
+  test('mobile: stats show as stacked cards at <768px', async ({ page }) => {
     await page.setViewportSize({ width: 402, height: 874 })
 
     const cards = page.getByTestId(/stats-/)
@@ -125,7 +125,7 @@ test.describe('R7 — Team Stats Dashboard', () => {
     expect(box?.width).toBeLessThan(400)
   })
 
-  test.skip('refresh button reloads stats data', async ({ page }) => {
+  test('refresh button reloads stats data', async ({ page }) => {
     const refreshBtn = page.getByRole('button', { name: /refresh/i })
     await refreshBtn.click()
 

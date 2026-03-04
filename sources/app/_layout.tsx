@@ -28,6 +28,16 @@ import { monkeyPatchConsoleForRemoteLoggingForFasterAiAutoDebuggingOnlyInLocalBu
 import { useUnistyles } from 'react-native-unistyles';
 import { AsyncLock } from '@/utils/lock';
 
+// MSW for web API mocking
+async function startMSW() {
+    if (Platform.OS === 'web' && process.env.NODE_ENV === 'development') {
+        const { worker } = await import('@/mocks/browser');
+        return worker.start({
+            onUnhandledRequest: 'bypass',
+        });
+    }
+}
+
 export {
     // Catch any errors thrown by the Layout component.
     ErrorBoundary,
@@ -158,6 +168,7 @@ export default function RootLayout() {
     React.useEffect(() => {
         (async () => {
             try {
+                await startMSW();
                 await loadFonts();
                 await sodium.ready;
                 await initializeI18n();

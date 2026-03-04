@@ -196,7 +196,7 @@ const styles = StyleSheet.create((theme) => ({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: theme.colors.text.primary,
+    color: theme.colors.text,
     marginBottom: 16,
   },
   inputGroup: {
@@ -205,17 +205,17 @@ const styles = StyleSheet.create((theme) => ({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.colors.text.secondary,
+    color: theme.colors.textSecondary,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: theme.colors.groupped.cell,
+    backgroundColor: theme.colors.input.background,
     borderRadius: 12,
     padding: 12,
     fontSize: 16,
-    color: theme.colors.text.primary,
+    color: theme.colors.input.text,
     borderWidth: 1,
-    borderColor: theme.colors.border.primary,
+    borderColor: theme.colors.divider,
   },
   textArea: {
     minHeight: 80,
@@ -230,25 +230,25 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: theme.colors.groupped.cell,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border.primary,
+    borderColor: theme.colors.divider,
     alignItems: 'center',
   },
   typeButtonActive: {
-    backgroundColor: theme.colors.accent.primary,
-    borderColor: theme.colors.accent.primary,
+    backgroundColor: theme.colors.button.primary.background,
+    borderColor: theme.colors.button.primary.background,
   },
   typeButtonText: {
     fontSize: 14,
-    color: theme.colors.text.secondary,
+    color: theme.colors.textSecondary,
   },
   typeButtonTextActive: {
     color: '#fff',
     fontWeight: '600',
   },
   button: {
-    backgroundColor: theme.colors.accent.primary,
+    backgroundColor: theme.colors.button.primary.background,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -278,16 +278,16 @@ const styles = StyleSheet.create((theme) => ({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.colors.text.primary,
+    color: theme.colors.text,
     marginBottom: 12,
   },
   recommendationCard: {
-    backgroundColor: theme.colors.groupped.cell,
+    backgroundColor: theme.colors.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: theme.colors.border.primary,
+    borderColor: theme.colors.divider,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -298,17 +298,17 @@ const styles = StyleSheet.create((theme) => ({
   roleName: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.colors.text.primary,
+    color: theme.colors.text,
     flex: 1,
   },
   matchScore: {
     fontSize: 16,
     fontWeight: '600',
-    color: theme.colors.accent.primary,
+    color: theme.colors.button.primary.background,
   },
   roleCategory: {
     fontSize: 14,
-    color: theme.colors.text.tertiary,
+    color: theme.colors.textSecondary,
     marginBottom: 12,
     textTransform: 'capitalize',
   },
@@ -317,19 +317,19 @@ const styles = StyleSheet.create((theme) => ({
   },
   skillLabel: {
     fontSize: 14,
-    color: theme.colors.text.secondary,
+    color: theme.colors.textSecondary,
   },
   reasonsSection: {
     marginBottom: 12,
   },
   reason: {
     fontSize: 14,
-    color: theme.colors.text.secondary,
+    color: theme.colors.textSecondary,
     lineHeight: 20,
     marginBottom: 4,
   },
   applyButton: {
-    backgroundColor: theme.colors.accent.primary,
+    backgroundColor: theme.colors.button.primary.background,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',

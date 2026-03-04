@@ -1661,7 +1661,7 @@ export default function NewTeamScreen() {
                                 <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>Machine</Text>
                                 {machines.length === 0 ? (
                                     <Text style={styles.helperText}>
-                                        Start the aha CLI on your computer to spawn teammates automatically.
+                                        Connect a machine via device code or QR link. CLI is optional for advanced automation.
                                     </Text>
                                 ) : (
                                     <View style={styles.machineList}>

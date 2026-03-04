@@ -4,15 +4,13 @@
  * Based on Mom Test finding: 9/10 users want a "Quick Start" default path
  */
 
-import { Dimensions, Platform, Pressable, ActivityIndicator } from 'react-native';
+import { Dimensions, Pressable, ActivityIndicator, View, ScrollView } from 'react-native';
 import React from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Text } from '@/components/StyledText';
 import { Ionicons } from '@expo/vector-icons';
 import { WizardProvider, useWizard } from '@/components/WizardContext';
-import { WizardStepper } from '@/components/WizardStepper';
 import { layout } from '@/components/layout';
 import { useAhaAction } from '@/hooks/useAhaAction';
 import { useAllMachines } from '@/sync/storage';
@@ -47,33 +45,6 @@ function WebModalWrapper({ children }: { children: React.ReactNode }) {
                 <View style={styles.wizardContainer}>
                     {children}
                 </View>
-            </View>
-        </View>
-    );
-}
-
-const QUICK_START_MASTER_ROLE_ID = 'master';
-const QUICK_START_BUILDER_ROLE_ID = 'builder';
-const QUICK_START_QA_ROLE_ID = 'qa';
-
-const WIZARD_STEPS = [
-    { id: 'name', title: 'Name' },
-    { id: 'roles', title: 'Roles' },
-    { id: 'confirm', title: 'Deploy' },
-] as const;
-
-// ---- Web Modal Wrapper ----
-
-function WebModalWrapper({ children }: { children: React.ReactNode }) {
-    const { width } = Dimensions.get('window');
-    const isLargeScreen = width >= 768;
-
-    if (!isLargeScreen) return <>{children}</>;
-
-    return (
-        <View style={styles.modalOverlay} testID="main-layout">
-            <View style={styles.modalContent} role="dialog" aria-modal="true">
-                {children}
             </View>
         </View>
     );
@@ -204,7 +175,36 @@ const WizardContent = React.memo(function WizardContent() {
 
     return (
         <View style={styles.container}>
-            <WizardStepper steps={[...WIZARD_STEPS]} currentStep={state.currentStep} />
+            <View style={styles.wizardNav}>
+                <Pressable
+                    onPress={() => {
+                        if (state.currentStep === 0) {
+                            handleCancel();
+                        } else {
+                            prevStep();
+                        }
+                    }}
+                    style={styles.wizardNavBack}
+                    accessibilityRole="button"
+                >
+                    <Ionicons name="chevron-back" size={18} color="#1A1918" />
+                    <Text style={styles.wizardNavTitle}>New Legion</Text>
+                </Pressable>
+                <Text style={styles.wizardStepText}>Step {state.currentStep + 1} of {WIZARD_STEPS.length}</Text>
+            </View>
+
+            <View style={styles.progressBar}>
+                {WIZARD_STEPS.map((step, index) => (
+                    <View
+                        key={step.id}
+                        style={[
+                            styles.progressSegment,
+                            index <= state.currentStep && styles.progressSegmentActive,
+                        ]}
+                    />
+                ))}
+            </View>
+
             {renderStep()}
         </View>
     );
@@ -472,5 +472,50 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     wizardContainer: {
         flex: 1,
+    },
+    wizardNav: {
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 10,
+        backgroundColor: theme.colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    wizardNavBack: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    wizardNavTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#1A1918',
+    },
+    wizardStepText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: theme.colors.textSecondary,
+    },
+    progressBar: {
+        backgroundColor: theme.colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+        paddingHorizontal: 16,
+        paddingBottom: 14,
+        flexDirection: 'row',
+        gap: 8,
+    },
+    progressSegment: {
+        flex: 1,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    progressSegmentActive: {
+        backgroundColor: '#3D8A5A',
     },
 }));

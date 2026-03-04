@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/StyledText';
-import { useArtifacts, storage } from '@/sync/storage';
+import { useArtifacts } from '@/sync/storage';
 import { DecryptedArtifact } from '@/sync/artifactTypes';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -12,6 +12,7 @@ import { layout } from '@/components/layout';
 import { sync } from '@/sync/sync';
 import { FAB } from '@/components/FAB';
 import { Modal } from '@/modal/ModalManager';
+import { AppStateView } from '@/components/AppStateView';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -19,6 +20,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: theme.colors.groupped.background,
     },
     contentContainer: {
+        paddingTop: 16,
         paddingBottom: 100,
     },
     loadingContainer: {
@@ -50,50 +52,89 @@ const stylesheet = StyleSheet.create((theme) => ({
         lineHeight: 20,
     },
     teamItem: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: '#FFFFFF',
         marginHorizontal: 16,
-        marginBottom: 1,
+        marginBottom: 12,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E5E4E1',
         paddingHorizontal: 16,
         paddingVertical: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
+        gap: 10,
     },
     teamItemFirst: {
-        borderTopLeftRadius: 12,
-        borderTopRightRadius: 12,
-        marginTop: 16,
+        marginTop: 0,
     },
     teamItemLast: {
-        borderBottomLeftRadius: 12,
-        borderBottomRightRadius: 12,
-        marginBottom: 16,
+        marginBottom: 12,
     },
     teamItemSingle: {
-        borderRadius: 12,
-        marginTop: 16,
-        marginBottom: 16,
+        marginTop: 0,
+        marginBottom: 12,
+    },
+    teamItemSelected: {
+        borderColor: theme.colors.button.primary.background,
+        backgroundColor: `${theme.colors.button.primary.background}0A`,
+    },
+    teamTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
     },
     teamContent: {
         flex: 1,
-        marginRight: 8,
     },
     teamTitle: {
-        fontSize: 16,
-        fontWeight: '500',
+        fontSize: 18,
+        fontWeight: '600',
         color: theme.colors.text,
-        marginBottom: 4,
     },
     teamUntitled: {
         color: theme.colors.textSecondary,
         fontStyle: 'italic',
     },
+    teamStatusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: '#D9D8D4',
+        backgroundColor: '#F6F5F2',
+    },
+    teamStatusBadgeActive: {
+        borderColor: '#3D8A5A',
+        backgroundColor: '#EAF5EE',
+    },
+    teamStatusText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#8A8882',
+    },
+    teamStatusTextActive: {
+        color: '#3D8A5A',
+    },
+    teamDescription: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: theme.colors.textSecondary,
+    },
     teamMeta: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 12,
     },
     teamDate: {
-        fontSize: 13,
+        fontSize: 12,
+        fontWeight: '500',
         color: theme.colors.textSecondary,
+    },
+    teamActions: {
+        marginTop: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
     },
     teamChevron: {
         color: theme.colors.textSecondary,
@@ -180,6 +221,58 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontWeight: '600',
         color: theme.colors.text,
     },
+    connectRepoCard: {
+        marginHorizontal: 16,
+        marginBottom: 14,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#3D8A5A',
+        backgroundColor: '#EAF5EE',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    connectRepoIconWrap: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    connectRepoCopyWrap: {
+        flex: 1,
+        gap: 2,
+    },
+    connectRepoTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#1A1918',
+    },
+    connectRepoDesc: {
+        fontSize: 12,
+        color: '#6D6C6A',
+    },
+    headerActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    headerActionText: {
+        fontSize: 16,
+        color: theme.colors.text,
+        fontWeight: '500',
+    },
+    headerAddButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#3D8A5A',
+    },
 }));
 
 export default function TeamsScreen() {
@@ -195,6 +288,7 @@ export default function TeamsScreen() {
     }, [allArtifacts]);
 
     const [isLoading, setIsLoading] = React.useState(false);
+    const [loadError, setLoadError] = React.useState<'network' | 'unknown' | null>(null);
     const [isSelectionMode, setIsSelectionMode] = React.useState(false);
     const [selectedTeams, setSelectedTeams] = React.useState<Set<string>>(new Set());
     const [isBatchProcessing, setIsBatchProcessing] = React.useState(false);
@@ -254,6 +348,38 @@ export default function TeamsScreen() {
         }
         return [];
     }, [teams]);
+
+    const getTeamDisplay = React.useCallback((team: DecryptedArtifact) => {
+        let parsed: any = {};
+        try {
+            parsed = team.body && typeof team.body === 'string' ? JSON.parse(team.body) : {};
+        } catch (error) {
+            parsed = {};
+        }
+
+        const teamNode = parsed.team || parsed;
+        const members = Array.isArray(teamNode?.members) ? teamNode.members : [];
+        const roles = Array.isArray(teamNode?.roles) ? teamNode.roles : [];
+        const memberCount = members.length || team.sessions?.length || 0;
+        const roleCount = roles.reduce((acc: number, role: any) => {
+            const quantity = Number(role?.quantity ?? 0);
+            return acc + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0);
+        }, 0);
+        const title = (team.title || teamNode?.name || '').trim() || 'Untitled Team';
+        const description =
+            (teamNode?.goal || teamNode?.description || '').trim() ||
+            `Collaborative team with ${Math.max(memberCount, 1)} member${memberCount === 1 ? '' : 's'}.`;
+
+        return {
+            title,
+            description,
+            memberCount,
+            roleCount,
+            isActive: memberCount > 0,
+            status: memberCount > 0 ? 'Active' : 'Idle',
+            updatedAtLabel: new Date(team.updatedAt).toLocaleDateString(),
+        };
+    }, []);
 
     // Batch archive handler
     const handleBatchArchive = React.useCallback(async () => {
@@ -344,33 +470,33 @@ export default function TeamsScreen() {
         }
     }, [selectedTeams, extractSessionIds, exitSelectionMode, t]);
 
-    React.useEffect(() => {
-        let cancelled = false;
-        let isMounted = true;
-
-        (async () => {
-            try {
-                const credentials = sync.getCredentials();
-                if (!credentials) {
-                    return;
-                }
-
-                setIsLoading(true);
-                await sync.fetchArtifactsList();
-            } catch (error) {
-                // Silently fail - sync will auto-retry
-            } finally {
-                if (isMounted && !cancelled) {
-                    setIsLoading(false);
-                }
+    const fetchTeams = React.useCallback(async () => {
+        try {
+            const credentials = sync.getCredentials();
+            if (!credentials) {
+                return;
             }
-        })();
 
-        return () => {
-            cancelled = true;
-            isMounted = false;
-        };
+            setLoadError(null);
+            setIsLoading(true);
+            await sync.fetchArtifactsList();
+        } catch (error) {
+            const message = error instanceof Error ? error.message.toLowerCase() : '';
+            const isNetworkError =
+                message.includes('network') ||
+                message.includes('fetch') ||
+                message.includes('timeout') ||
+                message.includes('offline') ||
+                message.includes('econn');
+            setLoadError(isNetworkError ? 'network' : 'unknown');
+        } finally {
+            setIsLoading(false);
+        }
     }, []);
+
+    React.useEffect(() => {
+        void fetchTeams();
+    }, [fetchTeams]);
 
     const handleDelete = React.useCallback(async (teamId: string, event: any) => {
         event.stopPropagation();
@@ -412,15 +538,18 @@ export default function TeamsScreen() {
         const isLast = index === teams.length - 1;
         const isSingle = teams.length === 1;
         const isSelected = selectedTeams.has(item.id);
+        const display = getTeamDisplay(item);
 
         return (
             <Pressable
                 style={[
                     styles.teamItem,
+                    isSelected ? styles.teamItemSelected : undefined,
                     isSingle ? styles.teamItemSingle :
                         isFirst ? styles.teamItemFirst :
                             isLast ? styles.teamItemLast : {}
                 ]}
+                testID="team-card"
                 onPress={() => {
                     if (isSelectionMode) {
                         toggleTeamSelection(item.id);
@@ -430,29 +559,54 @@ export default function TeamsScreen() {
                 }}
                 onLongPress={() => handleLongPress(item.id)}
             >
-                {isSelectionMode ? (
-                    <View style={[styles.checkbox, isSelected ? styles.checkboxSelected : undefined]}>
-                        {isSelected ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
+                <View style={styles.teamTopRow}>
+                    <View style={styles.teamContent}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            {isSelectionMode ? (
+                                <View style={[styles.checkbox, isSelected ? styles.checkboxSelected : undefined]}>
+                                    {isSelected ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
+                                </View>
+                            ) : null}
+                            <Text
+                                style={[
+                                    styles.teamTitle,
+                                    display.title === 'Untitled Team' ? styles.teamUntitled : undefined
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {display.title}
+                            </Text>
+                        </View>
                     </View>
-                ) : null}
-                <View style={styles.teamContent}>
-                    <Text
-                        style={[
-                            styles.teamTitle,
-                            !item.title ? styles.teamUntitled : undefined
-                        ]}
-                        numberOfLines={1}
-                    >
-                        {item.title || 'Untitled Team'}
-                    </Text>
-                    <View style={styles.teamMeta}>
-                        <Text style={styles.teamDate}>
-                            {item.sessions?.length || 0} members • {new Date(item.updatedAt).toLocaleDateString()}
-                        </Text>
-                    </View>
+                    {!isSelectionMode ? (
+                        <View
+                            style={[
+                                styles.teamStatusBadge,
+                                display.isActive ? styles.teamStatusBadgeActive : undefined,
+                            ]}
+                            testID="team-status"
+                        >
+                            <Text
+                                style={[
+                                    styles.teamStatusText,
+                                    display.isActive ? styles.teamStatusTextActive : undefined,
+                                ]}
+                            >
+                                {display.status}
+                            </Text>
+                        </View>
+                    ) : null}
+                </View>
+                <Text style={styles.teamDescription} numberOfLines={2}>
+                    {display.description}
+                </Text>
+                <View style={styles.teamMeta}>
+                    <Text style={styles.teamDate}>{display.memberCount} members</Text>
+                    <Text style={styles.teamDate}>{display.roleCount} roles</Text>
+                    <Text style={styles.teamDate}>Updated {display.updatedAtLabel}</Text>
                 </View>
                 {!isSelectionMode ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={styles.teamActions}>
                         <Pressable
                             onPress={(e) => handleDelete(item.id, e)}
                             style={{ padding: 8, marginRight: 4 }}
@@ -465,9 +619,32 @@ export default function TeamsScreen() {
                 ) : null}
             </Pressable>
         );
-    }, [teams, router, styles, handleDelete, isSelectionMode, selectedTeams, toggleTeamSelection, handleLongPress, theme]);
+    }, [teams, router, styles, handleDelete, isSelectionMode, selectedTeams, toggleTeamSelection, handleLongPress, theme, getTeamDisplay]);
 
     const keyExtractor = React.useCallback((item: DecryptedArtifact) => item.id, []);
+
+    const ListHeaderComponent = React.useCallback(() => {
+        if (isSelectionMode || teams.length === 0) {
+            return null;
+        }
+
+        return (
+            <Pressable
+                style={styles.connectRepoCard}
+                onPress={() => router.push('/teams/new-wizard')}
+                accessibilityRole="button"
+            >
+                <View style={styles.connectRepoIconWrap}>
+                    <Ionicons name="git-branch-outline" size={20} color="#3D8A5A" />
+                </View>
+                <View style={styles.connectRepoCopyWrap}>
+                    <Text style={styles.connectRepoTitle}>Connect a Repo</Text>
+                    <Text style={styles.connectRepoDesc}>Start building with AI agents</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#6D6C6A" />
+            </Pressable>
+        );
+    }, [isSelectionMode, teams.length, router, styles]);
 
     const ListEmptyComponent = React.useCallback(() => {
         if (isLoading) {
@@ -481,45 +658,46 @@ export default function TeamsScreen() {
             );
         }
 
-        return (
-            <View style={styles.emptyContainer}>
-                <Ionicons
-                    name="people-outline"
-                    size={64}
-                    style={styles.emptyIcon}
-                    color={theme.colors.textSecondary}
+        if (loadError) {
+            return (
+                <AppStateView
+                    preset="network-error"
+                    title={loadError === 'network' ? undefined : 'Unable to Load Teams'}
+                    message={
+                        loadError === 'network'
+                            ? undefined
+                            : 'We could not load your team list right now.'
+                    }
+                    recovery={
+                        loadError === 'network'
+                            ? undefined
+                            : 'Please retry in a moment.'
+                    }
+                    primaryAction={{
+                        label: 'Retry',
+                        onPress: () => {
+                            void fetchTeams();
+                        },
+                    }}
                 />
-                <Text style={styles.emptyTitle}>
-                    No Teams Yet
-                </Text>
-                <Text style={styles.emptyDescription}>
-                    Create a team to collaborate with multiple agents.
-                </Text>
-                <Pressable
-                    style={styles.quickStartButton}
-                    onPress={() => router.push('/teams/new')}
-                    accessibilityRole="button"
-                >
-                    <Ionicons name="flash" size={20} color="#FFFFFF" />
-                    <Text style={styles.quickStartButtonText}>Quick Start</Text>
-                </Pressable>
-                <Pressable
-                    style={styles.connectRepoButton}
-                    onPress={() => router.push('/teams/new')}
-                    accessibilityRole="button"
-                >
-                    <Text style={styles.connectRepoButtonText}>Connect Repository</Text>
-                </Pressable>
-            </View>
+            );
+        }
+
+        return (
+            <AppStateView
+                preset="empty-team"
+                primaryAction={{ label: 'Quick Start', onPress: () => router.push('/teams/new-wizard') }}
+                secondaryAction={{ label: 'Connect a Repo', onPress: () => router.push('/teams/new-wizard') }}
+            />
         );
-    }, [isLoading, styles, theme, router]);
+    }, [isLoading, styles, loadError, fetchTeams, router]);
 
     return (
         <>
             <Stack.Screen
                 options={{
                     headerShown: true,
-                    headerTitle: isSelectionMode ? `${selectedTeams.size} Selected` : 'Teams',
+                    headerTitle: isSelectionMode ? `${selectedTeams.size} Selected` : 'My Legions',
                     headerLeft: isSelectionMode ? () => (
                         <Pressable onPress={exitSelectionMode} style={{ padding: 8 }}>
                             <Text style={{ color: theme.colors.text, fontSize: 16 }}>Cancel</Text>
@@ -530,18 +708,27 @@ export default function TeamsScreen() {
                             <Text style={{ color: theme.colors.text, fontSize: 16 }}>Select All</Text>
                         </Pressable>
                     ) : () => (
-                        <Pressable
-                            onPress={() => setIsSelectionMode(true)}
-                            style={{ padding: 8 }}
-                            disabled={teams.length === 0}
-                        >
-                            <Text style={{
-                                color: teams.length === 0 ? theme.colors.textSecondary : theme.colors.text,
-                                fontSize: 16
-                            }}>
-                                Edit
-                            </Text>
-                        </Pressable>
+                        <View style={styles.headerActionRow}>
+                            <Pressable
+                                onPress={() => setIsSelectionMode(true)}
+                                style={{ padding: 8 }}
+                                disabled={teams.length === 0}
+                            >
+                                <Text style={[
+                                    styles.headerActionText,
+                                    teams.length === 0 ? { color: theme.colors.textSecondary } : undefined
+                                ]}>
+                                    Edit
+                                </Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => router.push('/teams/new-wizard')}
+                                style={styles.headerAddButton}
+                                accessibilityRole="button"
+                            >
+                                <Ionicons name="add" size={18} color="#FFFFFF" />
+                            </Pressable>
+                        </View>
                     ),
                 }}
             />
@@ -556,12 +743,13 @@ export default function TeamsScreen() {
                         { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' },
                         isSelectionMode && { paddingBottom: 100 + safeArea.bottom }
                     ]}
+                    ListHeaderComponent={ListHeaderComponent}
                     ListEmptyComponent={ListEmptyComponent}
                     extraData={selectedTeams}
                 />
 
                 {/* Floating Action Button - hide in selection mode */}
-                {!isSelectionMode && <FAB onPress={() => router.push('/teams/new')} />}
+                {!isSelectionMode && <FAB onPress={() => router.push('/teams/new-wizard')} />}
 
                 {/* Batch Action Bar */}
                 {isSelectionMode && (

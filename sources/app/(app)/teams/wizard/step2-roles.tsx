@@ -1,14 +1,3 @@
-/**
- * R4: Wizard Step 2 - Role Selection
- * Presents preset configuration cards to reduce decision fatigue.
- * Based on Mom Test: users need "good defaults" with role explanations visible without clicking.
- *
- * Preset options:
- *  - "Builder Pack": 1 Master + 2 Builders (fast shipping)
- *  - "Full Team": Master + Builder + QA + Reviewer (quality-focused)
- *  - "Custom": manual role selection
- */
-
 import React from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { Text } from '@/components/StyledText';
@@ -19,218 +8,151 @@ import { useAllMachines } from '@/sync/storage';
 import { layout } from '@/components/layout';
 import { RoleConfig, generateRoleId } from './types';
 
-// ---- Role Preset Definitions ----
-
-interface RolePreset {
-    id: string;
-    label: string;
-    tagline: string;
-    description: string;
-    icon: string;
-    roles: Array<{ roleId: string; roleName: string; quantity: number; description: string }>;
-    recommended?: boolean;
-}
-
-const ROLE_PRESETS: RolePreset[] = [
-    {
-        id: 'builder-pack',
-        label: 'Builder Pack',
-        tagline: 'Ship fast',
-        description: 'One lead agent coordinating two workers. Great for focused feature development and solo projects.',
-        icon: 'rocket',
-        recommended: true,
-        roles: [
-            {
-                roleId: 'master',
-                roleName: 'Master',
-                quantity: 1,
-                description: 'Plans work and coordinates the team',
-            },
-            {
-                roleId: 'builder',
-                roleName: 'Builder',
-                quantity: 2,
-                description: 'Implements features and writes code',
-            },
-        ],
-    },
-    {
-        id: 'full-team',
-        label: 'Full Team',
-        tagline: 'Quality-first',
-        description: 'Complete cycle: plan, build, test, review. Best for production-critical or long-running projects.',
-        icon: 'shield-checkmark',
-        roles: [
-            {
-                roleId: 'master',
-                roleName: 'Master',
-                quantity: 1,
-                description: 'Plans and coordinates',
-            },
-            {
-                roleId: 'builder',
-                roleName: 'Builder',
-                quantity: 1,
-                description: 'Implements features',
-            },
-            {
-                roleId: 'qa',
-                roleName: 'QA',
-                quantity: 1,
-                description: 'Tests and validates quality',
-            },
-            {
-                roleId: 'reviewer',
-                roleName: 'Reviewer',
-                quantity: 1,
-                description: 'Reviews code and gives feedback',
-            },
-        ],
-    },
-    {
-        id: 'custom',
-        label: 'Custom',
-        tagline: 'Your way',
-        description: 'Start with a single Builder and manually add roles. Full control over your team composition.',
-        icon: 'construct',
-        roles: [
-            {
-                roleId: 'builder',
-                roleName: 'Builder',
-                quantity: 1,
-                description: 'Implements features and writes code',
-            },
-        ],
-    },
-];
-
-// ---- Role Description Item ----
-
-interface RoleDescriptionItemProps {
-    roleName: string;
-    quantity: number;
-    description: string;
-}
-
-const RoleDescriptionItem = React.memo(function RoleDescriptionItem({
-    roleName,
-    quantity,
-    description,
-}: RoleDescriptionItemProps) {
-    const styles = stylesheet;
-    return (
-        <View style={styles.roleRow}>
-            <View style={styles.roleQuantityBadge}>
-                <Text style={styles.roleQuantityText}>{quantity}x</Text>
-            </View>
-            <View style={styles.roleInfo}>
-                <Text style={styles.roleItemName}>{roleName}</Text>
-                <Text style={styles.roleItemDesc}>{description}</Text>
-            </View>
-        </View>
-    );
-});
-
-// ---- Preset Card ----
-
-interface PresetCardProps {
-    preset: RolePreset;
-    isSelected: boolean;
-    onSelect: () => void;
-}
-
-const PresetCard = React.memo(function PresetCard({ preset, isSelected, onSelect }: PresetCardProps) {
-    const styles = stylesheet;
-    const { theme } = useUnistyles();
-
-    return (
-        <Pressable
-            style={[styles.presetCard, isSelected && styles.presetCardSelected]}
-            onPress={onSelect}
-        >
-            <View style={styles.presetHeader}>
-                <View style={[styles.presetIconWrap, isSelected && styles.presetIconWrapSelected]}>
-                    <Ionicons
-                        name={preset.icon as any}
-                        size={20}
-                        color={isSelected ? '#FFF' : theme.colors.button.primary.background}
-                    />
-                </View>
-                <View style={styles.presetTitleBlock}>
-                    <View style={styles.presetTitleRow}>
-                        <Text style={[styles.presetLabel, isSelected && styles.presetLabelSelected]}>
-                            {preset.label}
-                        </Text>
-                        {preset.recommended && (
-                            <View style={[styles.recommendedBadge, isSelected && styles.recommendedBadgeSelected]}>
-                                <Text style={[styles.recommendedText, isSelected && styles.recommendedTextSelected]}>
-                                    Recommended
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                    <Text style={[styles.presetTagline, isSelected && styles.presetTaglineSelected]}>
-                        {preset.tagline}
-                    </Text>
-                </View>
-                <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
-                    {isSelected && <View style={styles.radioInner} />}
-                </View>
-            </View>
-
-            <Text style={[styles.presetDescription, isSelected && styles.presetDescriptionSelected]}>
-                {preset.description}
-            </Text>
-
-            <View style={styles.roleList}>
-                {preset.roles.map((role) => (
-                    <RoleDescriptionItem
-                        key={role.roleId}
-                        roleName={role.roleName}
-                        quantity={role.quantity}
-                        description={role.description}
-                    />
-                ))}
-            </View>
-        </Pressable>
-    );
-});
-
-// ---- Step 2 Main ----
-
 interface Step2RolesProps {
     onNext: () => void;
     onBack: () => void;
 }
 
+interface RoleBlueprint {
+    id: string;
+    title: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    tint: string;
+    softBg: string;
+    defaultMode: RoleConfig['mode'];
+}
+
+const ROLE_BLUEPRINTS: Record<string, RoleBlueprint> = {
+    builder: {
+        id: 'builder',
+        title: 'Builder',
+        icon: 'construct',
+        tint: '#3D8A5A',
+        softBg: '#EAF5EE',
+        defaultMode: 'codex',
+    },
+    qa: {
+        id: 'qa',
+        title: 'QA Reviewer',
+        icon: 'shield-checkmark',
+        tint: '#D08068',
+        softBg: '#FBEFEB',
+        defaultMode: 'claude-code',
+    },
+    reviewer: {
+        id: 'reviewer',
+        title: 'Reviewer',
+        icon: 'search',
+        tint: '#3D8A5A',
+        softBg: '#EAF5EE',
+        defaultMode: 'claude-code',
+    },
+    master: {
+        id: 'master',
+        title: 'Master',
+        icon: 'sparkles',
+        tint: '#2F7A9B',
+        softBg: '#E8F2F7',
+        defaultMode: 'claude-code',
+    },
+};
+
+const MARKET_ROLE_SEQUENCE = ['reviewer', 'master', 'builder', 'qa'] as const;
+
+function machineLabel(machine: any): string {
+    return machine?.metadata?.displayName || machine?.metadata?.host || machine?.id?.slice(0, 8) || 'Machine-1';
+}
+
+function blueprintFor(roleId: string, roleName?: string): RoleBlueprint {
+    if (ROLE_BLUEPRINTS[roleId]) {
+        return ROLE_BLUEPRINTS[roleId];
+    }
+
+    return {
+        id: roleId,
+        title: roleName || roleId,
+        icon: 'construct',
+        tint: '#3D8A5A',
+        softBg: '#EAF5EE',
+        defaultMode: 'claude-code',
+    };
+}
+
+function createDefaultRoles(machineId?: string): RoleConfig[] {
+    return [
+        {
+            id: generateRoleId(),
+            roleId: 'builder',
+            roleName: 'Builder',
+            quantity: 2,
+            mode: 'codex',
+            machineId,
+        },
+        {
+            id: generateRoleId(),
+            roleId: 'qa',
+            roleName: 'QA Reviewer',
+            quantity: 1,
+            mode: 'claude-code',
+            machineId,
+        },
+    ];
+}
+
 export const Step2Roles = React.memo(function Step2Roles({ onNext, onBack }: Step2RolesProps) {
     const { state, setState } = useWizard();
+    const { theme } = useUnistyles();
     const styles = stylesheet;
     const machines = useAllMachines();
 
-    const [selectedPresetId, setSelectedPresetId] = React.useState<string>(() => {
-        if (state.roles.length === 0) return 'builder-pack';
-        return 'custom';
+    const firstMachineId = machines[0]?.id;
+
+    const [roles, setRoles] = React.useState<RoleConfig[]>(() => {
+        if (state.roles.length > 0) {
+            return state.roles;
+        }
+        return createDefaultRoles(firstMachineId);
     });
+    const [expandedRoleId, setExpandedRoleId] = React.useState<string | null>(() => {
+        return state.roles[0]?.id ?? null;
+    });
+    const [advancedRoleId, setAdvancedRoleId] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        if (!firstMachineId) {
+            return;
+        }
+        setRoles((prev) => prev.map((role) => (role.machineId ? role : { ...role, machineId: firstMachineId })));
+    }, [firstMachineId]);
+
+    const updateRole = React.useCallback((roleId: string, updater: (role: RoleConfig) => RoleConfig) => {
+        setRoles((prev) => prev.map((role) => (role.id === roleId ? updater(role) : role)));
+    }, []);
+
+    const handleAddRoleFromMarket = React.useCallback(() => {
+        const currentRoleIds = new Set(roles.map((role) => role.roleId));
+        const nextRoleId =
+            MARKET_ROLE_SEQUENCE.find((roleId) => !currentRoleIds.has(roleId)) ??
+            MARKET_ROLE_SEQUENCE[roles.length % MARKET_ROLE_SEQUENCE.length];
+        const blueprint = blueprintFor(nextRoleId);
+
+        const newRole: RoleConfig = {
+            id: generateRoleId(),
+            roleId: nextRoleId,
+            roleName: blueprint.title,
+            quantity: 1,
+            mode: blueprint.defaultMode,
+            machineId: firstMachineId,
+        };
+
+        setRoles((prev) => [...prev, newRole]);
+        setExpandedRoleId(newRole.id);
+    }, [roles, firstMachineId]);
 
     const handleNext = React.useCallback(() => {
-        const preset = ROLE_PRESETS.find((p) => p.id === selectedPresetId);
-        if (!preset) return;
-
-        const firstMachineId = machines[0]?.id;
-
-        const roles: RoleConfig[] = preset.roles.map((r) => ({
-            id: generateRoleId(),
-            roleId: r.roleId,
-            roleName: r.roleName,
-            quantity: r.quantity,
-            mode: 'claude-code' as const,
-            machineId: firstMachineId,
-        }));
-
         setState({ roles });
         onNext();
-    }, [selectedPresetId, machines, setState, onNext]);
+    }, [setState, roles, onNext]);
 
     return (
         <ScrollView
@@ -241,51 +163,196 @@ export const Step2Roles = React.memo(function Step2Roles({ onNext, onBack }: Ste
             ]}
             testID="wizard-step-2"
         >
+            <Text style={styles.sectionTitle}>Configure Roles</Text>
             <Text style={styles.sectionHint}>
-                Choose a role composition. Each agent has a specific job on your team.
-                You can adjust quantities and settings after creation.
+                Set up agent roles, quantities and modes for your legion.
             </Text>
 
-            {ROLE_PRESETS.map((preset) => (
-                <PresetCard
-                    key={preset.id}
-                    preset={preset}
-                    isSelected={selectedPresetId === preset.id}
-                    onSelect={() => setSelectedPresetId(preset.id)}
-                />
-            ))}
+            <View style={styles.roleList}>
+                {roles.map((role) => {
+                    const blueprint = blueprintFor(role.roleId, role.roleName);
+                    const isExpanded = expandedRoleId === role.id;
+                    const isAdvancedOpen = advancedRoleId === role.id;
+                    const roleMachine = machines.find((item) => item.id === role.machineId);
+                    const machineName = roleMachine ? machineLabel(roleMachine) : 'Machine-1';
+                    const modeLabel = role.mode === 'codex' ? 'codex' : 'claudecode';
 
-            {/* Hidden checkboxes for testing - reflect preset selection */}
-            <View style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}>
+                    return (
+                        <View key={role.id} style={styles.roleCard}>
+                            <View style={styles.roleTop}>
+                                <View style={[styles.roleIconWrap, { backgroundColor: blueprint.softBg }]}>
+                                    <Ionicons name={blueprint.icon} size={18} color={blueprint.tint} />
+                                </View>
+                                <Pressable
+                                    style={styles.roleInfo}
+                                    onPress={() => setExpandedRoleId((prev) => (prev === role.id ? null : role.id))}
+                                >
+                                    <Text style={styles.roleName}>{role.roleName || blueprint.title}</Text>
+                                    <Text style={styles.roleMeta}>
+                                        {modeLabel} · x{role.quantity} · {machineName}
+                                    </Text>
+                                </Pressable>
+                                <View style={styles.countWrap}>
+                                    <Pressable
+                                        style={styles.countButton}
+                                        onPress={() =>
+                                            updateRole(role.id, (item) => ({
+                                                ...item,
+                                                quantity: Math.max(1, item.quantity - 1),
+                                            }))
+                                        }
+                                    >
+                                        <Text style={styles.countButtonText}>-</Text>
+                                    </Pressable>
+                                    <Text style={styles.countValue}>{role.quantity}</Text>
+                                    <Pressable
+                                        style={styles.countButtonPrimary}
+                                        onPress={() =>
+                                            updateRole(role.id, (item) => ({
+                                                ...item,
+                                                quantity: item.quantity + 1,
+                                            }))
+                                        }
+                                    >
+                                        <Text style={styles.countButtonPrimaryText}>+</Text>
+                                    </Pressable>
+                                </View>
+                            </View>
+
+                            {isExpanded && (
+                                <View style={styles.expandedBody}>
+                                    <View style={styles.row}>
+                                        <View style={styles.rowItem}>
+                                            <Text style={styles.rowLabel}>Agent Type</Text>
+                                            <View style={styles.typeSwitch}>
+                                                <Pressable
+                                                    style={[
+                                                        styles.typeOption,
+                                                        role.mode === 'codex' && styles.typeOptionActive,
+                                                    ]}
+                                                    onPress={() => updateRole(role.id, (item) => ({ ...item, mode: 'codex' }))}
+                                                >
+                                                    <Text
+                                                        style={[
+                                                            styles.typeOptionText,
+                                                            role.mode === 'codex' && styles.typeOptionTextActive,
+                                                        ]}
+                                                    >
+                                                        codex
+                                                    </Text>
+                                                </Pressable>
+                                                <Pressable
+                                                    style={[
+                                                        styles.typeOption,
+                                                        role.mode === 'claude-code' && styles.typeOptionActive,
+                                                    ]}
+                                                    onPress={() => updateRole(role.id, (item) => ({ ...item, mode: 'claude-code' }))}
+                                                >
+                                                    <Text
+                                                        style={[
+                                                            styles.typeOptionText,
+                                                            role.mode === 'claude-code' && styles.typeOptionTextActive,
+                                                        ]}
+                                                    >
+                                                        claudecode
+                                                    </Text>
+                                                </Pressable>
+                                            </View>
+                                        </View>
+
+                                        <View style={styles.rowItem}>
+                                            <Text style={styles.rowLabel}>Machine</Text>
+                                            <View style={styles.machineOptions}>
+                                                {machines.length > 0 ? (
+                                                    machines.map((machine) => {
+                                                        const selected = role.machineId === machine.id;
+                                                        return (
+                                                            <Pressable
+                                                                key={machine.id}
+                                                                style={[
+                                                                    styles.machineChip,
+                                                                    selected && styles.machineChipActive,
+                                                                ]}
+                                                                onPress={() =>
+                                                                    updateRole(role.id, (item) => ({
+                                                                        ...item,
+                                                                        machineId: machine.id,
+                                                                    }))
+                                                                }
+                                                            >
+                                                                <Text
+                                                                    style={[
+                                                                        styles.machineChipText,
+                                                                        selected && styles.machineChipTextActive,
+                                                                    ]}
+                                                                    numberOfLines={1}
+                                                                >
+                                                                    {machineLabel(machine)}
+                                                                </Text>
+                                                            </Pressable>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <View style={styles.machineChip}>
+                                                        <Text style={styles.machineChipText}>No machine</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    <Pressable
+                                        style={styles.advancedToggle}
+                                        onPress={() =>
+                                            setAdvancedRoleId((prev) => (prev === role.id ? null : role.id))
+                                        }
+                                    >
+                                        <Ionicons
+                                            name={isAdvancedOpen ? 'chevron-down' : 'chevron-forward'}
+                                            size={14}
+                                            color={theme.colors.textSecondary}
+                                        />
+                                        <Text style={styles.advancedLabel}>Advanced Settings</Text>
+                                    </Pressable>
+
+                                    {isAdvancedOpen && (
+                                        <View style={styles.advancedCard}>
+                                            <Text style={styles.advancedHint}>
+                                                Model, skills, MCP, plugins and role-level root path can be configured after creation.
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
+                        </View>
+                    );
+                })}
+            </View>
+
+            <Pressable style={styles.addRoleButton} onPress={handleAddRoleFromMarket}>
+                <Ionicons name="add" size={16} color={theme.colors.textSecondary} />
+                <Text style={styles.addRoleText}>Add Role from Market</Text>
+            </Pressable>
+
+            {/* Compatibility test hooks */}
+            <View style={styles.testHookContainer}>
                 <View
                     testID="role-master"
                     accessibilityRole="checkbox"
-                    accessibilityState={{
-                        selected: selectedPresetId === 'builder-pack' || selectedPresetId === 'full-team'
-                    }}
+                    accessibilityState={{ selected: roles.some((role) => role.roleId === 'master') }}
                 />
                 <View
                     testID="role-builder"
                     accessibilityRole="checkbox"
-                    accessibilityState={{ selected: true }}
+                    accessibilityState={{ selected: roles.some((role) => role.roleId === 'builder') }}
                 />
                 <View
                     testID="role-qa"
                     accessibilityRole="checkbox"
-                    accessibilityState={{ selected: true }}
+                    accessibilityState={{ selected: roles.some((role) => role.roleId === 'qa') }}
                 />
             </View>
 
-            {/* Mode explanation */}
-            <View style={styles.infoCard}>
-                <Ionicons name="information-circle-outline" size={18} color="#3D8A5A" />
-                <Text style={styles.infoText}>
-                    All agents use <Text style={styles.infoTextBold}>Claude Code</Text> by default — the best mode for coding tasks.
-                    You can switch individual agents to Codex after creation.
-                </Text>
-            </View>
-
-            {/* Footer */}
             <View style={styles.footer}>
                 <Pressable style={styles.backButton} onPress={onBack}>
                     <Ionicons name="chevron-back" size={18} color="#333" />
@@ -309,174 +376,212 @@ const stylesheet = StyleSheet.create((theme) => ({
         padding: 16,
         paddingBottom: 100,
     },
+    sectionTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#1A1918',
+    },
     sectionHint: {
+        marginTop: 6,
+        marginBottom: 16,
         fontSize: 14,
         color: theme.colors.textSecondary,
         lineHeight: 20,
-        marginBottom: 20,
-    },
-    presetCard: {
-        backgroundColor: theme.colors.surface,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
-        borderWidth: 1.5,
-        borderColor: theme.colors.divider,
-    },
-    presetCardSelected: {
-        borderColor: theme.colors.button.primary.background,
-        backgroundColor: `${theme.colors.button.primary.background}08`,
-    },
-    presetHeader: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 10,
-        gap: 12,
-    },
-    presetIconWrap: {
-        width: 38,
-        height: 38,
-        borderRadius: 10,
-        backgroundColor: `${theme.colors.button.primary.background}18`,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-    },
-    presetIconWrapSelected: {
-        backgroundColor: theme.colors.button.primary.background,
-    },
-    presetTitleBlock: {
-        flex: 1,
-    },
-    presetTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        flexWrap: 'wrap',
-    },
-    presetLabel: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: theme.colors.text,
-    },
-    presetLabelSelected: {
-        color: theme.colors.button.primary.background,
-    },
-    recommendedBadge: {
-        backgroundColor: `${theme.colors.button.primary.background}18`,
-        borderRadius: 20,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-    },
-    recommendedBadgeSelected: {
-        backgroundColor: theme.colors.button.primary.background,
-    },
-    recommendedText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: theme.colors.button.primary.background,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    recommendedTextSelected: {
-        color: '#FFF',
-    },
-    presetTagline: {
-        fontSize: 12,
-        color: theme.colors.textSecondary,
-        marginTop: 2,
-    },
-    presetTaglineSelected: {
-        color: theme.colors.button.primary.background,
-    },
-    radioOuter: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 2,
-        borderColor: theme.colors.divider,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-    },
-    radioOuterSelected: {
-        borderColor: theme.colors.button.primary.background,
-    },
-    radioInner: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: theme.colors.button.primary.background,
-    },
-    presetDescription: {
-        fontSize: 13,
-        color: theme.colors.textSecondary,
-        lineHeight: 18,
-        marginBottom: 12,
-    },
-    presetDescriptionSelected: {
-        color: theme.colors.text,
     },
     roleList: {
-        gap: 8,
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.divider,
-        paddingTop: 12,
+        gap: 12,
     },
-    roleRow: {
+    roleCard: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        padding: 14,
+    },
+    roleTop: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
     },
-    roleQuantityBadge: {
-        width: 32,
-        height: 24,
-        borderRadius: 6,
+    roleIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    roleInfo: {
+        flex: 1,
+        minWidth: 0,
+    },
+    roleName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1A1918',
+    },
+    roleMeta: {
+        marginTop: 2,
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+    },
+    countWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    countButton: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
         backgroundColor: theme.colors.groupped.background,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    roleQuantityText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: theme.colors.button.primary.background,
+    countButtonPrimary: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#3D8A5A',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    roleInfo: {
-        flex: 1,
-    },
-    roleItemName: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: theme.colors.text,
-    },
-    roleItemDesc: {
-        fontSize: 12,
-        color: theme.colors.textSecondary,
-    },
-    infoCard: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 10,
-        backgroundColor: '#3D8A5A18',
-        borderRadius: 12,
-        padding: 14,
-        marginTop: 4,
-        marginBottom: 8,
-    },
-    infoText: {
-        flex: 1,
-        fontSize: 13,
-        color: theme.colors.textSecondary,
+    countButtonText: {
+        fontSize: 18,
         lineHeight: 18,
+        color: '#53524E',
     },
-    infoTextBold: {
+    countButtonPrimaryText: {
+        fontSize: 18,
+        lineHeight: 18,
+        color: '#FFF',
+    },
+    countValue: {
+        minWidth: 20,
+        textAlign: 'center',
+        fontSize: 15,
         fontWeight: '600',
+        color: '#1A1918',
+    },
+    expandedBody: {
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+        gap: 12,
+    },
+    row: {
+        gap: 10,
+    },
+    rowItem: {
+        gap: 6,
+    },
+    rowLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+    },
+    typeSwitch: {
+        flexDirection: 'row',
+        borderRadius: 8,
+        padding: 3,
+        backgroundColor: theme.colors.groupped.background,
+        gap: 4,
+    },
+    typeOption: {
+        flex: 1,
+        borderRadius: 6,
+        paddingVertical: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    typeOptionActive: {
+        backgroundColor: '#3D8A5A',
+    },
+    typeOptionText: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        fontWeight: '500',
+    },
+    typeOptionTextActive: {
+        color: '#FFF',
+        fontWeight: '600',
+    },
+    machineOptions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    machineChip: {
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        maxWidth: '100%',
+    },
+    machineChipActive: {
+        borderColor: '#3D8A5A',
+        backgroundColor: '#EAF5EE',
+    },
+    machineChipText: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+    },
+    machineChipTextActive: {
         color: '#3D8A5A',
+        fontWeight: '600',
+    },
+    advancedToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    advancedLabel: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        fontWeight: '500',
+    },
+    advancedCard: {
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.groupped.background,
+        padding: 10,
+    },
+    advancedHint: {
+        fontSize: 12,
+        lineHeight: 17,
+        color: theme.colors.textSecondary,
+    },
+    addRoleButton: {
+        marginTop: 14,
+        marginBottom: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHighest,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    addRoleText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+    },
+    testHookContainer: {
+        position: 'absolute',
+        opacity: 0,
+        pointerEvents: 'none',
     },
     footer: {
         flexDirection: 'row',
         gap: 12,
-        marginTop: 16,
+        marginTop: 8,
     },
     backButton: {
         flex: 1,
@@ -500,7 +605,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row',
         paddingVertical: 14,
         borderRadius: 12,
-        backgroundColor: theme.colors.button.primary.background,
+        backgroundColor: '#3D8A5A',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,

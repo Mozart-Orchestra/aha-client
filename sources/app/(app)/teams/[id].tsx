@@ -32,6 +32,8 @@ import { taskNeedsApproval } from '@/utils/taskHelpers';
 import RalphControlPanel, { RalphLoopState } from '@/components/RalphControlPanel';
 import { useAuth } from '@/auth/AuthContext';
 import { AgentManagementModal } from '@/components/AgentManagementModal';
+import { AppStateView } from '@/components/AppStateView';
+import { formatTokens, useTeamStats } from '@/hooks/useTeamStats';
 import {
     fetchRolePool,
     fetchRoleReviews,
@@ -70,6 +72,208 @@ const stylesheet = StyleSheet.create((theme) => ({
     subtitle: {
         fontSize: 14,
         color: theme.colors.textSecondary,
+    },
+    chatMemberStrip: {
+        backgroundColor: theme.colors.surfaceHighest,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    chatMemberLabel: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+        marginRight: 8,
+    },
+    chatAvatarRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 8,
+    },
+    chatAvatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: theme.colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: -6,
+    },
+    chatAvatarText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#1A1918',
+    },
+    tokenPill: {
+        marginLeft: 'auto',
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        backgroundColor: theme.colors.groupped.background,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    tokenPillText: {
+        fontSize: 11,
+        color: '#7A6114',
+        fontWeight: '600',
+    },
+    chatQuickActionBar: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHigh,
+    },
+    chatQuickAction: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#EAF5EE',
+    },
+    chatQuickActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#3D8A5A',
+    },
+    boardToggleWrap: {
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 10,
+        backgroundColor: theme.colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    boardToggleSegment: {
+        flexDirection: 'row',
+        borderRadius: 10,
+        backgroundColor: theme.colors.groupped.background,
+        padding: 3,
+        gap: 4,
+    },
+    boardToggleButton: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
+        paddingVertical: 8,
+    },
+    boardToggleButtonActive: {
+        backgroundColor: theme.colors.surface,
+    },
+    boardToggleText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+    },
+    boardToggleTextActive: {
+        color: theme.colors.text,
+    },
+    ganttPlaceholder: {
+        margin: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        padding: 16,
+    },
+    ganttPlaceholderTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.text,
+        marginBottom: 6,
+    },
+    ganttPlaceholderHint: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        lineHeight: 20,
+    },
+    overviewSection: {
+        marginTop: 8,
+        marginBottom: 14,
+    },
+    overviewTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginBottom: 10,
+    },
+    statsGridRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 10,
+    },
+    statCard: {
+        flex: 1,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        padding: 12,
+    },
+    statCardLabel: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    statCardValue: {
+        marginTop: 6,
+        fontSize: 20,
+        fontWeight: '700',
+        color: theme.colors.text,
+    },
+    modelCard: {
+        marginTop: 10,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        padding: 14,
+        gap: 10,
+    },
+    modelTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: theme.colors.text,
+    },
+    modelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    modelLabel: {
+        width: 60,
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+    },
+    modelTrack: {
+        flex: 1,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: theme.colors.groupped.background,
+        overflow: 'hidden',
+    },
+    modelFill: {
+        height: '100%',
+        borderRadius: 5,
+    },
+    modelPercent: {
+        width: 40,
+        textAlign: 'right',
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
     },
     boardContainer: {
         flex: 1,
@@ -577,6 +781,7 @@ export default function TeamDashboardScreen() {
     const profile = useProfile();
     const isDataReady = useIsDataReady();
     const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info'>('chat');
+    const [boardViewMode, setBoardViewMode] = React.useState<'kanban' | 'gantt'>('kanban');
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
@@ -593,6 +798,7 @@ export default function TeamDashboardScreen() {
     const [ratingCategory, setRatingCategory] = React.useState<'all' | 'user' | 'master' | 'system'>('all');
     const autoReviewInFlight = React.useRef(false);
     const [showAgentModal, setShowAgentModal] = React.useState(false);
+    const { stats: teamStats } = useTeamStats(teamId);
 
     // Ralph Loop state
     const [ralphState, setRalphState] = React.useState<RalphLoopState>({
@@ -1728,6 +1934,52 @@ export default function TeamDashboardScreen() {
         return kanbanData.tasks.filter(task => taskNeedsApproval(task));
     }, [kanbanData.tasks]);
 
+    const onlineMembers = React.useMemo(() => {
+        const online = roster.filter(({ session }) => session?.active !== false);
+        return online.length > 0 ? online : roster;
+    }, [roster]);
+
+    const chatTokenLabel = React.useMemo(() => {
+        const total = teamStats?.tokenUsage?.total ?? 0;
+        if (total > 0) {
+            return `${formatTokens(total)} tok`;
+        }
+        return `${Math.max(teamMessages.length * 120, 0)} tok`;
+    }, [teamStats?.tokenUsage?.total, teamMessages.length]);
+
+    const overviewStats = React.useMemo(() => {
+        return {
+            agents: teamStats?.memberCount ?? roster.length,
+            tasks: teamStats?.taskStats?.total ?? kanbanData.tasks.length,
+            messages: teamStats?.messageCount ?? teamMessages.length,
+            tokens: teamStats?.tokenUsage?.total ?? 0,
+        };
+    }, [teamStats, roster.length, kanbanData.tasks.length, teamMessages.length]);
+
+    const modelDistribution = React.useMemo(() => {
+        const total = teamStats?.tokenUsage?.total ?? 0;
+        if (total > 0) {
+            const opus = teamStats?.tokenUsage?.byModel?.opus ?? 0;
+            const sonnet = teamStats?.tokenUsage?.byModel?.sonnet ?? 0;
+            const haiku = teamStats?.tokenUsage?.byModel?.haiku ?? 0;
+            return [
+                { label: 'Opus', percent: Math.round((opus / total) * 100), color: '#3D8A5A' },
+                { label: 'Sonnet', percent: Math.round((sonnet / total) * 100), color: '#D08068' },
+                { label: 'Haiku', percent: Math.round((haiku / total) * 100), color: '#2F7A9B' },
+            ];
+        }
+
+        return [
+            { label: 'Opus', percent: 62, color: '#3D8A5A' },
+            { label: 'Sonnet', percent: 28, color: '#D08068' },
+            { label: 'Haiku', percent: 10, color: '#2F7A9B' },
+        ];
+    }, [teamStats]);
+
+    const quickReviewTask = React.useMemo(() => {
+        return approvedTasks.find((task) => normalizeStatus(task.status) === 'review') ?? null;
+    }, [approvedTasks, normalizeStatus]);
+
     const matchesColumn = React.useCallback((task: KanbanTask, columnId: string) => {
         return normalizeStatus(task.status) === columnId;
     }, [normalizeStatus]);
@@ -1759,29 +2011,18 @@ export default function TeamDashboardScreen() {
                 {isLoading ? (
                     <ActivityIndicator size="large" />
                 ) : (
-                    <View style={{ alignItems: 'center', padding: 20 }}>
-                        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
-                        <Text style={[styles.title, { marginTop: 16, textAlign: 'center' }]}>
-                            Team Board Not Found
-                        </Text>
-                        <Text style={[styles.subtitle, { marginTop: 8, textAlign: 'center', maxWidth: 300 }]}>
-                            This team doesn't have a Kanban board yet. Initialize one to start tracking tasks.
-                        </Text>
-                        <Pressable
-                            style={{
-                                marginTop: 20,
-                                backgroundColor: theme.colors.button.primary.background,
-                                paddingHorizontal: 24,
-                                paddingVertical: 12,
-                                borderRadius: 8
-                            }}
-                            onPress={handleInitializeArtifact}
-                        >
-                            <Text style={{ color: theme.colors.button.primary.tint, fontWeight: '600' }}>
-                                Initialize Board
-                            </Text>
-                        </Pressable>
-                    </View>
+                    <AppStateView
+                        preset="empty-board"
+                        title="Team Board Not Found"
+                        message="This team does not have a board artifact yet."
+                        recovery="Initialize the board once to start tracking tasks."
+                        primaryAction={{
+                            label: 'Initialize Board',
+                            onPress: () => {
+                                void handleInitializeArtifact();
+                            },
+                        }}
+                    />
                 )}
             </View>
         );
@@ -1789,119 +2030,252 @@ export default function TeamDashboardScreen() {
 
     const renderKanban = () => (
         <>
-            {/* 🆕 Pending tasks notification */}
-            {pendingTasks.length > 0 && (
-                <View style={[styles.pendingBanner, { backgroundColor: '#FFF3CD', borderColor: '#FFC107' }]}>
-                    <Ionicons name="information-circle" size={20} color="#FFC107" />
-                    <Text style={[styles.pendingBannerText, { color: '#856404' }]}>
-                        {pendingTasks.length} {pendingTasks.length === 1 ? 'task' : 'tasks'} awaiting approval
-                    </Text>
+            <View style={styles.boardToggleWrap}>
+                <View style={styles.boardToggleSegment}>
                     <Pressable
-                        onPress={() => setShowApprovalModal(true)}
-                        style={[styles.pendingBannerButton, { backgroundColor: '#FFC107' }]}
+                        style={[
+                            styles.boardToggleButton,
+                            boardViewMode === 'kanban' && styles.boardToggleButtonActive,
+                        ]}
+                        onPress={() => setBoardViewMode('kanban')}
                     >
-                        <Text style={styles.pendingBannerButtonText}>Review</Text>
+                        <Text
+                            style={[
+                                styles.boardToggleText,
+                                boardViewMode === 'kanban' && styles.boardToggleTextActive,
+                            ]}
+                        >
+                            Kanban
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        style={[
+                            styles.boardToggleButton,
+                            boardViewMode === 'gantt' && styles.boardToggleButtonActive,
+                        ]}
+                        onPress={() => setBoardViewMode('gantt')}
+                    >
+                        <Text
+                            style={[
+                                styles.boardToggleText,
+                                boardViewMode === 'gantt' && styles.boardToggleTextActive,
+                            ]}
+                        >
+                            Gantt
+                        </Text>
                     </Pressable>
                 </View>
-            )}
-
-            <ScrollView horizontal style={{ flex: 1 }}>
-                <View style={styles.boardContainer}>
-                    {kanbanData.columns.map(column => (
-                        <View key={column.id} style={styles.column}>
-                            <View style={styles.columnHeader}>
-                                <Text style={styles.columnTitle}>{column.title}</Text>
-                                <Text style={styles.taskCount}>
-                                    {approvedTasks.filter(t => matchesColumn(t, column.id)).length}
-                                </Text>
-                            </View>
-
-                            <ScrollView>
-                                {approvedTasks
-                                    .filter(t => matchesColumn(t, column.id))
-                                .map(task => {
-                                    const linkedSessions = taskSessionLinks.get(task.id) || [];
-                                    const sessionCount = linkedSessions.length;
-
-                                    return (
-                                    <Pressable
-                                        key={task.id}
-                                        style={styles.taskCard}
-                                        onPress={() => {
-                                            setSelectedTask(task);
-                                            setShowTaskDetail(true);
-                                        }}
-                                        onLongPress={() => handleMoveTask(task)}
-                                    >
-                                        <Text style={styles.taskTitle}>{task.title}</Text>
-                                        {task.assigneeId && (
-                                            <Text style={styles.taskAssignee}>@{task.assigneeId}</Text>
-                                        )}
-
-                                        {/* 🆕 Linked sessions 显示 */}
-                                        {(sessionCount > 0 || task.priority) && (
-                                            <View style={styles.taskMeta}>
-                                                {sessionCount > 0 && (
-                                                    <View style={styles.taskSessionsLink}>
-                                                        <Ionicons
-                                                            name="chatbubble-outline"
-                                                            size={14}
-                                                            color={theme.colors.textSecondary}
-                                                            style={styles.taskSessionsIcon}
-                                                        />
-                                                        <Text style={styles.taskSessionsText}>
-                                                            {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
-                                                        </Text>
-                                                    </View>
-                                                )}
-                                                {task.priority && (
-                                                    <View style={[
-                                                        styles.taskPriority,
-                                                        {
-                                                            backgroundColor: task.priority === 'high' || task.priority === 'urgent'
-                                                                ? withAlpha(theme.colors.textDestructive, 0.125)
-                                                                : task.priority === 'medium'
-                                                                ? withAlpha(theme.colors.warning, 0.125)
-                                                                : withAlpha(theme.colors.success, 0.125)
-                                                        }
-                                                    ]}>
-                                                        <Text style={[
-                                                            styles.taskSessionsText,
-                                                            {
-                                                                color: task.priority === 'high' || task.priority === 'urgent'
-                                                                    ? theme.colors.textDestructive
-                                                                    : task.priority === 'medium'
-                                                                    ? theme.colors.warning
-                                                                    : theme.colors.success
-                                                            }
-                                                        ]}>
-                                                            {task.priority}
-                                                        </Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                        )}
-                                    </Pressable>
-                                );
-                                })}
-
-                            <Pressable
-                                style={styles.addTaskButton}
-                                onPress={() => handleAddTask(column.id)}
-                            >
-                                <Ionicons name="add" size={16} color={theme.colors.textSecondary} />
-                                <Text style={styles.addTaskText}>Add Task</Text>
-                            </Pressable>
-                        </ScrollView>
-                    </View>
-                ))}
             </View>
-        </ScrollView>
+
+            {boardViewMode === 'gantt' ? (
+                <ScrollView style={{ flex: 1 }}>
+                    <View style={styles.ganttPlaceholder}>
+                        <Text style={styles.ganttPlaceholderTitle}>Timeline mode (preview)</Text>
+                        <Text style={styles.ganttPlaceholderHint}>
+                            Switch to Kanban to edit status directly. This view prioritizes timeline reading.
+                        </Text>
+                        {approvedTasks.slice(0, 6).map((task, index) => (
+                            <Text key={task.id} style={[styles.ganttPlaceholderHint, { marginTop: index === 0 ? 12 : 8 }]}>
+                                • {task.title} ({normalizeStatus(task.status)})
+                            </Text>
+                        ))}
+                        {approvedTasks.length === 0 && (
+                            <Text style={[styles.ganttPlaceholderHint, { marginTop: 12 }]}>
+                                No approved tasks yet. Add one task to see it on the timeline.
+                            </Text>
+                        )}
+                    </View>
+                </ScrollView>
+            ) : (
+                <>
+                    {pendingTasks.length > 0 && (
+                        <View style={[styles.pendingBanner, { backgroundColor: '#FFF3CD', borderColor: '#FFC107' }]}>
+                            <Ionicons name="information-circle" size={20} color="#FFC107" />
+                            <Text style={[styles.pendingBannerText, { color: '#856404' }]}>
+                                {pendingTasks.length} {pendingTasks.length === 1 ? 'task' : 'tasks'} awaiting approval
+                            </Text>
+                            <Pressable
+                                onPress={() => setShowApprovalModal(true)}
+                                style={[styles.pendingBannerButton, { backgroundColor: '#FFC107' }]}
+                            >
+                                <Text style={styles.pendingBannerButtonText}>Review</Text>
+                            </Pressable>
+                        </View>
+                    )}
+
+                    {approvedTasks.length === 0 && pendingTasks.length === 0 ? (
+                        <AppStateView
+                            preset="empty-board"
+                            primaryAction={{
+                                label: 'Add First Task',
+                                onPress: () => {
+                                    void handleAddTask('todo');
+                                },
+                            }}
+                            secondaryAction={{
+                                label: 'AI Breakdown',
+                                onPress: () => {
+                                    setActiveTab('chat');
+                                    Modal.alert(
+                                        'AI Breakdown',
+                                        'Opened team chat. Try: /task break down <your goal>.'
+                                    );
+                                },
+                            }}
+                        />
+                    ) : (
+                        <ScrollView horizontal style={{ flex: 1 }}>
+                            <View style={styles.boardContainer}>
+                                {kanbanData.columns.map(column => (
+                                    <View key={column.id} style={styles.column}>
+                                        <View style={styles.columnHeader}>
+                                            <Text style={styles.columnTitle}>{column.title}</Text>
+                                            <Text style={styles.taskCount}>
+                                                {approvedTasks.filter(t => matchesColumn(t, column.id)).length}
+                                            </Text>
+                                        </View>
+
+                                        <ScrollView>
+                                            {approvedTasks
+                                                .filter(t => matchesColumn(t, column.id))
+                                                .map(task => {
+                                                    const linkedSessions = taskSessionLinks.get(task.id) || [];
+                                                    const sessionCount = linkedSessions.length;
+
+                                                    return (
+                                                        <Pressable
+                                                            key={task.id}
+                                                            style={styles.taskCard}
+                                                            onPress={() => {
+                                                                setSelectedTask(task);
+                                                                setShowTaskDetail(true);
+                                                            }}
+                                                            onLongPress={() => handleMoveTask(task)}
+                                                        >
+                                                            <Text style={styles.taskTitle}>{task.title}</Text>
+                                                            {task.assigneeId && (
+                                                                <Text style={styles.taskAssignee}>@{task.assigneeId}</Text>
+                                                            )}
+
+                                                            {(sessionCount > 0 || task.priority) && (
+                                                                <View style={styles.taskMeta}>
+                                                                    {sessionCount > 0 && (
+                                                                        <View style={styles.taskSessionsLink}>
+                                                                            <Ionicons
+                                                                                name="chatbubble-outline"
+                                                                                size={14}
+                                                                                color={theme.colors.textSecondary}
+                                                                                style={styles.taskSessionsIcon}
+                                                                            />
+                                                                            <Text style={styles.taskSessionsText}>
+                                                                                {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
+                                                                            </Text>
+                                                                        </View>
+                                                                    )}
+                                                                    {task.priority && (
+                                                                        <View
+                                                                            style={[
+                                                                                styles.taskPriority,
+                                                                                {
+                                                                                    backgroundColor: task.priority === 'high' || task.priority === 'urgent'
+                                                                                        ? withAlpha(theme.colors.textDestructive, 0.125)
+                                                                                        : task.priority === 'medium'
+                                                                                            ? withAlpha(theme.colors.warning, 0.125)
+                                                                                            : withAlpha(theme.colors.success, 0.125),
+                                                                                },
+                                                                            ]}
+                                                                        >
+                                                                            <Text
+                                                                                style={[
+                                                                                    styles.taskSessionsText,
+                                                                                    {
+                                                                                        color: task.priority === 'high' || task.priority === 'urgent'
+                                                                                            ? theme.colors.textDestructive
+                                                                                            : task.priority === 'medium'
+                                                                                                ? theme.colors.warning
+                                                                                                : theme.colors.success,
+                                                                                    },
+                                                                                ]}
+                                                                            >
+                                                                                {task.priority}
+                                                                            </Text>
+                                                                        </View>
+                                                                    )}
+                                                                </View>
+                                                            )}
+                                                        </Pressable>
+                                                    );
+                                                })}
+
+                                            <Pressable
+                                                style={styles.addTaskButton}
+                                                onPress={() => handleAddTask(column.id)}
+                                            >
+                                                <Ionicons name="add" size={16} color={theme.colors.textSecondary} />
+                                                <Text style={styles.addTaskText}>Add Task</Text>
+                                            </Pressable>
+                                        </ScrollView>
+                                    </View>
+                                ))}
+                            </View>
+                        </ScrollView>
+                    )}
+                </>
+            )}
         </>
     );
 
     const renderInfo = () => (
         <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={[styles.section, styles.overviewSection]}>
+                <Text style={styles.overviewTitle}>Overview</Text>
+
+                <View style={styles.statsGridRow}>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statCardLabel}>Agents</Text>
+                        <Text style={styles.statCardValue}>{overviewStats.agents}</Text>
+                    </View>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statCardLabel}>Tasks</Text>
+                        <Text style={styles.statCardValue}>{overviewStats.tasks}</Text>
+                    </View>
+                </View>
+
+                <View style={styles.statsGridRow}>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statCardLabel}>Messages</Text>
+                        <Text style={styles.statCardValue}>{overviewStats.messages}</Text>
+                    </View>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statCardLabel}>Tokens</Text>
+                        <Text style={styles.statCardValue}>
+                            {overviewStats.tokens > 0 ? formatTokens(overviewStats.tokens) : '0'}
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={styles.modelCard}>
+                    <Text style={styles.modelTitle}>Model Distribution</Text>
+                    {modelDistribution.map((item) => (
+                        <View key={item.label} style={styles.modelRow}>
+                            <Text style={styles.modelLabel}>{item.label}</Text>
+                            <View style={styles.modelTrack}>
+                                <View
+                                    style={[
+                                        styles.modelFill,
+                                        {
+                                            width: `${Math.max(Math.min(item.percent, 100), 4)}%`,
+                                            backgroundColor: item.color,
+                                        },
+                                    ]}
+                                />
+                            </View>
+                            <Text style={styles.modelPercent}>{item.percent}%</Text>
+                        </View>
+                    ))}
+                </View>
+            </View>
+
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Team Information</Text>
                 <View style={styles.roleCard}>
@@ -2197,6 +2571,51 @@ export default function TeamDashboardScreen() {
 
         return (
             <View style={{ flex: 1 }}>
+                <View style={styles.chatMemberStrip}>
+                    <Text style={styles.chatMemberLabel}>{onlineMembers.length} online</Text>
+                    <View style={styles.chatAvatarRow}>
+                        {onlineMembers.slice(0, 5).map(({ member }, index) => {
+                            const name = member.displayName || member.sessionId;
+                            const initial = name?.trim()?.charAt(0)?.toUpperCase() || 'A';
+                            const palette = ['#EAF5EE', '#FBEFEB', '#E8F2F7', '#FFF7E6', '#F1EEF9'];
+                            return (
+                                <View
+                                    key={`${member.sessionId}-${index}`}
+                                    style={[
+                                        styles.chatAvatar,
+                                        { backgroundColor: palette[index % palette.length] },
+                                    ]}
+                                >
+                                    <Text style={styles.chatAvatarText}>{initial}</Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                    <View style={styles.tokenPill}>
+                        <Ionicons name="flash-outline" size={12} color="#B07A00" />
+                        <Text style={styles.tokenPillText}>{chatTokenLabel}</Text>
+                    </View>
+                </View>
+
+                <View style={styles.chatQuickActionBar}>
+                    <Pressable
+                        style={styles.chatQuickAction}
+                        onPress={() => {
+                            if (quickReviewTask) {
+                                setSelectedTask(quickReviewTask);
+                                setShowTaskDetail(true);
+                                setActiveTab('board');
+                                return;
+                            }
+
+                            setActiveTab('board');
+                        }}
+                    >
+                        <Ionicons name="checkmark-done-circle-outline" size={14} color="#3D8A5A" />
+                        <Text style={styles.chatQuickActionText}>Review PR</Text>
+                    </Pressable>
+                </View>
+
                 <TeamChatRoom
                     teamId={teamId}
                     teamName={artifact?.title || desktopRoom?.name || 'Team'}
