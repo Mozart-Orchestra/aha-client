@@ -29,6 +29,7 @@ export interface TeamStats {
       haiku: number;
     };
   };
+  modelDistribution: TeamModelDistributionPoint[];
   codeMetrics: {
     totalCommits: number;
     totalLinesChanged: number;
@@ -61,6 +62,25 @@ export interface UsageTimeline {
   };
 }
 
+export interface TeamModelDistributionPoint {
+  model: string;
+  label: string;
+  tokenCount: number;
+  percentage: number;
+}
+
+interface TeamModelDistributionResponse {
+  distribution?: Array<{
+    model?: string;
+    tokenCount?: number;
+    percentage?: number;
+  }>;
+}
+
+type RawTeamStats = Partial<Omit<TeamStats, 'modelDistribution'>> & {
+  modelDistribution?: TeamModelDistributionResponse['distribution'];
+};
+
 interface UseTeamStatsResult {
   stats: TeamStats | null;
   isLoading: boolean;
@@ -73,6 +93,91 @@ interface UseTeamUsageTimelineResult {
   isLoading: boolean;
   error: string | null;
   refresh: () => void;
+}
+
+interface UseTeamModelDistributionResult {
+  distribution: TeamModelDistributionPoint[];
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => void;
+}
+
+function toFiniteNumber(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function formatModelLabel(model: string): string {
+  const compact = model.trim();
+  if (!compact) {
+    return 'Unknown Model';
+  }
+
+  return compact
+    .split('/')
+    .filter(Boolean)
+    .pop()!
+    .replace(/[_:-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function normalizeUsageTimestamp(timestamp: number): number {
+  const safeTimestamp = toFiniteNumber(timestamp);
+  if (safeTimestamp <= 0) {
+    return 0;
+  }
+
+  return safeTimestamp < 1_000_000_000_000 ? safeTimestamp * 1000 : safeTimestamp;
+}
+
+export function normalizeModelDistribution(
+  distribution: TeamModelDistributionResponse['distribution']
+): TeamModelDistributionPoint[] {
+  const points = Array.isArray(distribution)
+    ? distribution
+        .map((entry) => {
+          const model = String(entry?.model ?? '').trim();
+          const tokenCount = Math.max(0, Math.round(toFiniteNumber(entry?.tokenCount)));
+          const percentage = Math.max(0, Math.round(toFiniteNumber(entry?.percentage)));
+
+          if (!model && tokenCount <= 0 && percentage <= 0) {
+            return null;
+          }
+
+          return {
+            model,
+            label: formatModelLabel(model),
+            tokenCount,
+            percentage,
+          };
+        })
+        .filter((point): point is TeamModelDistributionPoint => Boolean(point))
+    : [];
+
+  const totalTokens = points.reduce((sum, point) => sum + point.tokenCount, 0);
+
+  return points
+    .map((point) => ({
+      ...point,
+      percentage: point.percentage > 0
+        ? point.percentage
+        : totalTokens > 0
+          ? Math.round((point.tokenCount / totalTokens) * 100)
+          : 0,
+    }))
+    .sort((left, right) => right.tokenCount - left.tokenCount);
+}
+
+function buildLegacyModelDistribution(
+  byModel: TeamStats['tokenUsage']['byModel'] | undefined
+): TeamModelDistributionResponse['distribution'] {
+  return [
+    { model: 'opus', tokenCount: Math.max(0, Math.round(toFiniteNumber(byModel?.opus))), percentage: 0 },
+    { model: 'sonnet', tokenCount: Math.max(0, Math.round(toFiniteNumber(byModel?.sonnet))), percentage: 0 },
+    { model: 'haiku', tokenCount: Math.max(0, Math.round(toFiniteNumber(byModel?.haiku))), percentage: 0 },
+  ];
 }
 
 function normalizePeriod(period: string): 'day' | 'week' | 'month' | 'all' {
@@ -93,12 +198,15 @@ function normalizeTimelinePeriod(period: string): 'day' | 'week' | 'month' {
 function normalizeTeamStats(
   teamId: string,
   period: string,
-  raw: Partial<TeamStats>
+  raw: RawTeamStats
 ): TeamStats {
   const tokenTotal = raw.tokenUsage?.total ?? 0;
   const totalCost = raw.costMetrics?.totalCost ?? 0;
   const budget = raw.costMetrics?.estimatedBudget ?? 100;
   const utilization = budget > 0 ? (totalCost / budget) * 100 : 0;
+  const modelDistributionSource = raw.modelDistribution && raw.modelDistribution.length > 0
+    ? raw.modelDistribution
+    : buildLegacyModelDistribution(raw.tokenUsage?.byModel);
 
   return {
     teamId: raw.teamId ?? teamId,
@@ -122,6 +230,7 @@ function normalizeTeamStats(
         haiku: raw.tokenUsage?.byModel?.haiku ?? 0,
       },
     },
+    modelDistribution: normalizeModelDistribution(modelDistributionSource),
     codeMetrics: {
       totalCommits: raw.codeMetrics?.totalCommits ?? 0,
       totalLinesChanged: raw.codeMetrics?.totalLinesChanged ?? 0,
@@ -185,7 +294,7 @@ export function useTeamStats(teamId: string | undefined): UseTeamStatsResult {
           return;
         }
 
-        const data = await response.json() as Partial<TeamStats>;
+        const data = await response.json() as RawTeamStats;
         if (!cancelled) {
           setStats(normalizeTeamStats(teamId, period, data));
         }
@@ -270,14 +379,20 @@ export function useTeamUsageTimeline(
           summary?: { totalTokens?: number; totalCost?: number; totalSessions?: number };
         };
         if (!cancelled) {
-          const pointCount = Math.max(data.data?.length ?? 0, 1);
-          const totalTokens = data.summary?.totalTokens ?? 0;
-          const totalCost = data.summary?.totalCost ?? 0;
+          const points = (data.data ?? []).map((point) => ({
+            timestamp: normalizeUsageTimestamp(toFiniteNumber(point.timestamp)),
+            tokens: Math.max(0, Math.round(toFiniteNumber(point.tokens))),
+            cost: toFiniteNumber(point.cost),
+            sessions: Math.max(0, Math.round(toFiniteNumber(point.sessions))),
+          }));
+          const pointCount = Math.max(points.length, 1);
+          const totalTokens = data.summary?.totalTokens ?? points.reduce((sum, point) => sum + point.tokens, 0);
+          const totalCost = data.summary?.totalCost ?? points.reduce((sum, point) => sum + point.cost, 0);
           setTimeline({
             teamId: data.teamId,
             period: data.period,
             groupBy: data.groupBy,
-            data: data.data ?? [],
+            data: points,
             summary: {
               totalTokens,
               totalCost,
@@ -310,6 +425,84 @@ export function useTeamUsageTimeline(
   }, []);
 
   return { timeline, isLoading, error, refresh };
+}
+
+export function useTeamModelDistribution(
+  teamId: string | undefined,
+  period: string = '7d'
+): UseTeamModelDistributionResult {
+  const [distribution, setDistribution] = React.useState<TeamModelDistributionPoint[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!teamId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchDistribution = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const credentials = await TokenStorage.getCredentials();
+        if (!credentials) {
+          if (!cancelled) {
+            setError('Not authenticated');
+          }
+          return;
+        }
+
+        const serverUrl = getServerUrl();
+        const normalizedPeriod = normalizeTimelinePeriod(period);
+        const url = `${serverUrl}/v1/teams/${encodeURIComponent(teamId)}/usage/models?period=${normalizedPeriod}`;
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${credentials.token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({})) as { error?: string };
+          if (!cancelled) {
+            setError(body.error ?? `Request failed with status ${response.status}`);
+          }
+          return;
+        }
+
+        const data = await response.json() as TeamModelDistributionResponse;
+        if (!cancelled) {
+          setDistribution(normalizeModelDistribution(data.distribution));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load model distribution');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchDistribution();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period, refreshToken, teamId]);
+
+  const refresh = React.useCallback(() => {
+    setRefreshToken((previous) => previous + 1);
+  }, []);
+
+  return { distribution, isLoading, error, refresh };
 }
 
 /**

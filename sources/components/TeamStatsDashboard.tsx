@@ -12,12 +12,24 @@ import { useTeamStats, useTeamUsageTimeline, formatTokens, formatCost, calculate
 
 interface TeamStatsDashboardProps {
   teamId: string;
+  embedded?: boolean;
+  showHeader?: boolean;
 }
 
-export function TeamStatsDashboard({ teamId }: TeamStatsDashboardProps) {
+const MODEL_USAGE_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EC4899'];
+
+export function TeamStatsDashboard({
+  teamId,
+  embedded = false,
+  showHeader = true,
+}: TeamStatsDashboardProps) {
   const { theme } = useUnistyles();
   const { stats, isLoading: statsLoading, error: statsError } = useTeamStats(teamId);
   const { timeline, isLoading: timelineLoading } = useTeamUsageTimeline(teamId, '7d');
+  const maxTimelineTokens = React.useMemo(
+    () => (timeline?.data.length ? Math.max(...timeline.data.map((point) => point.tokens), 0) : 0),
+    [timeline]
+  );
 
   if (statsLoading) {
     return (
@@ -39,15 +51,16 @@ export function TeamStatsDashboard({ teamId }: TeamStatsDashboardProps) {
     );
   }
 
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Team Statistics</Text>
-        <Text style={styles.subtitle}>
-          Last updated: {stats.lastActivityAt ? new Date(stats.lastActivityAt).toLocaleString() : 'N/A'}
-        </Text>
-      </View>
+  const content = (
+    <>
+      {showHeader && (
+        <View style={styles.header}>
+          <Text style={styles.title}>Team Statistics</Text>
+          <Text style={styles.subtitle}>
+            Last updated: {stats.lastActivityAt ? new Date(stats.lastActivityAt).toLocaleString() : 'N/A'}
+          </Text>
+        </View>
+      )}
 
       {/* Summary Cards */}
       <View style={styles.summaryGrid}>
@@ -124,24 +137,15 @@ export function TeamStatsDashboard({ teamId }: TeamStatsDashboardProps) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Token Usage by Model</Text>
         <View style={styles.modelUsageContainer}>
-          <ModelUsageBar
-            label="Opus"
-            value={stats.tokenUsage.byModel.opus}
-            total={stats.tokenUsage.total}
-            color="#8B5CF6"
-          />
-          <ModelUsageBar
-            label="Sonnet"
-            value={stats.tokenUsage.byModel.sonnet}
-            total={stats.tokenUsage.total}
-            color="#3B82F6"
-          />
-          <ModelUsageBar
-            label="Haiku"
-            value={stats.tokenUsage.byModel.haiku}
-            total={stats.tokenUsage.total}
-            color="#10B981"
-          />
+          {stats.modelDistribution.map((point, index) => (
+            <ModelUsageBar
+              key={`${point.model}-${index}`}
+              label={point.label}
+              value={point.tokenCount}
+              total={stats.tokenUsage.total}
+              color={MODEL_USAGE_COLORS[index % MODEL_USAGE_COLORS.length]}
+            />
+          ))}
         </View>
       </View>
 
@@ -178,7 +182,7 @@ export function TeamStatsDashboard({ teamId }: TeamStatsDashboardProps) {
                 day={new Date(point.timestamp).toLocaleDateString('en-US', { weekday: 'short' })}
                 tokens={point.tokens}
                 cost={point.cost}
-                maxTokens={Math.max(...timeline.data.map(d => d.tokens))}
+                maxTokens={maxTimelineTokens}
               />
             ))}
           </View>
@@ -189,6 +193,16 @@ export function TeamStatsDashboard({ teamId }: TeamStatsDashboardProps) {
           </View>
         </View>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <View style={styles.embeddedContent}>{content}</View>;
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      {content}
     </ScrollView>
   );
 }
@@ -324,6 +338,11 @@ const stylesheet = StyleSheet.create((theme) => ({
   contentContainer: {
     padding: 16,
     paddingBottom: 32,
+  },
+  embeddedContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 0,
   },
   loadingContainer: {
     flex: 1,
@@ -532,7 +551,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border || '#E5E7EB',
+    borderTopColor: theme.colors.divider,
   },
   timelineSummaryText: {
     fontSize: 13,

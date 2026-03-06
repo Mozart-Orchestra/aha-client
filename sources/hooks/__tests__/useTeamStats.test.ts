@@ -2,8 +2,19 @@
  * Tests for R7 Team Stats hooks
  */
 
-import { describe, it, expect } from 'vitest';
-import { formatTokens, formatCost, calculatePercentage } from '../useTeamStats';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('@/auth/tokenStorage', () => ({
+  TokenStorage: {
+    getCredentials: vi.fn(),
+  },
+}));
+
+vi.mock('@/sync/serverConfig', () => ({
+  getServerUrl: vi.fn(() => 'http://localhost:3005'),
+}));
+
+import { formatTokens, formatCost, calculatePercentage, normalizeModelDistribution } from '../useTeamStats';
 
 describe('useTeamStats utilities', () => {
   describe('formatTokens', () => {
@@ -14,7 +25,7 @@ describe('useTeamStats utilities', () => {
 
     it('should format tokens in thousands', () => {
       expect(formatTokens(1000)).toBe('1.0K');
-      expect(formatTokens(1543200)).toBe('1.5M');
+      expect(formatTokens(1543200)).toBe('1.54M');
     });
 
     it('should format tokens in millions', () => {
@@ -45,6 +56,20 @@ describe('useTeamStats utilities', () => {
     it('should round to nearest integer', () => {
       expect(calculatePercentage(33, 100)).toBe(33);
       expect(calculatePercentage(66, 100)).toBe(66);
+    });
+  });
+
+  describe('normalizeModelDistribution', () => {
+    it('sorts server models and backfills percentages from token counts', () => {
+      expect(
+        normalizeModelDistribution([
+          { model: 'claude-opus', tokenCount: 100, percentage: 0 },
+          { model: 'openai/gpt-4.1-mini', tokenCount: 300, percentage: 0 },
+        ])
+      ).toEqual([
+        { model: 'openai/gpt-4.1-mini', label: 'Gpt 4.1 Mini', tokenCount: 300, percentage: 75 },
+        { model: 'claude-opus', label: 'Claude Opus', tokenCount: 100, percentage: 25 },
+      ]);
     });
   });
 });

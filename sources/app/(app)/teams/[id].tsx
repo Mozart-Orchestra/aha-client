@@ -21,6 +21,7 @@ import TeamChatRoom from '@/components/TeamChatRoom';
 import { TaskDetailModal } from '@/components/TaskDetailModal';
 import { TaskApprovalModal } from '@/components/TaskApprovalModal';
 import { RoleStats } from '@/components/roles/RoleStats';
+import { ReviewPRButton } from '@/components/team/ReviewPRButton';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
@@ -33,7 +34,9 @@ import RalphControlPanel, { RalphLoopState } from '@/components/RalphControlPane
 import { useAuth } from '@/auth/AuthContext';
 import { AgentManagementModal } from '@/components/AgentManagementModal';
 import { AppStateView } from '@/components/AppStateView';
+import { TeamStatsDashboard } from '@/components/TeamStatsDashboard';
 import { formatTokens, useTeamStats } from '@/hooks/useTeamStats';
+import { useCanonicalTeam } from '@/hooks/useCanonicalTeams';
 import {
     fetchRolePool,
     fetchRoleReviews,
@@ -46,6 +49,11 @@ import {
     TeamReview,
     TeamScorecard,
 } from '@/sync/apiRoles';
+
+const GANTT_DAY_WIDTH = 28;
+const GANTT_TASK_COLUMN_WIDTH = 216;
+const GANTT_ROW_HEIGHT = 46;
+const GANTT_MIN_TIMELINE_DAYS = 7;
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -130,6 +138,12 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderBottomColor: theme.colors.divider,
         backgroundColor: theme.colors.surfaceHigh,
     },
+    chatQuickActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
     chatQuickAction: {
         alignSelf: 'flex-start',
         flexDirection: 'row',
@@ -178,24 +192,158 @@ const stylesheet = StyleSheet.create((theme) => ({
     boardToggleTextActive: {
         color: theme.colors.text,
     },
-    ganttPlaceholder: {
+    ganttContainer: {
         margin: 16,
+        gap: 12,
+    },
+    ganttSummaryCard: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    ganttSummaryTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    ganttSummaryHint: {
+        marginTop: 4,
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        lineHeight: 18,
+    },
+    ganttLegendRow: {
+        marginTop: 10,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    ganttLegendItem: {
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.groupped.background,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    ganttLegendDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    ganttLegendText: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+    },
+    ganttGridCard: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        overflow: 'hidden',
+    },
+    ganttHeaderRow: {
+        flexDirection: 'row',
+        backgroundColor: theme.colors.surfaceHigh,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    ganttHeaderTaskCell: {
+        width: GANTT_TASK_COLUMN_WIDTH,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRightWidth: 1,
+        borderRightColor: theme.colors.divider,
+        justifyContent: 'center',
+    },
+    ganttHeaderTaskText: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        fontWeight: '600',
+    },
+    ganttHeaderTimelineCell: {
+        position: 'relative',
+        height: 38,
+        justifyContent: 'center',
+    },
+    ganttTickLine: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        width: 1,
+        backgroundColor: theme.colors.divider,
+    },
+    ganttTickLabel: {
+        position: 'absolute',
+        top: 9,
+        fontSize: 10,
+        color: theme.colors.textSecondary,
+    },
+    ganttRow: {
+        flexDirection: 'row',
+        minHeight: GANTT_ROW_HEIGHT,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    ganttRowLast: {
+        borderBottomWidth: 0,
+    },
+    ganttTaskCell: {
+        width: GANTT_TASK_COLUMN_WIDTH,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRightWidth: 1,
+        borderRightColor: theme.colors.divider,
+        justifyContent: 'center',
+    },
+    ganttTaskTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    ganttTaskMeta: {
+        marginTop: 3,
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+    },
+    ganttTimelineCell: {
+        position: 'relative',
+        minHeight: GANTT_ROW_HEIGHT,
+        justifyContent: 'center',
+    },
+    ganttBar: {
+        position: 'absolute',
+        height: 24,
+        borderRadius: 7,
+        borderWidth: 1,
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+    },
+    ganttBarText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    ganttEmpty: {
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.colors.divider,
         backgroundColor: theme.colors.surface,
         padding: 16,
     },
-    ganttPlaceholderTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: theme.colors.text,
-        marginBottom: 6,
-    },
-    ganttPlaceholderHint: {
+    ganttEmptyText: {
         fontSize: 13,
         color: theme.colors.textSecondary,
-        lineHeight: 20,
+        lineHeight: 19,
     },
     overviewSection: {
         marginTop: 8,
@@ -675,7 +823,36 @@ type RatingLike = {
     createdAt: number;
 };
 
+type GanttRow = {
+    task: KanbanTask;
+    status: string;
+    assigneeLabel: string;
+    startAt: number;
+    endAt: number;
+    offsetDays: number;
+    spanDays: number;
+};
+
+const GANTT_STATUS_LABELS: Record<string, string> = {
+    todo: 'Todo',
+    'in-progress': 'In Progress',
+    review: 'Review',
+    blocked: 'Blocked',
+    done: 'Done',
+};
+
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+const startOfUtcDay = (timestamp: number): number => {
+    const date = new Date(timestamp);
+    date.setUTCHours(0, 0, 0, 0);
+    return date.getTime();
+};
+
+const formatMonthDay = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+};
 
 const getPeriodWindowDays = (period: RatingPeriod): number => {
     switch (period) {
@@ -775,6 +952,7 @@ export default function TeamDashboardScreen() {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const { credentials } = useAuth();
+    const { team: canonicalTeam, refresh: refreshCanonicalTeam } = useCanonicalTeam(teamId);
     const artifact = useArtifact(teamId);
     const allArtifacts = useArtifacts();
     const allSessions = useAllSessions();
@@ -830,6 +1008,8 @@ export default function TeamDashboardScreen() {
         if (!roomId || !collaborationState) return null;
         return collaborationState.boards.find((entry: any) => entry.roomId === roomId)?.board ?? DEFAULT_KANBAN_BOARD;
     }, [collaborationState, roomId]);
+
+    const resolvedTeamTitle = canonicalTeam?.name || artifact?.title || desktopRoom?.name || 'Team';
 
     // Get user's display name for chat
     const myDisplayName = React.useMemo(() => {
@@ -984,39 +1164,42 @@ export default function TeamDashboardScreen() {
     // Rename Team handler
     const handleRenameTeam = React.useCallback(async () => {
         setShowMenu(false);
+        const previousTeamTitle = resolvedTeamTitle;
         const newName = await Modal.prompt(
             'Rename Team',
             'Enter a new name for this team:',
             {
-                defaultValue: artifact?.title || '',
+                defaultValue: previousTeamTitle,
                 placeholder: 'Team name',
                 confirmText: 'Rename',
                 cancelText: 'Cancel'
             }
         );
 
-        if (!newName || newName.trim() === artifact?.title) return;
+        const trimmedName = newName?.trim();
+        if (!trimmedName || trimmedName === previousTeamTitle) return;
 
         try {
-            // Call server API to update body.name
-            const result = await sync.renameTeam(teamId, newName.trim());
-            if (result.success && artifact) {
-                // Also update the artifact header title for list display
-                // Server only updates body.name, we need to update header.title
-                await sync.updateArtifact(
-                    teamId,
-                    newName.trim(),
-                    artifact.body || null,
-                    artifact.sessions,
-                    artifact.draft,
-                    artifact.type
-                );
+            const result = await sync.renameTeam(teamId, trimmedName);
+            if (result.success) {
+                if (artifact) {
+                    // Server syncs canonical team + artifact body, but encrypted header titles still need a client mirror.
+                    await sync.updateArtifact(
+                        teamId,
+                        trimmedName,
+                        artifact.body || null,
+                        artifact.sessions,
+                        artifact.draft,
+                        artifact.type
+                    );
+                }
+                await refreshCanonicalTeam();
             }
         } catch (error) {
             console.error('Failed to rename team:', error);
             Modal.alert('Error', 'Failed to rename team. Please try again.');
         }
-    }, [teamId, artifact]);
+    }, [artifact, refreshCanonicalTeam, resolvedTeamTitle, teamId]);
 
     // Initialize missing Team Artifact (P0 fix for teams created without artifact)
     const handleInitializeArtifact = React.useCallback(async () => {
@@ -1573,7 +1756,7 @@ export default function TeamDashboardScreen() {
                 try {
                     const score = await fetchTeamScore(credentials, id);
                     const artifactItem = teamArtifacts.find((item) => item.id === id);
-                    const teamName = artifactItem?.title || (id === teamId ? artifact?.title : undefined) || id;
+                    const teamName = artifactItem?.title || (id === teamId ? resolvedTeamTitle : undefined) || id;
                     return { teamId: id, teamName, score };
                 } catch {
                     return null;
@@ -1590,7 +1773,7 @@ export default function TeamDashboardScreen() {
         });
 
         setTeamLeaderboard(validEntries);
-    }, [credentials, allArtifacts, teamId, artifact?.title]);
+    }, [credentials, allArtifacts, teamId, resolvedTeamTitle]);
 
     const filteredTeamLeaderboard = React.useMemo(() => {
         return teamLeaderboard.filter((entry) => {
@@ -1917,15 +2100,6 @@ export default function TeamDashboardScreen() {
         }
     }, [credentials, promptReviewPayload, teamId, roleIdsForReviews, loadReviewData]);
 
-    const timelineEvents = React.useMemo(() => {
-        return [...kanbanData.tasks]
-            .sort((a, b) => b.updatedAt - a.updatedAt)
-            .map(task => {
-                const assignee = roster.find(r => r.member.sessionId === task.assigneeId);
-                return { task, assignee };
-            });
-    }, [kanbanData.tasks, roster]);
-
     // 🆕 Filter out pending tasks (only show approved tasks on board)
     const approvedTasks = reviewableTasks;
 
@@ -1933,6 +2107,115 @@ export default function TeamDashboardScreen() {
     const pendingTasks = React.useMemo(() => {
         return kanbanData.tasks.filter(task => taskNeedsApproval(task));
     }, [kanbanData.tasks]);
+
+    const assigneeLabelBySessionId = React.useMemo(() => {
+        const byId = new Map<string, string>();
+        for (const entry of roster) {
+            const label =
+                entry.member.displayName ||
+                entry.session?.metadata?.name ||
+                entry.session?.metadata?.host ||
+                entry.member.sessionId;
+            byId.set(entry.member.sessionId, label);
+        }
+        return byId;
+    }, [roster]);
+
+    const ganttStatusColorByStatus = React.useMemo<Record<string, string>>(() => ({
+        todo: '#4F6BD9',
+        'in-progress': '#2F7A9B',
+        review: '#7F67C2',
+        blocked: '#C0564A',
+        done: '#3D8A5A',
+    }), []);
+
+    const getGanttStatusColor = React.useCallback((status: string): string => {
+        return ganttStatusColorByStatus[status] || theme.colors.textSecondary;
+    }, [ganttStatusColorByStatus, theme.colors.textSecondary]);
+
+    const ganttTimeline = React.useMemo(() => {
+        if (approvedTasks.length === 0) {
+            return null;
+        }
+
+        const rows: GanttRow[] = approvedTasks
+            .map((task) => {
+                const status = normalizeStatus(task.status);
+                const startSource = task.createdAt || task.updatedAt || Date.now();
+                const endSource = task.dueDate ?? task.updatedAt ?? task.createdAt ?? Date.now();
+                const startAt = startOfUtcDay(startSource);
+                const endAt = Math.max(startAt + ONE_DAY_MS, startOfUtcDay(endSource) + ONE_DAY_MS);
+                const assigneeLabel = task.assigneeId
+                    ? (assigneeLabelBySessionId.get(task.assigneeId) || task.assigneeId)
+                    : 'Unassigned';
+
+                return {
+                    task,
+                    status,
+                    assigneeLabel,
+                    startAt,
+                    endAt,
+                    offsetDays: 0,
+                    spanDays: 1,
+                };
+            })
+            .sort((a, b) => {
+                if (a.startAt !== b.startAt) {
+                    return a.startAt - b.startAt;
+                }
+                if (a.endAt !== b.endAt) {
+                    return a.endAt - b.endAt;
+                }
+                return b.task.updatedAt - a.task.updatedAt;
+            });
+
+        const rangeStart = Math.min(...rows.map((row) => row.startAt));
+        const rangeEnd = Math.max(...rows.map((row) => row.endAt));
+        const totalDays = Math.max(
+            GANTT_MIN_TIMELINE_DAYS,
+            Math.ceil((rangeEnd - rangeStart) / ONE_DAY_MS)
+        );
+
+        const normalizedRows = rows.map((row) => {
+            const offsetDays = Math.max(0, Math.floor((row.startAt - rangeStart) / ONE_DAY_MS));
+            const spanDays = Math.max(1, Math.ceil((row.endAt - row.startAt) / ONE_DAY_MS));
+            return { ...row, offsetDays, spanDays };
+        });
+
+        const ticks = Array.from(
+            { length: totalDays + 1 },
+            (_, index) => rangeStart + index * ONE_DAY_MS
+        );
+
+        return {
+            totalDays,
+            ticks,
+            rows: normalizedRows,
+        };
+    }, [approvedTasks, normalizeStatus, assigneeLabelBySessionId]);
+
+    const ganttTickStep = React.useMemo(() => {
+        if (!ganttTimeline) {
+            return 1;
+        }
+        if (ganttTimeline.totalDays > 90) {
+            return 14;
+        }
+        if (ganttTimeline.totalDays > 45) {
+            return 7;
+        }
+        if (ganttTimeline.totalDays > 21) {
+            return 2;
+        }
+        return 1;
+    }, [ganttTimeline]);
+
+    const ganttTimelineWidth = React.useMemo(() => {
+        if (!ganttTimeline) {
+            return 0;
+        }
+        return Math.max(360, ganttTimeline.totalDays * GANTT_DAY_WIDTH);
+    }, [ganttTimeline]);
 
     const onlineMembers = React.useMemo(() => {
         const online = roster.filter(({ session }) => session?.active !== false);
@@ -1944,37 +2227,8 @@ export default function TeamDashboardScreen() {
         if (total > 0) {
             return `${formatTokens(total)} tok`;
         }
-        return `${Math.max(teamMessages.length * 120, 0)} tok`;
-    }, [teamStats?.tokenUsage?.total, teamMessages.length]);
-
-    const overviewStats = React.useMemo(() => {
-        return {
-            agents: teamStats?.memberCount ?? roster.length,
-            tasks: teamStats?.taskStats?.total ?? kanbanData.tasks.length,
-            messages: teamStats?.messageCount ?? teamMessages.length,
-            tokens: teamStats?.tokenUsage?.total ?? 0,
-        };
-    }, [teamStats, roster.length, kanbanData.tasks.length, teamMessages.length]);
-
-    const modelDistribution = React.useMemo(() => {
-        const total = teamStats?.tokenUsage?.total ?? 0;
-        if (total > 0) {
-            const opus = teamStats?.tokenUsage?.byModel?.opus ?? 0;
-            const sonnet = teamStats?.tokenUsage?.byModel?.sonnet ?? 0;
-            const haiku = teamStats?.tokenUsage?.byModel?.haiku ?? 0;
-            return [
-                { label: 'Opus', percent: Math.round((opus / total) * 100), color: '#3D8A5A' },
-                { label: 'Sonnet', percent: Math.round((sonnet / total) * 100), color: '#D08068' },
-                { label: 'Haiku', percent: Math.round((haiku / total) * 100), color: '#2F7A9B' },
-            ];
-        }
-
-        return [
-            { label: 'Opus', percent: 62, color: '#3D8A5A' },
-            { label: 'Sonnet', percent: 28, color: '#D08068' },
-            { label: 'Haiku', percent: 10, color: '#2F7A9B' },
-        ];
-    }, [teamStats]);
+        return '0 tok';
+    }, [teamStats?.tokenUsage?.total]);
 
     const quickReviewTask = React.useMemo(() => {
         return approvedTasks.find((task) => normalizeStatus(task.status) === 'review') ?? null;
@@ -2069,20 +2323,124 @@ export default function TeamDashboardScreen() {
 
             {boardViewMode === 'gantt' ? (
                 <ScrollView style={{ flex: 1 }}>
-                    <View style={styles.ganttPlaceholder}>
-                        <Text style={styles.ganttPlaceholderTitle}>Timeline mode (preview)</Text>
-                        <Text style={styles.ganttPlaceholderHint}>
-                            Switch to Kanban to edit status directly. This view prioritizes timeline reading.
-                        </Text>
-                        {approvedTasks.slice(0, 6).map((task, index) => (
-                            <Text key={task.id} style={[styles.ganttPlaceholderHint, { marginTop: index === 0 ? 12 : 8 }]}>
-                                • {task.title} ({normalizeStatus(task.status)})
+                    <View style={styles.ganttContainer}>
+                        <View style={styles.ganttSummaryCard}>
+                            <Text style={styles.ganttSummaryTitle}>Execution Timeline</Text>
+                            <Text style={styles.ganttSummaryHint}>
+                                Tap a bar to open task details. Long-press in Kanban if you need to move status.
                             </Text>
-                        ))}
-                        {approvedTasks.length === 0 && (
-                            <Text style={[styles.ganttPlaceholderHint, { marginTop: 12 }]}>
-                                No approved tasks yet. Add one task to see it on the timeline.
-                            </Text>
+                            <View style={styles.ganttLegendRow}>
+                                {Object.entries(GANTT_STATUS_LABELS).map(([status, label]) => (
+                                    <View key={status} style={styles.ganttLegendItem}>
+                                        <View
+                                            style={[
+                                                styles.ganttLegendDot,
+                                                { backgroundColor: getGanttStatusColor(status) },
+                                            ]}
+                                        />
+                                        <Text style={styles.ganttLegendText}>{label}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+
+                        {ganttTimeline ? (
+                            <ScrollView horizontal showsHorizontalScrollIndicator>
+                                <View style={styles.ganttGridCard}>
+                                    <View style={styles.ganttHeaderRow}>
+                                        <View style={styles.ganttHeaderTaskCell}>
+                                            <Text style={styles.ganttHeaderTaskText}>Task / Owner</Text>
+                                        </View>
+                                        <View style={[styles.ganttHeaderTimelineCell, { width: ganttTimelineWidth }]}>
+                                            {ganttTimeline.ticks.map((tickAt, tickIndex) => (
+                                                <React.Fragment key={`header-tick-${tickIndex}`}>
+                                                    <View
+                                                        style={[
+                                                            styles.ganttTickLine,
+                                                            { left: tickIndex * GANTT_DAY_WIDTH },
+                                                        ]}
+                                                    />
+                                                    {(tickIndex % ganttTickStep === 0 || tickIndex === ganttTimeline.totalDays) && (
+                                                        <Text
+                                                            style={[
+                                                                styles.ganttTickLabel,
+                                                                { left: tickIndex * GANTT_DAY_WIDTH + 3 },
+                                                            ]}
+                                                        >
+                                                            {formatMonthDay(tickAt)}
+                                                        </Text>
+                                                    )}
+                                                </React.Fragment>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    {ganttTimeline.rows.map((row, rowIndex) => {
+                                        const statusLabel = GANTT_STATUS_LABELS[row.status] || row.status;
+                                        const barColor = getGanttStatusColor(row.status);
+                                        const barLeft = row.offsetDays * GANTT_DAY_WIDTH + 2;
+                                        const barWidth = Math.max(GANTT_DAY_WIDTH - 4, row.spanDays * GANTT_DAY_WIDTH - 6);
+                                        const dueLabel = row.task.dueDate
+                                            ? formatMonthDay(row.task.dueDate)
+                                            : formatMonthDay(row.endAt - ONE_DAY_MS);
+
+                                        return (
+                                            <Pressable
+                                                key={row.task.id}
+                                                style={[
+                                                    styles.ganttRow,
+                                                    rowIndex === ganttTimeline.rows.length - 1 && styles.ganttRowLast,
+                                                ]}
+                                                onPress={() => {
+                                                    setSelectedTask(row.task);
+                                                    setShowTaskDetail(true);
+                                                }}
+                                            >
+                                                <View style={styles.ganttTaskCell}>
+                                                    <Text style={styles.ganttTaskTitle} numberOfLines={1}>
+                                                        {row.task.title}
+                                                    </Text>
+                                                    <Text style={styles.ganttTaskMeta} numberOfLines={1}>
+                                                        {row.assigneeLabel} · {formatMonthDay(row.startAt)} → {dueLabel}
+                                                    </Text>
+                                                </View>
+                                                <View style={[styles.ganttTimelineCell, { width: ganttTimelineWidth }]}>
+                                                    {ganttTimeline.ticks.map((_, tickIndex) => (
+                                                        <View
+                                                            key={`${row.task.id}-tick-${tickIndex}`}
+                                                            style={[
+                                                                styles.ganttTickLine,
+                                                                { left: tickIndex * GANTT_DAY_WIDTH },
+                                                            ]}
+                                                        />
+                                                    ))}
+                                                    <View
+                                                        style={[
+                                                            styles.ganttBar,
+                                                            {
+                                                                left: barLeft,
+                                                                width: barWidth,
+                                                                backgroundColor: barColor,
+                                                                borderColor: withAlpha(barColor, 0.7),
+                                                            },
+                                                        ]}
+                                                    >
+                                                        <Text style={styles.ganttBarText} numberOfLines={1}>
+                                                            {statusLabel} · {row.spanDays}d
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            </ScrollView>
+                        ) : (
+                            <View style={styles.ganttEmpty}>
+                                <Text style={styles.ganttEmptyText}>
+                                    No approved tasks yet. Add one task in Kanban view to populate the execution timeline.
+                                </Text>
+                            </View>
                         )}
                     </View>
                 </ScrollView>
@@ -2227,54 +2585,7 @@ export default function TeamDashboardScreen() {
 
     const renderInfo = () => (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={[styles.section, styles.overviewSection]}>
-                <Text style={styles.overviewTitle}>Overview</Text>
-
-                <View style={styles.statsGridRow}>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statCardLabel}>Agents</Text>
-                        <Text style={styles.statCardValue}>{overviewStats.agents}</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statCardLabel}>Tasks</Text>
-                        <Text style={styles.statCardValue}>{overviewStats.tasks}</Text>
-                    </View>
-                </View>
-
-                <View style={styles.statsGridRow}>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statCardLabel}>Messages</Text>
-                        <Text style={styles.statCardValue}>{overviewStats.messages}</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statCardLabel}>Tokens</Text>
-                        <Text style={styles.statCardValue}>
-                            {overviewStats.tokens > 0 ? formatTokens(overviewStats.tokens) : '0'}
-                        </Text>
-                    </View>
-                </View>
-
-                <View style={styles.modelCard}>
-                    <Text style={styles.modelTitle}>Model Distribution</Text>
-                    {modelDistribution.map((item) => (
-                        <View key={item.label} style={styles.modelRow}>
-                            <Text style={styles.modelLabel}>{item.label}</Text>
-                            <View style={styles.modelTrack}>
-                                <View
-                                    style={[
-                                        styles.modelFill,
-                                        {
-                                            width: `${Math.max(Math.min(item.percent, 100), 4)}%`,
-                                            backgroundColor: item.color,
-                                        },
-                                    ]}
-                                />
-                            </View>
-                            <Text style={styles.modelPercent}>{item.percent}%</Text>
-                        </View>
-                    ))}
-                </View>
-            </View>
+            <TeamStatsDashboard teamId={teamId} embedded showHeader={false} />
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Team Information</Text>
@@ -2598,27 +2909,30 @@ export default function TeamDashboardScreen() {
                 </View>
 
                 <View style={styles.chatQuickActionBar}>
-                    <Pressable
-                        style={styles.chatQuickAction}
-                        onPress={() => {
-                            if (quickReviewTask) {
-                                setSelectedTask(quickReviewTask);
-                                setShowTaskDetail(true);
-                                setActiveTab('board');
-                                return;
-                            }
+                    <View style={styles.chatQuickActionRow}>
+                        <Pressable
+                            style={styles.chatQuickAction}
+                            onPress={() => {
+                                if (quickReviewTask) {
+                                    setSelectedTask(quickReviewTask);
+                                    setShowTaskDetail(true);
+                                    setActiveTab('board');
+                                    return;
+                                }
 
-                            setActiveTab('board');
-                        }}
-                    >
-                        <Ionicons name="checkmark-done-circle-outline" size={14} color="#3D8A5A" />
-                        <Text style={styles.chatQuickActionText}>Review PR</Text>
-                    </Pressable>
+                                setActiveTab('board');
+                            }}
+                        >
+                            <Ionicons name="checkmark-done-circle-outline" size={14} color="#3D8A5A" />
+                            <Text style={styles.chatQuickActionText}>Open Board Review</Text>
+                        </Pressable>
+                        <ReviewPRButton teamId={teamId} />
+                    </View>
                 </View>
 
                 <TeamChatRoom
                     teamId={teamId}
-                    teamName={artifact?.title || desktopRoom?.name || 'Team'}
+                    teamName={resolvedTeamTitle}
                     mySessionId={mySessionId}
                     myRole="user"
                     myDisplayName={myDisplayName}
@@ -2636,7 +2950,7 @@ export default function TeamDashboardScreen() {
             <Stack.Screen
                 options={{
                     headerShown: true,
-                    headerTitle: (desktopBridge ? desktopRoom?.name : artifact?.title) || 'Team Dashboard',
+                    headerTitle: resolvedTeamTitle || 'Team Dashboard',
                     headerRight: () => (
                         <Pressable
                             onPress={() => setShowMenu(!showMenu)}

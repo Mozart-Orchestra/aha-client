@@ -39,12 +39,19 @@ export interface CodeMetrics {
 
 export interface TeamStats {
     teamId: string;
+    period: string;
     memberCount: number;
     activeMemberCount: number;
     messageCount: number;
     taskStats: TaskStats;
     tokenUsage: TokenUsage;
+    modelDistribution: ModelDistributionItem[];
     codeMetrics: CodeMetrics;
+    costMetrics: {
+        totalCost: number;
+        estimatedBudget: number;
+        budgetUtilization: number;
+    };
     lastActivityAt: string | null;
 }
 
