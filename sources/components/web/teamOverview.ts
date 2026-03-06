@@ -1,4 +1,5 @@
 import type { DecryptedArtifact } from '@/sync/artifactTypes';
+import type { CanonicalTeamRecord } from '@/sync/apiTeamManagement';
 
 export type TeamTaskStatus = 'todo' | 'in-progress' | 'review' | 'done';
 
@@ -25,6 +26,7 @@ export interface TeamOverview {
     parseError: boolean;
     updatedAt: number;
     updatedAtLabel: string;
+    artifactBacked: boolean;
 }
 
 export interface TeamAggregateStats {
@@ -59,6 +61,23 @@ const EMPTY_STATUS_COUNTS: Record<TeamTaskStatus, number> = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
+}
+
+function formatUpdatedAtLabel(timestamp: number): string {
+    return new Date(timestamp).toLocaleDateString();
+}
+
+function hasMeaningfulDescription(description: string | null | undefined): description is string {
+    if (!description) {
+        return false;
+    }
+
+    const trimmed = description.trim();
+    if (!trimmed) {
+        return false;
+    }
+
+    return !trimmed.startsWith('Collaborative team with ');
 }
 
 export function normalizeTaskStatus(rawStatus: unknown): TeamTaskStatus {
@@ -122,14 +141,19 @@ export function summarizeTeamArtifact(artifact: DecryptedArtifact): TeamOverview
 
     const memberCount = members.length || artifact.sessions?.length || 0;
     const roleSlots = roles.reduce((total, role) => {
-        if (!isRecord(role)) return total;
+        if (!isRecord(role)) {
+            return total;
+        }
+
         const quantity = Number(role.quantity ?? 0);
-        if (!Number.isFinite(quantity) || quantity <= 0) return total;
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            return total;
+        }
+
         return total + quantity;
     }, 0);
 
-    const titleFromBody =
-        typeof teamNode.name === 'string' ? teamNode.name.trim() : '';
+    const titleFromBody = typeof teamNode.name === 'string' ? teamNode.name.trim() : '';
     const titleFromArtifact = typeof artifact.title === 'string' ? artifact.title.trim() : '';
     const title = titleFromArtifact || titleFromBody || 'Untitled Team';
 
@@ -157,7 +181,8 @@ export function summarizeTeamArtifact(artifact: DecryptedArtifact): TeamOverview
         hasBody: Boolean(artifact.body),
         parseError,
         updatedAt: artifact.updatedAt,
-        updatedAtLabel: new Date(artifact.updatedAt).toLocaleDateString(),
+        updatedAtLabel: formatUpdatedAtLabel(artifact.updatedAt),
+        artifactBacked: true,
     };
 }
 
@@ -166,6 +191,59 @@ export function summarizeTeamArtifacts(artifacts: DecryptedArtifact[]): TeamOver
         .filter((artifact) => artifact.type === 'team')
         .map(summarizeTeamArtifact)
         .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export function mergeTeamOverviews(
+    artifactTeams: TeamOverview[],
+    canonicalTeams: CanonicalTeamRecord[]
+): TeamOverview[] {
+    const merged = new Map<string, TeamOverview>();
+
+    for (const team of canonicalTeams) {
+        const memberCount = team.memberCount || 0;
+        const taskCount = team.taskCount || 0;
+
+        merged.set(team.id, {
+            id: team.id,
+            title: team.name || 'Untitled Team',
+            description: team.description || `Collaborative team with ${Math.max(memberCount, 1)} member${memberCount === 1 ? '' : 's'}.`,
+            memberCount,
+            roleSlots: team.roleCount || 0,
+            taskCount,
+            activeTaskCount: taskCount,
+            doneTaskCount: 0,
+            statusCounts: { ...EMPTY_STATUS_COUNTS },
+            tasks: [],
+            hasBody: false,
+            parseError: false,
+            updatedAt: team.updatedAt,
+            updatedAtLabel: formatUpdatedAtLabel(team.updatedAt),
+            artifactBacked: false,
+        });
+    }
+
+    for (const artifactTeam of artifactTeams) {
+        const previous = merged.get(artifactTeam.id);
+        if (!previous) {
+            merged.set(artifactTeam.id, artifactTeam);
+            continue;
+        }
+
+        merged.set(artifactTeam.id, {
+            ...artifactTeam,
+            title: artifactTeam.title === 'Untitled Team' ? previous.title : artifactTeam.title,
+            description: hasMeaningfulDescription(artifactTeam.description) ? artifactTeam.description : previous.description,
+            memberCount: Math.max(artifactTeam.memberCount, previous.memberCount),
+            roleSlots: Math.max(artifactTeam.roleSlots, previous.roleSlots),
+            taskCount: Math.max(artifactTeam.taskCount, previous.taskCount),
+            activeTaskCount: Math.max(artifactTeam.activeTaskCount, previous.activeTaskCount),
+            updatedAt: Math.max(artifactTeam.updatedAt, previous.updatedAt),
+            updatedAtLabel: formatUpdatedAtLabel(Math.max(artifactTeam.updatedAt, previous.updatedAt)),
+            artifactBacked: true,
+        });
+    }
+
+    return Array.from(merged.values()).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function aggregateTeamStats(teams: TeamOverview[]): TeamAggregateStats {

@@ -11,7 +11,7 @@ import * as React from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnistyles } from 'react-native-unistyles';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useBriefing, type BriefingBlocker, type BriefingTask } from '@/hooks/useBriefing';
 
@@ -19,11 +19,18 @@ const ACCENT_GREEN = '#3D8A5A';
 const ACCENT_RED = '#D08068';
 const ACCENT_BLUE = '#3D6A8A';
 
+interface SidebarMenuItem {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  route: Href;
+}
+
 function Sidebar() {
-  const menuItems = [
+  const menuItems: SidebarMenuItem[] = [
     { icon: 'home', label: 'Home', route: '/web/home' },
     { icon: 'chatbubbles', label: 'Chat', route: '/web/team-chat' },
-    { icon: 'grid', label: 'Board', route: '/web/devices' },
+    { icon: 'grid', label: 'Board', route: '/web/board' },
+    { icon: 'desktop', label: 'Devices', route: '/web/devices' },
     { icon: 'people', label: 'Teams', route: '/web/team-info' },
     { icon: 'settings', label: 'Settings', route: '/web/settings' },
   ];
@@ -48,7 +55,7 @@ function Sidebar() {
       {menuItems.map((item) => (
         <Pressable
           key={item.label}
-          onPress={() => item.route && router.push(item.route as `/web/${string}`)}
+          onPress={() => router.push(item.route)}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -238,7 +245,7 @@ export default function WebMorningBriefingScreen() {
   const handleResumeSession = React.useCallback(() => {
     const sessionId = briefing?.contextResume?.lastActiveSession?.sessionId;
     if (sessionId) {
-      router.push(`/sessions/${sessionId}`);
+      router.push(`/session/${sessionId}`);
     }
   }, [briefing]);
 

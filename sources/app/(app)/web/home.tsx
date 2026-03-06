@@ -11,11 +11,22 @@ import { useArtifacts, useIsDataReady, useSocketStatus } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import {
   summarizeTeamArtifacts,
+  mergeTeamOverviews,
   aggregateTeamStats,
   type TeamOverview,
 } from '@/components/web/teamOverview';
+import { useCanonicalTeams } from '@/hooks/useCanonicalTeams';
+import { getTeamCreationRoute } from '@/features/teams/wizard/routes';
 
 const ACCENT_GREEN = '#22C55E';
+type HomeRoute = '/web/team-chat' | '/web/board' | '/web/devices' | '/web/team-info' | '/web/settings' | '/web/login' | '/teams/new-wizard' | '/restore/device-code' | '/new' | '/web/teams/stats';
+
+interface SidebarItem {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  active?: boolean;
+  route?: HomeRoute;
+}
 
 interface QuickStat {
   label: string;
@@ -25,10 +36,11 @@ interface QuickStat {
 }
 
 function Sidebar() {
-  const menuItems = [
+  const menuItems: SidebarItem[] = [
     { icon: 'home', label: 'Home', active: true },
     { icon: 'chatbubbles', label: 'Chat', route: '/web/team-chat' },
-    { icon: 'grid', label: 'Board', route: '/web/devices' },
+    { icon: 'grid', label: 'Board', route: '/web/board' },
+    { icon: 'desktop', label: 'Devices', route: '/web/devices' },
     { icon: 'people', label: 'Teams', route: '/web/team-info' },
     { icon: 'settings', label: 'Settings', route: '/web/settings' },
   ];
@@ -98,6 +110,91 @@ function Sidebar() {
   );
 }
 
+function MarketEntryCard({
+  onOpenMarket,
+  onQuickStart,
+}: {
+  onOpenMarket: () => void;
+  onQuickStart: () => void;
+}) {
+  return (
+    <View
+      style={{
+        marginBottom: 24,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#D7EAD9',
+        padding: 20,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <View
+              style={{
+                backgroundColor: `${ACCENT_GREEN}15`,
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="storefront" size={20} color={ACCENT_GREEN} />
+            </View>
+            <View style={{ backgroundColor: '#EAF5EE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#3D8A5A', fontFamily: 'Outfit' }}>
+                AGENT MARKET
+              </Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827', fontFamily: 'Outfit' }}>
+            Build a team from market roles
+          </Text>
+          <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: '#6B7280', fontFamily: 'Outfit' }}>
+            Open the custom team flow directly in role configuration, browse built-in/default/custom/public agents,
+            then assemble your legion around the job to be done.
+          </Text>
+        </View>
+
+        <View style={{ gap: 10, minWidth: 180 }}>
+          <Pressable
+            onPress={onOpenMarket}
+            style={{
+              backgroundColor: ACCENT_GREEN,
+              borderRadius: 10,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF', fontFamily: 'Outfit' }}>
+              Open Agent Market
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={onQuickStart}
+            style={{
+              borderWidth: 1,
+              borderColor: '#D1D5DB',
+              borderRadius: 10,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              alignItems: 'center',
+              backgroundColor: '#FFFFFF',
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', fontFamily: 'Outfit' }}>
+              Quick Start Team
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function QuickStats({ stats }: { stats: QuickStat[] }) {
   return (
     <View style={{ flexDirection: 'row', gap: 16, marginBottom: 32 }}>
@@ -141,7 +238,7 @@ function QuickStats({ stats }: { stats: QuickStat[] }) {
 function TeamCard({ team }: { team: TeamOverview }) {
   return (
     <Pressable
-      onPress={() => router.push(`/web/devices?teamId=${encodeURIComponent(team.id)}`)}
+      onPress={() => router.push(`/web/board?teamId=${encodeURIComponent(team.id)}`)}
       style={{
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
@@ -287,12 +384,19 @@ export default function WebHomeScreen() {
   const artifacts = useArtifacts();
   const isDataReady = useIsDataReady();
   const socketStatus = useSocketStatus();
+  const {
+    teams: canonicalTeams,
+    isLoading: isCanonicalTeamsLoading,
+    error: canonicalTeamsError,
+    refresh: refreshCanonicalTeams,
+  } = useCanonicalTeams();
 
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const hydratedTeamIdsRef = React.useRef<Set<string>>(new Set());
 
-  const teams = React.useMemo(() => summarizeTeamArtifacts(artifacts), [artifacts]);
+  const artifactTeams = React.useMemo(() => summarizeTeamArtifacts(artifacts), [artifacts]);
+  const teams = React.useMemo(() => mergeTeamOverviews(artifactTeams, canonicalTeams), [artifactTeams, canonicalTeams]);
   const aggregate = React.useMemo(() => aggregateTeamStats(teams), [teams]);
 
   const refreshArtifacts = React.useCallback(async () => {
@@ -300,21 +404,24 @@ export default function WebHomeScreen() {
     setLoadError(null);
 
     try {
-      await sync.fetchArtifactsList();
+      await Promise.all([
+        sync.fetchArtifactsList(),
+        refreshCanonicalTeams(),
+      ]);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Failed to load teams');
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [refreshCanonicalTeams]);
 
   React.useEffect(() => {
     refreshArtifacts().catch(() => undefined);
   }, [refreshArtifacts]);
 
   React.useEffect(() => {
-    const teamIdsMissingBody = teams
-      .filter((team) => !team.hasBody && !hydratedTeamIdsRef.current.has(team.id))
+    const teamIdsMissingBody = artifactTeams
+      .filter((team) => team.artifactBacked && !team.hasBody && !hydratedTeamIdsRef.current.has(team.id))
       .slice(0, 3)
       .map((team) => team.id);
 
@@ -330,7 +437,7 @@ export default function WebHomeScreen() {
         setLoadError('Failed to hydrate team details from server.');
       }
     });
-  }, [teams]);
+  }, [artifactTeams, teams.length]);
 
   const completionRate = aggregate.taskCount > 0
     ? `${Math.round((aggregate.doneTaskCount / aggregate.taskCount) * 100)}%`
@@ -344,7 +451,67 @@ export default function WebHomeScreen() {
   ];
 
   const hasCredentialIssue = !sync.getCredentials();
-  const hasNetworkIssue = Boolean(loadError) || socketStatus.status === 'error';
+  const resolvedLoadError = loadError || canonicalTeamsError;
+  const hasNetworkIssue = Boolean(resolvedLoadError) || socketStatus.status === 'error';
+  const openQuickStart = React.useCallback(() => {
+    router.push(getTeamCreationRoute('entry'));
+  }, []);
+  const openAgentMarket = React.useCallback(() => {
+    router.push(getTeamCreationRoute('market'));
+  }, []);
+
+  const headerActions = React.useMemo(() => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <Pressable
+        onPress={openAgentMarket}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: '#D1D5DB',
+          backgroundColor: '#FFFFFF',
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 8,
+        }}
+      >
+        <Ionicons name="storefront-outline" size={18} color="#374151" />
+        <Text style={{ marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#374151', fontFamily: 'Outfit' }}>
+          Agent Market
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={openQuickStart}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: ACCENT_GREEN,
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 8,
+        }}
+      >
+        <Ionicons name="add" size={20} color="#FFFFFF" />
+        <Text style={{ marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#FFFFFF', fontFamily: 'Outfit' }}>
+          New Team
+        </Text>
+      </Pressable>
+    </View>
+  ), [openAgentMarket, openQuickStart]);
+
+  const quickActions: Array<{
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    color: string;
+    onPress: () => void;
+  }> = React.useMemo(() => ([
+    { icon: 'storefront', label: 'Agent Market', color: ACCENT_GREEN, onPress: openAgentMarket },
+    { icon: 'sparkles', label: 'Empty Session', color: '#14B8A6', onPress: () => router.push('/new') },
+    { icon: 'key', label: 'Pair Device', color: '#8B5CF6', onPress: () => router.push('/restore/device-code') },
+    { icon: 'desktop', label: 'Devices', color: '#0EA5E9', onPress: () => router.push('/web/devices') },
+    { icon: 'grid', label: 'Open Board', color: '#22C55E', onPress: () => router.push('/web/board') },
+    { icon: 'stats-chart', label: 'Team Stats', color: '#F97316', onPress: () => router.push('/web/teams/stats') },
+  ]), [openAgentMarket]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB', flexDirection: 'row' }}>
@@ -366,26 +533,12 @@ export default function WebHomeScreen() {
           <Text style={{ fontSize: 20, fontWeight: '600', color: '#111827', fontFamily: 'Outfit' }}>
             Dashboard
           </Text>
-          <Pressable
-            onPress={() => router.push('/teams/new-wizard')}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: ACCENT_GREEN,
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              borderRadius: 8,
-            }}
-          >
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-            <Text style={{ marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#FFFFFF', fontFamily: 'Outfit' }}>
-              New Team
-            </Text>
-          </Pressable>
+          {headerActions}
         </View>
 
         <ScrollView style={{ flex: 1, padding: 24 }}>
           <QuickStats stats={stats} />
+          <MarketEntryCard onOpenMarket={openAgentMarket} onQuickStart={openQuickStart} />
 
           {hasCredentialIssue && (
             <View style={{ marginBottom: 20 }}>
@@ -404,7 +557,7 @@ export default function WebHomeScreen() {
               <StateCard
                 icon="cloud-offline"
                 title="Sync is unavailable"
-                description={loadError || 'Cannot reach happy-server right now. Retry after checking your network and server status.'}
+                description={resolvedLoadError || 'Cannot reach happy-server right now. Retry after checking your network and server status.'}
                 actionLabel="Retry Sync"
                 onAction={refreshArtifacts}
                 isLoading={isRefreshing}
@@ -423,7 +576,7 @@ export default function WebHomeScreen() {
             </Pressable>
           </View>
 
-          {!isDataReady && teams.length === 0 && (
+          {(!isDataReady || isCanonicalTeamsLoading) && teams.length === 0 && (
             <View
               style={{
                 backgroundColor: '#FFFFFF',
@@ -444,11 +597,11 @@ export default function WebHomeScreen() {
             <StateCard
               icon="sparkles"
               title="Start your first legion"
-              description="No team yet. Create one in one click, then run aha-cli on your machine to bring agents online."
-              actionLabel="Create Team"
-              onAction={() => router.push('/teams/new-wizard')}
-              secondaryActionLabel="Open Device Code"
-              onSecondaryAction={() => router.push('/restore/device-code')}
+              description="No team yet. Open Agent Market to compose roles first, or quick-start a default team and bring agents online after pairing a machine."
+              actionLabel="Open Agent Market"
+              onAction={openAgentMarket}
+              secondaryActionLabel="Quick Start"
+              onSecondaryAction={openQuickStart}
               isLoading={isRefreshing}
             />
           )}
@@ -462,12 +615,7 @@ export default function WebHomeScreen() {
               One-Click Actions
             </Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
-              {[
-                { icon: 'add-circle', label: 'Create Team', color: '#3B82F6', onPress: () => router.push('/teams/new-wizard') },
-                { icon: 'key', label: 'Pair Device', color: '#8B5CF6', onPress: () => router.push('/restore/device-code') },
-                { icon: 'grid', label: 'Open Board', color: '#22C55E', onPress: () => router.push('/web/devices') },
-                { icon: 'stats-chart', label: 'Team Stats', color: '#F97316', onPress: () => router.push('/web/teams/stats') },
-              ].map((action) => (
+              {quickActions.map((action) => (
                 <Pressable
                   key={action.label}
                   onPress={action.onPress}
@@ -481,7 +629,7 @@ export default function WebHomeScreen() {
                     borderColor: '#E5E7EB',
                   }}
                 >
-                  <Ionicons name={action.icon as keyof typeof Ionicons.glyphMap} size={24} color={action.color} />
+                  <Ionicons name={action.icon} size={24} color={action.color} />
                   <Text style={{ marginTop: 8, fontSize: 12, color: '#374151', fontFamily: 'Outfit' }}>
                     {action.label}
                   </Text>

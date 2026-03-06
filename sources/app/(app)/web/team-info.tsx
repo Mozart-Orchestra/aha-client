@@ -1,149 +1,207 @@
 import * as React from 'react';
-import { View, Text, ScrollView, Pressable, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { useUnistyles } from 'react-native-unistyles';
-import { router } from 'expo-router';
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { TeamStatsDashboard } from '@/components/TeamStatsDashboard';
+import { TeamWorkspaceShell } from '@/components/web/TeamWorkspaceShell';
+import { uiPenColors, uiPenFontFamily, uiPenRadius } from '@/components/web/uiPenTokens';
+import { mergeTeamOverviews, summarizeTeamArtifacts } from '@/components/web/teamOverview';
+import { useCanonicalTeams } from '@/hooks/useCanonicalTeams';
+import { useArtifact, useArtifacts } from '@/sync/storage';
+import { sync } from '@/sync/sync';
 
-interface Team {
-  id: string;
-  name: string;
-  avatar: string;
-  memberCount: number;
-  stats: {
-    tasks: number;
-    messages: number;
-    commits: number;
-  };
-}
+export default function TeamInfoWebScreen() {
+    const params = useLocalSearchParams<{ teamId?: string | string[] }>();
+    const artifacts = useArtifacts();
+    const { teams: canonicalTeams } = useCanonicalTeams();
+    const artifactTeams = React.useMemo(() => summarizeTeamArtifacts(artifacts), [artifacts]);
+    const teams = React.useMemo(() => mergeTeamOverviews(artifactTeams, canonicalTeams), [artifactTeams, canonicalTeams]);
 
-interface Evolution {
-  version: string;
-  date: string;
-  changes: string[];
-}
+    const paramTeamId = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
+    const selectedTeamId = paramTeamId || teams[0]?.id;
+    const selectedTeam = React.useMemo(
+        () => teams.find((team) => team.id === selectedTeamId) || null,
+        [teams, selectedTeamId]
+    );
+    const selectedArtifact = useArtifact(selectedTeam?.id || '');
 
-const mockTeams: Team[] = [
-  { id: 'team-1', name: 'My Startup', avatar: 'https://i.pravatar.cc/150?u=team-1', memberCount: 5, stats: { tasks: 24, messages: 128, commits: 47 } },
-  { id: 'team-2', name: 'Client Project', avatar: 'https://i.pravatar.cc/150?u=team-2', memberCount: 3, stats: { tasks: 12, messages: 64, commits: 23 } },
-];
+    React.useEffect(() => {
+        void sync.fetchArtifactsList().catch(() => undefined);
+    }, []);
 
-const mockEvolution: Evolution = {
-  version: 'v20303',
-  date: '2026-03-04',
-  changes: [
-    'Web UI with sidebar navigation',
-    'Team Chat with agent integration',
-    'Device pairing with QR codes',
-    'Permission Inbox for agent requests',
-  ],
-};
+    React.useEffect(() => {
+        if (!selectedTeam?.id || !selectedTeam.artifactBacked) {
+            return;
+        }
+        if (!selectedArtifact?.body) {
+            void sync.fetchArtifactWithBody(selectedTeam.id).catch(() => undefined);
+        }
+    }, [selectedArtifact?.body, selectedTeam?.artifactBacked, selectedTeam?.id]);
 
-function Sidebar() {
-  const { theme } = useUnistyles();
-  return (
-    <View style={{ width: 260, height: '100%', backgroundColor: theme.colors.groupped.background, borderRightWidth: 1, borderRightColor: theme.colors.groupped.border }}>
-      <View style={{ padding: 20, paddingBottom: 16 }}>
-        <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.groupped.text, fontFamily: 'Outfit' }}>Happy</Text>
-      </View>
-      <View style={{ height: 1, backgroundColor: theme.colors.groupped.border }} />
-      <View style={{ padding: 16, paddingHorizontal: 12 }}>
-        <Pressable onPress={() => router.push('/web/team-info')} style={{ flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8, backgroundColor: theme.colors.groupped.accent + '20' }}>
-          <Text style={{ fontSize: 14, fontWeight: '500', color: theme.colors.groupped.accent, fontFamily: 'Outfit' }}>Teams</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/web/devices')} style={{ flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8, marginTop: 4 }}>
-          <Text style={{ fontSize: 14, color: theme.colors.groupped.caption, fontFamily: 'Outfit' }}>Devices</Text>
-        </Pressable>
-      </View>
-      <View style={{ flex: 1 }} />
-      <View style={{ height: 1, backgroundColor: theme.colors.groupped.border }} />
-      <View style={{ padding: 16, paddingHorizontal: 12 }}>
-        <Pressable onPress={() => router.push('/web/settings')}>
-          <Text style={{ fontSize: 14, color: theme.colors.groupped.caption, fontFamily: 'Outfit' }}>Settings</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
+    const rightPanel = selectedTeam ? (
+        <View style={{ flex: 1, padding: 12 }}>
+            <Text style={{ color: uiPenColors.textPrimary, fontSize: 14, fontWeight: '700', fontFamily: uiPenFontFamily }}>
+                Snapshot
+            </Text>
+            <View
+                style={{
+                    marginTop: 10,
+                    borderRadius: uiPenRadius.lg,
+                    borderWidth: 1,
+                    borderColor: uiPenColors.borderSubtle,
+                    backgroundColor: uiPenColors.bgElevated,
+                    padding: 10,
+                }}
+            >
+                {[
+                    { label: 'Agents', value: selectedTeam.memberCount },
+                    { label: 'Messages', value: '--' },
+                    { label: 'Tasks', value: selectedTeam.taskCount },
+                    { label: 'Done', value: selectedTeam.doneTaskCount },
+                ].map((item) => (
+                    <View
+                        key={item.label}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: 4,
+                        }}
+                    >
+                        <Text style={{ color: uiPenColors.textSecondary, fontSize: 12, fontFamily: uiPenFontFamily }}>{item.label}</Text>
+                        <Text style={{ color: uiPenColors.textPrimary, fontSize: 12, fontWeight: '700', fontFamily: uiPenFontFamily }}>
+                            {item.value}
+                        </Text>
+                    </View>
+                ))}
+            </View>
 
-function TeamCard({ team }: { team: Team }) {
-  const { theme } = useUnistyles();
-  return (
-    <View style={{ backgroundColor: theme.colors.groupped.surface, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.groupped.border }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Image source={{ uri: team.avatar }} style={{ width: 48, height: 48, borderRadius: 12 }} />
-        <View style={{ marginLeft: 12, flex: 1 }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.groupped.text, fontFamily: 'Outfit' }}>{team.name}</Text>
-          <Text style={{ fontSize: 12, color: theme.colors.groupped.caption, fontFamily: 'Outfit' }}>{team.memberCount} members</Text>
+            <Text style={{ marginTop: 12, color: uiPenColors.textSecondary, fontSize: 12, lineHeight: 18, fontFamily: uiPenFontFamily }}>
+                Info view combines base team metrics and server stats dashboard for tokens, model usage, and throughput trends.
+            </Text>
         </View>
-      </View>
-      <View style={{ flexDirection: 'row', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.groupped.border }}>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.groupped.text, fontFamily: 'Outfit' }}>{team.stats.tasks}</Text>
-          <Text style={{ fontSize: 11, color: theme.colors.groupped.caption, fontFamily: 'Outfit' }}>Tasks</Text>
-        </View>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.groupped.text, fontFamily: 'Outfit' }}>{team.stats.messages}</Text>
-          <Text style={{ fontSize: 11, color: theme.colors.groupped.caption, fontFamily: 'Outfit' }}>Messages</Text>
-        </View>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.groupped.text, fontFamily: 'Outfit' }}>{team.stats.commits}</Text>
-          <Text style={{ fontSize: 11, color: theme.colors.groupped.caption, fontFamily: 'Outfit' }}>Commits</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
+    ) : null;
 
-function EvolutionCard({ evolution }: { evolution: Evolution }) {
-  const { theme } = useUnistyles();
-  return (
-    <View style={{ backgroundColor: theme.colors.groupped.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: theme.colors.groupped.border }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.groupped.text, fontFamily: 'Outfit' }}>Evolution</Text>
-        <View style={{ backgroundColor: theme.colors.groupped.accent + '20', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
-          <Text style={{ fontSize: 12, color: theme.colors.groupped.accent, fontWeight: '600', fontFamily: 'Outfit' }}>{evolution.version}</Text>
-        </View>
-      </View>
-      <Text style={{ fontSize: 12, color: theme.colors.groupped.caption, fontFamily: 'Outfit', marginBottom: 12 }}>{evolution.date}</Text>
-      {evolution.changes.map((change, index) => (
-        <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-          <Text style={{ fontSize: 12, color: theme.colors.groupped.accent, marginRight: 8 }}>•</Text>
-          <Text style={{ fontSize: 13, color: theme.colors.groupped.text, fontFamily: 'Outfit', flex: 1 }}>{change}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
+    if (Platform.OS !== 'web') {
+        return (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Text>Team info is only available on web.</Text>
+            </View>
+        );
+    }
 
-function MainContent() {
-  const { theme } = useUnistyles();
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: theme.colors.groupped.background, borderBottomWidth: 1, borderBottomColor: theme.colors.groupped.border }}>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.groupped.text, fontFamily: 'Outfit' }}>Teams & Evolution</Text>
-        <Pressable style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.colors.groupped.accent, borderRadius: 8 }}>
-          <Text style={{ color: '#fff', fontWeight: '600', fontFamily: 'Outfit', fontSize: 12 }}>+ New Team</Text>
-        </Pressable>
-      </View>
-      <ScrollView style={{ flex: 1, backgroundColor: theme.colors.groupped.page, padding: 20 }}>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.groupped.text, fontFamily: 'Outfit', marginBottom: 16 }}>Your Teams</Text>
-        {mockTeams.map((team) => <TeamCard key={team.id} team={team} />)}
-        <View style={{ marginTop: 24 }}>
-          <EvolutionCard evolution={mockEvolution} />
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
+    if (!selectedTeam) {
+        return (
+            <TeamWorkspaceShell activeTab="info" title="Team Info" teams={teams} selectedTeamId={selectedTeamId}>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <Text style={{ color: uiPenColors.textPrimary, fontSize: 18, fontWeight: '700', fontFamily: uiPenFontFamily }}>
+                        No team data yet
+                    </Text>
+                    <Text
+                        style={{
+                            marginTop: 8,
+                            color: uiPenColors.textSecondary,
+                            fontSize: 14,
+                            textAlign: 'center',
+                            fontFamily: uiPenFontFamily,
+                            maxWidth: 520,
+                        }}
+                    >
+                        Create or select a team to open the info and stats workspace.
+                    </Text>
+                </View>
+            </TeamWorkspaceShell>
+        );
+    }
 
-export default function TeamInfoScreen() {
-  const insets = useSafeAreaInsets();
-  if (Platform.OS !== 'web') return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Team Info is only available on web</Text></View>;
-  return (
-    <View style={{ flex: 1, flexDirection: 'row', paddingTop: insets.top, paddingBottom: insets.bottom }}>
-      <Sidebar />
-      <MainContent />
-    </View>
-  );
+    return (
+        <TeamWorkspaceShell
+            activeTab="info"
+            title={`${selectedTeam.title} · Info & Stats`}
+            teams={teams}
+            selectedTeamId={selectedTeam.id}
+            rightPanel={rightPanel}
+            headerActions={
+                <Pressable
+                    onPress={() => {
+                        router.push(`/web/team-chat?teamId=${encodeURIComponent(selectedTeam.id)}`);
+                    }}
+                    style={{
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: uiPenColors.borderSubtle,
+                        backgroundColor: uiPenColors.bgCard,
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                    }}
+                >
+                    <Text style={{ color: uiPenColors.textPrimary, fontSize: 12, fontWeight: '700', fontFamily: uiPenFontFamily }}>
+                        Open Chat
+                    </Text>
+                </Pressable>
+            }
+        >
+            <ScrollView style={{ flex: 1, backgroundColor: uiPenColors.bgPage }} contentContainerStyle={{ padding: 14, gap: 10 }}>
+                <View
+                    style={{
+                        borderRadius: uiPenRadius.xl,
+                        borderWidth: 1,
+                        borderColor: uiPenColors.borderSubtle,
+                        backgroundColor: uiPenColors.bgCard,
+                        padding: 14,
+                    }}
+                >
+                    <Text style={{ color: uiPenColors.textPrimary, fontSize: 16, fontWeight: '700', fontFamily: uiPenFontFamily }}>
+                        Team Overview
+                    </Text>
+                    <Text style={{ marginTop: 6, color: uiPenColors.textSecondary, fontSize: 13, lineHeight: 20, fontFamily: uiPenFontFamily }}>
+                        {selectedTeam.description}
+                    </Text>
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                        {[
+                            { label: 'Todo', value: selectedTeam.statusCounts.todo, bg: '#EEF3FF', text: '#4F6BD9' },
+                            { label: 'In Progress', value: selectedTeam.statusCounts['in-progress'], bg: '#E7F3F8', text: '#2F7A9B' },
+                            { label: 'Review', value: selectedTeam.statusCounts.review, bg: '#F1ECFA', text: '#7F67C2' },
+                            { label: 'Done', value: selectedTeam.statusCounts.done, bg: '#EAF5EE', text: '#3D8A5A' },
+                        ].map((item) => (
+                            <View
+                                key={item.label}
+                                style={{
+                                    borderRadius: uiPenRadius.pill,
+                                    backgroundColor: item.bg,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 5,
+                                    borderWidth: 1,
+                                    borderColor: uiPenColors.borderSubtle,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                }}
+                            >
+                                <Text style={{ color: item.text, fontSize: 12, fontWeight: '700', fontFamily: uiPenFontFamily }}>{item.label}</Text>
+                                <Text style={{ color: item.text, fontSize: 12, fontFamily: uiPenFontFamily }}>{item.value}</Text>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
+                <View
+                    style={{
+                        borderRadius: uiPenRadius.xl,
+                        borderWidth: 1,
+                        borderColor: uiPenColors.borderSubtle,
+                        backgroundColor: uiPenColors.bgCard,
+                        padding: 14,
+                    }}
+                >
+                    <Text style={{ color: uiPenColors.textPrimary, fontSize: 16, fontWeight: '700', fontFamily: uiPenFontFamily, marginBottom: 8 }}>
+                        Team Stats Dashboard
+                    </Text>
+                    <View style={{ minHeight: 420 }}>
+                        <TeamStatsDashboard teamId={selectedTeam.id} />
+                    </View>
+                </View>
+            </ScrollView>
+        </TeamWorkspaceShell>
+    );
 }

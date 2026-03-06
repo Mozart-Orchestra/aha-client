@@ -18,6 +18,7 @@ Expo Router screens live in `sources/app`, with shared UI in `sources/components
 Team creation and relaunch flows should converge through `sources/features/teams/wizard/routes.ts` and `sources/app/(app)/teams/new-wizard.tsx`; keep `sources/app/(app)/teams/new.tsx` as a compatibility redirect rather than expanding the legacy form.
 Routes that deep-link into `sources/app/(app)/new/index.tsx` should carry launch defaults through `storeTempData(...)` / `dataId` and may prefill `machineId`, `path`, `agentType`, `sessionType`, `sessionName`, and `sessionRole`; treat `/new` as the canonical hydrator for those values.
 Team stats/info surfaces should converge through `sources/hooks/useTeamStats.ts` and `sources/components/TeamStatsDashboard.tsx`; avoid screen-local token or model heuristics when `/v1/teams/:teamId/stats` already provides the canonical summary, and reserve `/usage` endpoints for timeline/detail views.
+Default web team workspace surfaces should converge through `sources/components/web/TeamWorkspaceShell.tsx` plus `sources/components/web/{teamWorkspace.ts,teamOverview.ts,teamBoard.ts,uiPenTokens.ts}`; keep `/web/devices` focused on machine presence and route board work through `/web/board`.
 
 ## Build, Test, and Development Commands
 - `yarn start` launches Expo locally; `yarn start:local-server` points the client at `http://localhost:3005` with verbose logging.
