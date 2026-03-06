@@ -285,6 +285,17 @@ export const zhHans: TranslationStructure = {
         }
     },
 
+    blankSession: {
+        info: '会话信息',
+        launchPreview: '空白会话在进入远程创建流程前会保留机器、路径和代理配置。',
+        infoDescription: '这些字段会在会话启动后映射到同一份会话信息中。',
+        agentRole: '代理角色',
+        image: '图片',
+        imageRequiresLiveSession: '请先启动会话，再附加图片或多模态输入。',
+        abort: '中止',
+        abortRequiresLiveSession: '会话尚未启动，因此没有可中止的内容。',
+    },
+
     sessionHistory: {
         // Used by session history screen
         title: '会话历史',

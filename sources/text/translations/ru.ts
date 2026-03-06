@@ -266,6 +266,17 @@ export const ru: TranslationStructure = {
         }
     },
 
+    blankSession: {
+        info: 'Информация о сессии',
+        launchPreview: 'Пустая сессия сохраняет машину, путь и агента перед переходом в удалённый запуск.',
+        infoDescription: 'Эти поля перейдут в ту же информацию о сессии после запуска.',
+        agentRole: 'Роль агента',
+        image: 'Изображение',
+        imageRequiresLiveSession: 'Сначала запустите сессию, а затем добавляйте изображения или мультимодальный ввод.',
+        abort: 'Прервать',
+        abortRequiresLiveSession: 'Пока сессия не запущена, останавливать нечего.',
+    },
+
     sessionHistory: {
         // Used by session history screen
         title: 'История сессий',

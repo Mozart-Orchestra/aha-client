@@ -294,6 +294,17 @@ export const pl: TranslationStructure = {
         }
     },
 
+    blankSession: {
+        info: 'Informacje o sesji',
+        launchPreview: 'Pusta sesja zachowuje maszynę, ścieżkę i agenta przed wejściem do zdalnego uruchomienia.',
+        infoDescription: 'Te pola odwzorowują te same informacje o sesji po jej uruchomieniu.',
+        agentRole: 'Rola agenta',
+        image: 'Obraz',
+        imageRequiresLiveSession: 'Uruchom sesję przed dodaniem obrazów lub wejścia multimodalnego.',
+        abort: 'Przerwij',
+        abortRequiresLiveSession: 'Nie ma czego zatrzymać, dopóki sesja nie zostanie uruchomiona.',
+    },
+
     sessionHistory: {
         // Used by session history screen
         title: 'Historia sesji',

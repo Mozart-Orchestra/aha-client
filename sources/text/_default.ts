@@ -283,6 +283,17 @@ export const en = {
         }
     },
 
+    blankSession: {
+        info: 'Session Info',
+        launchPreview: 'Blank launch keeps the same machine, path, and agent before entering the remote flow.',
+        infoDescription: 'These fields map to the same live session info once the session starts.',
+        agentRole: 'Agent Role',
+        image: 'Image',
+        imageRequiresLiveSession: 'Start the session before attaching images or multimodal input.',
+        abort: 'Abort',
+        abortRequiresLiveSession: 'There is nothing to stop until the session is running.',
+    },
+
     sessionHistory: {
         // Used by session history screen
         title: 'Session History',

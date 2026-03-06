@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Platform, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, Platform, Pressable, TextInput, useWindowDimensions } from 'react-native';
 import { Typography } from '@/constants/Typography';
 import { useAllMachines, storage, useSetting } from '@/sync/storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,8 +54,10 @@ function NewSessionScreen() {
         }
         return prompt || '';
     });
+    const [sessionName, setSessionName] = React.useState(() => tempSessionData?.sessionName || '');
+    const [sessionRole, setSessionRole] = React.useState(() => tempSessionData?.sessionRole || '');
     const [isSending, setIsSending] = React.useState(false);
-    const [sessionType, setSessionType] = React.useState<'simple' | 'worktree'>('simple');
+    const [sessionType, setSessionType] = React.useState<'simple' | 'worktree'>(() => tempSessionData?.sessionType || 'simple');
     const ref = React.useRef<MultiTextInputHandle>(null);
     const headerHeight = useHeaderHeight();
     const safeArea = useSafeAreaInsets();
@@ -74,6 +76,9 @@ function NewSessionScreen() {
 
     const machines = useAllMachines();
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(() => {
+        if (tempSessionData?.machineId) {
+            return tempSessionData.machineId;
+        }
         if (machines.length > 0) {
             // Check if we have a recently used machine that's currently available
             if (recentMachinePaths.length > 0) {
@@ -91,7 +96,17 @@ function NewSessionScreen() {
     });
     React.useEffect(() => {
         if (machines.length > 0) {
-            if (!selectedMachineId) {
+            const hasSelectedMachine = selectedMachineId ? machines.some(machine => machine.id === selectedMachineId) : false;
+
+            if (!hasSelectedMachine && tempSessionData?.machineId) {
+                const tempMachine = machines.find(machine => machine.id === tempSessionData.machineId);
+                if (tempMachine) {
+                    setSelectedMachineId(tempMachine.id);
+                    return;
+                }
+            }
+
+            if (!hasSelectedMachine) {
                 // No machine selected yet, prefer the most recently used machine
                 let machineToSelect = machines[0].id; // Default to first machine
 
@@ -126,7 +141,7 @@ function NewSessionScreen() {
                 }
             }
         }
-    }, [machines, selectedMachineId, recentMachinePaths]);
+    }, [machines, selectedMachineId, recentMachinePaths, tempSessionData?.machineId]);
 
     React.useEffect(() => {
         let handler = (machineId: string) => {
@@ -247,6 +262,9 @@ function NewSessionScreen() {
     //
 
     const [selectedPath, setSelectedPath] = React.useState<string>(() => {
+        if (tempSessionData?.path) {
+            return tempSessionData.path;
+        }
         // Initialize with the path from the selected machine (which should be the most recent if available)
         return getRecentPathForMachine(selectedMachineId, recentMachinePaths);
     });
@@ -274,13 +292,22 @@ function NewSessionScreen() {
     }, []);
 
     // Create
-    const doCreate = React.useCallback(async () => {
+    const doCreate = React.useCallback(async (startEmpty: boolean = false) => {
         if (!selectedMachineId) {
             Modal.alert(t('common.error'), t('newSession.noMachineSelected'));
             return;
         }
         if (!selectedPath) {
             Modal.alert(t('common.error'), t('newSession.noPathSelected'));
+            return;
+        }
+
+        const trimmedPrompt = input.trim();
+        const trimmedSessionName = sessionName.trim();
+        const trimmedSessionRole = sessionRole.trim();
+
+        if (!startEmpty && !trimmedPrompt) {
+            Modal.alert(t('common.error'), t('newSession.promptRequiredForStartedSession'));
             return;
         }
 
@@ -301,7 +328,7 @@ function NewSessionScreen() {
                     } else {
                         Modal.alert(
                             t('common.error'), 
-                            t('newSession.worktree.failed', { error: worktreeResult.error || 'Unknown error' })
+                            t('newSession.worktree.failed', { error: worktreeResult.error || t('errors.unknownError') })
                         );
                     }
                     setIsSending(false);
@@ -321,8 +348,19 @@ function NewSessionScreen() {
                 directory: actualPath,
                 // For now we assume you already have a path to start in
                 approvedNewDirectoryCreation: true,
-                agent: agentType
+                agent: agentType,
+                role: trimmedSessionRole || undefined,
+                sessionName: trimmedSessionName || undefined,
+                sessionPath: actualPath
             });
+
+            if (result.type === 'error') {
+                throw new Error(result.errorMessage || t('newSession.failedToStart'));
+            }
+
+            if (result.type === 'requestToApproveDirectoryCreation') {
+                throw new Error(t('newSession.createDirectoryConfirm', { directory: result.directory }));
+            }
 
             // Use sessionId to check for success for backwards compatibility
             if ('sessionId' in result && result.sessionId) {
@@ -351,8 +389,10 @@ function NewSessionScreen() {
                 storage.getState().updateSessionPermissionMode(result.sessionId, permissionMode);
                 storage.getState().updateSessionModelMode(result.sessionId, modelMode);
 
-                // Send message
-                await sync.sendMessage(result.sessionId, input);
+                // Optional initial message. Empty-session flow skips this step.
+                if (!startEmpty && trimmedPrompt.length > 0) {
+                    await sync.sendMessage(result.sessionId, trimmedPrompt);
+                }
                 // Navigate to session
                 router.replace(`/session/${result.sessionId}`, {
                     dangerouslySingular() {
@@ -360,17 +400,19 @@ function NewSessionScreen() {
                     },
                 });
             } else {
-                throw new Error('Session spawning failed - no session ID returned.');
+                throw new Error(t('newSession.sessionSpawningFailed'));
             }
         } catch (error) {
             console.error('Failed to start session', error);
 
-            let errorMessage = 'Failed to start session. Make sure the daemon is running on the target machine.';
+            let errorMessage = t('newSession.failedToStart');
             if (error instanceof Error) {
                 if (error.message.includes('timeout')) {
-                    errorMessage = 'Session startup timed out. The machine may be slow or the daemon may not be responding.';
+                    errorMessage = t('newSession.sessionTimeout');
                 } else if (error.message.includes('Socket not connected')) {
-                    errorMessage = 'Not connected to server. Check your internet connection.';
+                    errorMessage = t('newSession.notConnectedToServer');
+                } else if (error.message.trim().length > 0) {
+                    errorMessage = error.message;
                 }
             }
 
@@ -378,7 +420,21 @@ function NewSessionScreen() {
         } finally {
             setIsSending(false);
         }
-    }, [agentType, selectedMachineId, selectedPath, input, recentMachinePaths, sessionType, experimentsEnabled, permissionMode, modelMode]);
+    }, [
+        agentType,
+        selectedMachineId,
+        selectedPath,
+        input,
+        sessionName,
+        sessionRole,
+        recentMachinePaths,
+        sessionType,
+        experimentsEnabled,
+        permissionMode,
+        modelMode,
+        router,
+        tempSessionData
+    ]);
 
     return (
         <KeyboardAvoidingView
@@ -418,7 +474,7 @@ function NewSessionScreen() {
                     ref={ref}
                     value={input}
                     onChangeText={setInput}
-                    onSend={doCreate}
+                    onSend={() => doCreate(false)}
                     isSending={isSending}
                     agentType={agentType}
                     onAgentClick={handleAgentClick}
@@ -438,6 +494,58 @@ function NewSessionScreen() {
                     <View style={[
                         { maxWidth: layout.maxWidth, flex: 1 }
                     ]}>
+                        <View
+                            style={{
+                                backgroundColor: theme.colors.surface,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: theme.colors.divider,
+                                padding: 12,
+                                marginBottom: 8,
+                                gap: 8,
+                            }}
+                        >
+                            <Text style={{
+                                fontSize: 12,
+                                color: theme.colors.textSecondary,
+                                ...Typography.default(),
+                            }}>
+                                {t('newSession.emptySessionSetup')}
+                            </Text>
+                            <TextInput
+                                value={sessionName}
+                                onChangeText={setSessionName}
+                                placeholder={t('newSession.sessionNamePlaceholder')}
+                                placeholderTextColor={theme.colors.input.placeholder}
+                                style={{
+                                    minHeight: 40,
+                                    borderRadius: 10,
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.divider,
+                                    backgroundColor: theme.colors.input.background,
+                                    paddingHorizontal: 10,
+                                    color: theme.colors.input.text,
+                                    ...Typography.default(),
+                                }}
+                            />
+                            <TextInput
+                                value={sessionRole}
+                                onChangeText={setSessionRole}
+                                placeholder={t('newSession.sessionRolePlaceholder')}
+                                placeholderTextColor={theme.colors.input.placeholder}
+                                style={{
+                                    minHeight: 40,
+                                    borderRadius: 10,
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.divider,
+                                    backgroundColor: theme.colors.input.background,
+                                    paddingHorizontal: 10,
+                                    color: theme.colors.input.text,
+                                    ...Typography.default(),
+                                }}
+                            />
+                        </View>
+
                         <Pressable
                             onPress={handlePathClick}
                             style={(p) => ({
@@ -464,6 +572,30 @@ function NewSessionScreen() {
                                 ...Typography.default('semiBold'),
                             }}>
                                 {selectedPath}
+                            </Text>
+                        </Pressable>
+
+                        <Pressable
+                            onPress={() => doCreate(true)}
+                            disabled={isSending}
+                            style={(p) => ({
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: theme.colors.divider,
+                                backgroundColor: theme.colors.surface,
+                                minHeight: 44,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: p.pressed || isSending ? 0.7 : 1,
+                                marginBottom: 8,
+                            })}
+                        >
+                            <Text style={{
+                                fontSize: 14,
+                                color: theme.colors.text,
+                                ...Typography.default('semiBold'),
+                            }}>
+                                {isSending ? t('newSession.creatingSession') : t('newSession.createEmptySession')}
                             </Text>
                         </Pressable>
                     </View>

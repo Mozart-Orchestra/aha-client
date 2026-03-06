@@ -283,6 +283,17 @@ export const es: TranslationStructure = {
         }
     },
 
+    blankSession: {
+        info: 'Información de la sesión',
+        launchPreview: 'La sesión en blanco conserva la máquina, la ruta y el agente antes de entrar en el flujo remoto.',
+        infoDescription: 'Estos campos se reflejan en la misma información de sesión una vez iniciada la sesión.',
+        agentRole: 'Rol del agente',
+        image: 'Imagen',
+        imageRequiresLiveSession: 'Inicia la sesión antes de adjuntar imágenes o entrada multimodal.',
+        abort: 'Abortar',
+        abortRequiresLiveSession: 'No hay nada que detener hasta que la sesión esté en ejecución.',
+    },
+
     sessionHistory: {
         // Used by session history screen
         title: 'Historial de sesiones',

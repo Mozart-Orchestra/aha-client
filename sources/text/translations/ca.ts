@@ -283,6 +283,17 @@ export const ca: TranslationStructure = {
         }
     },
 
+    blankSession: {
+        info: 'Informació de la sessió',
+        launchPreview: 'La sessió en blanc conserva la màquina, el camí i l’agent abans d’entrar al flux remot.',
+        infoDescription: 'Aquests camps es reflecteixen a la mateixa informació de sessió quan la sessió s’inicia.',
+        agentRole: 'Rol de l’agent',
+        image: 'Imatge',
+        imageRequiresLiveSession: 'Inicia la sessió abans d’adjuntar imatges o entrada multimodal.',
+        abort: 'Atura',
+        abortRequiresLiveSession: 'No hi ha res per aturar fins que la sessió estigui en marxa.',
+    },
+
     sessionHistory: {
         // Used by session history screen
         title: 'Historial de sessions',
