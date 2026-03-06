@@ -13,6 +13,29 @@ import { sync } from '@/sync/sync';
 import { FAB } from '@/components/FAB';
 import { Modal } from '@/modal/ModalManager';
 import { AppStateView } from '@/components/AppStateView';
+import { getTeamCreationRoute, getTeamRelaunchRoute } from '@/features/teams/wizard/routes';
+
+function parseTeamArtifact(team: DecryptedArtifact | undefined): {
+    teamNode: any;
+    members: any[];
+    roles: any[];
+} {
+    if (!team?.body || typeof team.body !== 'string') {
+        return { teamNode: {}, members: [], roles: [] };
+    }
+
+    try {
+        const parsed = JSON.parse(team.body);
+        const teamNode = parsed?.team || parsed || {};
+        return {
+            teamNode,
+            members: Array.isArray(teamNode?.members) ? teamNode.members : [],
+            roles: Array.isArray(teamNode?.roles) ? teamNode.roles : [],
+        };
+    } catch {
+        return { teamNode: {}, members: [], roles: [] };
+    }
+}
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -134,7 +157,35 @@ const stylesheet = StyleSheet.create((theme) => ({
         marginTop: 2,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    teamActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+        flex: 1,
+    },
+    teamActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    teamActionButtonDestructive: {
+        backgroundColor: `${theme.colors.textDestructive}12`,
+    },
+    teamActionLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+    },
+    teamActionLabelDestructive: {
+        color: theme.colors.textDestructive,
     },
     teamChevron: {
         color: theme.colors.textSecondary,
@@ -335,31 +386,12 @@ export default function TeamsScreen() {
     // Helper to extract session IDs from team body
     const extractSessionIds = React.useCallback((teamId: string): string[] => {
         const team = teams.find(t => t.id === teamId);
-        if (!team?.body || typeof team.body !== 'string') return [];
-
-        try {
-            const parsed = JSON.parse(team.body);
-            const members = parsed?.team?.members || parsed?.members;
-            if (Array.isArray(members)) {
-                return members.map((m: any) => m.sessionId).filter(Boolean);
-            }
-        } catch (e) {
-            // Silent fail - return empty array
-        }
-        return [];
+        const { members } = parseTeamArtifact(team);
+        return members.map((member: any) => member?.sessionId).filter(Boolean);
     }, [teams]);
 
     const getTeamDisplay = React.useCallback((team: DecryptedArtifact) => {
-        let parsed: any = {};
-        try {
-            parsed = team.body && typeof team.body === 'string' ? JSON.parse(team.body) : {};
-        } catch (error) {
-            parsed = {};
-        }
-
-        const teamNode = parsed.team || parsed;
-        const members = Array.isArray(teamNode?.members) ? teamNode.members : [];
-        const roles = Array.isArray(teamNode?.roles) ? teamNode.roles : [];
+        const { teamNode, members, roles } = parseTeamArtifact(team);
         const memberCount = members.length || team.sessions?.length || 0;
         const roleCount = roles.reduce((acc: number, role: any) => {
             const quantity = Number(role?.quantity ?? 0);
@@ -380,6 +412,97 @@ export default function TeamsScreen() {
             updatedAtLabel: new Date(team.updatedAt).toLocaleDateString(),
         };
     }, []);
+
+    const handleRename = React.useCallback(async (team: DecryptedArtifact, event: any) => {
+        event.stopPropagation();
+
+        const previousTeamTitle = (team.title || '').trim() || 'Untitled Team';
+        const newName = await Modal.prompt(
+            t('teams.renamePromptTitle') || t('common.rename') || 'Rename',
+            t('teams.renamePromptMessage') || 'Enter a new name for this team:',
+            {
+                defaultValue: previousTeamTitle,
+                placeholder: t('teams.renamePromptPlaceholder') || 'Team name',
+                confirmText: t('common.rename') || 'Rename',
+                cancelText: t('common.cancel') || 'Cancel',
+            },
+        );
+
+        const trimmedName = newName?.trim();
+        if (!trimmedName || trimmedName === previousTeamTitle) {
+            return;
+        }
+
+        try {
+            const result = await sync.renameTeam(team.id, trimmedName);
+            if (result.success) {
+                await sync.updateArtifact(
+                    team.id,
+                    trimmedName,
+                    team.body || null,
+                    team.sessions || [],
+                    team.draft || false,
+                    team.type || 'team',
+                );
+            }
+        } catch (error) {
+            await Modal.alert(
+                t('common.error') || 'Error',
+                t('teams.renameError') || 'Failed to rename team. Please try again.',
+            );
+        }
+    }, [t]);
+
+    const handleArchive = React.useCallback(async (teamId: string, event: any) => {
+        event.stopPropagation();
+
+        const sessionIds = extractSessionIds(teamId);
+        const sessionText = sessionIds.length === 1 ? 'session' : 'sessions';
+        const confirmed = await Modal.confirm(
+            t('teams.archiveConfirmTitle') || t('teams.archive') || 'Archive',
+            t('teams.archiveConfirmMessage', { count: sessionIds.length, sessionText }) ||
+                `Archive this team and ${sessionIds.length} associated ${sessionText}?`,
+            {
+                confirmText: t('teams.archive') || 'Archive',
+                cancelText: t('common.cancel') || 'Cancel',
+            },
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const result = await sync.archiveTeam(teamId, sessionIds);
+            if (result.success) {
+                await Modal.alert(
+                    t('common.success') || 'Success',
+                    t('teams.archiveSuccess', { count: result.archivedSessions }) ||
+                        `Archived team with ${result.archivedSessions} session(s).`,
+                );
+            }
+        } catch (error) {
+            await Modal.alert(
+                t('common.error') || 'Error',
+                t('teams.archiveError') || 'Failed to archive team. Please try again.',
+            );
+        }
+    }, [extractSessionIds, t]);
+
+    const handleRelaunch = React.useCallback(async (team: DecryptedArtifact, event: any) => {
+        event.stopPropagation();
+
+        const { roles } = parseTeamArtifact(team);
+        if (roles.length === 0) {
+            await Modal.alert(
+                t('common.error') || 'Error',
+                t('teams.relaunchNoRoles') || 'This team has no saved role configuration to relaunch yet.',
+            );
+            return;
+        }
+
+        router.push(getTeamRelaunchRoute(team.id));
+    }, [router, t]);
 
     // Batch archive handler
     const handleBatchArchive = React.useCallback(async () => {
@@ -607,19 +730,46 @@ export default function TeamsScreen() {
                 </View>
                 {!isSelectionMode ? (
                     <View style={styles.teamActions}>
-                        <Pressable
-                            onPress={(e) => handleDelete(item.id, e)}
-                            style={{ padding: 8, marginRight: 4 }}
-                            hitSlop={8}
-                        >
-                            <Ionicons name="trash-outline" size={20} color={theme.colors.textSecondary} />
-                        </Pressable>
+                        <View style={styles.teamActionRow}>
+                            <Pressable
+                                onPress={(e) => handleRename(item, e)}
+                                style={styles.teamActionButton}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="create-outline" size={16} color={theme.colors.textSecondary} />
+                                <Text style={styles.teamActionLabel}>{t('common.rename') || 'Rename'}</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={(e) => handleRelaunch(item, e)}
+                                style={styles.teamActionButton}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="refresh-outline" size={16} color={theme.colors.textSecondary} />
+                                <Text style={styles.teamActionLabel}>{t('teams.relaunch') || 'Relaunch'}</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={(e) => handleArchive(item.id, e)}
+                                style={styles.teamActionButton}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="archive-outline" size={16} color={theme.colors.textSecondary} />
+                                <Text style={styles.teamActionLabel}>{t('teams.archive') || 'Archive'}</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={(e) => handleDelete(item.id, e)}
+                                style={[styles.teamActionButton, styles.teamActionButtonDestructive]}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="trash-outline" size={16} color={theme.colors.textDestructive} />
+                                <Text style={[styles.teamActionLabel, styles.teamActionLabelDestructive]}>{t('teams.delete') || 'Delete'}</Text>
+                            </Pressable>
+                        </View>
                         <Ionicons name="chevron-forward" size={18} style={styles.teamChevron} color={theme.colors.textSecondary} />
                     </View>
                 ) : null}
             </Pressable>
         );
-    }, [teams, router, styles, handleDelete, isSelectionMode, selectedTeams, toggleTeamSelection, handleLongPress, theme, getTeamDisplay]);
+    }, [teams, router, styles, handleArchive, handleDelete, handleLongPress, handleRelaunch, handleRename, isSelectionMode, selectedTeams, theme, toggleTeamSelection, getTeamDisplay, t]);
 
     const keyExtractor = React.useCallback((item: DecryptedArtifact) => item.id, []);
 
@@ -631,7 +781,7 @@ export default function TeamsScreen() {
         return (
             <Pressable
                 style={styles.connectRepoCard}
-                onPress={() => router.push('/teams/new-wizard')}
+                onPress={() => router.push(getTeamCreationRoute('market'))}
                 accessibilityRole="button"
             >
                 <View style={styles.connectRepoIconWrap}>
@@ -686,8 +836,8 @@ export default function TeamsScreen() {
         return (
             <AppStateView
                 preset="empty-team"
-                primaryAction={{ label: 'Quick Start', onPress: () => router.push('/teams/new-wizard') }}
-                secondaryAction={{ label: 'Connect a Repo', onPress: () => router.push('/teams/new-wizard') }}
+                primaryAction={{ label: 'Quick Start', onPress: () => router.push(getTeamCreationRoute('entry')) }}
+                secondaryAction={{ label: 'Connect a Repo', onPress: () => router.push(getTeamCreationRoute('market')) }}
             />
         );
     }, [isLoading, styles, loadError, fetchTeams, router]);
@@ -722,7 +872,7 @@ export default function TeamsScreen() {
                                 </Text>
                             </Pressable>
                             <Pressable
-                                onPress={() => router.push('/teams/new-wizard')}
+                                onPress={() => router.push(getTeamCreationRoute('entry'))}
                                 style={styles.headerAddButton}
                                 accessibilityRole="button"
                             >
@@ -749,7 +899,7 @@ export default function TeamsScreen() {
                 />
 
                 {/* Floating Action Button - hide in selection mode */}
-                {!isSelectionMode && <FAB onPress={() => router.push('/teams/new-wizard')} />}
+                {!isSelectionMode && <FAB onPress={() => router.push(getTeamCreationRoute('entry'))} />}
 
                 {/* Batch Action Bar */}
                 {isSelectionMode && (

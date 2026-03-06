@@ -6,19 +6,21 @@
 
 import { Dimensions, Pressable, ActivityIndicator, View, ScrollView } from 'react-native';
 import React from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Text } from '@/components/StyledText';
+import { t } from '@/text';
 import { Ionicons } from '@expo/vector-icons';
 import { WizardProvider, useWizard } from '@/components/WizardContext';
 import { layout } from '@/components/layout';
 import { useAhaAction } from '@/hooks/useAhaAction';
-import { useAllMachines } from '@/sync/storage';
+import { useAllMachines, useArtifacts } from '@/sync/storage';
 import { sync } from '@/sync/sync';
-import { generateRoleId } from './wizard/types';
-import { Step1Name } from './wizard/step1-name';
-import { Step2Roles } from './wizard/step2-roles';
-import { Step3Confirm } from './wizard/step3-confirm';
+import { RoleConfig, TeamWizardState, generateRoleId } from '@/features/teams/wizard/types';
+import { Step1Name } from '@/features/teams/wizard/step1-name';
+import { Step2Roles } from '@/features/teams/wizard/step2-roles';
+import { Step3Confirm } from '@/features/teams/wizard/step3-confirm';
+import { DecryptedArtifact } from '@/sync/artifactTypes';
 
 const QUICK_START_MASTER_ROLE_ID = 'master';
 const QUICK_START_BUILDER_ROLE_ID = 'builder';
@@ -29,6 +31,76 @@ const WIZARD_STEPS = [
     { id: 'roles', title: 'Roles' },
     { id: 'confirm', title: 'Deploy' },
 ] as const;
+
+function readParam(value?: string | string[]): string | undefined {
+    return Array.isArray(value) ? value[0] : value;
+}
+
+function resolveStepIndex(step?: string): number {
+    switch (step) {
+        case 'roles':
+            return 1;
+        case 'confirm':
+            return 2;
+        default:
+            return 0;
+    }
+}
+
+function normalizeRoleList(teamNode: any): RoleConfig[] {
+    const roles = Array.isArray(teamNode?.roles) ? teamNode.roles : [];
+
+    return roles.map((role: any, index: number) => ({
+        id: `relaunch-${role?.id || role?.roleId || index}` ,
+        roleId: String(role?.roleId || role?.id || `role-${index + 1}`),
+        roleName: String(role?.title || role?.roleName || role?.roleId || role?.id || `Role ${index + 1}`),
+        quantity: Number.isFinite(Number(role?.quantity)) && Number(role?.quantity) > 0 ? Number(role.quantity) : 1,
+        mode: role?.mode === 'codex' ? 'codex' : 'claude-code',
+        machineId: typeof role?.machineId === 'string' && role.machineId ? role.machineId : undefined,
+        model: typeof role?.model === 'string' ? role.model : undefined,
+        skills: Array.isArray(role?.skills) ? role.skills.filter((entry: unknown): entry is string => typeof entry === 'string' && entry.length > 0) : undefined,
+        mcpServers: Array.isArray(role?.mcpServers) ? role.mcpServers.filter((entry: unknown): entry is string => typeof entry === 'string' && entry.length > 0) : undefined,
+        plugins: Array.isArray(role?.plugins) ? role.plugins.filter((entry: unknown): entry is string => typeof entry === 'string' && entry.length > 0) : undefined,
+        rootPath: typeof role?.rootPath === 'string' ? role.rootPath : undefined,
+    }));
+}
+
+function buildInitialStateFromSourceTeam(artifact: DecryptedArtifact, step?: string): Partial<TeamWizardState> | undefined {
+    if (!artifact.body || typeof artifact.body !== 'string') {
+        return undefined;
+    }
+
+    try {
+        const parsed = JSON.parse(artifact.body);
+        const teamNode = parsed?.team || parsed || {};
+        const teamName = (artifact.title || teamNode?.name || 'Team').trim() || 'Team';
+        const workingDirectory = typeof teamNode?.workingDirectory === 'string'
+            ? teamNode.workingDirectory
+            : typeof teamNode?.rootPath === 'string'
+                ? teamNode.rootPath
+                : '';
+        const goal = typeof teamNode?.goal === 'string'
+            ? teamNode.goal
+            : typeof teamNode?.description === 'string'
+                ? teamNode.description
+                : '';
+
+        return {
+            currentStep: step ? resolveStepIndex(step) : 2,
+            teamName,
+            workingDirectory,
+            goal,
+            agentLanguage: teamNode?.agentLanguage === 'zh' ? 'zh' : 'en',
+            roles: normalizeRoleList(teamNode),
+            startImmediately: true,
+        };
+    } catch {
+        return {
+            currentStep: step ? resolveStepIndex(step) : 0,
+            teamName: (artifact.title || 'Team').trim() || 'Team',
+        };
+    }
+}
 
 // ---- Web Modal Wrapper ----
 
@@ -41,7 +113,7 @@ function WebModalWrapper({ children }: { children: React.ReactNode }) {
 
     return (
         <View style={styles.modalOverlay} testID="main-layout">
-            <View style={styles.modalContent} accessibilityRole="dialog" aria-modal="true">
+            <View style={styles.modalContent}>
                 <View style={styles.wizardContainer}>
                     {children}
                 </View>
@@ -151,7 +223,7 @@ const EntryScreen = React.memo(function EntryScreen({
 
 // ---- Wizard Content (3-step flow) ----
 
-const WizardContent = React.memo(function WizardContent() {
+const WizardContent = React.memo(function WizardContent({ title }: { title: string }) {
     const router = useRouter();
     const { state, nextStep, prevStep } = useWizard();
     const styles = stylesheet;
@@ -188,7 +260,7 @@ const WizardContent = React.memo(function WizardContent() {
                     accessibilityRole="button"
                 >
                     <Ionicons name="chevron-back" size={18} color="#1A1918" />
-                    <Text style={styles.wizardNavTitle}>New Legion</Text>
+                    <Text style={styles.wizardNavTitle}>{title}</Text>
                 </Pressable>
                 <Text style={styles.wizardStepText}>Step {state.currentStep + 1} of {WIZARD_STEPS.length}</Text>
             </View>
@@ -214,18 +286,72 @@ const WizardContent = React.memo(function WizardContent() {
 
 type ViewMode = 'entry' | 'wizard';
 
+type NewTeamWizardParams = {
+    view?: string | string[];
+    step?: string | string[];
+    sourceTeamId?: string | string[];
+};
+
 function NewTeamRoot() {
     const router = useRouter();
-    const [viewMode, setViewMode] = React.useState<ViewMode>('entry');
+    const styles = stylesheet;
+    const params = useLocalSearchParams<NewTeamWizardParams>();
+    const artifacts = useArtifacts();
     const machines = useAllMachines();
+    const viewParam = readParam(params.view);
+    const stepParam = readParam(params.step);
+    const sourceTeamId = readParam(params.sourceTeamId);
+    const sourceTeam = React.useMemo(
+        () => artifacts.find((artifact) => artifact.id === sourceTeamId && artifact.type === 'team'),
+        [artifacts, sourceTeamId],
+    );
+    const initialViewMode = viewParam === 'wizard' || !!sourceTeamId ? 'wizard' : 'entry';
+    const [viewMode, setViewMode] = React.useState<ViewMode>(initialViewMode);
+    const isSourceTeamLoading = !!sourceTeamId && !!sourceTeam && sourceTeam.body === undefined;
+    const screenTitle = sourceTeamId ? t('teams.relaunch') || 'Relaunch' : 'New Team';
+    const wizardNavTitle = sourceTeamId ? t('teams.relaunch') || 'Relaunch' : 'New Legion';
+
+    React.useEffect(() => {
+        setViewMode(initialViewMode);
+    }, [initialViewMode]);
+
+    React.useEffect(() => {
+        if (sourceTeamId && sourceTeam?.body === undefined) {
+            void sync.fetchArtifactWithBody(sourceTeamId).catch(() => undefined);
+        }
+    }, [sourceTeam?.body, sourceTeamId]);
+
+    const wizardInitialState = React.useMemo(() => {
+        if (sourceTeam) {
+            const seededState = buildInitialStateFromSourceTeam(sourceTeam, stepParam);
+            if (seededState) {
+                return seededState;
+            }
+        }
+
+        if (stepParam === 'roles') {
+            return {
+                currentStep: 1,
+                teamName: 'New Team',
+            };
+        }
+
+        if (stepParam === 'confirm') {
+            return {
+                currentStep: 2,
+                teamName: sourceTeam?.title || 'New Team',
+            };
+        }
+
+        return undefined;
+    }, [sourceTeam, stepParam]);
 
     const quickStartAction = React.useCallback(async () => {
         const firstMachineId = machines[0]?.id;
 
-        const artifact = await sync.createArtifact({
-            type: 'team',
-            title: 'My Team',
-            body: JSON.stringify({
+        const artifactId = await sync.createArtifact(
+            'My Team',
+            JSON.stringify({
                 name: 'My Team',
                 workingDirectory: '',
                 goal: '',
@@ -258,9 +384,12 @@ function NewTeamRoot() {
                     },
                 ],
             }),
-        });
+            [],
+            false,
+            'team'
+        );
 
-        router.replace(`/teams/${artifact.id}`);
+        router.replace(`/teams/${artifactId}`);
     }, [machines, router]);
 
     const [isQuickStartLoading, handleQuickStart] = useAhaAction(quickStartAction);
@@ -270,16 +399,36 @@ function NewTeamRoot() {
     }, []);
 
     if (viewMode === 'wizard') {
-        return (
-            <WebModalWrapper>
-                <WizardProvider>
+        if (isSourceTeamLoading) {
+            return (
+                <WebModalWrapper>
                     <Stack.Screen
                         options={{
-                            headerTitle: 'New Team',
+                            headerTitle: screenTitle,
                             headerBackTitle: 'Teams',
                         }}
                     />
-                    <WizardContent />
+                    <View style={[styles.container, styles.loadingState]}>
+                        <ActivityIndicator size="small" color="#8A8882" />
+                        <Text style={styles.loadingStateText}>{t('common.loading') || 'Loading'}</Text>
+                    </View>
+                </WebModalWrapper>
+            );
+        }
+
+        return (
+            <WebModalWrapper>
+                <WizardProvider
+                    key={`${sourceTeamId ?? viewParam ?? 'entry'}:${stepParam ?? 'name'}`}
+                    initialState={wizardInitialState}
+                >
+                    <Stack.Screen
+                        options={{
+                            headerTitle: screenTitle,
+                            headerBackTitle: 'Teams',
+                        }}
+                    />
+                    <WizardContent title={wizardNavTitle} />
                 </WizardProvider>
             </WebModalWrapper>
         );
@@ -289,7 +438,7 @@ function NewTeamRoot() {
         <WebModalWrapper>
             <Stack.Screen
                 options={{
-                    headerTitle: 'New Team',
+                    headerTitle: screenTitle,
                     headerBackTitle: 'Teams',
                 }}
             />
@@ -314,6 +463,18 @@ const stylesheet = StyleSheet.create((theme) => ({
     contentContainer: {
         padding: 16,
         paddingBottom: 60,
+    },
+    loadingState: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        paddingHorizontal: 24,
+    },
+    loadingStateText: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+        textAlign: 'center',
     },
     heroSection: {
         alignItems: 'center',

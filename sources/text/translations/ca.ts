@@ -263,6 +263,12 @@ export const ca: TranslationStructure = {
         startNewSessionInFolder: 'Nova sessió aquí',
         noMachineSelected: 'Si us plau, selecciona una màquina per iniciar la sessió',
         noPathSelected: 'Si us plau, selecciona un directori per iniciar la sessió',
+        promptRequiredForStartedSession: 'Introdueix un prompt o tria "Crear sessió buida".',
+        emptySessionSetup: 'Configuració de la sessió buida (opcional)',
+        sessionNamePlaceholder: 'Nom de la sessió (opcional)',
+        sessionRolePlaceholder: "Rol de l'agent (opcional, ex. reviewer)",
+        createEmptySession: 'Crear sessió buida',
+        creatingSession: 'Creant sessió...',
         sessionType: {
             title: 'Tipus de sessió',
             simple: 'Simple',
@@ -871,6 +877,17 @@ export const ca: TranslationStructure = {
         delete: 'Eliminar',
         teamNotFound: 'Equip no trobat',
         deleteError: 'Error en eliminar l\'equip. Torna-ho a provar.',
+        renamePromptTitle: "Canvia el nom de l'equip",
+        renamePromptMessage: 'Introdueix un nom nou per a aquest equip:',
+        renamePromptPlaceholder: "Nom de l'equip",
+        renameError: "No s'ha pogut canviar el nom de l'equip. Torna-ho a provar.",
+        archiveConfirmTitle: 'Arxivar equip',
+        archiveConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Arxivar aquest equip i ${count} ${sessionText} associades?`,
+        archiveSuccess: ({ count }: { count: number }) => `Equip arxivat amb ${count} sessió(ns).`,
+        archiveError: "No s'ha pogut arxivar l'equip. Torna-ho a provar.",
+        relaunch: 'Relança',
+        relaunchNoRoles: 'Aquest equip encara no té cap configuració de rols desada per relançar.',
     },
 
     // TODO: Add Catalan translations for memory, rules, and teamRoles

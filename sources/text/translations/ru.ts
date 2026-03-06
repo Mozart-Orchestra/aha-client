@@ -246,6 +246,12 @@ export const ru: TranslationStructure = {
         startNewSessionInFolder: 'Новая сессия здесь',
         noMachineSelected: 'Пожалуйста, выберите машину для запуска сессии',
         noPathSelected: 'Пожалуйста, выберите директорию для запуска сессии',
+        promptRequiredForStartedSession: 'Введите промпт или выберите «Создать пустую сессию».',
+        emptySessionSetup: 'Настройка пустой сессии (необязательно)',
+        sessionNamePlaceholder: 'Название сессии (необязательно)',
+        sessionRolePlaceholder: 'Роль агента (необязательно, напр. reviewer)',
+        createEmptySession: 'Создать пустую сессию',
+        creatingSession: 'Создание сессии...',
         sessionType: {
             title: 'Тип сессии',
             simple: 'Простая',
@@ -894,6 +900,17 @@ export const ru: TranslationStructure = {
         delete: 'Удалить',
         teamNotFound: 'Команда не найдена',
         deleteError: 'Не удалось удалить команду. Попробуйте снова.',
+        renamePromptTitle: 'Переименовать команду',
+        renamePromptMessage: 'Введите новое название этой команды:',
+        renamePromptPlaceholder: 'Название команды',
+        renameError: 'Не удалось переименовать команду. Попробуйте снова.',
+        archiveConfirmTitle: 'Архивировать команду',
+        archiveConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Архивировать эту команду и ${count} связанных ${sessionText}?`,
+        archiveSuccess: ({ count }: { count: number }) => `Команда архивирована вместе с ${count} сессией(ями).`,
+        archiveError: 'Не удалось архивировать команду. Попробуйте снова.',
+        relaunch: 'Перезапустить',
+        relaunchNoRoles: 'У этой команды ещё нет сохранённой конфигурации ролей для перезапуска.',
     },
 
     // TODO: Add Russian translations for memory, rules, and teamRoles

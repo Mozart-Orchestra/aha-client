@@ -263,6 +263,12 @@ export const en = {
         notConnectedToServer: 'Not connected to server. Check your internet connection.',
         noMachineSelected: 'Please select a machine to start the session',
         noPathSelected: 'Please select a directory to start the session in',
+        promptRequiredForStartedSession: 'Enter a prompt or choose "Create Empty Session".',
+        emptySessionSetup: 'Empty session setup (optional)',
+        sessionNamePlaceholder: 'Session name (optional)',
+        sessionRolePlaceholder: 'Agent role (optional, e.g. reviewer)',
+        createEmptySession: 'Create Empty Session',
+        creatingSession: 'Creating Session...',
         sessionType: {
             title: 'Session Type',
             simple: 'Simple',
@@ -1348,6 +1354,17 @@ export const en = {
         delete: 'Delete',
         teamNotFound: 'Team not found',
         deleteError: 'Failed to delete team. Please try again.',
+        renamePromptTitle: 'Rename Team',
+        renamePromptMessage: 'Enter a new name for this team:',
+        renamePromptPlaceholder: 'Team name',
+        renameError: 'Failed to rename team. Please try again.',
+        archiveConfirmTitle: 'Archive Team',
+        archiveConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Archive this team and ${count} associated ${sessionText}?`,
+        archiveSuccess: ({ count }: { count: number }) => `Archived team with ${count} session(s).`,
+        archiveError: 'Failed to archive team. Please try again.',
+        relaunch: 'Relaunch',
+        relaunchNoRoles: 'This team has no saved role configuration to relaunch yet.',
     }
 } as const;
 

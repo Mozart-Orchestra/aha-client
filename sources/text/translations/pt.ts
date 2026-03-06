@@ -263,6 +263,12 @@ export const pt: TranslationStructure = {
         startNewSessionInFolder: 'Nova sessão aqui',
         noMachineSelected: 'Por favor, selecione uma máquina para iniciar a sessão',
         noPathSelected: 'Por favor, selecione um diretório para iniciar a sessão',
+        promptRequiredForStartedSession: 'Digite um prompt ou escolha "Criar sessão vazia".',
+        emptySessionSetup: 'Configuração da sessão vazia (opcional)',
+        sessionNamePlaceholder: 'Nome da sessão (opcional)',
+        sessionRolePlaceholder: 'Função do agente (opcional, ex. reviewer)',
+        createEmptySession: 'Criar sessão vazia',
+        creatingSession: 'Criando sessão...',
         sessionType: {
             title: 'Tipo de sessão',
             simple: 'Simples',
@@ -871,6 +877,17 @@ export const pt: TranslationStructure = {
         delete: 'Excluir',
         teamNotFound: 'Equipe não encontrada',
         deleteError: 'Falha ao excluir equipe. Tente novamente.',
+        renamePromptTitle: 'Renomear equipe',
+        renamePromptMessage: 'Digite um novo nome para esta equipe:',
+        renamePromptPlaceholder: 'Nome da equipe',
+        renameError: 'Falha ao renomear equipe. Tente novamente.',
+        archiveConfirmTitle: 'Arquivar equipe',
+        archiveConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Arquivar esta equipe e ${count} ${sessionText} associadas?`,
+        archiveSuccess: ({ count }: { count: number }) => `Equipe arquivada com ${count} sessão(ões).`,
+        archiveError: 'Falha ao arquivar equipe. Tente novamente.',
+        relaunch: 'Relançar',
+        relaunchNoRoles: 'Esta equipe ainda não tem uma configuração de papéis salva para relançar.',
     },
 
     // TODO: Add Portuguese translations for memory, rules, and teamRoles

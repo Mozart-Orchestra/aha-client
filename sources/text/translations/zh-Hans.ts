@@ -265,6 +265,12 @@ export const zhHans: TranslationStructure = {
         notConnectedToServer: '未连接到服务器。请检查您的网络连接。',
         noMachineSelected: '请选择一台设备以启动会话',
         noPathSelected: '请选择一个目录以启动会话',
+        promptRequiredForStartedSession: '请输入提示词或选择“创建空白会话”。',
+        emptySessionSetup: '空白会话设置（可选）',
+        sessionNamePlaceholder: '会话名称（可选）',
+        sessionRolePlaceholder: 'Agent 角色（可选，例如 reviewer）',
+        createEmptySession: '创建空白会话',
+        creatingSession: '正在创建会话...',
         sessionType: {
             title: '会话类型',
             simple: '简单',
@@ -1347,5 +1353,16 @@ export const zhHans: TranslationStructure = {
         delete: '删除',
         teamNotFound: '未找到团队',
         deleteError: '删除团队失败，请重试。',
+        renamePromptTitle: '重命名团队',
+        renamePromptMessage: '请输入该团队的新名称：',
+        renamePromptPlaceholder: '团队名称',
+        renameError: '重命名团队失败，请重试。',
+        archiveConfirmTitle: '归档团队',
+        archiveConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `归档此团队及其关联的 ${count} 个${sessionText}？`,
+        archiveSuccess: ({ count }: { count: number }) => `已归档团队及其 ${count} 个会话。`,
+        archiveError: '归档团队失败，请重试。',
+        relaunch: '重新启动',
+        relaunchNoRoles: '此团队尚无可用于重新启动的已保存角色配置。',
     }
 } as const;

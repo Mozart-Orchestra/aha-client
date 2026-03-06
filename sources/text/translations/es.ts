@@ -263,6 +263,12 @@ export const es: TranslationStructure = {
         startNewSessionInFolder: 'Nueva sesión aquí',
         noMachineSelected: 'Por favor, selecciona una máquina para iniciar la sesión',
         noPathSelected: 'Por favor, selecciona un directorio para iniciar la sesión',
+        promptRequiredForStartedSession: 'Ingresa un prompt o elige "Crear sesión vacía".',
+        emptySessionSetup: 'Configuración de sesión vacía (opcional)',
+        sessionNamePlaceholder: 'Nombre de la sesión (opcional)',
+        sessionRolePlaceholder: 'Rol del agente (opcional, p. ej. reviewer)',
+        createEmptySession: 'Crear sesión vacía',
+        creatingSession: 'Creando sesión...',
         sessionType: {
             title: 'Tipo de sesión',
             simple: 'Simple',
@@ -872,6 +878,17 @@ export const es: TranslationStructure = {
         delete: 'Eliminar',
         teamNotFound: 'Equipo no encontrado',
         deleteError: 'Error al eliminar el equipo. Inténtalo de nuevo.',
+        renamePromptTitle: 'Renombrar equipo',
+        renamePromptMessage: 'Introduce un nuevo nombre para este equipo:',
+        renamePromptPlaceholder: 'Nombre del equipo',
+        renameError: 'No se pudo renombrar el equipo. Inténtalo de nuevo.',
+        archiveConfirmTitle: 'Archivar equipo',
+        archiveConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `¿Archivar este equipo y ${count} ${sessionText} asociados?`,
+        archiveSuccess: ({ count }: { count: number }) => `Equipo archivado con ${count} sesión(es).`,
+        archiveError: 'No se pudo archivar el equipo. Inténtalo de nuevo.',
+        relaunch: 'Relanzar',
+        relaunchNoRoles: 'Este equipo todavía no tiene una configuración de roles guardada para relanzar.',
     },
 
     // TODO: Add Spanish translations for memory, rules, and teamRoles

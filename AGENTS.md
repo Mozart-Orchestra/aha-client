@@ -1,7 +1,21 @@
 # Repository Guidelines
 
+## Workspace Context First
+
+Before changing code here, read these files in order:
+
+1. `../AGENTS.md`
+2. `../docs/context/00-system-map.md`
+3. `../docs/context/01-contracts.md`
+4. `../docs/context/03-current-focus.md`
+5. This file
+6. `CLAUDE.md`
+
+Do not begin by scanning the whole workspace.
+
 ## Project Structure & Module Organization
 Expo Router screens live in `sources/app`, with shared UI in `sources/components` and modal shells under `sources/modal`. Domain logic (encryption, sync, realtime, tracking) sits in dedicated `sources/*` folders so Expo and `src-tauri` reuse them through the `@/` alias defined in `tsconfig.json`. Assets, copy, and theming files live in `sources/assets`, `sources/text`, and `sources/theme.*`; automation sits in `sources/scripts/`, docs stay in `docs/`, and `public/` contains served artifacts.
+Team creation and relaunch flows should converge through `sources/features/teams/wizard/routes.ts` and `sources/app/(app)/teams/new-wizard.tsx`; keep `sources/app/(app)/teams/new.tsx` as a compatibility redirect rather than expanding the legacy form.
 
 ## Build, Test, and Development Commands
 - `yarn start` launches Expo locally; `yarn start:local-server` points the client at `http://localhost:3005` with verbose logging.

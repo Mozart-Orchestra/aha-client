@@ -22,6 +22,7 @@ import { useDesktopBridge, DesktopRoomMemberInput } from '@/desktop/useDesktopBr
 import { RoleSelector, RoleItem as SelectorRoleItem } from '@/components/roles/RoleSelector';
 import { EvoMapDisplay, ReleaseGateCard } from '@/components/TeamCompositionDisplay';
 import { SearchSuggestions } from '@/components/SearchSuggestions';
+import { getTeamCreationRoute } from '@/features/teams/wizard/routes';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -417,6 +418,24 @@ export default function NewTeamScreen() {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const router = useRouter();
+
+    React.useEffect(() => {
+        router.replace(getTeamCreationRoute('entry'));
+    }, [router]);
+
+    return (
+        <>
+            <Stack.Screen
+                options={{
+                    headerShown: true,
+                    headerTitle: 'New Team',
+                }}
+            />
+            <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }]}>
+                <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+            </View>
+        </>
+    );
     const allSessions = useAllSessions();
     const machines = useAllMachines();
     const recentMachinePaths = useSetting('recentMachinePaths');
@@ -1099,6 +1118,7 @@ export default function NewTeamScreen() {
                                             sessionName: agentTitle,
                                             sessionPath: resolvedCwd,
                                             env: {
+                                                AHA_ROOM_NAME: title.trim(),
                                                 AHA_AGENT_LANGUAGE: agentLanguage
                                             }
                                         });

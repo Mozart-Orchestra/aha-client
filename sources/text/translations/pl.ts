@@ -274,6 +274,12 @@ export const pl: TranslationStructure = {
         startNewSessionInFolder: 'Nowa sesja tutaj',
         noMachineSelected: 'Proszę wybrać maszynę do rozpoczęcia sesji',
         noPathSelected: 'Proszę wybrać katalog do rozpoczęcia sesji',
+        promptRequiredForStartedSession: 'Wpisz prompt lub wybierz „Utwórz pustą sesję”.',
+        emptySessionSetup: 'Konfiguracja pustej sesji (opcjonalnie)',
+        sessionNamePlaceholder: 'Nazwa sesji (opcjonalnie)',
+        sessionRolePlaceholder: 'Rola agenta (opcjonalnie, np. reviewer)',
+        createEmptySession: 'Utwórz pustą sesję',
+        creatingSession: 'Tworzenie sesji...',
         sessionType: {
             title: 'Typ sesji',
             simple: 'Prosta',
@@ -895,6 +901,17 @@ export const pl: TranslationStructure = {
         delete: 'Usuń',
         teamNotFound: 'Nie znaleziono zespołu',
         deleteError: 'Nie udało się usunąć zespołu. Spróbuj ponownie.',
+        renamePromptTitle: 'Zmień nazwę zespołu',
+        renamePromptMessage: 'Wpisz nową nazwę tego zespołu:',
+        renamePromptPlaceholder: 'Nazwa zespołu',
+        renameError: 'Nie udało się zmienić nazwy zespołu. Spróbuj ponownie.',
+        archiveConfirmTitle: 'Archiwizuj zespół',
+        archiveConfirmMessage: ({ count, sessionText }: { count: number; sessionText: string }) =>
+            `Zarchiwizować ten zespół i ${count} powiązanych ${sessionText}?`,
+        archiveSuccess: ({ count }: { count: number }) => `Zarchiwizowano zespół z ${count} sesją(-ami).`,
+        archiveError: 'Nie udało się zarchiwizować zespołu. Spróbuj ponownie.',
+        relaunch: 'Uruchom ponownie',
+        relaunchNoRoles: 'Ten zespół nie ma jeszcze zapisanej konfiguracji ról do ponownego uruchomienia.',
     },
 
     // TODO: Add Polish translations for memory, rules, and teamRoles
