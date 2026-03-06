@@ -10,9 +10,11 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/StyledText';
+import { EvolutionSummaryCard } from '@/components/EvolutionSummaryCard';
 import { layout } from '@/components/layout';
 import { t } from '@/text';
 import { useBriefing } from '@/hooks/useBriefing';
+import { useEvolutionSummary } from '@/hooks/useEvolutionSummary';
 import {
     briefingStyles as styles,
     ACCENT_GREEN,
@@ -102,6 +104,12 @@ export default React.memo(function MorningBriefingScreen() {
     const insets = useSafeAreaInsets();
 
     const { briefing, isLoading, refresh } = useBriefing(teamId ?? '');
+    const {
+        summary: evolutionSummary,
+        isLoading: isEvolutionLoading,
+        error: evolutionError,
+        refresh: refreshEvolution,
+    } = useEvolutionSummary(teamId ?? '');
 
     const handleResume = React.useCallback(() => {
         const sessionId = briefing?.contextResume?.lastActiveSession?.sessionId;
@@ -208,6 +216,20 @@ export default React.memo(function MorningBriefingScreen() {
                         </View>
                     </View>
                 </View>
+                <EvolutionSummaryCard
+                    title="Evolution Snapshot"
+                    variant="compact"
+                    summary={evolutionSummary}
+                    isLoading={isEvolutionLoading}
+                    error={evolutionError}
+                    onRetry={refreshEvolution}
+                    onOpenDetails={() => {
+                        if (teamId) {
+                            router.push(`/teams/${teamId}`);
+                        }
+                    }}
+                    detailLabel="Open team workspace"
+                />
 
                 {/* Blockers — highest urgency, red card */}
                 {(briefing?.blockers?.length ?? 0) > 0 ? (

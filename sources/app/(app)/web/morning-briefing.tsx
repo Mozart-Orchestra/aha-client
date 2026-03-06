@@ -13,7 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnistyles } from 'react-native-unistyles';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { EvolutionSummaryCard } from '@/components/EvolutionSummaryCard';
 import { useBriefing, type BriefingBlocker, type BriefingTask } from '@/hooks/useBriefing';
+import { useEvolutionSummary } from '@/hooks/useEvolutionSummary';
 
 const ACCENT_GREEN = '#3D8A5A';
 const ACCENT_RED = '#D08068';
@@ -232,6 +234,12 @@ export default function WebMorningBriefingScreen() {
   const { teamId } = useLocalSearchParams<{ teamId?: string }>();
 
   const { briefing, isLoading, error, refresh } = useBriefing(teamId ?? '');
+  const {
+    summary: evolutionSummary,
+    isLoading: isEvolutionLoading,
+    error: evolutionError,
+    refresh: refreshEvolution,
+  } = useEvolutionSummary(teamId ?? '');
 
   const handleSkip = React.useCallback(() => {
     // Navigate to team chat or home
@@ -479,6 +487,21 @@ export default function WebMorningBriefingScreen() {
                 </View>
               </View>
             </View>
+
+            <EvolutionSummaryCard
+              title="Evolution Snapshot"
+              variant="compact"
+              summary={evolutionSummary}
+              isLoading={isEvolutionLoading}
+              error={evolutionError}
+              onRetry={refreshEvolution}
+              onOpenDetails={() => {
+                if (teamId) {
+                  router.push(`/web/team-info?teamId=${encodeURIComponent(teamId)}`);
+                }
+              }}
+              detailLabel="Open evolution workspace"
+            />
 
             {/* Continue Where You Left Off Card */}
             <View

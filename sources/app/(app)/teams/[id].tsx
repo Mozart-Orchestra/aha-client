@@ -34,7 +34,9 @@ import RalphControlPanel, { RalphLoopState } from '@/components/RalphControlPane
 import { useAuth } from '@/auth/AuthContext';
 import { AgentManagementModal } from '@/components/AgentManagementModal';
 import { AppStateView } from '@/components/AppStateView';
+import { EvolutionSummaryCard } from '@/components/EvolutionSummaryCard';
 import { TeamStatsDashboard } from '@/components/TeamStatsDashboard';
+import { useEvolutionSummary } from '@/hooks/useEvolutionSummary';
 import { formatTokens, useTeamStats } from '@/hooks/useTeamStats';
 import { useCanonicalTeam } from '@/hooks/useCanonicalTeams';
 import {
@@ -977,6 +979,12 @@ export default function TeamDashboardScreen() {
     const autoReviewInFlight = React.useRef(false);
     const [showAgentModal, setShowAgentModal] = React.useState(false);
     const { stats: teamStats } = useTeamStats(teamId);
+    const {
+        summary: evolutionSummary,
+        isLoading: isEvolutionLoading,
+        error: evolutionError,
+        refresh: refreshEvolution,
+    } = useEvolutionSummary(teamId);
 
     // Ralph Loop state
     const [ralphState, setRalphState] = React.useState<RalphLoopState>({
@@ -2708,6 +2716,20 @@ export default function TeamDashboardScreen() {
                         <Text style={styles.emptyState}>No rating trend data in selected period/category.</Text>
                     )}
                 </View>
+
+                <EvolutionSummaryCard
+                    title="Evolution Signals"
+                    summary={evolutionSummary}
+                    isLoading={isEvolutionLoading}
+                    error={evolutionError}
+                    onRetry={refreshEvolution}
+                    onOpenDetails={() => {
+                        if (teamId) {
+                            router.push(`/teams/morning-briefing?teamId=${encodeURIComponent(teamId)}`);
+                        }
+                    }}
+                    detailLabel="Open briefing entry"
+                />
 
                 <View style={styles.roleCard}>
                     <Text style={styles.roleTitle}>Role Rating Trend</Text>

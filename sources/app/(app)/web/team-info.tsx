@@ -2,10 +2,12 @@ import * as React from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { TeamStatsDashboard } from '@/components/TeamStatsDashboard';
+import { EvolutionSummaryCard } from '@/components/EvolutionSummaryCard';
 import { TeamWorkspaceShell } from '@/components/web/TeamWorkspaceShell';
 import { uiPenColors, uiPenFontFamily, uiPenRadius } from '@/components/web/uiPenTokens';
 import { mergeTeamOverviews, summarizeTeamArtifacts } from '@/components/web/teamOverview';
 import { useCanonicalTeams } from '@/hooks/useCanonicalTeams';
+import { useEvolutionSummary } from '@/hooks/useEvolutionSummary';
 import { useArtifact, useArtifacts } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 
@@ -23,6 +25,12 @@ export default function TeamInfoWebScreen() {
         [teams, selectedTeamId]
     );
     const selectedArtifact = useArtifact(selectedTeam?.id || '');
+    const {
+        summary: evolutionSummary,
+        isLoading: isEvolutionLoading,
+        error: evolutionError,
+        refresh: refreshEvolution,
+    } = useEvolutionSummary(selectedTeam?.id || '');
 
     React.useEffect(() => {
         void sync.fetchArtifactsList().catch(() => undefined);
@@ -201,6 +209,14 @@ export default function TeamInfoWebScreen() {
                         <TeamStatsDashboard teamId={selectedTeam.id} />
                     </View>
                 </View>
+
+                <EvolutionSummaryCard
+                    title="Evolution Workspace"
+                    summary={evolutionSummary}
+                    isLoading={isEvolutionLoading}
+                    error={evolutionError}
+                    onRetry={refreshEvolution}
+                />
             </ScrollView>
         </TeamWorkspaceShell>
     );
