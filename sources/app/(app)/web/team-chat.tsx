@@ -3,10 +3,13 @@ import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import TeamChatRoom from '@/components/TeamChatRoom';
 import { TeamWorkspaceShell } from '@/components/web/TeamWorkspaceShell';
+import { parseBoardTasksFromBody } from '@/components/web/teamBoard';
 import { uiPenColors, uiPenFontFamily } from '@/components/web/uiPenTokens';
 import { mergeTeamOverviews, summarizeTeamArtifacts } from '@/components/web/teamOverview';
+import { useTeamTasks } from '@/hooks/useTeamTasks';
 import { useCanonicalTeams } from '@/hooks/useCanonicalTeams';
 import { getTeamCreationRoute } from '@/features/teams/wizard/routes';
+import type { KanbanTask } from '@/sync/kanbanTypes';
 import { useAllSessions, useArtifact, useArtifacts, useIsDataReady } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 
@@ -74,6 +77,7 @@ export default function TeamChatWebScreen() {
     );
 
     const artifactWithBody = useArtifact(selectedTeam?.id || '');
+    const taskState = useTeamTasks(selectedTeam?.id);
 
     React.useEffect(() => {
         if (!selectedTeam?.id || !selectedTeam.artifactBacked) {
@@ -83,6 +87,22 @@ export default function TeamChatWebScreen() {
             void sync.fetchArtifactWithBody(selectedTeam.id).catch(() => undefined);
         }
     }, [selectedTeam?.artifactBacked, selectedTeam?.id, artifactWithBody?.body]);
+
+    const fallbackTasks = React.useMemo(
+        () => parseBoardTasksFromBody(artifactWithBody?.body).tasks.map((task) => ({
+            ...task,
+            createdAt: task.createdAt ?? task.updatedAt,
+            updatedAt: task.updatedAt,
+            dueDate: task.dueDate ?? null,
+            dependencies: task.dependencies ?? [],
+        } as KanbanTask)),
+        [artifactWithBody?.body]
+    );
+
+    const teamTasks = React.useMemo(
+        () => (taskState.source === 'canonical' || taskState.tasks.length > 0 ? taskState.tasks : fallbackTasks),
+        [fallbackTasks, taskState.source, taskState.tasks]
+    );
 
     const roster = React.useMemo(() => {
         if (!selectedTeam) {
@@ -310,6 +330,10 @@ export default function TeamChatWebScreen() {
                     teamId={selectedTeam.id}
                     teamName={selectedTeam.title}
                     members={roster}
+                    tasks={teamTasks}
+                    onOpenTask={(task) => {
+                        router.push(withTeamTask('/web/board', selectedTeam.id, task.id) as any);
+                    }}
                 />
             ) : (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -330,4 +354,8 @@ export default function TeamChatWebScreen() {
 
 function withTeamId(base: string, teamId: string): string {
     return `${base}?teamId=${encodeURIComponent(teamId)}`;
+}
+
+function withTeamTask(base: string, teamId: string, taskId: string): string {
+    return `${base}?teamId=${encodeURIComponent(teamId)}&taskId=${encodeURIComponent(taskId)}`;
 }

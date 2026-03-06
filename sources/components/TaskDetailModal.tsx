@@ -22,6 +22,15 @@ interface TaskDetailModalProps {
     onSave?: (taskId: string, updates: Partial<KanbanTask>) => Promise<void>;
     onDiscuss?: (task: KanbanTask) => void;
     allSessions?: any[];
+    onRefine?: (task: KanbanTask) => Promise<void>;
+    onRewrite?: (task: KanbanTask) => Promise<void>;
+    isRefining?: boolean;
+    isRewriting?: boolean;
+    actionFeedback?: {
+        tone: 'success' | 'error';
+        message: string;
+    } | null;
+    extraActions?: React.ReactNode;
 }
 
 interface Subtask {
@@ -37,7 +46,13 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     onClose,
     onSave,
     onDiscuss,
-    allSessions
+    allSessions,
+    onRefine,
+    onRewrite,
+    isRefining = false,
+    isRewriting = false,
+    actionFeedback,
+    extraActions,
 }) => {
     const { theme } = useUnistyles();
     const [isEditing, setIsEditing] = useState(false);
@@ -45,6 +60,26 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const [subtasks, setSubtasks] = useState<Subtask[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [assigneeInput, setAssigneeInput] = useState('');
+    const [dueDateInput, setDueDateInput] = useState('');
+    const [dependenciesInput, setDependenciesInput] = useState('');
+
+    const priorityOrder: Array<NonNullable<KanbanTask['priority']>> = ['low', 'medium', 'high', 'urgent'];
+
+    const formatDateInput = (timestamp?: number | null) => {
+        if (!timestamp) return '';
+        return new Date(timestamp).toISOString().slice(0, 10);
+    };
+
+    const parseDueDateInput = (value: string): number | null => {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const parsed = Date.parse(`${trimmed}T00:00:00Z`);
+        if (!Number.isFinite(parsed)) {
+            throw new Error('Use YYYY-MM-DD for due date');
+        }
+        return parsed;
+    };
 
     // 当 task 改变时,重置状态
     React.useEffect(() => {
@@ -57,8 +92,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 assigneeId: task.assigneeId,
                 priority: task.priority || 'medium',
                 dueDate: task.dueDate,
+                dependencies: task.dependencies || [],
                 tags: task.tags || []
             });
+            setAssigneeInput(task.assigneeId || '');
+            setDueDateInput(formatDateInput(task.dueDate));
+            setDependenciesInput(task.dependencies?.join(', ') || '');
             // TODO: 从 subtaskIds 加载子任务
             setSubtasks([]);
         }
@@ -84,7 +123,18 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         setIsSaving(true);
         setSaveError(null);
         try {
-            await onSave(task.id, editedTask);
+            const nextAssignee = assigneeInput.trim().replace(/^@/, '');
+            const dependencies = dependenciesInput
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean);
+
+            await onSave(task.id, {
+                ...editedTask,
+                assigneeId: nextAssignee || null,
+                dueDate: parseDueDateInput(dueDateInput),
+                dependencies,
+            });
             setIsEditing(false);
             setSaveError(null);
         } catch (error) {
@@ -106,8 +156,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             assigneeId: task.assigneeId,
             priority: task.priority || 'medium',
             dueDate: task.dueDate,
+            dependencies: task.dependencies || [],
             tags: task.tags || []
         });
+        setAssigneeInput(task.assigneeId || '');
+        setDueDateInput(formatDateInput(task.dueDate));
+        setDependenciesInput(task.dependencies?.join(', ') || '');
     };
 
     const getAssigneeName = (assigneeId?: string | null) => {
@@ -126,7 +180,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         }
     };
 
-    const formatDate = (timestamp?: number) => {
+    const formatDate = (timestamp?: number | null) => {
         if (!timestamp) return 'No due date';
         return new Date(timestamp).toLocaleDateString();
     };
@@ -139,15 +193,17 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     // Handler for status selection
     const handleStatusPress = () => {
         if (!isEditing || !columns) return;
-        // TODO: Show status picker modal
-        console.log('Status picker not implemented');
+        const currentIndex = Math.max(0, columns.findIndex((column) => column.id === editedTask.status));
+        const nextColumn = columns[(currentIndex + 1) % columns.length];
+        setEditedTask((current) => ({ ...current, status: nextColumn?.id || current.status }));
     };
 
     // Handler for priority selection
     const handlePriorityPress = () => {
         if (!isEditing) return;
-        // TODO: Show priority picker modal
-        console.log('Priority picker not implemented');
+        const currentIndex = priorityOrder.indexOf((editedTask.priority as NonNullable<KanbanTask['priority']>) || 'medium');
+        const nextPriority = priorityOrder[(currentIndex + 1) % priorityOrder.length] || 'medium';
+        setEditedTask((current) => ({ ...current, priority: nextPriority }));
     };
 
     // Handler for subtask toggle
@@ -192,6 +248,15 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             </View>
                         )}
 
+                        {actionFeedback && (
+                            <View style={[
+                                stylesheet.feedbackBanner,
+                                actionFeedback.tone === 'error' ? stylesheet.feedbackBannerError : stylesheet.feedbackBannerSuccess,
+                            ]}>
+                                <Text style={stylesheet.feedbackText}>{actionFeedback.message}</Text>
+                            </View>
+                        )}
+
                         <ScrollView style={stylesheet.content} showsVerticalScrollIndicator={false}>
                             {/* Title */}
                             {isEditing ? (
@@ -225,9 +290,18 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                                 <View style={stylesheet.metaItem}>
                                     <Text style={stylesheet.metaLabel}>Assignee</Text>
-                                    <Text style={stylesheet.metaValue}>
-                                        {getAssigneeName(task.assigneeId)}
-                                    </Text>
+                                    {isEditing ? (
+                                        <TextInput
+                                            style={stylesheet.inlineInput}
+                                            value={assigneeInput}
+                                            onChangeText={setAssigneeInput}
+                                            placeholder="session id or @role"
+                                        />
+                                    ) : (
+                                        <Text style={stylesheet.metaValue}>
+                                            {getAssigneeName(task.assigneeId)}
+                                        </Text>
+                                    )}
                                 </View>
                             </View>
 
@@ -257,9 +331,19 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                                 <View style={stylesheet.metaItem}>
                                     <Text style={stylesheet.metaLabel}>Due Date</Text>
-                                    <Text style={stylesheet.metaValue}>
-                                        {formatDate(task.dueDate)}
-                                    </Text>
+                                    {isEditing ? (
+                                        <TextInput
+                                            style={stylesheet.inlineInput}
+                                            value={dueDateInput}
+                                            onChangeText={setDueDateInput}
+                                            placeholder="YYYY-MM-DD"
+                                            autoCapitalize="none"
+                                        />
+                                    ) : (
+                                        <Text style={stylesheet.metaValue}>
+                                            {formatDate(task.dueDate)}
+                                        </Text>
+                                    )}
                                 </View>
                             </View>
 
@@ -281,6 +365,69 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     </Text>
                                 )}
                             </View>
+
+                            <View style={stylesheet.section}>
+                                <Text style={stylesheet.sectionTitle}>Dependencies</Text>
+                                {isEditing ? (
+                                    <TextInput
+                                        style={stylesheet.descriptionInput}
+                                        value={dependenciesInput}
+                                        onChangeText={setDependenciesInput}
+                                        placeholder="task-1, task-2"
+                                    />
+                                ) : (
+                                    <Text style={stylesheet.description}>
+                                        {task.dependencies?.length ? task.dependencies.join(', ') : 'No dependencies'}
+                                    </Text>
+                                )}
+                            </View>
+
+                            {!isEditing && (onRefine || onRewrite || extraActions) ? (
+                                <View style={stylesheet.section}>
+                                    <Text style={stylesheet.sectionTitle}>Task Actions</Text>
+                                    <View style={stylesheet.actionRow}>
+                                        {onRefine ? (
+                                            <Pressable
+                                                style={[stylesheet.actionButton, stylesheet.refineButton]}
+                                                onPress={() => {
+                                                    void onRefine(task);
+                                                }}
+                                                disabled={isRefining || isRewriting}
+                                            >
+                                                {isRefining ? (
+                                                    <ActivityIndicator size="small" color="#FFF" />
+                                                ) : (
+                                                    <>
+                                                        <Ionicons name="sparkles-outline" size={16} color="#FFF" />
+                                                        <Text style={stylesheet.footerButtonText}>Refine</Text>
+                                                    </>
+                                                )}
+                                            </Pressable>
+                                        ) : null}
+                                        {onRewrite ? (
+                                            <Pressable
+                                                style={[stylesheet.actionButton, stylesheet.rewriteButton]}
+                                                onPress={() => {
+                                                    void onRewrite(task);
+                                                }}
+                                                disabled={isRefining || isRewriting}
+                                            >
+                                                {isRewriting ? (
+                                                    <ActivityIndicator size="small" color="#FFF" />
+                                                ) : (
+                                                    <>
+                                                        <Ionicons name="create-outline" size={16} color="#FFF" />
+                                                        <Text style={stylesheet.footerButtonText}>Rewrite</Text>
+                                                    </>
+                                                )}
+                                            </Pressable>
+                                        ) : null}
+                                    </View>
+                                    {extraActions ? (
+                                        <View style={stylesheet.extraActionsContainer}>{extraActions}</View>
+                                    ) : null}
+                                </View>
+                            ) : null}
 
                             {/* Subtasks */}
                             {subtasks.length > 0 && (
@@ -472,6 +619,14 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 14,
         color: theme.colors.text,
     },
+    inlineInput: {
+        fontSize: 14,
+        color: theme.colors.text,
+        backgroundColor: theme.colors.groupped.background,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
     section: {
         marginBottom: 24,
     },
@@ -587,6 +742,29 @@ const stylesheet = StyleSheet.create((theme) => ({
     saveButton: {
         backgroundColor: theme.colors.success,
     },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    actionButton: {
+        flex: 1,
+        minHeight: 44,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+    },
+    refineButton: {
+        backgroundColor: theme.colors.button.primary.background,
+    },
+    rewriteButton: {
+        backgroundColor: theme.colors.warning,
+    },
+    extraActionsContainer: {
+        marginTop: 12,
+    },
     errorBanner: {
         marginHorizontal: 16,
         marginTop: 12,
@@ -599,5 +777,24 @@ const stylesheet = StyleSheet.create((theme) => ({
     errorText: {
         fontSize: 12,
         color: theme.colors.textDestructive,
+    },
+    feedbackBanner: {
+        marginHorizontal: 16,
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    feedbackBannerSuccess: {
+        borderColor: theme.colors.success,
+        backgroundColor: theme.colors.surfaceHighest,
+    },
+    feedbackBannerError: {
+        borderColor: theme.colors.textDestructive,
+        backgroundColor: theme.colors.surfaceHighest,
+    },
+    feedbackText: {
+        fontSize: 12,
+        color: theme.colors.text,
     },
 }));

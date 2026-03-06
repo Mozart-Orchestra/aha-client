@@ -99,7 +99,7 @@ export interface KanbanTask {
 
     // 🆕 Chat-Board 集成
     relatedMessageIds?: string[];     // 关联的聊天消息ID列表
-    dueDate?: number;                 // 截止日期
+    dueDate?: number | null;          // 截止日期
     tags?: string[];                  // 任务标签
 
     // 🆕 Todo 集成

@@ -14,6 +14,8 @@ import {
   executeCreateTask,
   executeUpdateTask,
   executeCompleteTask,
+  executeRefineTask,
+  executeRewriteTask,
   getCommandHelp,
   type TaskCommandResult,
   type ParsedCommand
@@ -526,6 +528,11 @@ const TaskCard = ({ task, onPress, styles }: TaskCardProps) => {
                     Assigned to: @{task.assigneeId.substring(0, 8)}
                 </Text>
             )}
+            {onPress ? (
+                <Text style={{ fontSize: 12, color: statusColor, marginTop: 8, fontWeight: '600' }}>
+                    Open task actions →
+                </Text>
+            ) : null}
         </Pressable>
     );
 };
@@ -537,9 +544,11 @@ interface MessageBubbleProps {
     onAvatarPress: (sessionId: string) => void;
     // 🆕 Task references support
     taskChatSync?: ReturnType<typeof useTaskChatSync>;
+    tasks?: KanbanTask[];
+    onTaskPress?: (task: KanbanTask) => void;
 }
 
-const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSync }: MessageBubbleProps) => {
+const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSync, tasks, onTaskPress }: MessageBubbleProps) => {
     const [expanded, setExpanded] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
     const [imageLoading, setImageLoading] = React.useState(true);
@@ -566,10 +575,21 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
 
     // 🆕 查找关联的任务
     const relatedTask = React.useMemo(() => {
-        if (!taskChatSync || !message.metadata?.taskId) return null;
-        const tasksForMessage = taskChatSync.getTasksForMessage(message.id);
-        return tasksForMessage.find(t => t.id === message.metadata?.taskId) ?? null;
-    }, [taskChatSync, message.id, message.metadata?.taskId]);
+        if (taskChatSync && message.metadata?.taskId) {
+            const tasksForMessage = taskChatSync.getTasksForMessage(message.id);
+            return tasksForMessage.find(t => t.id === message.metadata?.taskId) ?? null;
+        }
+
+        if (!tasks?.length) return null;
+
+        const taskIds = new Set<string>();
+        if (message.metadata?.taskId) {
+            taskIds.add(message.metadata.taskId);
+        }
+        extractTaskIds(message.content).forEach((taskId) => taskIds.add(taskId));
+
+        return tasks.find((task) => taskIds.has(task.id)) ?? null;
+    }, [taskChatSync, tasks, message.id, message.metadata?.taskId, message.content]);
 
     // Determine if we should show short or long content
     // If shortContent exists, use it as the summary.
@@ -700,10 +720,7 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, taskChatSy
                         <TaskCard
                             task={relatedTask}
                             styles={styles}
-                            onPress={() => {
-                                // TODO: Navigate to task detail or switch to board tab
-                                console.log('Task pressed:', relatedTask.id);
-                            }}
+                            onPress={onTaskPress ? () => onTaskPress(relatedTask) : undefined}
                         />
                     )}
                 </View>
@@ -769,6 +786,8 @@ interface TeamChatRoomProps {
     messages?: TeamMessage[];
     onMessagesChange?: (messages: TeamMessage[]) => void;
     taskChatSync?: ReturnType<typeof useTaskChatSync>;
+    tasks?: KanbanTask[];
+    onOpenTask?: (task: KanbanTask) => void;
 }
 
 export default function TeamChatRoom({
@@ -780,7 +799,9 @@ export default function TeamChatRoom({
     members = [],
     messages: externalMessages,
     onMessagesChange,
-    taskChatSync
+    taskChatSync,
+    tasks,
+    onOpenTask,
 }: TeamChatRoomProps) {
     const { theme } = useUnistyles();
     const styles = stylesheet;
@@ -1505,6 +1526,20 @@ export default function TeamChatRoom({
             case 'completeTask':
                 return await executeCompleteTask(command.params.taskId);
 
+            case 'refineTask':
+                return await executeRefineTask(
+                    command.params.taskId,
+                    command.params.context,
+                    teamId
+                );
+
+            case 'rewriteTask':
+                return await executeRewriteTask(
+                    command.params.taskId,
+                    command.params.style,
+                    teamId
+                );
+
             default:
                 return {
                     success: false,
@@ -1588,6 +1623,8 @@ export default function TeamChatRoom({
                                 styles={styles}
                                 onAvatarPress={handleAvatarPress}
                                 taskChatSync={taskChatSync}
+                                tasks={tasks}
+                                onTaskPress={onOpenTask}
                             />
                         );
                     })

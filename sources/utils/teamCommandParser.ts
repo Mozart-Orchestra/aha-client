@@ -5,11 +5,13 @@
  */
 
 import { linkTaskToSession } from '@/-zen/model/taskSessionLink';
+import { TokenStorage } from '@/auth/tokenStorage';
+import { refineTeamTask, rewriteTeamTask } from '@/sync/apiTasks';
+import { getServerUrl } from '@/sync/serverConfig';
 import { storage } from '@/sync/storage';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface ParsedCommand {
-  type: 'createTask' | 'updateTask' | 'assignTask' | 'completeTask' | 'unknown';
+  type: 'createTask' | 'updateTask' | 'assignTask' | 'completeTask' | 'refineTask' | 'rewriteTask' | 'unknown';
   params: Record<string, any>;
   rawText: string;
 }
@@ -72,6 +74,36 @@ export function parseCommand(input: string): ParsedCommand | null {
     return {
       type: 'completeTask',
       params: { taskId: completeMatch[1] },
+      rawText: trimmed
+    };
+  }
+
+  // 任务细化命令 (AI refine)
+  // /task refine <taskId> [context...]
+  const refineTaskRegex = /^\/task\s+refine\s+(\S+)(?:\s+(.+))?/i;
+  const refineMatch = trimmed.match(refineTaskRegex);
+  if (refineMatch) {
+    return {
+      type: 'refineTask',
+      params: {
+        taskId: refineMatch[1],
+        context: refineMatch[2] || undefined
+      },
+      rawText: trimmed
+    };
+  }
+
+  // 任务重写命令 (AI rewrite)
+  // /task rewrite <taskId> [style:concise|detailed|technical|user-friendly]
+  const rewriteTaskRegex = /^\/task\s+rewrite\s+(\S+)(?:\s+style:(concise|detailed|technical|user-friendly))?/i;
+  const rewriteMatch = trimmed.match(rewriteTaskRegex);
+  if (rewriteMatch) {
+    return {
+      type: 'rewriteTask',
+      params: {
+        taskId: rewriteMatch[1],
+        style: rewriteMatch[2] || 'concise'
+      },
       rawText: trimmed
     };
   }
@@ -313,6 +345,100 @@ export async function executeCompleteTask(
 }
 
 /**
+ * 执行任务细化命令 (AI refine)
+ * Calls server API to use AI for task refinement
+ */
+export async function executeRefineTask(
+  taskId: string,
+  context?: string,
+  teamId?: string
+): Promise<TaskCommandResult> {
+  try {
+    if (!teamId) {
+      return {
+        success: false,
+        message: '❌ Failed to refine task: Missing teamId'
+      };
+    }
+
+    const credentials = await TokenStorage.getCredentials();
+    if (!credentials) {
+      return {
+        success: false,
+        message: '❌ Failed to refine task: Not authenticated'
+      };
+    }
+
+    const result = await refineTeamTask(credentials, teamId, taskId, context);
+    const suggestions = Array.isArray(result.refinement?.suggestions) ? result.refinement!.suggestions : [];
+    const title = result.task?.title || taskId;
+
+    return {
+      success: true,
+      message: suggestions.length > 0
+        ? `✨ Task refined: "${title}"\n\nSuggestions:\n${suggestions.map((s: string) => `• ${s}`).join('\n')}`
+        : `✨ Task refined: "${title}"`,
+      taskId,
+      data: result
+    };
+  } catch (error) {
+    console.error('Failed to refine task:', error);
+    return {
+      success: false,
+      message: `❌ Failed to refine task: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
+/**
+ * 执行任务重写命令 (AI rewrite)
+ * Calls server API to use AI for task rewriting
+ */
+export async function executeRewriteTask(
+  taskId: string,
+  style: string = 'concise',
+  teamId?: string
+): Promise<TaskCommandResult> {
+  try {
+    if (!teamId) {
+      return {
+        success: false,
+        message: '❌ Failed to rewrite task: Missing teamId'
+      };
+    }
+
+    const credentials = await TokenStorage.getCredentials();
+    if (!credentials) {
+      return {
+        success: false,
+        message: '❌ Failed to rewrite task: Not authenticated'
+      };
+    }
+
+    const result = await rewriteTeamTask(
+      credentials,
+      teamId,
+      taskId,
+      style as 'concise' | 'detailed' | 'technical' | 'user-friendly'
+    );
+    const rewrittenTitle = result.rewrite?.rewrittenTitle || result.task?.title || taskId;
+
+    return {
+      success: true,
+      message: `✨ Task rewritten (${style} style): "${rewrittenTitle}"`,
+      taskId,
+      data: result
+    };
+  } catch (error) {
+    console.error('Failed to rewrite task:', error);
+    return {
+      success: false,
+      message: `❌ Failed to rewrite task: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
+/**
  * 获取命令帮助信息
  */
 export function getCommandHelp(): string {
@@ -334,5 +460,13 @@ export function getCommandHelp(): string {
 /complete task <taskId>
   完成任务
   示例: /complete task task_123
+
+/task refine <taskId> [context...]
+  使用 AI 细化任务描述，添加更多细节和验收标准
+  示例: /task refine task_123 需要考虑移动端适配
+
+/task rewrite <taskId> [style:concise|detailed|technical|user-friendly]
+  使用 AI 重写任务标题和描述，改善清晰度
+  示例: /task rewrite task_123 style:technical
   `.trim();
 }

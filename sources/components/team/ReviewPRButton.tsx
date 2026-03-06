@@ -51,6 +51,7 @@ interface Finding {
 interface ReviewResult {
     reviewJobId: string;
     status: ReviewStatus;
+    progress?: number;
     summary: {
         verdict: 'approve' | 'request-changes' | 'comment';
         confidence: number;
@@ -65,6 +66,13 @@ interface ReviewResult {
         description: string;
     }>;
     chatMessage: { role: 'system'; content: string } | null;
+    metrics?: {
+        tasksCompleted: number;
+        messagesExchanged: number;
+        blockersResolved: number;
+    };
+    reportSummary?: string;
+    error?: string;
 }
 
 interface ReviewPRButtonProps {
@@ -107,6 +115,53 @@ function confidenceColor(confidence: number): string {
     return ACCENT_ORANGE;
 }
 
+function normalizeReviewResult(raw: any, reviewJobId: string): ReviewResult {
+    const normalizedStatus: ReviewStatus = raw?.status === 'failed'
+        ? 'failed'
+        : raw?.status === 'completed'
+            ? 'completed'
+            : raw?.status === 'queued'
+                ? 'queued'
+                : raw?.status === 'in-progress' || raw?.status === 'processing' || raw?.status === 'pending'
+                    ? 'in-progress'
+                    : 'failed';
+
+    const recommendations: string[] = Array.isArray(raw?.result?.recommendations)
+        ? raw.result.recommendations
+        : [];
+
+    const fallbackFindings: Finding[] = recommendations.map((message, index) => ({
+        id: `${reviewJobId}-rec-${index}`,
+        severity: 'info',
+        type: 'recommendation',
+        file: 'team',
+        message,
+        confidence: 0.65,
+    }));
+
+    const summary = raw?.summary && typeof raw.summary === 'object'
+        ? raw.summary
+        : null;
+    const findings = Array.isArray(raw?.findings) ? raw.findings : fallbackFindings;
+    const suggestedChanges = Array.isArray(raw?.suggestedChanges) ? raw.suggestedChanges : [];
+    const chatMessage = raw?.chatMessage && typeof raw.chatMessage === 'object' ? raw.chatMessage : null;
+    const metrics = raw?.result?.metrics && typeof raw.result.metrics === 'object' ? raw.result.metrics : undefined;
+    const reportSummary = typeof raw?.result?.summary === 'string' ? raw.result.summary : undefined;
+
+    return {
+        reviewJobId: raw?.reviewJobId ?? raw?.jobId ?? reviewJobId,
+        status: normalizedStatus,
+        progress: typeof raw?.progress === 'number' ? raw.progress : undefined,
+        summary,
+        findings,
+        suggestedChanges,
+        chatMessage,
+        metrics,
+        reportSummary,
+        error: typeof raw?.error === 'string' ? raw.error : undefined,
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Hook: review polling logic
 // ---------------------------------------------------------------------------
@@ -141,9 +196,10 @@ function useReviewPolling(teamId: string) {
                     return;
                 }
 
-                const data = await response.json() as ReviewResult;
-                if (data.status === 'completed' || data.status === 'failed') {
-                    onDone(data);
+                const data = await response.json() as any;
+                const normalized = normalizeReviewResult(data, reviewJobId);
+                if (normalized.status === 'completed' || normalized.status === 'failed') {
+                    onDone(normalized);
                     return;
                 }
 
@@ -239,13 +295,22 @@ export const ReviewPRButton = React.memo(function ReviewPRButton({
                 return;
             }
 
-            const job = await response.json() as { reviewJobId: string };
+            const job = await response.json() as { reviewJobId?: string; jobId?: string };
+            const reviewJobId = job.reviewJobId ?? job.jobId;
+            if (!reviewJobId) {
+                setErrorMessage('Review job id missing in server response');
+                setStatus('failed');
+                return;
+            }
             setStatus('in-progress');
 
             setTimeout(() => {
-                poll(job.reviewJobId, 1, (reviewResult) => {
+                poll(reviewJobId, 1, (reviewResult) => {
                     setResult(reviewResult);
                     setStatus(reviewResult.status as ReviewStatus);
+                    if (reviewResult.status === 'failed') {
+                        setErrorMessage(reviewResult.error ?? 'Review failed');
+                    }
                 });
             }, 1500);
         } catch (err) {
@@ -361,19 +426,60 @@ export const ReviewPRButton = React.memo(function ReviewPRButton({
                                                 <Text style={styles.metricLabel}>confidence</Text>
                                             </View>
                                         </View>
+                                    ) : result.metrics ? (
+                                        <View style={styles.metricsRow}>
+                                            <View style={styles.metric}>
+                                                <Text style={styles.metricValue}>{result.metrics.tasksCompleted}</Text>
+                                                <Text style={styles.metricLabel}>tasks done</Text>
+                                            </View>
+                                            <View style={styles.metric}>
+                                                <Text style={styles.metricValue}>{result.metrics.messagesExchanged}</Text>
+                                                <Text style={styles.metricLabel}>messages</Text>
+                                            </View>
+                                            <View style={styles.metric}>
+                                                <Text style={styles.metricValue}>{result.metrics.blockersResolved}</Text>
+                                                <Text style={styles.metricLabel}>blockers</Text>
+                                            </View>
+                                        </View>
+                                    ) : null}
+
+                                    {result.reportSummary ? (
+                                        <Text style={styles.findingMessage}>{result.reportSummary}</Text>
                                     ) : null}
 
                                     <View style={styles.findingsHeader}>
-                                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.text }}>Findings</Text>
-                                        <View style={[styles.verdictBadge, { backgroundColor: result.summary?.verdict === 'approve' ? '#E8F5EE' : '#FDF0ED' }]}>
-                                            <Text style={[styles.verdictText, { color: result.summary?.verdict === 'approve' ? ACCENT_GREEN : ACCENT_RED }]}>
-                                                {result.summary?.verdict === 'approve' ? 'APPROVE' : 'REQUEST CHANGES'}
+                                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.text }}>
+                                            {result.findings.length > 0 ? 'Findings' : 'Review Summary'}
+                                        </Text>
+                                        <View
+                                            style={[
+                                                styles.verdictBadge,
+                                                {
+                                                    backgroundColor: result.summary
+                                                        ? (result.summary.verdict === 'approve' ? '#E8F5EE' : '#FDF0ED')
+                                                        : '#E8F0F8',
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.verdictText,
+                                                    {
+                                                        color: result.summary
+                                                            ? (result.summary.verdict === 'approve' ? ACCENT_GREEN : ACCENT_RED)
+                                                            : '#3D6A8A',
+                                                    },
+                                                ]}
+                                            >
+                                                {result.summary
+                                                    ? (result.summary.verdict === 'approve' ? 'APPROVE' : 'REQUEST CHANGES')
+                                                    : 'COMPLETED'}
                                             </Text>
                                         </View>
                                     </View>
 
                                     {result.findings.length === 0 ? (
-                                        <Text style={styles.noFindingsText}>No issues found — looks good!</Text>
+                                        <Text style={styles.noFindingsText}>No blocking issues found.</Text>
                                     ) : (
                                         result.findings.slice(0, 5).map(finding => (
                                             <View key={finding.id} style={[styles.findingCard, { borderLeftColor: severityBorderColor(finding.severity) }]}>

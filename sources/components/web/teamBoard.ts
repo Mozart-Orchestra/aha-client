@@ -3,7 +3,11 @@ import { normalizeTaskStatus, type TeamTaskSnapshot } from './teamOverview';
 export type BoardStatus = 'todo' | 'in-progress' | 'review' | 'done';
 
 export type BoardTask = TeamTaskSnapshot & {
+    description?: string;
+    priority?: 'low' | 'medium' | 'high' | 'urgent';
     createdAt?: number;
+    dueDate?: number | null;
+    dependencies?: string[];
 };
 
 export const BOARD_STATUS_ORDER: BoardStatus[] = ['todo', 'in-progress', 'review', 'done'];
@@ -36,10 +40,19 @@ export function parseBoardTasksFromBody(body: string | null | undefined): {
             .map((task, index) => ({
                 id: typeof task.id === 'string' && task.id.trim().length > 0 ? task.id : `task-${index}`,
                 title: typeof task.title === 'string' && task.title.trim().length > 0 ? task.title : 'Untitled Task',
+                description: typeof task.description === 'string' ? task.description : undefined,
                 status: normalizeTaskStatus(task.status),
                 assigneeId: typeof task.assigneeId === 'string' ? task.assigneeId : null,
+                priority: typeof task.priority === 'string'
+                    && ['low', 'medium', 'high', 'urgent'].includes(task.priority)
+                    ? task.priority as BoardTask['priority']
+                    : undefined,
                 updatedAt: typeof task.updatedAt === 'number' ? task.updatedAt : Date.now(),
                 createdAt: typeof task.createdAt === 'number' ? task.createdAt : undefined,
+                dueDate: typeof task.dueDate === 'number' ? task.dueDate : null,
+                dependencies: Array.isArray(task.dependencies)
+                    ? task.dependencies.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+                    : undefined,
             }));
 
         return { root, tasks };
@@ -54,14 +67,18 @@ export function buildBoardRootWithTasks(
     teamName: string
 ): Record<string, unknown> {
     const nextRoot = { ...root };
-    nextRoot.tasks = tasks.map((task) => ({
-        id: task.id,
-        title: task.title,
-        status: normalizeTaskStatus(task.status),
-        assigneeId: task.assigneeId ?? undefined,
-        updatedAt: task.updatedAt,
-        createdAt: task.createdAt ?? task.updatedAt,
-    }));
+        nextRoot.tasks = tasks.map((task) => ({
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            status: normalizeTaskStatus(task.status),
+            assigneeId: task.assigneeId ?? undefined,
+            priority: task.priority,
+            updatedAt: task.updatedAt,
+            createdAt: task.createdAt ?? task.updatedAt,
+            dueDate: task.dueDate ?? undefined,
+            dependencies: task.dependencies?.length ? task.dependencies : undefined,
+        }));
 
     if (!nextRoot.team || typeof nextRoot.team !== 'object') {
         nextRoot.team = {
