@@ -1,6 +1,7 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
 import { getServerUrl } from './serverConfig';
+import type { RoleMarketRole } from './apiRoles';
 
 export interface TeamCompositionSignals {
     readyPingRatio?: number;
@@ -74,6 +75,7 @@ export interface TeamCompositionPlan {
     };
     releaseGates: TeamReleaseGate[];
     teams: TeamCompositionSlice[];
+    marketRecommendations: RoleMarketRole[];
 }
 
 export async function composeTeamPlan(credentials: AuthCredentials, payload: TeamCompositionRequest): Promise<TeamCompositionPlan> {

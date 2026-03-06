@@ -65,6 +65,42 @@ export interface PublicRole extends CustomRole {
     stats: RoleStats;
 }
 
+export interface RoleMarketVariant {
+    id: string;
+    label: string;
+    source: 'server-template' | 'workspace-custom' | 'public-market';
+    detail: string;
+}
+
+export interface RoleMarketAccess {
+    key: 'defaults' | 'workspace-private' | 'workspace-shared' | 'market-public';
+    label: string;
+}
+
+export interface RoleMarketRole {
+    id: string;
+    title: string;
+    summary: string;
+    icon?: string;
+    ownerId?: string;
+    source: 'default' | 'custom' | 'public';
+    assignedSkills: string[];
+    stats?: RoleStats;
+    score: number;
+    why: string[];
+    goalMatches: string[];
+    variant: RoleMarketVariant;
+    access: RoleMarketAccess;
+}
+
+export interface RoleMarketResponse {
+    goal: string;
+    inferredFocus: string[];
+    recommendations: RoleMarketRole[];
+    roles: RoleMarketRole[];
+    total: number;
+}
+
 export interface RoleTemplate {
     id: string;
     title: string;
@@ -423,6 +459,33 @@ export async function fetchRolePool(
             headers
         );
         return data.roles;
+    });
+}
+
+export async function fetchRoleMarket(
+    credentials: AuthCredentials,
+    options?: { goal?: string; context?: string; search?: string; limit?: number }
+): Promise<RoleMarketResponse> {
+    const API_ENDPOINT = getServerUrl();
+    const params = new URLSearchParams();
+
+    if (options?.goal) params.set('goal', options.goal);
+    if (options?.context) params.set('context', options.context);
+    if (options?.search) params.set('search', options.search);
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+
+    return await backoff(async () => {
+        const headers = {
+            'Authorization': `Bearer ${credentials.token}`,
+            'Content-Type': 'application/json',
+        };
+
+        return await requestWithBaseFallback<RoleMarketResponse>(
+            getApiBaseCandidates(API_ENDPOINT),
+            (base) => fetch(`${base}/v1/roles/market${suffix}`, { headers })
+        );
     });
 }
 
