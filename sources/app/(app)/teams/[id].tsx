@@ -27,6 +27,7 @@ import Color from 'color';
 import { syncKanbanStatusToTodo } from '@/-zen/model/ops';
 import { getCurrentAuth } from '@/auth/AuthContext';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
+import { EvolutionSection } from '@/components/EvolutionSection';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -309,7 +310,7 @@ export default function TeamDashboardScreen() {
     const allSessions = useAllSessions();
     const profile = useProfile();
     const isDataReady = useIsDataReady();
-    const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info'>('chat');
+    const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info' | 'evolution'>('chat');
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
@@ -1182,7 +1183,7 @@ export default function TeamDashboardScreen() {
             <View style={styles.container}>
                 <View style={styles.header}>
                     <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
-                        {(['chat', 'board', 'info'] as const).map((tab) => (
+                        {(['chat', 'board', 'info', 'evolution'] as const).map((tab) => (
                             <Pressable
                                 key={tab}
                                 onPress={() => setActiveTab(tab)}
@@ -1214,6 +1215,7 @@ export default function TeamDashboardScreen() {
                 {activeTab === 'chat' && renderChat()}
                 {activeTab === 'board' && renderKanban()}
                 {activeTab === 'info' && renderInfo()}
+                {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
             </View>
 
             {/* 🆕 任务详情弹窗 */}
