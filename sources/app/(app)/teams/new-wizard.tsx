@@ -4,9 +4,9 @@
  * Based on Mom Test finding: 9/10 users want a "Quick Start" default path
  */
 
-import { Dimensions, Pressable, ActivityIndicator, View, ScrollView } from 'react-native';
+import { Dimensions, Platform, Pressable, ActivityIndicator, View, ScrollView } from 'react-native';
 import React from 'react';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Text } from '@/components/StyledText';
 import { t } from '@/text';
@@ -16,7 +16,12 @@ import { layout } from '@/components/layout';
 import { useAhaAction } from '@/hooks/useAhaAction';
 import { useAllMachines, useArtifacts } from '@/sync/storage';
 import { sync } from '@/sync/sync';
+import { TokenStorage } from '@/auth/tokenStorage';
+import { createCanonicalTeam } from '@/sync/apiTeamManagement';
+import { spawnAgents } from '@/sync/apiRuntimeAgent';
 import { RoleConfig, TeamWizardState, generateRoleId } from '@/features/teams/wizard/types';
+import { buildTemplateRoles, findTeamMarketTemplate, resolveTemplateTeamName } from '@/features/teams/wizard/marketTemplates';
+import { buildRuntimeSpawnRequests, buildServerRoleSeeds, pickPreferredMachineId } from '@/features/teams/wizard/runtimeSpawnPlan';
 import { Step1Name } from '@/features/teams/wizard/step1-name';
 import { Step2Roles } from '@/features/teams/wizard/step2-roles';
 import { Step3Confirm } from '@/features/teams/wizard/step3-confirm';
@@ -25,6 +30,7 @@ import { DecryptedArtifact } from '@/sync/artifactTypes';
 const QUICK_START_MASTER_ROLE_ID = 'master';
 const QUICK_START_BUILDER_ROLE_ID = 'builder';
 const QUICK_START_QA_ROLE_ID = 'qa';
+const QUICK_START_RUNTIME_MODE = 'codex' as const;
 
 const WIZARD_STEPS = [
     { id: 'name', title: 'Name' },
@@ -45,6 +51,26 @@ function resolveStepIndex(step?: string): number {
         default:
             return 0;
     }
+}
+
+function buildInitialStateFromTemplate(
+    templateId: string | undefined,
+    fallbackTitle: string | undefined,
+    goal: string | undefined,
+    machineId: string | undefined,
+): Partial<TeamWizardState> | undefined {
+    const templateRoles = buildTemplateRoles(templateId, machineId);
+    if (templateRoles.length === 0) {
+        return undefined;
+    }
+
+    return {
+        currentStep: 2,
+        teamName: resolveTemplateTeamName(templateId, fallbackTitle),
+        goal: goal || '',
+        roles: templateRoles,
+        startImmediately: true,
+    };
 }
 
 function normalizeRoleList(teamNode: any): RoleConfig[] {
@@ -105,15 +131,67 @@ function buildInitialStateFromSourceTeam(artifact: DecryptedArtifact, step?: str
 // ---- Web Modal Wrapper ----
 
 function WebModalWrapper({ children }: { children: React.ReactNode }) {
-    const { width } = Dimensions.get('window');
+    const { width, height } = Dimensions.get('window');
     const isLargeScreen = width >= 768;
+    const pathname = usePathname();
+    const isInsideWebShell = pathname.startsWith('/web/');
     const styles = stylesheet;
+    const shellSidebarWidth = 270;
+    const horizontalPadding = width >= 1440 ? 32 : 20;
+    const resolvedWidth = isInsideWebShell
+        ? Math.min(980, Math.max(0, width - shellSidebarWidth - horizontalPadding * 2))
+        : Math.min(900, Math.max(0, width - horizontalPadding * 2));
+    const resolvedHeight = isInsideWebShell
+        ? Math.min(860, Math.max(0, height - 120))
+        : Math.min(760, Math.max(0, height - 96));
 
     if (!isLargeScreen) return <>{children}</>;
 
+    // Inside TeamWorkspaceShell — use flex layout, no absolute overlay
+    if (isInsideWebShell) {
+        return (
+            <View
+                style={[
+                    styles.shellModalWrapper,
+                    {
+                        paddingHorizontal: horizontalPadding,
+                        paddingVertical: 20,
+                    },
+                ]}
+                testID="main-layout"
+            >
+                <View
+                    style={[
+                        styles.modalContent,
+                        {
+                            width: resolvedWidth,
+                            maxWidth: resolvedWidth,
+                            minHeight: resolvedHeight,
+                            maxHeight: resolvedHeight,
+                        },
+                    ]}
+                >
+                    <View style={styles.wizardContainer}>
+                        {children}
+                    </View>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.modalOverlay} testID="main-layout">
-            <View style={styles.modalContent}>
+            <View
+                style={[
+                    styles.modalContent,
+                    {
+                        width: resolvedWidth,
+                        maxWidth: resolvedWidth,
+                        minHeight: resolvedHeight,
+                        maxHeight: resolvedHeight,
+                    },
+                ]}
+            >
                 <View style={styles.wizardContainer}>
                     {children}
                 </View>
@@ -290,6 +368,10 @@ type NewTeamWizardParams = {
     view?: string | string[];
     step?: string | string[];
     sourceTeamId?: string | string[];
+    templateId?: string | string[];
+    templateTitle?: string | string[];
+    goal?: string | string[];
+    instantCreate?: string | string[];
 };
 
 function NewTeamRoot() {
@@ -301,6 +383,10 @@ function NewTeamRoot() {
     const viewParam = readParam(params.view);
     const stepParam = readParam(params.step);
     const sourceTeamId = readParam(params.sourceTeamId);
+    const templateId = readParam(params.templateId);
+    const templateTitle = readParam(params.templateTitle);
+    const incomingGoal = readParam(params.goal);
+    const instantCreateTemplateId = readParam(params.instantCreate);
     const sourceTeam = React.useMemo(
         () => artifacts.find((artifact) => artifact.id === sourceTeamId && artifact.type === 'team'),
         [artifacts, sourceTeamId],
@@ -321,6 +407,8 @@ function NewTeamRoot() {
         }
     }, [sourceTeam?.body, sourceTeamId]);
 
+    const preferredMachineId = React.useMemo(() => pickPreferredMachineId(machines), [machines]);
+
     const wizardInitialState = React.useMemo(() => {
         if (sourceTeam) {
             const seededState = buildInitialStateFromSourceTeam(sourceTeam, stepParam);
@@ -329,10 +417,21 @@ function NewTeamRoot() {
             }
         }
 
+        const templateState = buildInitialStateFromTemplate(
+            templateId,
+            templateTitle,
+            incomingGoal,
+            preferredMachineId,
+        );
+        if (templateState) {
+            return templateState;
+        }
+
         if (stepParam === 'roles') {
             return {
                 currentStep: 1,
-                teamName: 'New Team',
+                teamName: resolveTemplateTeamName(templateId, templateTitle),
+                goal: incomingGoal || '',
             };
         }
 
@@ -344,10 +443,56 @@ function NewTeamRoot() {
         }
 
         return undefined;
-    }, [sourceTeam, stepParam]);
+    }, [incomingGoal, preferredMachineId, sourceTeam, stepParam, templateId, templateTitle]);
 
     const quickStartAction = React.useCallback(async () => {
-        const firstMachineId = machines[0]?.id;
+        const selectedMachineId = preferredMachineId;
+        const quickStartRoles: RoleConfig[] = [
+            {
+                id: generateRoleId(),
+                roleId: QUICK_START_MASTER_ROLE_ID,
+                roleName: 'Master',
+                quantity: 1,
+                mode: QUICK_START_RUNTIME_MODE,
+                machineId: selectedMachineId,
+            },
+            {
+                id: generateRoleId(),
+                roleId: QUICK_START_BUILDER_ROLE_ID,
+                roleName: 'Builder',
+                quantity: 1,
+                mode: QUICK_START_RUNTIME_MODE,
+                machineId: selectedMachineId,
+            },
+            {
+                id: generateRoleId(),
+                roleId: QUICK_START_QA_ROLE_ID,
+                roleName: 'QA',
+                quantity: 1,
+                mode: QUICK_START_RUNTIME_MODE,
+                machineId: selectedMachineId,
+            },
+        ];
+
+        // Create server-side team first so we get the canonical team ID for navigation.
+        // This is fast (<10ms) and ensures the team-chat page can poll agents by the real ID.
+        let credentials = await TokenStorage.getCredentials();
+        let canonicalTeamId: string | undefined;
+        try {
+            if (credentials) {
+                const canonicalTeam = await createCanonicalTeam(credentials, {
+                    name: 'My Team',
+                    roles: buildServerRoleSeeds(quickStartRoles),
+                });
+                canonicalTeamId = canonicalTeam.id;
+                console.info('[new-team.quick-start] created canonical team', {
+                    canonicalTeamId,
+                    machineId: selectedMachineId ?? null,
+                });
+            }
+        } catch (error) {
+            console.warn('[new-team.quick-start] failed to create canonical team, falling back to local artifact', error);
+        }
 
         const artifactId = await sync.createArtifact(
             'My Team',
@@ -357,46 +502,194 @@ function NewTeamRoot() {
                 goal: '',
                 agentLanguage: 'en',
                 members: [],
-                roles: [
-                    {
-                        id: generateRoleId(),
-                        roleId: QUICK_START_MASTER_ROLE_ID,
-                        roleName: 'Master',
-                        quantity: 1,
-                        mode: 'claude-code',
-                        machineId: firstMachineId,
-                    },
-                    {
-                        id: generateRoleId(),
-                        roleId: QUICK_START_BUILDER_ROLE_ID,
-                        roleName: 'Builder',
-                        quantity: 1,
-                        mode: 'claude-code',
-                        machineId: firstMachineId,
-                    },
-                    {
-                        id: generateRoleId(),
-                        roleId: QUICK_START_QA_ROLE_ID,
-                        roleName: 'QA',
-                        quantity: 1,
-                        mode: 'claude-code',
-                        machineId: firstMachineId,
-                    },
-                ],
+                canonicalTeamId,
+                roles: quickStartRoles,
             }),
             [],
             false,
-            'team'
+            'team',
+            canonicalTeamId,
         );
 
-        router.replace(`/teams/${artifactId}`);
-    }, [machines, router]);
+        if (canonicalTeamId && selectedMachineId) {
+            const spawnRequests = buildRuntimeSpawnRequests(quickStartRoles, selectedMachineId);
+            try {
+                if (credentials) {
+                    const results = await Promise.allSettled(
+                        spawnRequests.map((request) => spawnAgents(credentials!, canonicalTeamId, request)),
+                    );
+                    const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+
+                    if (failures.length > 0) {
+                        console.warn('[new-team.quick-start] runtime spawn failures', {
+                            canonicalTeamId,
+                            machineId: selectedMachineId,
+                            requestedRoles: spawnRequests.map((request) => request.roleId),
+                            failureCount: failures.length,
+                            reasons: failures.map((failure) =>
+                                failure.reason instanceof Error ? failure.reason.message : String(failure.reason),
+                            ),
+                        });
+                    } else {
+                        console.info('[new-team.quick-start] runtime agents spawned', {
+                            canonicalTeamId,
+                            machineId: selectedMachineId,
+                            requestedRoles: spawnRequests.map((request) => request.roleId),
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn('[new-team.quick-start] failed to spawn runtime agents', {
+                    canonicalTeamId,
+                    machineId: selectedMachineId,
+                    requestedRoles: spawnRequests.map((request) => request.roleId),
+                    error,
+                });
+            }
+        } else {
+            console.warn('[new-team.quick-start] skipped runtime spawn because canonical team or machine is missing', {
+                canonicalTeamId: canonicalTeamId ?? null,
+                machineId: selectedMachineId ?? null,
+            });
+        }
+
+        const navTeamId = canonicalTeamId || artifactId;
+        const teamRoute = Platform.OS === 'web'
+            ? `/web/team-chat?teamId=${encodeURIComponent(navTeamId)}`
+            : `/teams/${navTeamId}`;
+        router.replace(teamRoute as never);
+    }, [preferredMachineId, router]);
 
     const [isQuickStartLoading, handleQuickStart] = useAhaAction(quickStartAction);
 
     const handleCustomSetup = React.useCallback(() => {
         setViewMode('wizard');
     }, []);
+
+    // F-034: Instant create from ?instantCreate=<templateId>
+    const instantCreateAction = React.useCallback(async () => {
+        if (!instantCreateTemplateId) return;
+        const template = findTeamMarketTemplate(instantCreateTemplateId);
+        const selectedMachineId = preferredMachineId;
+        const teamName = template?.title || 'My Team';
+        const roles = template
+            ? template.wizardRoles.map((role) => ({
+                  id: generateRoleId(),
+                  roleId: role.roleId,
+                  roleName: role.roleName,
+                  quantity: role.quantity,
+                  mode: role.mode,
+                  machineId: selectedMachineId,
+              }))
+            : [
+                  { id: generateRoleId(), roleId: QUICK_START_MASTER_ROLE_ID, roleName: 'Master', quantity: 1, mode: QUICK_START_RUNTIME_MODE, machineId: selectedMachineId },
+                  { id: generateRoleId(), roleId: QUICK_START_BUILDER_ROLE_ID, roleName: 'Builder', quantity: 1, mode: QUICK_START_RUNTIME_MODE, machineId: selectedMachineId },
+                  { id: generateRoleId(), roleId: QUICK_START_QA_ROLE_ID, roleName: 'QA', quantity: 1, mode: QUICK_START_RUNTIME_MODE, machineId: selectedMachineId },
+              ];
+        const spawnRequests = buildRuntimeSpawnRequests(roles, selectedMachineId);
+        let credentials = await TokenStorage.getCredentials();
+        let canonicalTeamId: string | undefined;
+
+        try {
+            if (credentials) {
+                const canonicalTeam = await createCanonicalTeam(credentials, {
+                    name: teamName,
+                    roles: buildServerRoleSeeds(roles),
+                });
+                canonicalTeamId = canonicalTeam.id;
+                console.info('[new-team.instant-create] created canonical team', {
+                    canonicalTeamId,
+                    templateId: instantCreateTemplateId,
+                    machineId: selectedMachineId ?? null,
+                });
+            }
+        } catch (error) {
+            console.warn('[new-team.instant-create] failed to create canonical team, falling back to local artifact', {
+                templateId: instantCreateTemplateId,
+                error,
+            });
+        }
+
+        const artifactId = await sync.createArtifact(
+            teamName,
+            JSON.stringify({
+                name: teamName,
+                workingDirectory: '',
+                goal: '',
+                agentLanguage: 'en',
+                members: [],
+                canonicalTeamId,
+                roles,
+            }),
+            [],
+            false,
+            'team',
+            canonicalTeamId,
+        );
+
+        try {
+            if (credentials && canonicalTeamId && spawnRequests.length > 0) {
+                const results = await Promise.allSettled(
+                    spawnRequests.map((request) => spawnAgents(credentials!, canonicalTeamId!, request)),
+                );
+                const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+
+                if (failures.length > 0) {
+                    console.warn('[new-team.instant-create] runtime spawn failures', {
+                        canonicalTeamId,
+                        templateId: instantCreateTemplateId,
+                        requestedRoles: spawnRequests.map((request) => request.roleId),
+                        failureCount: failures.length,
+                        reasons: failures.map((failure) =>
+                            failure.reason instanceof Error ? failure.reason.message : String(failure.reason),
+                        ),
+                    });
+                } else {
+                    console.info('[new-team.instant-create] runtime agents spawned', {
+                        canonicalTeamId,
+                        templateId: instantCreateTemplateId,
+                        requestedRoles: spawnRequests.map((request) => request.roleId),
+                    });
+                }
+            }
+        } catch (error) {
+            console.warn('[new-team.instant-create] failed to spawn runtime agents', {
+                canonicalTeamId: canonicalTeamId ?? null,
+                templateId: instantCreateTemplateId,
+                requestedRoles: spawnRequests.map((request) => request.roleId),
+                error,
+            });
+        }
+
+        const navTeamId = canonicalTeamId || artifactId;
+        const teamRoute = Platform.OS === 'web'
+            ? `/web/team-chat?teamId=${encodeURIComponent(navTeamId)}`
+            : `/teams/${navTeamId}`;
+        router.replace(teamRoute as never);
+    }, [instantCreateTemplateId, preferredMachineId, router]);
+
+    const [isInstantCreating, handleInstantCreate] = useAhaAction(instantCreateAction);
+
+    // Auto-trigger instant create when param is present
+    const instantCreateTriggered = React.useRef(false);
+    React.useEffect(() => {
+        if (instantCreateTemplateId && !instantCreateTriggered.current) {
+            instantCreateTriggered.current = true;
+            handleInstantCreate();
+        }
+    }, [instantCreateTemplateId, handleInstantCreate]);
+
+    if (isInstantCreating) {
+        return (
+            <WebModalWrapper>
+                <Stack.Screen options={{ headerTitle: screenTitle, headerBackTitle: 'Teams' }} />
+                <View style={[styles.container, styles.loadingState]}>
+                    <ActivityIndicator size="small" color="#3D8A5A" />
+                    <Text style={styles.loadingStateText}>Creating your team...</Text>
+                </View>
+            </WebModalWrapper>
+        );
+    }
 
     if (viewMode === 'wizard') {
         if (isSourceTeamLoading) {
@@ -419,7 +712,7 @@ function NewTeamRoot() {
         return (
             <WebModalWrapper>
                 <WizardProvider
-                    key={`${sourceTeamId ?? viewParam ?? 'entry'}:${stepParam ?? 'name'}`}
+                    key={`${sourceTeamId ?? viewParam ?? 'entry'}:${stepParam ?? 'name'}:${readParam(params.templateId) ?? ''}`}
                     initialState={wizardInitialState}
                 >
                     <Stack.Screen
@@ -608,6 +901,14 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontWeight: '500',
     },
     // Web modal styles
+    shellModalWrapper: {
+        flex: 1,
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    },
     modalOverlay: {
         position: 'absolute',
         top: 0,
@@ -622,9 +923,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     modalContent: {
         backgroundColor: theme.colors.surface,
         borderRadius: 16,
-        width: 600,
-        maxWidth: '90%',
-        maxHeight: '80%',
+        overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.25,
@@ -633,6 +932,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     wizardContainer: {
         flex: 1,
+        minHeight: 0,
     },
     wizardNav: {
         paddingHorizontal: 16,

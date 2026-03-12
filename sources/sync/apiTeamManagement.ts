@@ -1,4 +1,5 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
+import { AhaError } from '@/utils/errors';
 import { backoff } from '@/utils/time';
 import { getServerUrl } from './serverConfig';
 
@@ -304,6 +305,139 @@ export async function renameSession(
         }
 
         return await response.json() as SessionRenameResponse;
+    });
+}
+
+
+export interface CanonicalTeamRecord {
+    id: string;
+    name: string;
+    description?: string;
+    memberCount: number;
+    roleCount: number;
+    taskCount: number;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface CreateCanonicalTeamParams {
+    name: string;
+    roles?: Array<{
+        name: string;
+        description?: string;
+    }>;
+}
+
+function coerceTeamTimestamp(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (typeof value === 'string') {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+            return numeric;
+        }
+
+        const parsed = Date.parse(value);
+        if (Number.isFinite(parsed)) {
+            return parsed;
+        }
+    }
+
+    return Date.now();
+}
+
+function normalizeCanonicalTeam(team: any): CanonicalTeamRecord {
+    return {
+        id: team.id,
+        name: team.name || team.title || 'Untitled Team',
+        description: team.description || team.goal || undefined,
+        memberCount: Array.isArray(team.members) ? team.members.length : 0,
+        roleCount: Array.isArray(team.roles) ? team.roles.length : 0,
+        taskCount: Array.isArray(team.tasks) ? team.tasks.length : 0,
+        createdAt: coerceTeamTimestamp(team.createdAt),
+        updatedAt: coerceTeamTimestamp(team.updatedAt || team.createdAt),
+    };
+}
+
+export async function listCanonicalTeams(
+    credentials: AuthCredentials
+): Promise<CanonicalTeamRecord[]> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v2/teams`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to load teams: ${response.status}`);
+        }
+
+        const data = await response.json() as { teams?: any[] };
+        const teams = Array.isArray(data.teams) ? data.teams : [];
+        return teams.map(normalizeCanonicalTeam);
+    });
+}
+
+export async function getCanonicalTeam(
+    credentials: AuthCredentials,
+    teamId: string
+): Promise<CanonicalTeamRecord> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v2/teams/${teamId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new AhaError('Team not found', false);
+            }
+            throw new Error(`Failed to load team: ${response.status}`);
+        }
+
+        const data = await response.json() as { team?: any };
+        return normalizeCanonicalTeam(data.team || {});
+    });
+}
+
+export async function createCanonicalTeam(
+    credentials: AuthCredentials,
+    params: CreateCanonicalTeamParams
+): Promise<CanonicalTeamRecord> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v2/teams`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: params.name,
+                roles: params.roles && params.roles.length > 0 ? params.roles : undefined,
+            })
+        });
+
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({})) as { error?: string };
+            throw new Error(body.error || `Failed to create team: ${response.status}`);
+        }
+
+        const data = await response.json() as { team?: any };
+        return normalizeCanonicalTeam(data.team || {});
     });
 }
 

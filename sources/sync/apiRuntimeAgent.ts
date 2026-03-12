@@ -37,9 +37,11 @@ export interface AgentListResponse {
     agents: AgentInfo[];
     summary: {
         total: number;
+        spawning: number;
         running: number;
         paused: number;
         stopped: number;
+        error: number;
     };
 }
 
@@ -119,6 +121,13 @@ export async function listAgents(
         });
 
         if (!response.ok) {
+            // 404 means the team doesn't exist on the server — don't retry
+            if (response.status === 404) {
+                throw Object.assign(
+                    new Error(`Team not found: ${response.status}`),
+                    { canTryAgain: false },
+                );
+            }
             throw new Error(`Failed to list agents: ${response.status}`);
         }
 
@@ -136,29 +145,25 @@ export async function spawnAgents(
 ): Promise<SpawnAgentResponse> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
-        const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/agents/spawn`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${credentials.token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(request)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            if (response.status === 429 && errorData.error === 'spawn_limit_exceeded') {
-                throw Object.assign(new Error(errorData.message), {
-                    name: 'SpawnLimitExceededError',
-                    ...errorData
-                }) as Error & SpawnLimitExceededError;
-            }
-            throw new Error(errorData.message || `Failed to spawn agents: ${response.status}`);
-        }
-
-        return await response.json() as SpawnAgentResponse;
+    const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/agents/spawn`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${credentials.token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(request)
     });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const error = Object.assign(
+            new Error(errorData.message || `Failed to spawn agents: ${response.status}`),
+            { canTryAgain: false, status: response.status, ...errorData },
+        );
+        throw error;
+    }
+
+    return await response.json() as SpawnAgentResponse;
 }
 
 /**
