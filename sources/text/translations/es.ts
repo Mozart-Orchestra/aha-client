@@ -435,7 +435,7 @@ export const es: TranslationStructure = {
     },
 
     sidebar: {
-        sessionsTitle: 'Happy',
+        sessionsTitle: 'Aha',
     },
 
     toolView: {

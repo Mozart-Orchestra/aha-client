@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Platform, Switch } from 'react-native';
 import { Text } from '@/components/StyledText';
-import { useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
 import { layout } from '@/components/layout';
@@ -299,6 +299,7 @@ export default function NewTeamScreen() {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const router = useRouter();
+    const searchParams = useLocalSearchParams<{ machineId?: string | string[] }>();
     const allSessions = useAllSessions();
     const machines = useAllMachines();
     const recentMachinePaths = useSetting('recentMachinePaths');
@@ -329,7 +330,17 @@ export default function NewTeamScreen() {
     const [cwd, setCwd] = React.useState('');
     const [cwdEdited, setCwdEdited] = React.useState(false);
     const [agentBinary, setAgentBinary] = React.useState('');
+    const preferredMachineId = React.useMemo(() => {
+        const machineId = searchParams.machineId;
+        if (Array.isArray(machineId)) {
+            return machineId[0] ?? null;
+        }
+        return typeof machineId === 'string' && machineId.length > 0 ? machineId : null;
+    }, [searchParams.machineId]);
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(() => {
+        if (preferredMachineId) {
+            return preferredMachineId;
+        }
         const machineList = Object.values(storage.getState().machines || {});
         const active = machineList.find((machine) => machine.active);
         return active?.id ?? (machineList[0]?.id ?? null);
@@ -355,7 +366,14 @@ export default function NewTeamScreen() {
 
     React.useEffect(() => {
         if (machines.length === 0) {
-            setSelectedMachineId(null);
+            setSelectedMachineId(preferredMachineId ?? null);
+            return;
+        }
+        if (preferredMachineId && machines.some((machine) => machine.id === preferredMachineId)) {
+            if (selectedMachineId !== preferredMachineId) {
+                setSelectedMachineId(preferredMachineId);
+                setIsPathDropdownOpen(false);
+            }
             return;
         }
         if (selectedMachineId && machines.some(machine => machine.id === selectedMachineId)) {
@@ -365,7 +383,7 @@ export default function NewTeamScreen() {
         const fallback = machines.find(machine => machine.active) ?? machines[0];
         setSelectedMachineId(fallback?.id ?? null);
         setIsPathDropdownOpen(false);
-    }, [machines, selectedMachineId]);
+    }, [machines, preferredMachineId, selectedMachineId]);
 
     // Only reset cwdEdited when user explicitly changes machine
     React.useEffect(() => {

@@ -2076,7 +2076,7 @@ class Sync {
         env?: Record<string, string>;
     }): Promise<string | null> {
         try {
-            const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-happy-session', {
+            const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-aha-session', {
                 ...params,
                 machineId,
                 approvedNewDirectoryCreation: true,

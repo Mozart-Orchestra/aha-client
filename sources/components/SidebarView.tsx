@@ -1,4 +1,4 @@
-import { useSocketStatus, useFriendRequests, useSettings } from '@/sync/storage';
+import { useSocketStatus } from '@/sync/storage';
 import * as React from 'react';
 import { Text, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +13,6 @@ import { MainView } from './MainView';
 import { Image } from 'expo-image';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
-import { useInboxHasContent } from '@/hooks/useInboxHasContent';
 
 const stylesheet = StyleSheet.create((theme, runtime) => ({
     container: {
@@ -129,9 +128,6 @@ export const SidebarView = React.memo(() => {
     const headerHeight = useHeaderHeight();
     const socketStatus = useSocketStatus();
     const realtimeStatus = useRealtimeStatus();
-    const friendRequests = useFriendRequests();
-    const inboxHasContent = useInboxHasContent();
-    const settings = useSettings();
 
     // Get connection status styling (matching sessionUtils.ts pattern)
     const getConnectionStatus = () => {
@@ -191,43 +187,8 @@ export const SidebarView = React.memo(() => {
                         />
                     </View>
                     <View style={styles.rightContainer}>
-                        {settings.experiments && (
-                            <Pressable
-                                onPress={() => router.push('/(app)/zen')}
-                                hitSlop={15}
-                            >
-                                <Image
-                                    source={require('@/assets/images/brutalist/Brutalism_3.png')}
-                                    contentFit="contain"
-                                    style={[{ width: 32, height: 32 }]}
-                                    tintColor={theme.colors.header.tint}
-                                />
-                            </Pressable>
-                        )}
                         <Pressable
-                            onPress={() => router.push('/(app)/inbox')}
-                            hitSlop={15}
-                            style={styles.notificationButton}
-                        >
-                            <Image
-                                source={require('@/assets/images/brutalist/Brutalism_27.png')}
-                                contentFit="contain"
-                                style={[{ width: 32, height: 32 }]}
-                                tintColor={theme.colors.header.tint}
-                            />
-                            {friendRequests.length > 0 && (
-                                <View style={styles.badge}>
-                                    <Text style={styles.badgeText}>
-                                        {friendRequests.length > 99 ? '99+' : friendRequests.length}
-                                    </Text>
-                                </View>
-                            )}
-                            {inboxHasContent && friendRequests.length === 0 && (
-                                <View style={styles.indicatorDot} />
-                            )}
-                        </Pressable>
-                        <Pressable
-                            onPress={() => router.push('/(app)/teams')}
+                            onPress={() => router.push('/teams')}
                             hitSlop={15}
                         >
                             <Image

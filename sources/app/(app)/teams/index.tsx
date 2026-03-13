@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/StyledText';
+import { Image } from 'expo-image';
 import { useArtifacts, storage } from '@/sync/storage';
 import { DecryptedArtifact } from '@/sync/artifactTypes';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +35,6 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     emptyIcon: {
         marginBottom: 16,
-        color: theme.colors.textSecondary,
     },
     emptyTitle: {
         fontSize: 18,
@@ -391,11 +391,11 @@ export default function TeamsScreen() {
 
         return (
             <View style={styles.emptyContainer}>
-                <Ionicons
-                    name="people-outline"
-                    size={64}
-                    style={styles.emptyIcon}
-                    color={theme.colors.textSecondary}
+                <Image
+                    source={require('@/assets/images/brutalist/Brutalism_5.png')}
+                    contentFit="contain"
+                    style={[styles.emptyIcon, { width: 64, height: 64 }]}
+                    tintColor={theme.colors.textSecondary}
                 />
                 <Text style={styles.emptyTitle}>
                     No Teams Yet

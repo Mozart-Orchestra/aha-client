@@ -159,7 +159,7 @@ export async function machineSpawnNewSession(options: SpawnSessionOptions): Prom
             agent?: 'codex' | 'claude'
         }>(
             machineId,
-            'spawn-happy-session',
+            'spawn-aha-session',
             { type: 'spawn-in-directory', directory, approvedNewDirectoryCreation, token, agent }
         );
         return result;

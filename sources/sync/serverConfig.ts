@@ -6,10 +6,29 @@ const serverConfigStorage = new MMKV({ id: 'server-config' });
 const SERVER_KEY = 'custom-server-url';
 const DEFAULT_SERVER_URL = 'https://top1vibe.com';
 
+function getRuntimeServerUrl(): string | null {
+    const envServerUrl = process.env.EXPO_PUBLIC_HAPPY_SERVER_URL?.trim();
+    if (envServerUrl) {
+        return envServerUrl;
+    }
+
+    if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return 'http://localhost:3005';
+        }
+    }
+
+    return null;
+}
+
 export function getServerUrl(): string {
-    return serverConfigStorage.getString(SERVER_KEY) || 
-           process.env.EXPO_PUBLIC_HAPPY_SERVER_URL || 
-           DEFAULT_SERVER_URL;
+    const storedServerUrl = serverConfigStorage.getString(SERVER_KEY)?.trim();
+    if (storedServerUrl && storedServerUrl !== DEFAULT_SERVER_URL) {
+        return storedServerUrl;
+    }
+
+    return getRuntimeServerUrl() || DEFAULT_SERVER_URL;
 }
 
 export function setServerUrl(url: string | null): void {
@@ -21,7 +40,8 @@ export function setServerUrl(url: string | null): void {
 }
 
 export function isUsingCustomServer(): boolean {
-    return getServerUrl() !== DEFAULT_SERVER_URL;
+    const storedServerUrl = serverConfigStorage.getString(SERVER_KEY)?.trim();
+    return !!storedServerUrl && storedServerUrl !== DEFAULT_SERVER_URL;
 }
 
 export function getServerInfo(): { hostname: string; port?: number; isCustom: boolean } {

@@ -435,7 +435,7 @@ export const en = {
     },
 
     sidebar: {
-        sessionsTitle: 'Kanban',
+        sessionsTitle: 'Aha',
     },
 
     toolView: {

@@ -10,16 +10,48 @@ import { QrScannerModal } from '@/components/QrScannerModal';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 import { sync } from '@/sync/sync';
+import { authGetToken } from '@/auth/authGetToken';
+import { encodeBase64 } from '@/encryption/base64';
+import { getRandomBytesAsync } from 'expo-crypto';
+import { Encryption } from '@/sync/encryption/encryption';
 
 interface UseConnectTerminalOptions {
     onSuccess?: () => void;
     onError?: (error: any) => void;
+    showSuccessModal?: boolean;
 }
 
 export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     const auth = useAuth();
     const [isLoading, setIsLoading] = React.useState(false);
     const checkScannerPermissions = useCheckScannerPermissions();
+
+    const ensureTerminalCredentials = React.useCallback(async () => {
+        if (auth.credentials?.secret) {
+            const secretBytes = decodeBase64(auth.credentials.secret, 'base64url');
+            const encryption = await Encryption.create(secretBytes);
+            return {
+                token: auth.credentials.token,
+                secret: auth.credentials.secret,
+                secretBytes,
+                encryption
+            };
+        }
+
+        const secretBytes = await getRandomBytesAsync(32);
+        const token = await authGetToken(secretBytes);
+        const secret = encodeBase64(secretBytes, 'base64url');
+
+        await auth.login(token, secret);
+
+        const encryption = await Encryption.create(secretBytes);
+        return {
+            token,
+            secret,
+            secretBytes,
+            encryption
+        };
+    }, [auth]);
 
     const processAuthUrl = React.useCallback(async (url: string) => {
         console.log('[TERMINAL AUTH] 🔍 Processing terminal auth URL:', url);
@@ -38,12 +70,9 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
             const publicKey = decodeBase64(tail, 'base64url');
             console.log('[TERMINAL AUTH] 🔑 Decoded publicKey length:', publicKey.length);
 
-            if (!auth.credentials?.secret) {
-                console.log('[TERMINAL AUTH] ❌ No auth credentials available');
-                throw new Error('No auth credentials');
-            }
+            const credentials = await ensureTerminalCredentials();
 
-            const mySecret = decodeBase64(auth.credentials.secret, 'base64url');
+            const mySecret = credentials.secretBytes;
             console.log('[TERMINAL AUTH] 🔐 My secret length:', mySecret.length);
 
             // V1 Response
@@ -51,27 +80,32 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
             console.log('[TERMINAL AUTH] 🔒 Encrypted V1 response length:', responseV1.length);
 
             // V2 Response
-            if (!sync.encryption?.contentDataKey) {
+            const contentDataKey = sync.encryption?.contentDataKey || credentials.encryption.contentDataKey;
+            if (!contentDataKey) {
                 console.log('[TERMINAL AUTH] ❌ Missing content data key');
                 throw new Error('Missing content data key');
             }
 
-            const responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
+            const responseV2Bundle = new Uint8Array(contentDataKey.length + 1);
             responseV2Bundle[0] = 0;
-            responseV2Bundle.set(sync.encryption.contentDataKey, 1);
+            responseV2Bundle.set(contentDataKey, 1);
             const responseV2 = encryptBox(responseV2Bundle, publicKey);
             console.log('[TERMINAL AUTH] 🔒 Encrypted V2 response length:', responseV2.length);
 
             console.log('[TERMINAL AUTH] 📤 Sending approval to server...');
-            await authApprove(auth.credentials.token, publicKey, responseV1, responseV2);
+            await authApprove(credentials.token, publicKey, responseV1, responseV2);
 
             console.log('[TERMINAL AUTH] ✅ Terminal connected successfully!');
-            Modal.alert(t('common.success'), t('modals.terminalConnectedSuccessfully'), [
-                {
-                    text: t('common.ok'),
-                    onPress: () => options?.onSuccess?.()
-                }
-            ]);
+            if (options?.showSuccessModal === false) {
+                options?.onSuccess?.();
+            } else {
+                Modal.alert(t('common.success'), t('modals.terminalConnectedSuccessfully'), [
+                    {
+                        text: t('common.ok'),
+                        onPress: () => options?.onSuccess?.()
+                    }
+                ]);
+            }
             return true;
         } catch (e) {
             console.error('[TERMINAL AUTH] ❌ Failed to connect terminal:', e);
@@ -85,7 +119,7 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
         } finally {
             setIsLoading(false);
         }
-    }, [auth.credentials, options]);
+    }, [ensureTerminalCredentials, options]);
 
     const connectTerminal = React.useCallback(async () => {
         if (Platform.OS === 'web') {
