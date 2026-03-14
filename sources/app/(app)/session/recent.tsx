@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, FlatList } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { useAllSessions } from '@/sync/storage';
 import { Session } from '@/sync/storageTypes';
-import { Avatar } from '@/components/Avatar';
+import { Avatar } from '@/components/avatar/Avatar';
 import { getSessionName, getSessionSubtitle, getSessionAvatarId } from '@/utils/sessionUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native-unistyles';
 import { Typography } from '@/constants/Typography';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { Pressable } from 'react-native';
 import { t } from '@/text';

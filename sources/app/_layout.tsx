@@ -10,7 +10,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { initialWindowMetrics, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SidebarNavigator } from '@/components/SidebarNavigator';
+import { SidebarNavigator } from '@/components/layout/SidebarNavigator';
 import sodium from '@/encryption/libsodium.lib';
 import { View, Platform } from 'react-native';
 import { ModalProvider } from '@/modal';
@@ -22,7 +22,7 @@ import { useTrackScreens } from '@/track/useTrackScreens';
 import { RealtimeProvider } from '@/realtime/RealtimeProvider';
 import { FaviconPermissionIndicator } from '@/components/web/FaviconPermissionIndicator';
 import { CommandPaletteProvider } from '@/components/CommandPalette/CommandPaletteProvider';
-import { StatusBarProvider } from '@/components/StatusBarProvider';
+import { StatusBarProvider } from '@/components/layout/StatusBarProvider';
 // import * as SystemUI from 'expo-system-ui';
 import { monkeyPatchConsoleForRemoteLoggingForFasterAiAutoDebuggingOnlyInLocalBuilds } from '@/utils/remoteLogger';
 import { useUnistyles } from 'react-native-unistyles';

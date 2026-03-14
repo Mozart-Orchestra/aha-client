@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, ScrollView, ActivityIndicator, Pressable, Platform } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { useArtifact } from '@/sync/storage';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { StyleSheet } from 'react-native-unistyles';
 import { t } from '@/text';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '@/modal';
 import { sync } from '@/sync/sync';

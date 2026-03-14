@@ -1,15 +1,15 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { ItemGroup } from '@/components/ItemGroup';
-import { Item } from '@/components/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { Item } from '@/components/ui/Item';
 import { Typography } from '@/constants/Typography';
 import { useAllMachines, useSessions, useSetting } from '@/sync/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { t } from '@/text';
-import { MultiTextInput, MultiTextInputHandle } from '@/components/MultiTextInput';
+import { MultiTextInput, MultiTextInputHandle } from '@/components/input/MultiTextInput';
 import { callbacks } from '../index';
 
 const stylesheet = StyleSheet.create((theme) => ({

@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
 import { Modal } from '@/modal';
 import { Typography } from '@/constants/Typography';
-import { RoundButton } from '@/components/RoundButton';
+import { RoundButton } from '@/components/ui/RoundButton';
 
 // Example custom modal component
 function CustomContentModal({ onClose, title, message }: { onClose: () => void; title: string; message: string }) {

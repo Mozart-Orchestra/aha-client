@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
 import { useSettingMutable, useLocalSettingMutable } from '@/sync/storage';
 import { useRouter } from 'expo-router';
 import * as Localization from 'expo-localization';
 import { useUnistyles, UnistylesRuntime } from 'react-native-unistyles';
-import { Switch } from '@/components/Switch';
+import { Switch } from '@/components/ui/Switch';
 import { Appearance } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import { darkTheme, lightTheme } from '@/theme';

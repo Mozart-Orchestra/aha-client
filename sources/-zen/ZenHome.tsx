@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, ScrollView, Text, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { ZenHeader } from './components/ZenHeader';
 import { TodoList } from './components/TodoList';
 import { useUnistyles } from 'react-native-unistyles';

@@ -28,16 +28,8 @@ function plural({ count, one, few, many }: { count: number; one: string; few: st
 export const ru: TranslationStructure = {
     tabs: {
         // Tab navigation labels
-        inbox: 'Входящие',
         sessions: 'Терминалы',
         settings: 'Настройки',
-    },
-
-    inbox: {
-        // Inbox screen
-        emptyTitle: 'Входящие пусты',
-        emptyDescription: 'Подключитесь к друзьям, чтобы начать делиться сессиями',
-        updates: 'Обновления',
     },
 
     common: {
@@ -336,6 +328,26 @@ export const ru: TranslationStructure = {
         deleteSessionWarning: 'Это действие нельзя отменить. Все сообщения и данные, связанные с этой сессией, будут удалены навсегда.',
         failedToDeleteSession: 'Не удалось удалить сессию',
         sessionDeleted: 'Сессия успешно удалена',
+    },
+
+    home: {
+        welcome: 'Добро пожаловать в Aha',
+        welcomeSubtitle: 'Ваше AI-рабочее пространство',
+        gettingStarted: 'С чего начать',
+        docsTitle: 'Руководство для новичков',
+        docsSubtitle: 'Узнайте, как использовать Aha и подключить агентов ИИ',
+        teamSection: 'Команда',
+        createTeamTitle: 'Создать команду',
+        createTeamSubtitle: 'Сотрудничайте с командой в реальном времени',
+        devicesSection: 'Устройства',
+        syncDeviceTitle: 'Синхронизация с другим устройством',
+        syncDeviceSubtitle: 'Привяжите аккаунт к другому телефону или планшету',
+        workSection: 'Работа',
+        reportTitle: 'Обзор команды',
+        reportSubtitle: 'Просмотр активности и прогресса команды',
+        exploreSection: 'Изучить',
+        marketplaceTitle: 'Магазин агентов',
+        marketplaceSubtitle: 'Находите и устанавливайте агентов ИИ',
     },
 
     components: {
@@ -659,7 +671,6 @@ export const ru: TranslationStructure = {
         linkNewDevice: 'Связать новое устройство',
         restoreWithSecretKey: 'Восстановить секретным ключом',
         whatsNew: 'Что нового',
-        friends: 'Друзья',
     },
 
     welcome: {
@@ -863,14 +874,6 @@ export const ru: TranslationStructure = {
         noData: 'Данные об использовании недоступны',
     },
 
-    feed: {
-        // Feed notifications for friend requests and acceptances
-        friendRequestFrom: ({ name }: { name: string }) => `${name} отправил вам запрос в друзья`,
-        friendRequestGeneric: 'Новый запрос в друзья',
-        friendAccepted: ({ name }: { name: string }) => `Вы теперь друзья с ${name}`,
-        friendAcceptedGeneric: 'Запрос в друзья принят',
-    },
-
     // TODO: Add Russian translations for memory, rules, and teamRoles
     // Using English placeholders for now
     memory: {
@@ -983,7 +986,17 @@ export const ru: TranslationStructure = {
         scribe: { title: 'Scribe / Documenter', summary: 'Maintains project documentation, changelogs, and knowledge base.', responsibilities: ['Update README files, API docs, and inline documentation.', 'Maintain changelog and project history.', 'Document decisions, architecture patterns, and workflows.'], abilityBoundaries: ['Does not edit implementation code.', 'Only edits documentation files (README.md, docs/, etc.)'], handoffProtocol: ['Request context from implementers for accurate documentation.', 'Tag relevant team members for review of documentation changes.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Focus on documentation (.md files, docs/, comments).', '3. Use view/edit tools to update documentation.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
         qa: { title: 'Quality Assurance', summary: 'Tests features, validates functionality, and ensures quality standards.', responsibilities: ['Write and run tests to verify implementations.', 'Check edge cases and report bugs.', 'Validate that acceptance criteria are met.'], abilityBoundaries: ['Does not merge code to production.', 'Reports issues through proper channels (team chat, task comments).'], handoffProtocol: ['Coordinate with builders to reproduce issues.', 'Provide detailed bug reports with steps to reproduce.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Run tests and check functionality.', '3. Report findings via team message or task comments.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
         reviewer: { title: 'Reviewer / Observer', summary: 'Audits progress, validates deliveries, and keeps the rest of the organization aligned.', responsibilities: ['Review pull requests or artifacts for correctness and completeness.', 'Summarize learnings back to stakeholders and raise risks early.'], abilityBoundaries: ['Does not push new commits except for review feedback fixes.', 'Escalates systemic risks instead of silently adjusting the scope.'], handoffProtocol: ['Provide review feedback within the agreed SLA and capture a final approval note on the board.', 'Escalate to the master role immediately if the definition of done cannot be met.'], protocol: ['⚠️ CRITICAL: You are READ-ONLY. You DO NOT edit files.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', "2. Check 'list_tasks' for review tasks.", "3. Provide feedback via 'send_team_message'.", '4. Do NOT respond to general user chat unless explicitly mentioned.'] }
-    }
+    },
+
+    agents: {
+        title: 'Агенты',
+        placeholder: 'Управление агентами скоро будет доступно',
+    },
+
+    favorites: {
+        title: 'Избранное',
+        placeholder: 'Пока нет избранного',
+    },
 } as const;
 
 export type TranslationsRu = typeof ru;

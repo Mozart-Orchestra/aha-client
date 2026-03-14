@@ -17,16 +17,8 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 export const en = {
     tabs: {
         // Tab navigation labels
-        inbox: 'Inbox',
         sessions: 'Terminals',
         settings: 'Settings',
-    },
-
-    inbox: {
-        // Inbox screen
-        emptyTitle: 'Empty Inbox',
-        emptyDescription: 'Connect with friends to start sharing sessions',
-        updates: 'Updates',
     },
 
     common: {
@@ -364,6 +356,26 @@ export const en = {
 
     },
 
+    home: {
+        welcome: 'Welcome to Aha',
+        welcomeSubtitle: 'Your AI-powered workspace',
+        gettingStarted: 'Getting Started',
+        docsTitle: 'Getting Started Guide',
+        docsSubtitle: 'Learn how to use Aha and connect your AI agents',
+        teamSection: 'Team',
+        createTeamTitle: 'Create a Team',
+        createTeamSubtitle: 'Collaborate with your team in real-time',
+        devicesSection: 'Devices',
+        syncDeviceTitle: 'Sync to Another Device',
+        syncDeviceSubtitle: 'Link this account to another phone or tablet',
+        workSection: 'Work',
+        reportTitle: 'Team Overview',
+        reportSubtitle: 'View your team activity and progress',
+        exploreSection: 'Explore',
+        marketplaceTitle: 'Agent Marketplace',
+        marketplaceSubtitle: 'Discover and install AI agents',
+    },
+
     components: {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
@@ -661,16 +673,15 @@ export const en = {
         linkNewDevice: 'Link New Device',
         restoreWithSecretKey: 'Restore with Secret Key',
         whatsNew: "What's New",
-        friends: 'Friends',
     },
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Codex and Claude Code mobile client',
-        subtitle: 'End-to-end encrypted and your account is stored only on your device.',
+        title: 'Control your Claude Code and Codex army, anywhere, anytime. One step:',
+        subtitle: 'End-to-end encrypted. Your account is stored only on your device.',
         createAccount: 'Create account',
         linkOrRestoreAccount: 'Link or restore account',
-        loginWithMobileApp: 'Login with mobile app',
+        loginWithMobileApp: 'copy command && join the army',
     },
 
     review: {
@@ -1316,13 +1327,15 @@ export const en = {
         noData: 'No usage data available',
     },
 
-    feed: {
-        // Feed notifications for friend requests and acceptances
-        friendRequestFrom: ({ name }: { name: string }) => `${name} sent you a friend request`,
-        friendRequestGeneric: 'New friend request',
-        friendAccepted: ({ name }: { name: string }) => `You are now friends with ${name}`,
-        friendAcceptedGeneric: 'Friend request accepted',
-    }
+    agents: {
+        title: 'Agents',
+        placeholder: 'Agent management coming soon',
+    },
+
+    favorites: {
+        title: 'Favorites',
+        placeholder: 'No favorites yet',
+    },
 } as const;
 
 export type Translations = typeof en;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, FlatList, Pressable, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { useArtifacts } from '@/sync/storage';
 import { DecryptedArtifact } from '@/sync/artifactTypes';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,9 +8,9 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { t } from '@/text';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { sync } from '@/sync/sync';
-import { FAB } from '@/components/FAB';
+import { FAB } from '@/components/ui/FAB';
 // Date formatting
 
 const stylesheet = StyleSheet.create((theme) => ({

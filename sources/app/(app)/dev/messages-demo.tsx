@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { FlatList, View } from 'react-native';
-import { MessageView } from '@/components/MessageView';
+import { MessageView } from '@/components/session/MessageView';
 import { debugMessages } from './messages-demo-data';
 import { Message } from '@/sync/typesMessage';
 import { useDemoMessages } from '@/hooks/useDemoMessages';

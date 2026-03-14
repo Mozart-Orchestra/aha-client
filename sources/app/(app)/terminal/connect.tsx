@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Platform } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { View, Platform, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/ui/StyledText';
 import { type Href, useRouter } from 'expo-router';
 import { Typography } from '@/constants/Typography';
-import { RoundButton } from '@/components/RoundButton';
 import { useConnectTerminal } from '@/hooks/useConnectTerminal';
-import { Ionicons } from '@expo/vector-icons';
-import { ItemList } from '@/components/ItemList';
-import { ItemGroup } from '@/components/ItemGroup';
-import { Item } from '@/components/Item';
+import { ItemList } from '@/components/ui/ItemList';
+import { ItemGroup } from '@/components/ui/ItemGroup';
 import { t } from '@/text';
 import { getServerUrl, setServerUrl, validateServerUrl } from '@/sync/serverConfig';
 import { useAuth } from '@/auth/AuthContext';
@@ -32,7 +29,7 @@ export default function TerminalConnectScreen() {
     const [nextPath, setNextPath] = useState<string | null>(null);
     const [targetMachineId, setTargetMachineId] = useState<string | null>(null);
     const [requestedServerUrl, setRequestedServerUrl] = useState<string | null>(null);
-    const [shouldAutoApprove, setShouldAutoApprove] = useState(false);
+    const [autoConnectTriggered, setAutoConnectTriggered] = useState(false);
     const nextHref = React.useMemo(() => {
         if (!nextPath) {
             return null;
@@ -90,7 +87,6 @@ export default function TerminalConnectScreen() {
                 setNextPath(pendingRequest.nextPath);
                 setTargetMachineId(pendingRequest.machineId);
                 setRequestedServerUrl(pendingRequest.serverUrl);
-                setShouldAutoApprove(pendingRequest.autoApprove);
                 setHashProcessed(true);
             } else {
                 setHashProcessed(true);
@@ -100,10 +96,20 @@ export default function TerminalConnectScreen() {
 
     const handleConnect = React.useCallback(async () => {
         if (publicKey) {
+            // Normalize both URLs for comparison, treating localhost and LAN IP as equivalent
             const currentServerUrl = normalizeComparableServerUrl(getServerUrl());
             const nextServerUrl = normalizeComparableServerUrl(requestedServerUrl);
+            // Rewrite localhost in requested URL to current page host for comparison
+            const nextServerUrlRewritten = nextServerUrl
+                ? normalizeComparableServerUrl(rewriteUrlToPageHost(nextServerUrl))
+                : null;
 
-            if (nextServerUrl && nextServerUrl !== currentServerUrl) {
+            const serverUrlChanged =
+                nextServerUrl &&
+                nextServerUrl !== currentServerUrl &&
+                nextServerUrlRewritten !== currentServerUrl;
+
+            if (serverUrlChanged) {
                 setServerUrl(nextServerUrl);
 
                 if (auth.credentials) {
@@ -125,49 +131,40 @@ export default function TerminalConnectScreen() {
         }
     }, [auth, nextPath, processAuthUrl, publicKey, requestedServerUrl, targetMachineId]);
 
+    // Auto-connect as soon as publicKey is available after hash processing
     useEffect(() => {
-        if (!shouldAutoApprove || !publicKey || isLoading) {
+        if (!hashProcessed || !publicKey || isLoading || autoConnectTriggered) {
             return;
         }
 
-        setShouldAutoApprove(false);
+        setAutoConnectTriggered(true);
         void handleConnect();
-    }, [handleConnect, isLoading, publicKey, shouldAutoApprove]);
-
-    const handleReject = () => {
-        router.back();
-    };
+    }, [handleConnect, hashProcessed, isLoading, publicKey, autoConnectTriggered]);
 
     // Show placeholder for mobile platforms
     if (Platform.OS !== 'web') {
         return (
             <ItemList>
                 <ItemGroup>
-                    <View style={{ 
+                    <View style={{
                         alignItems: 'center',
                         paddingVertical: 32,
                         paddingHorizontal: 16
                     }}>
-                        <Ionicons 
-                            name="laptop-outline" 
-                            size={64} 
-                            color="#8E8E93" 
-                            style={{ marginBottom: 16 }} 
-                        />
-                        <Text style={{ 
-                            ...Typography.default('semiBold'), 
-                            fontSize: 18, 
+                        <Text style={{
+                            ...Typography.default('semiBold'),
+                            fontSize: 18,
                             textAlign: 'center',
-                            marginBottom: 12 
+                            marginBottom: 12
                         }}>
                             {t('terminal.webBrowserRequired')}
                         </Text>
-                        <Text style={{ 
-                            ...Typography.default(), 
-                            fontSize: 14, 
-                            color: '#666', 
+                        <Text style={{
+                            ...Typography.default(),
+                            fontSize: 14,
+                            color: '#666',
                             textAlign: 'center',
-                            lineHeight: 20 
+                            lineHeight: 20
                         }}>
                             {t('terminal.webBrowserRequiredDescription')}
                         </Text>
@@ -177,16 +174,17 @@ export default function TerminalConnectScreen() {
         );
     }
 
-    // Show loading state while processing hash
-    if (!hashProcessed) {
+    // Show loading state while processing hash or auto-connecting
+    if (!hashProcessed || (publicKey && !awaitingRedirect)) {
         return (
             <ItemList>
                 <ItemGroup>
-                    <View style={{ 
+                    <View style={{
                         alignItems: 'center',
                         paddingVertical: 32,
                         paddingHorizontal: 16
                     }}>
+                        <ActivityIndicator size="large" style={{ marginBottom: 16 }} />
                         <Text style={{ ...Typography.default(), color: '#666' }}>
                             {t('terminal.processingConnection')}
                         </Text>
@@ -201,32 +199,26 @@ export default function TerminalConnectScreen() {
         return (
             <ItemList>
                 <ItemGroup>
-                    <View style={{ 
+                    <View style={{
                         alignItems: 'center',
                         paddingVertical: 32,
                         paddingHorizontal: 16
                     }}>
-                        <Ionicons 
-                            name="warning-outline" 
-                            size={48} 
-                            color="#FF3B30" 
-                            style={{ marginBottom: 16 }} 
-                        />
-                        <Text style={{ 
-                            ...Typography.default('semiBold'), 
-                            fontSize: 16, 
+                        <Text style={{
+                            ...Typography.default('semiBold'),
+                            fontSize: 16,
                             color: '#FF3B30',
                             textAlign: 'center',
-                            marginBottom: 8 
+                            marginBottom: 8
                         }}>
                             {t('terminal.invalidConnectionLink')}
                         </Text>
-                        <Text style={{ 
-                            ...Typography.default(), 
-                            fontSize: 14, 
-                            color: '#666', 
+                        <Text style={{
+                            ...Typography.default(),
+                            fontSize: 14,
+                            color: '#666',
                             textAlign: 'center',
-                            lineHeight: 20 
+                            lineHeight: 20
                         }}>
                             {t('terminal.invalidConnectionLinkDescription')}
                         </Text>
@@ -236,96 +228,7 @@ export default function TerminalConnectScreen() {
         );
     }
 
-    // Show confirmation screen for valid connection
-    return (
-        <ItemList>
-            {/* Connection Request Header */}
-            <ItemGroup>
-                <View style={{ 
-                    alignItems: 'center',
-                    paddingVertical: 24,
-                    paddingHorizontal: 16
-                }}>
-                    <Ionicons 
-                        name="terminal-outline" 
-                        size={48} 
-                        color="#007AFF" 
-                        style={{ marginBottom: 16 }} 
-                    />
-                    <Text style={{ 
-                        ...Typography.default('semiBold'), 
-                        fontSize: 20, 
-                        textAlign: 'center',
-                        marginBottom: 12
-                    }}>
-                        {t('terminal.connectTerminal')}
-                    </Text>
-                    <Text style={{ 
-                        ...Typography.default(), 
-                        fontSize: 14, 
-                        color: '#666', 
-                        textAlign: 'center',
-                        lineHeight: 20 
-                    }}>
-                        {t('terminal.terminalRequestDescription')}
-                    </Text>
-                </View>
-            </ItemGroup>
-
-            {/* Connection Details */}
-            <ItemGroup title={t('terminal.connectionDetails')}>
-                <Item
-                    title={t('terminal.publicKey')}
-                    detail={`${publicKey.substring(0, 12)}...`}
-                    icon={<Ionicons name="key-outline" size={29} color="#007AFF" />}
-                    showChevron={false}
-                />
-                <Item
-                    title={t('terminal.encryption')}
-                    detail={t('terminal.endToEndEncrypted')}
-                    icon={<Ionicons name="lock-closed-outline" size={29} color="#34C759" />}
-                    showChevron={false}
-                />
-            </ItemGroup>
-
-            {/* Action Buttons */}
-            <ItemGroup>
-                <View style={{ 
-                    paddingHorizontal: 16,
-                    paddingVertical: 16,
-                    gap: 12 
-                }}>
-                    <RoundButton
-                        title={isLoading ? t('terminal.connecting') : t('terminal.acceptConnection')}
-                        onPress={handleConnect}
-                        size="large"
-                        disabled={isLoading}
-                        loading={isLoading}
-                    />
-                    <RoundButton
-                        title={t('terminal.reject')}
-                        onPress={handleReject}
-                        size="large"
-                        display="inverted"
-                        disabled={isLoading}
-                    />
-                </View>
-            </ItemGroup>
-
-            {/* Security Notice */}
-            <ItemGroup 
-                title={t('terminal.security')}
-                footer={t('terminal.securityFooter')}
-            >
-                <Item
-                    title={t('terminal.clientSideProcessing')}
-                    subtitle={t('terminal.linkProcessedLocally')}
-                    icon={<Ionicons name="shield-checkmark-outline" size={29} color="#34C759" />}
-                    showChevron={false}
-                />
-            </ItemGroup>
-        </ItemList>
-    );
+    return null;
 }
 
 function normalizeSingleValue(value: string | string[] | undefined): string | null {
@@ -388,6 +291,34 @@ function normalizeComparableServerUrl(serverUrl: string | null): string | null {
     } catch {
         return serverUrl.trim().replace(/\/$/, '');
     }
+}
+
+/**
+ * Rewrites a URL's localhost hostname to the current page's hostname.
+ * Allows comparing stored localhost URLs against the rewritten LAN-IP version
+ * so we avoid unnecessary server URL changes when the server is the same machine.
+ */
+function rewriteUrlToPageHost(url: string): string {
+    if (typeof window === 'undefined') {
+        return url;
+    }
+
+    const pageHost = window.location.hostname;
+    if (pageHost === 'localhost' || pageHost === '127.0.0.1') {
+        return url;
+    }
+
+    try {
+        const parsed = new URL(url);
+        if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+            parsed.hostname = pageHost;
+            return parsed.toString().replace(/\/$/, '');
+        }
+    } catch {
+        // fall through
+    }
+
+    return url;
 }
 
 function readPendingTerminalConnectRequest(): PendingTerminalConnectRequest | null {

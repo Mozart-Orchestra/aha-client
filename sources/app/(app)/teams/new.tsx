@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Platform, Switch } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { Modal } from '@/modal';
 import { sync } from '@/sync/sync';
 import { useAllSessions, storage, useAllMachines, useSetting } from '@/sync/storage';

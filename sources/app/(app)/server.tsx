@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { View, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack } from 'expo-router';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { Typography } from '@/constants/Typography';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
-import { RoundButton } from '@/components/RoundButton';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
+import { RoundButton } from '@/components/ui/RoundButton';
 import { Modal } from '@/modal';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import { getServerUrl, setServerUrl, validateServerUrl, getServerInfo } from '@/sync/serverConfig';
 import { useAuth } from '@/auth/AuthContext';

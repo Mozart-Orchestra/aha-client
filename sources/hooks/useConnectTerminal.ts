@@ -6,7 +6,7 @@ import { decodeBase64 } from '@/encryption/base64';
 import { encryptBox } from '@/encryption/libsodium';
 import { authApprove } from '@/auth/authApprove';
 import { useCheckScannerPermissions } from '@/hooks/useCheckCameraPermissions';
-import { QrScannerModal } from '@/components/QrScannerModal';
+import { QrScannerModal } from '@/components/qr/QrScannerModal';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 import { sync } from '@/sync/sync';

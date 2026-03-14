@@ -1,11 +1,19 @@
 import React from 'react';
-import { View, ScrollView, ActivityIndicator, Pressable } from 'react-native';
-import { Text } from '@/components/StyledText';
+import {
+    ActivityIndicator,
+    Platform,
+    Pressable,
+    ScrollView,
+    View,
+    useWindowDimensions,
+} from 'react-native';
+import { Text } from '@/components/ui/StyledText';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useArtifact, useAllSessions, useProfile, useIsDataReady } from '@/sync/storage';
+import { useArtifact, useAllSessions, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Modal } from '@/modal';
 import {
     KanbanBoard,
@@ -17,9 +25,9 @@ import {
 } from '@/sync/kanbanTypes';
 import { useDesktopBridge } from '@/desktop/useDesktopBridge';
 import { getDisplayName } from '@/sync/profile';
-import TeamChatRoom from '@/components/TeamChatRoom';
-import { TaskDetailModal } from '@/components/TaskDetailModal';
-import { TaskApprovalModal } from '@/components/TaskApprovalModal';
+import TeamChatRoom from '@/components/team/TeamChatRoom';
+import { TaskDetailModal } from '@/components/team/TaskDetailModal';
+import { TaskApprovalModal } from '@/components/team/TaskApprovalModal';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
@@ -27,7 +35,11 @@ import Color from 'color';
 import { syncKanbanStatusToTodo } from '@/-zen/model/ops';
 import { getCurrentAuth } from '@/auth/AuthContext';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
-import { EvolutionSection } from '@/components/EvolutionSection';
+import { EvolutionSection } from '@/components/settings/EvolutionSection';
+import { FloatingIslandSidebar } from '@/components/layout/FloatingIslandSidebar';
+import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell';
+import { SidebarView } from '@/components/layout/SidebarView';
+import { getSessionName } from '@/utils/sessionUtils';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -66,7 +78,6 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 12,
         marginHorizontal: 6,
         padding: 12,
-        minWidth: 250,
     },
     columnHeader: {
         flexDirection: 'row',
@@ -91,7 +102,6 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: theme.colors.groupped.background,
         borderRadius: 8,
         padding: 12,
-        marginBottom: 8,
         borderWidth: 1,
         borderColor: theme.colors.divider,
         // Force card to fill column width and constrain children
@@ -290,6 +300,71 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.textSecondary,
         fontStyle: 'italic',
     },
+    desktopPanelHeader: {
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        height: 54,
+        borderBottomWidth: 1,
+        borderBottomColor: '#DEE8EE',
+    },
+    desktopHeaderTopRow: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    desktopTabsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: '100%',
+        minWidth: 0,
+    },
+    desktopTab: {
+        width: 80,
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+    },
+    desktopTabActive: {
+        borderRadius: 999,
+        shadowColor: '#7A8C9B',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.07,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    desktopTabText: {
+        fontSize: 13,
+    },
+    desktopPanelBody: {
+        flex: 1,
+        minHeight: 0,
+        minWidth: 0,
+    },
+    desktopMenu: {
+        position: 'absolute',
+        top: 52,
+        right: 22,
+        minWidth: 188,
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 24,
+        elevation: 6,
+        zIndex: 20,
+    },
+    desktopMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    desktopMenuDivider: {
+        height: 1,
+    },
 }));
 
 const withAlpha = (color: string, alpha: number): string => {
@@ -300,16 +375,69 @@ const withAlpha = (color: string, alpha: number): string => {
     }
 };
 
+const SHELL_TABS = [
+    { id: 'chat', label: 'Chat' },
+    { id: 'board', label: 'Board' },
+    { id: 'info', label: 'Info' },
+] as const;
+
+const SHELL_ROLE_COLORS: Record<string, string> = {
+    master: '#007AFF',
+    orchestrator: '#007AFF',
+    builder: '#FF9500',
+    implementer: '#FF9500',
+    qa: '#5856D6',
+    'qa-engineer': '#5856D6',
+    framer: '#34C759',
+    architect: '#34C759',
+    reviewer: '#8A7F74',
+    observer: '#8A7F74',
+};
+
+const SHELL_CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#1A1209', '#B89A6F', '#6886A3'];
+
+function getRoleAccent(roleId?: string): string {
+    if (!roleId) {
+        return '#8A7F74';
+    }
+
+    return SHELL_ROLE_COLORS[roleId.toLowerCase()] ?? '#8A7F74';
+}
+
+function formatShellTime(timestamp: number): string {
+    const now = new Date();
+    const value = new Date(timestamp);
+
+    if (now.toDateString() === value.toDateString()) {
+        return value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    return value.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+}
+
+function getMessagePreview(message: TeamMessage): string {
+    const source = (message.shortContent || message.content || '').replace(/\s+/g, ' ').trim();
+    if (!source) {
+        return 'No recent message';
+    }
+    return source.length > 42 ? `${source.slice(0, 42)}...` : source;
+}
+
 export default function TeamDashboardScreen() {
     const { id, roomId: roomIdParam } = useLocalSearchParams();
     const teamId = id as string;
     const router = useRouter();
     const { theme } = useUnistyles();
+    const { width, height } = useWindowDimensions();
     const styles = stylesheet;
     const artifact = useArtifact(teamId);
+    const allTeams = useArtifacts().filter(a => a.type === 'team');
     const allSessions = useAllSessions();
     const profile = useProfile();
     const isDataReady = useIsDataReady();
+    const isDesktopShell = Platform.OS === 'web' && width >= 1180;
+    const shellVariant = 'default' as const;
+    const shellTheme = getThreeColumnShellTokens(shellVariant);
     const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info' | 'evolution'>('chat');
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
@@ -317,6 +445,8 @@ export default function TeamDashboardScreen() {
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const [showMenu, setShowMenu] = React.useState(false);
+    const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+    const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const artifactRoomId = React.useMemo(() => {
@@ -857,6 +987,97 @@ export default function TeamDashboardScreen() {
         return kanbanData.tasks.filter(task => taskNeedsApproval(task));
     }, [kanbanData.tasks]);
 
+    const onlineCount = React.useMemo(() => {
+        return roster.filter((entry) => entry.session?.active).length;
+    }, [roster]);
+
+    const statusSummary = React.useMemo(() => {
+        const reviewCount = approvedTasks.filter((task) => normalizeStatus(task.status) === 'review').length;
+        const workingCount = approvedTasks.filter((task) => {
+            const status = normalizeStatus(task.status);
+            return status === 'todo' || status === 'in-progress' || status === 'blocked';
+        }).length;
+
+        return {
+            decision: pendingTasks.length || undefined,
+            working: workingCount || undefined,
+            review: reviewCount || undefined,
+        };
+    }, [approvedTasks, normalizeStatus, pendingTasks.length]);
+
+    const recentConversations = React.useMemo(() => {
+        const deduped = new Set<string>();
+        const rows: {
+            id: string;
+            name: string;
+            lastMessage: string;
+            time: string;
+            avatarColor: string;
+            avatarLabel: string;
+            unreadCount?: number;
+        }[] = [];
+
+        [...teamMessages]
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .forEach((message) => {
+                if (message.type === 'system') {
+                    return;
+                }
+
+                const key = message.fromSessionId || message.fromDisplayName || message.id;
+                if (deduped.has(key) || rows.length >= 4) {
+                    return;
+                }
+
+                deduped.add(key);
+
+                const name = message.fromDisplayName || message.fromRole || 'Teammate';
+                rows.push({
+                    id: key,
+                    name,
+                    lastMessage: getMessagePreview(message),
+                    time: formatShellTime(message.timestamp),
+                    avatarColor: SHELL_CONVERSATION_COLORS[rows.length % SHELL_CONVERSATION_COLORS.length],
+                    avatarLabel: name.slice(0, 1).toUpperCase(),
+                    unreadCount: message.type === 'notification' ? 1 : undefined,
+                });
+            });
+
+        if (rows.length === 0) {
+            rows.push({
+                id: `team-${teamId}`,
+                name: artifact?.title || desktopRoom?.name || 'Team',
+                lastMessage: 'Open the team room and start coordinating work.',
+                time: '',
+                avatarColor: SHELL_CONVERSATION_COLORS[0],
+                avatarLabel: (artifact?.title || desktopRoom?.name || 'T').slice(0, 1).toUpperCase(),
+            });
+        }
+
+        return rows;
+    }, [artifact?.title, desktopRoom?.name, teamId, teamMessages]);
+
+    React.useEffect(() => {
+        if (!selectedAgentId && roster.length > 0) {
+            setSelectedAgentId(roster[0].member.sessionId);
+        }
+    }, [roster, selectedAgentId]);
+
+    React.useEffect(() => {
+        if (!selectedConversationId && recentConversations.length > 0) {
+            setSelectedConversationId(recentConversations[0].id);
+        }
+    }, [recentConversations, selectedConversationId]);
+
+    // Derive the current user's role title from the roster for the sidebar header
+    const myRoleTitle = React.useMemo(() => {
+        const myEntry = roster.find(r => {
+            const role = r.session?.metadata?.role;
+            return !role || role === 'user';
+        });
+        return myEntry?.role?.title || 'Team Member';
+    }, [roster]);
+
     const matchesColumn = React.useCallback((task: KanbanTask, columnId: string) => {
         return normalizeStatus(task.status) === columnId;
     }, [normalizeStatus]);
@@ -934,8 +1155,7 @@ export default function TeamDashboardScreen() {
                 </View>
             )}
 
-            <ScrollView horizontal style={{ flex: 1 }}>
-                <View style={styles.boardContainer}>
+            <View style={styles.boardContainer}>
                     {kanbanData.columns.map(column => (
                         <View key={column.id} style={styles.column}>
                             <View style={styles.columnHeader}>
@@ -945,7 +1165,7 @@ export default function TeamDashboardScreen() {
                                 </Text>
                             </View>
 
-                            <ScrollView>
+                            <ScrollView contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
                                 {approvedTasks
                                     .filter(t => matchesColumn(t, column.id))
                                 .map(task => {
@@ -963,9 +1183,13 @@ export default function TeamDashboardScreen() {
                                         onLongPress={() => handleMoveTask(task)}
                                     >
                                         <Text style={styles.taskTitle}>{task.title}</Text>
-                                        {task.assigneeId && (
-                                            <Text style={styles.taskAssignee}>@{task.assigneeId}</Text>
-                                        )}
+                                        {task.assigneeId && (() => {
+                                            const session = sessionLookup.get(task.assigneeId);
+                                            const name = session ? getSessionName(session) : task.assigneeId.slice(0, 8);
+                                            return (
+                                                <Text style={styles.taskAssignee}>@{name}</Text>
+                                            );
+                                        })()}
 
                                         {/* 🆕 Linked sessions 显示 */}
                                         {(sessionCount > 0 || task.priority) && (
@@ -1025,7 +1249,6 @@ export default function TeamDashboardScreen() {
                     </View>
                 ))}
             </View>
-        </ScrollView>
         </>
     );
 
@@ -1088,16 +1311,207 @@ export default function TeamDashboardScreen() {
                     messages={teamMessages}
                     onMessagesChange={setTeamMessages}
                     taskChatSync={taskChatSync}
+                    variant={isDesktopShell ? 'edzlf' : 'default'}
                 />
             </View>
         );
     };
 
+    const desktopSecondaryPanel = (
+        <FloatingIslandSidebar
+            variant={shellVariant}
+            header={{
+                title: myDisplayName,
+                subtitle: `${myRoleTitle} · Online`,
+                iconLabel: myDisplayName.slice(0, 1).toUpperCase(),
+                iconGradientColors: ['#314658', '#1E2D3C'],
+                trailingIcon: 'chevron-down',
+            }}
+            agentItems={roster.slice(0, 6).map((entry) => ({
+                id: entry.member.sessionId,
+                name: entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId,
+                dotColor: getRoleAccent(entry.role?.id || entry.member.roleId || entry.session?.metadata?.role),
+                selected: selectedAgentId === entry.member.sessionId,
+                count: selectedAgentId === entry.member.sessionId
+                    ? entry.tasks.length
+                    : entry.tasks.length > 0 ? entry.tasks.length : undefined,
+                onPress: () => {
+                    setSelectedAgentId(entry.member.sessionId);
+                    router.push({
+                        pathname: '/session/[id]',
+                        params: {
+                            id: entry.member.sessionId,
+                            teamId: teamId,
+                            teamName: artifact?.title || desktopRoom?.name || 'Team',
+                            roleName: entry.session?.metadata?.role || entry.role?.id || '',
+                        },
+                    } as any);
+                },
+            }))}
+            statusItems={[
+                {
+                    id: 'decision',
+                    icon: 'radio-button-on',
+                    label: 'Needs Decision',
+                    color: '#FF3B30',
+                    backgroundColor: '#FF3B300D',
+                    count: statusSummary.decision,
+                },
+                {
+                    id: 'working',
+                    icon: 'pulse',
+                    label: 'Working',
+                    color: '#FF9500',
+                    backgroundColor: '#FF950012',
+                    count: statusSummary.working,
+                },
+                {
+                    id: 'review',
+                    icon: 'people',
+                    label: 'Team Review',
+                    color: '#8A7F74',
+                    backgroundColor: '#00000000',
+                    count: statusSummary.review,
+                },
+            ]}
+            conversationItems={allTeams.map((team, index) => ({
+                id: team.id,
+                name: team.title || 'Team',
+                lastMessage: '',
+                time: '',
+                avatarColor: SHELL_CONVERSATION_COLORS[index % SHELL_CONVERSATION_COLORS.length],
+                avatarLabel: (team.title || 'T').slice(0, 1).toUpperCase(),
+                selected: team.id === teamId,
+                onPress: () => {
+                    router.push({
+                        pathname: '/teams/[id]',
+                        params: { id: team.id },
+                    } as any);
+                },
+            }))}
+            conversationSectionLabel="Teams"
+            conversationEmptyText="No teams yet"
+        />
+    );
+
+    const desktopMainPanel = (
+        <>
+            <View
+                style={[
+                    styles.desktopPanelHeader,
+                    { backgroundColor: 'rgba(242,246,248,0.82)' },
+                ]}
+            >
+                <View style={styles.desktopHeaderTopRow}>
+                    <View style={styles.desktopTabsRow}>
+                        {SHELL_TABS.map((tab) => {
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <Pressable
+                                    key={tab.id}
+                                    onPress={() => {
+                                        setActiveTab(tab.id);
+                                        setShowMenu(false);
+                                    }}
+                                    style={[
+                                        styles.desktopTab,
+                                        isActive && styles.desktopTabActive,
+                                    ]}
+                                >
+                                    {isActive ? (
+                                        <LinearGradient
+                                            colors={['#FFFFFF', '#EDF3F7']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 0, y: 1 }}
+                                            style={{
+                                                ...StyleSheet.absoluteFillObject as object,
+                                                borderRadius: 999,
+                                            }}
+                                        />
+                                    ) : null}
+                                    <Text
+                                        style={[
+                                            styles.desktopTabText,
+                                            {
+                                                color: isActive ? '#233648' : '#92A1AF',
+                                                fontWeight: isActive ? '600' : 'normal',
+                                            },
+                                        ]}
+                                    >
+                                        {tab.label}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+                    <View style={{ flex: 1 }} />
+                    <Pressable
+                        onPress={() => setShowMenu((previous) => !previous)}
+                    >
+                        <Ionicons name="ellipsis-horizontal" size={20} color="#98A8B5" />
+                    </Pressable>
+                </View>
+                {showMenu ? (
+                    <View
+                        style={[
+                            styles.desktopMenu,
+                            {
+                                backgroundColor: '#F8FBFDEB',
+                                borderColor: shellTheme.panelBorder,
+                            },
+                        ]}
+                    >
+                        <Pressable onPress={handleRenameTeam} style={styles.desktopMenuItem}>
+                            <Ionicons name="pencil-outline" size={17} color={shellTheme.panelTitle} />
+                            <Text style={{ color: shellTheme.panelTitle, fontSize: 14 }}>Rename</Text>
+                        </Pressable>
+                        <View style={[styles.desktopMenuDivider, { backgroundColor: shellTheme.panelDivider }]} />
+                        <Pressable onPress={handleArchiveTeam} style={styles.desktopMenuItem}>
+                            <Ionicons name="archive-outline" size={17} color={shellTheme.panelTitle} />
+                            <Text style={{ color: shellTheme.panelTitle, fontSize: 14 }}>Archive</Text>
+                        </Pressable>
+                        <View style={[styles.desktopMenuDivider, { backgroundColor: shellTheme.panelDivider }]} />
+                        <Pressable onPress={handleDeleteTeam} style={styles.desktopMenuItem}>
+                            <Ionicons name="trash-outline" size={17} color={theme.colors.textDestructive} />
+                            <Text style={{ color: theme.colors.textDestructive, fontSize: 14 }}>Delete</Text>
+                        </Pressable>
+                    </View>
+                ) : null}
+            </View>
+            <View style={styles.desktopPanelBody}>
+                {activeTab === 'chat' && renderChat()}
+                {activeTab === 'board' && renderKanban()}
+                {activeTab === 'info' && renderInfo()}
+                {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
+                <TaskDetailModal
+                    visible={showTaskDetail}
+                    contained={true}
+                    task={selectedTask}
+                    columns={kanbanData.columns}
+                    onClose={() => setShowTaskDetail(false)}
+                    onDiscuss={handleDiscussTask}
+                    onSave={async (taskId, updates) => {
+                        await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
+                        setShowTaskDetail(false);
+                    }}
+                    allSessions={allSessions}
+                />
+            </View>
+        </>
+    );
+
+    const desktopShell = (
+        <SidebarView
+            secondaryPanel={desktopSecondaryPanel}
+            mainPanel={desktopMainPanel}
+        />
+    );
+
     return (
         <>
             <Stack.Screen
                 options={{
-                    headerShown: true,
+                    headerShown: !isDesktopShell,
                     headerTitle: (desktopBridge ? desktopRoom?.name : artifact?.title) || 'Team Dashboard',
                     headerRight: () => (
                         <Pressable
@@ -1110,8 +1524,7 @@ export default function TeamDashboardScreen() {
                     ),
                 }}
             />
-            {/* Menu dropdown - rendered outside header to avoid clipping */}
-            {showMenu && (
+            {!isDesktopShell && showMenu && (
                 <>
                     <Pressable
                         style={{
@@ -1180,58 +1593,64 @@ export default function TeamDashboardScreen() {
                     </View>
                 </>
             )}
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
-                        {(['chat', 'board', 'info', 'evolution'] as const).map((tab) => (
-                            <Pressable
-                                key={tab}
-                                onPress={() => setActiveTab(tab)}
-                                style={{
-                                    flex: 1,
-                                    paddingVertical: 8,
-                                    alignItems: 'center',
-                                    borderRadius: 8,
-                                    backgroundColor: activeTab === tab ? theme.colors.surface : 'transparent',
-                                    shadowColor: activeTab === tab ? '#000' : 'transparent',
-                                    shadowOffset: { width: 0, height: 1 },
-                                    shadowOpacity: activeTab === tab ? 0.1 : 0,
-                                    shadowRadius: 2,
-                                }}
-                            >
-                                <Text style={{
-                                    fontSize: 14,
-                                    fontWeight: '600',
-                                    color: activeTab === tab ? theme.colors.text : theme.colors.textSecondary,
-                                    textTransform: 'capitalize'
-                                }}>
-                                    {tab}
-                                </Text>
-                            </Pressable>
-                        ))}
+            {isDesktopShell ? (
+                desktopShell
+            ) : (
+                <View style={styles.container}>
+                    <View style={styles.header}>
+                        <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
+                            {(['chat', 'board', 'info', 'evolution'] as const).map((tab) => (
+                                <Pressable
+                                    key={tab}
+                                    onPress={() => setActiveTab(tab)}
+                                    style={{
+                                        flex: 1,
+                                        paddingVertical: 8,
+                                        alignItems: 'center',
+                                        borderRadius: 8,
+                                        backgroundColor: activeTab === tab ? theme.colors.surface : 'transparent',
+                                        shadowColor: activeTab === tab ? '#000' : 'transparent',
+                                        shadowOffset: { width: 0, height: 1 },
+                                        shadowOpacity: activeTab === tab ? 0.1 : 0,
+                                        shadowRadius: 2,
+                                    }}
+                                >
+                                    <Text style={{
+                                        fontSize: 14,
+                                        fontWeight: '600',
+                                        color: activeTab === tab ? theme.colors.text : theme.colors.textSecondary,
+                                        textTransform: 'capitalize',
+                                    }}>
+                                        {tab}
+                                    </Text>
+                                </Pressable>
+                            ))}
+                        </View>
                     </View>
+
+                    {activeTab === 'chat' && renderChat()}
+                    {activeTab === 'board' && renderKanban()}
+                    {activeTab === 'info' && renderInfo()}
+                    {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
                 </View>
+            )}
 
-                {activeTab === 'chat' && renderChat()}
-                {activeTab === 'board' && renderKanban()}
-                {activeTab === 'info' && renderInfo()}
-                {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
-            </View>
-
-            {/* 🆕 任务详情弹窗 */}
-            <TaskDetailModal
-                visible={showTaskDetail}
-                task={selectedTask}
-                columns={kanbanData.columns}
-                onClose={() => setShowTaskDetail(false)}
-                onDiscuss={handleDiscussTask}
-                onSave={async (taskId, updates) => {
-                    // 使用 taskChatSync 更新任务，会自动发送通知
-                    await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
-                    setShowTaskDetail(false);
-                }}
-                allSessions={allSessions}
-            />
+            {/* 🆕 任务详情弹窗 (mobile only — desktop uses contained modal inside main panel) */}
+            {!isDesktopShell && (
+                <TaskDetailModal
+                    visible={showTaskDetail}
+                    task={selectedTask}
+                    columns={kanbanData.columns}
+                    onClose={() => setShowTaskDetail(false)}
+                    onDiscuss={handleDiscussTask}
+                    onSave={async (taskId, updates) => {
+                        // 使用 taskChatSync 更新任务，会自动发送通知
+                        await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
+                        setShowTaskDetail(false);
+                    }}
+                    allSessions={allSessions}
+                />
+            )}
 
             {/* 🆕 任务审批弹窗 */}
             <TaskApprovalModal

@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '@/utils/uuid';
 import type { KanbanTask } from '@/sync/kanbanTypes';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import {

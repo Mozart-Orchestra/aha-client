@@ -9,7 +9,8 @@ const DEFAULT_SERVER_URL = 'https://top1vibe.com';
 function getRuntimeServerUrl(): string | null {
     const envServerUrl = process.env.EXPO_PUBLIC_HAPPY_SERVER_URL?.trim();
     if (envServerUrl) {
-        return envServerUrl;
+        // 当页面从局域网 IP 访问时，将 env 里的 localhost 地址重写为页面主机
+        return rewriteLocalhostUrl(envServerUrl);
     }
 
     if (typeof window !== 'undefined') {
@@ -17,18 +18,59 @@ function getRuntimeServerUrl(): string | null {
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return 'http://localhost:3005';
         }
+        // 局域网 IP（开发场景）：用页面同一主机 + 默认端口
+        if (isPrivateIp(hostname)) {
+            return `http://${hostname}:3005`;
+        }
     }
 
     return null;
 }
 
+function isPrivateIp(hostname: string): boolean {
+    return (
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.') ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+    );
+}
+
 export function getServerUrl(): string {
     const storedServerUrl = serverConfigStorage.getString(SERVER_KEY)?.trim();
     if (storedServerUrl && storedServerUrl !== DEFAULT_SERVER_URL) {
-        return storedServerUrl;
+        return rewriteLocalhostUrl(storedServerUrl);
     }
 
     return getRuntimeServerUrl() || DEFAULT_SERVER_URL;
+}
+
+/**
+ * When the stored server URL uses localhost but the app is accessed from a
+ * non-localhost host (e.g. a phone connecting to the dev machine over LAN),
+ * replace localhost with the current page hostname so requests reach the
+ * correct machine instead of the device's own loopback.
+ */
+function rewriteLocalhostUrl(url: string): string {
+    if (typeof window === 'undefined') {
+        return url;
+    }
+
+    const pageHost = window.location.hostname;
+    if (pageHost === 'localhost' || pageHost === '127.0.0.1') {
+        return url;
+    }
+
+    try {
+        const parsed = new URL(url);
+        if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+            parsed.hostname = pageHost;
+            return parsed.toString().replace(/\/$/, '');
+        }
+    } catch {
+        // fall through
+    }
+
+    return url;
 }
 
 export function setServerUrl(url: string | null): void {

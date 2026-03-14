@@ -2,16 +2,16 @@ import * as React from 'react';
 import { View, ScrollView, ActivityIndicator, Platform, Pressable } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useLocalSearchParams } from 'expo-router';
-import { Text } from '@/components/StyledText';
-import { SimpleSyntaxHighlighter } from '@/components/SimpleSyntaxHighlighter';
+import { Text } from '@/components/ui/StyledText';
+import { SimpleSyntaxHighlighter } from '@/components/ui/SimpleSyntaxHighlighter';
 import { Typography } from '@/constants/Typography';
 import { sessionReadFile, sessionBash } from '@/sync/ops';
 import { storage } from '@/sync/storage';
 import { Modal } from '@/modal';
 import { useUnistyles, StyleSheet } from 'react-native-unistyles';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { t } from '@/text';
-import { FileIcon } from '@/components/FileIcon';
+import { FileIcon } from '@/components/ui/FileIcon';
 
 interface FileContent {
     content: string;

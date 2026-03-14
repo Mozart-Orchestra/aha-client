@@ -10,7 +10,7 @@ import { Session, Machine } from './storageTypes';
 import { InvalidateSync } from '@/utils/sync';
 import { SessionEncryption } from './encryption/sessionEncryption';
 import { ActivityUpdateAccumulator } from './reducer/activityUpdateAccumulator';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '@/utils/uuid';
 import * as Notifications from 'expo-notifications';
 import { registerPushToken } from './apiPush';
 import { Platform, AppState } from 'react-native';

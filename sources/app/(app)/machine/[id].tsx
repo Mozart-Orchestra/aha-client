@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, Platform, Pressable, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
 import { Typography } from '@/constants/Typography';
 import { useSessions, useAllMachines, useMachine } from '@/sync/storage';
 import { Ionicons, Octicons } from '@expo/vector-icons';
@@ -18,7 +18,7 @@ import { t } from '@/text';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { machineSpawnNewSession } from '@/sync/ops';
 import { resolveAbsolutePath } from '@/utils/pathUtils';
-import { MultiTextInput, type MultiTextInputHandle } from '@/components/MultiTextInput';
+import { MultiTextInput, type MultiTextInputHandle } from '@/components/input/MultiTextInput';
 
 const styles = StyleSheet.create((theme) => ({
     pathInputContainer: {

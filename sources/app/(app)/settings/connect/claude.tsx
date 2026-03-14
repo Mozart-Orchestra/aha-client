@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
-import { OAuthView } from '@/components/OAuthView';
+import { OAuthView } from '@/components/settings/OAuthView';
 import { buildAuthorizationUrl, ClaudeAuthTokens, exchangeCodeForTokens } from '@/utils/oauth';
 import { Modal } from '@/modal';
 import { t } from '@/text';
@@ -9,7 +9,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { connectService } from '@/sync/apiServices';
 import { sync } from '@/sync/sync';
 import { View } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { StyleSheet } from 'react-native-unistyles';
 import { Platform } from 'react-native';
 

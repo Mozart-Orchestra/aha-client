@@ -19,16 +19,8 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 export const zhHans: TranslationStructure = {
     tabs: {
         // Tab navigation labels
-        inbox: '收件箱',
         sessions: '终端',
         settings: '设置',
-    },
-
-    inbox: {
-        // Inbox screen
-        emptyTitle: '收件箱为空',
-        emptyDescription: '与好友建立连接，开始共享会话',
-        updates: '更新',
     },
 
     common: {
@@ -366,6 +358,26 @@ export const zhHans: TranslationStructure = {
 
     },
 
+    home: {
+        welcome: '欢迎使用 Aha',
+        welcomeSubtitle: '你的 AI 智能工作台',
+        gettingStarted: '快速上手',
+        docsTitle: '新手入门指南',
+        docsSubtitle: '了解如何使用 Aha 并连接你的 AI 智能体',
+        teamSection: '团队',
+        createTeamTitle: '创建团队',
+        createTeamSubtitle: '与团队成员实时协作',
+        devicesSection: '设备',
+        syncDeviceTitle: '同步到其他设备',
+        syncDeviceSubtitle: '将账号关联到另一部手机或平板',
+        workSection: '工作',
+        reportTitle: '团队概览',
+        reportSubtitle: '查看团队活动与进度汇报',
+        exploreSection: '发现',
+        marketplaceTitle: '智能体市场',
+        marketplaceSubtitle: '发现并安装各类 AI 智能体',
+    },
+
     components: {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
@@ -663,16 +675,15 @@ export const zhHans: TranslationStructure = {
         linkNewDevice: '链接新设备',
         restoreWithSecretKey: '通过密钥恢复',
         whatsNew: "更新日志",
-        friends: '好友',
     },
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Codex 和 Claude Code 移动客户端',
-        subtitle: '端到端加密，您的账户仅存储在您的设备上。',
+        title: '随时随地控制你的 Claude Code 和 Codex 军团，仅需一步：',
+        subtitle: '端到端加密，账号仅存储在你的设备上。',
         createAccount: '创建账户',
         linkOrRestoreAccount: '链接或恢复账户',
-        loginWithMobileApp: '使用移动应用登录',
+        loginWithMobileApp: 'copy 命令 && 进入军团',
     },
 
     review: {
@@ -1316,11 +1327,13 @@ export const zhHans: TranslationStructure = {
         noData: '暂无使用数据',
     },
 
-    feed: {
-        // Feed notifications for friend requests and acceptances
-        friendRequestFrom: ({ name }: { name: string }) => `${name} 向您发送了好友请求`,
-        friendRequestGeneric: '新的好友请求',
-        friendAccepted: ({ name }: { name: string }) => `您现在与 ${name} 成为了好友`,
-        friendAcceptedGeneric: '好友请求已接受',
-    }
+    agents: {
+        title: '智能体',
+        placeholder: '智能体管理即将推出',
+    },
+
+    favorites: {
+        title: '收藏',
+        placeholder: '暂无收藏',
+    },
 } as const;

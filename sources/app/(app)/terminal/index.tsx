@@ -1,14 +1,14 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Typography } from '@/constants/Typography';
-import { RoundButton } from '@/components/RoundButton';
+import { RoundButton } from '@/components/ui/RoundButton';
 import { useConnectTerminal } from '@/hooks/useConnectTerminal';
 import { Ionicons } from '@expo/vector-icons';
-import { ItemList } from '@/components/ItemList';
-import { ItemGroup } from '@/components/ItemGroup';
-import { Item } from '@/components/Item';
+import { ItemList } from '@/components/ui/ItemList';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { Item } from '@/components/ui/Item';
 import { useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
 

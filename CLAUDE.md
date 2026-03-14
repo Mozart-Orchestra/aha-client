@@ -7,10 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Development
 - `yarn start` - Start the Expo development server
 - `yarn ios` - Run the app on iOS simulator
-- `yarn android` - Run the app on Android emulator  
+- `yarn android` - Run the app on Android emulator
 - `yarn web` - Run the app in web browser
 - `yarn prebuild` - Generate native iOS and Android directories
 - `yarn typecheck` - Run TypeScript type checking after all changes
+
+### LAN 开发注意事项（手机/局域网访问）
+- **端口确认**：`lsof -nP -iTCP -sTCP:LISTEN | grep -E '3005|8081'` 确认 happy-server 实际端口
+- **`.env.local` 端口必须与实际运行端口一致**，当前 happy-server 跑在 3005
+- **修改 `.env.local` 后必须重启 Metro**（`EXPO_PUBLIC_*` 变量编译期烧录，热更新无效）
+- **LAN 访问限制**：`crypto.randomUUID()` 和 `crypto.subtle` 在 HTTP LAN 访问时不可用（需要 HTTPS 或 localhost 安全上下文）
+  - UUID 生成：使用 `@/utils/uuid` 而非 `expo-crypto` 的 randomUUID
+  - 加密操作（AES、subtle）：同样需要安全上下文，LAN HTTP 下无法使用
 
 ### Testing
 - `yarn test` - Run tests in watch mode (Jest with jest-expo preset)

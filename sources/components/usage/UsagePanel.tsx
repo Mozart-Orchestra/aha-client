@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, ScrollView, Pressable } from 'react-native';
-import { Text } from '@/components/StyledText';
+import { Text } from '@/components/ui/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { useAuth } from '@/auth/AuthContext';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
 import { UsageChart } from './UsageChart';
 import { UsageBar } from './UsageBar';
 import { getUsageForPeriod, calculateTotals, UsageDataPoint } from '@/sync/apiUsage';

@@ -5,22 +5,22 @@ import { useAllMachines, storage, useSetting } from '@/sync/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUnistyles } from 'react-native-unistyles';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { AgentInput } from '@/components/AgentInput';
-import { MultiTextInputHandle } from '@/components/MultiTextInput';
+import { AgentInput } from '@/components/session/AgentInput';
+import { MultiTextInputHandle } from '@/components/input/MultiTextInput';
 import { useHeaderHeight } from '@/utils/responsive';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { machineSpawnNewSession } from '@/sync/ops';
 import { Modal } from '@/modal';
 import { sync } from '@/sync/sync';
-import { SessionTypeSelector } from '@/components/SessionTypeSelector';
+import { SessionTypeSelector } from '@/components/session/SessionTypeSelector';
 import { createWorktree } from '@/utils/createWorktree';
 import { getTempData, type NewSessionData } from '@/utils/tempDataStore';
 import { linkTaskToSession } from '@/-zen/model/taskSessionLink';
-import { PermissionMode, ModelMode } from '@/components/PermissionModeSelector';
+import { PermissionMode, ModelMode } from '@/components/settings/PermissionModeSelector';
 import { getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 
 // Simple temporary state for passing selections back from picker screens

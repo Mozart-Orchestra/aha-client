@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography } from '@/constants/Typography';
 import { Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '@/utils/uuid';
 import { storage } from '@/sync/storage';
 import { toggleTodo, updateTodoTitle, deleteTodo, updateTodoKanbanIntegration, type TodoItem } from '@/-zen/model/ops';
 import { useAuth } from '@/auth/AuthContext';

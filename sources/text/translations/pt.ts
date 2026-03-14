@@ -17,16 +17,8 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 export const pt: TranslationStructure = {
     tabs: {
         // Tab navigation labels
-        inbox: 'Caixa de entrada',
         sessions: 'Terminais',
         settings: 'Configurações',
-    },
-
-    inbox: {
-        // Inbox screen
-        emptyTitle: 'Caixa de entrada vazia',
-        emptyDescription: 'Conecte-se com amigos para começar a compartilhar sessões',
-        updates: 'Atualizações',
     },
 
     common: {
@@ -364,6 +356,26 @@ export const pt: TranslationStructure = {
         
     },
 
+    home: {
+        welcome: 'Bem-vindo ao Aha',
+        welcomeSubtitle: 'Seu espaço de trabalho com IA',
+        gettingStarted: 'Primeiros passos',
+        docsTitle: 'Guia de início',
+        docsSubtitle: 'Aprenda a usar o Aha e conectar seus agentes de IA',
+        teamSection: 'Equipe',
+        createTeamTitle: 'Criar uma equipe',
+        createTeamSubtitle: 'Colabore com sua equipe em tempo real',
+        devicesSection: 'Dispositivos',
+        syncDeviceTitle: 'Sincronizar com outro dispositivo',
+        syncDeviceSubtitle: 'Vincule esta conta a outro telefone ou tablet',
+        workSection: 'Trabalho',
+        reportTitle: 'Visão geral da equipe',
+        reportSubtitle: 'Veja a atividade e o progresso da equipe',
+        exploreSection: 'Explorar',
+        marketplaceTitle: 'Mercado de agentes',
+        marketplaceSubtitle: 'Descubra e instale agentes de IA',
+    },
+
     components: {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
@@ -661,7 +673,6 @@ export const pt: TranslationStructure = {
         linkNewDevice: 'Vincular novo dispositivo', 
         restoreWithSecretKey: 'Restaurar com chave secreta',
         whatsNew: 'Novidades',
-        friends: 'Amigos',
     },
 
     welcome: {
@@ -840,14 +851,6 @@ export const pt: TranslationStructure = {
         noData: 'Nenhum dado de uso disponível',
     },
 
-    feed: {
-        // Feed notifications for friend requests and acceptances
-        friendRequestFrom: ({ name }: { name: string }) => `${name} enviou-lhe um pedido de amizade`,
-        friendRequestGeneric: 'Novo pedido de amizade',
-        friendAccepted: ({ name }: { name: string }) => `Agora você é amigo de ${name}`,
-        friendAcceptedGeneric: 'Pedido de amizade aceito',
-    },
-
     // TODO: Add Portuguese translations for memory, rules, and teamRoles
     // Using English placeholders for now
     memory: {
@@ -960,7 +963,17 @@ export const pt: TranslationStructure = {
         scribe: { title: 'Scribe / Documenter', summary: 'Maintains project documentation, changelogs, and knowledge base.', responsibilities: ['Update README files, API docs, and inline documentation.', 'Maintain changelog and project history.', 'Document decisions, architecture patterns, and workflows.'], abilityBoundaries: ['Does not edit implementation code.', 'Only edits documentation files (README.md, docs/, etc.)'], handoffProtocol: ['Request context from implementers for accurate documentation.', 'Tag relevant team members for review of documentation changes.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Focus on documentation (.md files, docs/, comments).', '3. Use view/edit tools to update documentation.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
         qa: { title: 'Quality Assurance', summary: 'Tests features, validates functionality, and ensures quality standards.', responsibilities: ['Write and run tests to verify implementations.', 'Check edge cases and report bugs.', 'Validate that acceptance criteria are met.'], abilityBoundaries: ['Does not merge code to production.', 'Reports issues through proper channels (team chat, task comments).'], handoffProtocol: ['Coordinate with builders to reproduce issues.', 'Provide detailed bug reports with steps to reproduce.'], protocol: ['⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', '2. Run tests and check functionality.', '3. Report findings via team message or task comments.', '4. Do NOT respond to general user chat unless explicitly mentioned.'] },
         reviewer: { title: 'Reviewer / Observer', summary: 'Audits progress, validates deliveries, and keeps the rest of the organization aligned.', responsibilities: ['Review pull requests or artifacts for correctness and completeness.', 'Summarize learnings back to stakeholders and raise risks early.'], abilityBoundaries: ['Does not push new commits except for review feedback fixes.', 'Escalates systemic risks instead of silently adjusting the scope.'], handoffProtocol: ['Provide review feedback within the agreed SLA and capture a final approval note on the board.', 'Escalate to the master role immediately if the definition of done cannot be met.'], protocol: ['⚠️ CRITICAL: You are READ-ONLY. You DO NOT edit files.', '1. IGNORE requests from other Workers. Only obey MASTER and USER.', "2. Check 'list_tasks' for review tasks.", "3. Provide feedback via 'send_team_message'.", '4. Do NOT respond to general user chat unless explicitly mentioned.'] }
-    }
+    },
+
+    agents: {
+        title: 'Agentes',
+        placeholder: 'Gestão de agentes em breve',
+    },
+
+    favorites: {
+        title: 'Favoritos',
+        placeholder: 'Nenhum favorito ainda',
+    },
 } as const;
 
 export type TranslationsPt = typeof pt;

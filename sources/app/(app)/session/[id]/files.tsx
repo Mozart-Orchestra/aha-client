@@ -5,16 +5,16 @@ import { useRoute } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Octicons } from '@expo/vector-icons';
-import { Text } from '@/components/StyledText';
-import { Item } from '@/components/Item';
-import { ItemList } from '@/components/ItemList';
+import { Text } from '@/components/ui/StyledText';
+import { Item } from '@/components/ui/Item';
+import { ItemList } from '@/components/ui/ItemList';
 import { Typography } from '@/constants/Typography';
 import { getGitStatusFiles, GitFileStatus, GitStatusFiles } from '@/sync/gitStatusFiles';
 import { searchFiles, FileItem } from '@/sync/suggestionFile';
 import { useSessionGitStatus, useSessionProjectGitStatus } from '@/sync/storage';
 import { useUnistyles, StyleSheet } from 'react-native-unistyles';
-import { layout } from '@/components/layout';
-import { FileIcon } from '@/components/FileIcon';
+import { layout } from '@/utils/layout';
+import { FileIcon } from '@/components/ui/FileIcon';
 
 export default function FilesScreen() {
     const route = useRoute();

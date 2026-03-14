@@ -1,6 +1,6 @@
 import React from 'react';
 import { UsagePanel } from '@/components/usage/UsagePanel';
-import { ItemList } from '@/components/ItemList';
+import { ItemList } from '@/components/ui/ItemList';
 
 export default function UsageSettingsScreen() {
     return (

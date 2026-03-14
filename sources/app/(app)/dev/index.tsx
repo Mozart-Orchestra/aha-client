@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import * as Application from 'expo-application';
@@ -11,7 +11,7 @@ import { useLocalSettingMutable, useSocketStatus } from '@/sync/storage';
 import { Modal } from '@/modal';
 import { sync } from '@/sync/sync';
 import { getServerUrl, setServerUrl, validateServerUrl } from '@/sync/serverConfig';
-import { Switch } from '@/components/Switch';
+import { Switch } from '@/components/ui/Switch';
 import { useUnistyles } from 'react-native-unistyles';
 
 export default function DevScreen() {

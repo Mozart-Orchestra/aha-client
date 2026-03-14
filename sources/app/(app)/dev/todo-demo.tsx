@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { TodoView } from "@/-zen/components/TodoView";
 import { Button, ScrollView, TextInput, View } from "react-native";
-import { randomUUID } from 'expo-crypto';
-import { ItemList } from '@/components/ItemList';
-import { ItemGroup } from '@/components/ItemGroup';
-import { layout } from '@/components/layout';
+import { randomUUID } from '@/utils/uuid';
+import { ItemList } from '@/components/ui/ItemList';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { layout } from '@/utils/layout';
 import { TodoList } from '@/-zen/components/TodoList';
 
 export default function TodoDemoScreen() {

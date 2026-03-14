@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { View, Text, TextInput, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
 import { storage } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { Typography } from '@/constants/Typography';

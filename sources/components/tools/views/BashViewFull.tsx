@@ -4,7 +4,7 @@ import { ToolCall } from '@/sync/typesMessage';
 import { Metadata } from '@/sync/storageTypes';
 import { knownTools } from '@/components/tools/knownTools';
 import { toolFullViewStyles } from '../ToolFullView';
-import { CommandView } from '@/components/CommandView';
+import { CommandView } from '@/components/session/CommandView';
 
 interface BashViewFullProps {
     tool: ToolCall;

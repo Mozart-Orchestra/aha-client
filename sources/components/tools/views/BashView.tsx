@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ToolCall } from '@/sync/typesMessage';
 import { ToolSectionView } from '../../tools/ToolSectionView';
-import { CommandView } from '@/components/CommandView';
+import { CommandView } from '@/components/session/CommandView';
 import { knownTools } from '@/components/tools/knownTools';
 import { Metadata } from '@/sync/storageTypes';
 

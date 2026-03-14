@@ -1,17 +1,17 @@
 import React from 'react';
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { ItemGroup } from '@/components/ItemGroup';
-import { Item } from '@/components/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { Item } from '@/components/ui/Item';
 import { Typography } from '@/constants/Typography';
 import { useAllMachines } from '@/sync/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import { callbacks } from '../index';
-import { ItemList } from '@/components/ItemList';
+import { ItemList } from '@/components/ui/ItemList';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {

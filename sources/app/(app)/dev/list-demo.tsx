@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
-import { Switch } from '@/components/Switch';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
+import { Switch } from '@/components/ui/Switch';
 
 export default function ListDemoScreen() {
     const [isEnabled, setIsEnabled] = React.useState(false);

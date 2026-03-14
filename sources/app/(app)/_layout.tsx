@@ -46,14 +46,6 @@ export default function RootLayout() {
                 }}
             />
             <Stack.Screen
-                name="inbox/index"
-                options={{
-                    headerShown: false,
-                    headerTitle: t('tabs.inbox'),
-                    headerBackTitle: t('common.home')
-                }}
-            />
-            <Stack.Screen
                 name="settings/index"
                 options={{
                     headerShown: true,
@@ -192,32 +184,6 @@ export default function RootLayout() {
                 }}
             />
             <Stack.Screen
-                name="friends/index"
-                options={({ navigation }) => ({
-                    headerShown: true,
-                    headerTitle: t('navigation.friends'),
-                    headerBackTitle: t('common.back'),
-                    headerRight: () => (
-                        <TouchableOpacity
-                            onPress={() => navigation.navigate('friends/search' as never)}
-                            style={{ paddingHorizontal: 16 }}
-                        >
-                            <Text style={{ color: theme.colors.button.primary.tint, fontSize: 16 }}>
-                                {t('friends.addFriend')}
-                            </Text>
-                        </TouchableOpacity>
-                    ),
-                })}
-            />
-            <Stack.Screen
-                name="friends/search"
-                options={{
-                    headerShown: true,
-                    headerTitle: t('friends.addFriend'),
-                    headerBackTitle: t('common.back'),
-                }}
-            />
-            <Stack.Screen
                 name="user/[id]"
                 options={{
                     headerShown: true,
@@ -339,6 +305,12 @@ export default function RootLayout() {
                     presentation: 'modal',
                     headerTitle: 'Task Details',
                     headerBackTitle: t('common.back'),
+                }}
+            />
+            <Stack.Screen
+                name="agents/index"
+                options={{
+                    headerShown: false,
                 }}
             />
             <Stack.Screen

@@ -5,12 +5,12 @@ import { View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-nati
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
-import { RoundButton } from '@/components/RoundButton';
+import { RoundButton } from '@/components/ui/RoundButton';
 import { Typography } from '@/constants/Typography';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { generateAuthKeyPair, authQRStart } from '@/auth/authQRStart';
 import { authQRWait } from '@/auth/authQRWait';
-import { layout } from '@/components/layout';
+import { layout } from '@/utils/layout';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';

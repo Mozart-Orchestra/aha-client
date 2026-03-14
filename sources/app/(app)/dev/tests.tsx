@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { View, ScrollView, Text, ActivityIndicator } from 'react-native';
-import { Item } from '@/components/Item';
-import { ItemGroup } from '@/components/ItemGroup';
-import { ItemList } from '@/components/ItemList';
+import { Item } from '@/components/ui/Item';
+import { ItemGroup } from '@/components/ui/ItemGroup';
+import { ItemList } from '@/components/ui/ItemList';
 import { testRunner, TestSuite, TestResult } from '@/dev/testRunner';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/constants/Typography';

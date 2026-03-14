@@ -1,5 +1,5 @@
 import { Header } from '@/components/navigation/Header';
-import { StatusDot } from '@/components/StatusDot';
+import { StatusDot } from '@/components/ui/StatusDot';
 import { Typography } from '@/constants/Typography';
 import { useSocketStatus } from '@/sync/storage';
 import { t } from '@/text';
