@@ -4,12 +4,17 @@ import * as z from 'zod';
 // Schema
 //
 
+const ThemePreferenceSchema = z.preprocess(
+    (value) => value === 'adaptive' ? 'light' : value,
+    z.enum(['light', 'dark'])
+);
+
 export const LocalSettingsSchema = z.object({
     // Developer settings (device-specific)
     debugMode: z.boolean().describe('Enable debug logging'),
     devModeEnabled: z.boolean().describe('Enable developer menu in settings'),
     commandPaletteEnabled: z.boolean().describe('Enable CMD+K command palette (web only)'),
-    themePreference: z.enum(['light', 'dark', 'adaptive']).describe('Theme preference: light, dark, or adaptive (follows system)'),
+    themePreference: ThemePreferenceSchema.describe('Theme preference: light or dark'),
     markdownCopyV2: z.boolean().describe('Replace native paragraph selection with long-press modal for full markdown copy'),
     // CLI version acknowledgments - keyed by machineId
     acknowledgedCliVersions: z.record(z.string(), z.string()).describe('Acknowledged CLI versions per machine'),
@@ -32,7 +37,7 @@ export const localSettingsDefaults: LocalSettings = {
     debugMode: false,
     devModeEnabled: false,
     commandPaletteEnabled: false,
-    themePreference: 'adaptive',
+    themePreference: 'light',
     markdownCopyV2: false,
     acknowledgedCliVersions: {},
 };

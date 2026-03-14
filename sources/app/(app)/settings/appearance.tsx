@@ -7,7 +7,6 @@ import { useRouter } from 'expo-router';
 import * as Localization from 'expo-localization';
 import { useUnistyles, UnistylesRuntime } from 'react-native-unistyles';
 import { Switch } from '@/components/ui/Switch';
-import { Appearance } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import { darkTheme, lightTheme } from '@/theme';
 import { t, getLanguageNativeName, SUPPORTED_LANGUAGES } from '@/text';
@@ -58,33 +57,20 @@ export default function AppearanceSettingsScreen() {
             <ItemGroup title={t('settingsAppearance.theme')} footer={t('settingsAppearance.themeDescription')}>
                 <Item
                     title={t('settings.appearance')}
-                    subtitle={themePreference === 'adaptive' ? t('settingsAppearance.themeDescriptions.adaptive') : themePreference === 'light' ? t('settingsAppearance.themeDescriptions.light') : t('settingsAppearance.themeDescriptions.dark')}
+                    subtitle={themePreference === 'light' ? t('settingsAppearance.themeDescriptions.light') : t('settingsAppearance.themeDescriptions.dark')}
                     icon={<Ionicons name="contrast-outline" size={29} color={theme.colors.status.connecting} />}
-                    detail={themePreference === 'adaptive' ? t('settingsAppearance.themeOptions.adaptive') : themePreference === 'light' ? t('settingsAppearance.themeOptions.light') : t('settingsAppearance.themeOptions.dark')}
+                    detail={themePreference === 'light' ? t('settingsAppearance.themeOptions.light') : t('settingsAppearance.themeOptions.dark')}
                     onPress={() => {
-                        const currentIndex = themePreference === 'adaptive' ? 0 : themePreference === 'light' ? 1 : 2;
-                        const nextIndex = (currentIndex + 1) % 3;
-                        const nextTheme = nextIndex === 0 ? 'adaptive' : nextIndex === 1 ? 'light' : 'dark';
-                        
-                        // Update the setting
+                        const nextTheme = themePreference === 'light' ? 'dark' : 'light';
+
                         setThemePreference(nextTheme);
-                        
-                        // Apply the theme change immediately
-                        if (nextTheme === 'adaptive') {
-                            // Enable adaptive themes and set to system theme
-                            UnistylesRuntime.setAdaptiveThemes(true);
-                            const systemTheme = Appearance.getColorScheme();
-                            const color = systemTheme === 'dark' ? darkTheme.colors.groupped.background : lightTheme.colors.groupped.background;
-                            UnistylesRuntime.setRootViewBackgroundColor(color);
-                            SystemUI.setBackgroundColorAsync(color);
-                        } else {
-                            // Disable adaptive themes and set explicit theme
-                            UnistylesRuntime.setAdaptiveThemes(false);
-                            UnistylesRuntime.setTheme(nextTheme);
-                            const color = nextTheme === 'dark' ? darkTheme.colors.groupped.background : lightTheme.colors.groupped.background;
-                            UnistylesRuntime.setRootViewBackgroundColor(color);
-                            SystemUI.setBackgroundColorAsync(color);
-                        }
+                        UnistylesRuntime.setAdaptiveThemes(false);
+                        UnistylesRuntime.setTheme(nextTheme);
+                        const color = nextTheme === 'dark'
+                            ? darkTheme.colors.groupped.background
+                            : lightTheme.colors.groupped.background;
+                        UnistylesRuntime.setRootViewBackgroundColor(color);
+                        SystemUI.setBackgroundColorAsync(color);
                     }}
                 />
             </ItemGroup>

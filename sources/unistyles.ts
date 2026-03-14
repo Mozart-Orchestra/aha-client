@@ -1,7 +1,6 @@
 import { StyleSheet, UnistylesRuntime } from 'react-native-unistyles';
 import { darkTheme, lightTheme } from './theme';
 import { loadThemePreference } from './sync/persistence';
-import { Appearance } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 
 //
@@ -25,26 +24,10 @@ const breakpoints = {
 // Load theme preference from storage
 const themePreference = loadThemePreference();
 
-// Determine initial theme and adaptive settings
-const getInitialTheme = (): 'light' | 'dark' => {
-    if (themePreference === 'adaptive') {
-        const systemTheme = Appearance.getColorScheme();
-        return systemTheme === 'dark' ? 'dark' : 'light';
-    }
-    return themePreference;
+const settings = {
+    initialTheme: themePreference,
+    CSSVars: true,
 };
-
-const settings = themePreference === 'adaptive'
-    ? {
-        // When adaptive, let Unistyles handle theme switching automatically
-        adaptiveThemes: true,
-        CSSVars: true, // Enable CSS variables for web
-    }
-    : {
-        // When fixed theme, set the initial theme explicitly
-        initialTheme: getInitialTheme(),
-        CSSVars: true, // Enable CSS variables for web
-    };
 
 //
 // Bootstrap
@@ -66,16 +49,11 @@ StyleSheet.configure({
 
 // Set initial root view background color based on theme
 const setRootBackgroundColor = () => {
-    if (themePreference === 'adaptive') {
-        const systemTheme = Appearance.getColorScheme();
-        const color = systemTheme === 'dark' ? appThemes.dark.colors.groupped.background : appThemes.light.colors.groupped.background;
-        UnistylesRuntime.setRootViewBackgroundColor(color);
-        SystemUI.setBackgroundColorAsync(color);
-    } else {
-        const color = themePreference === 'dark' ? appThemes.dark.colors.groupped.background : appThemes.light.colors.groupped.background;
-        UnistylesRuntime.setRootViewBackgroundColor(color);
-        SystemUI.setBackgroundColorAsync(color);
-    }
+    const color = themePreference === 'dark'
+        ? appThemes.dark.colors.groupped.background
+        : appThemes.light.colors.groupped.background;
+    UnistylesRuntime.setRootViewBackgroundColor(color);
+    SystemUI.setBackgroundColorAsync(color);
 };
 
 // Set initial background color
