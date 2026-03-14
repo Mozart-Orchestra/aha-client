@@ -101,9 +101,9 @@ export interface DecryptedMessage {
 export const MachineMetadataSchema = z.object({
     host: z.string(),
     platform: z.string(),
-    happyCliVersion: z.string(),
-    happyHomeDir: z.string(), // Directory for Happy auth, settings, logs (usually .happy/ or .happy-dev/)
-    homeDir: z.string(), // User's home directory (matches CLI field name)
+    happyCliVersion: z.string().optional(),
+    happyHomeDir: z.string().optional(), // Directory for Happy auth, settings, logs (usually .happy/ or .happy-dev/)
+    homeDir: z.string().optional(), // User's home directory (matches CLI field name)
     // Optional fields that may be added in future versions
     username: z.string().optional(),
     arch: z.string().optional(),

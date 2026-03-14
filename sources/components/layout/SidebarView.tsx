@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AhaLogo } from '@/components/ui/AhaLogo';
@@ -27,7 +27,6 @@ interface SidebarViewProps {
 
 export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarViewProps) => {
     const desktopShell = React.useContext(DesktopShellContext);
-    const isFocused = useIsFocused();
     const variant: ThreeColumnShellVariant = 'default';
     const safeArea = useSafeAreaInsets();
     const router = useRouter();
@@ -106,13 +105,16 @@ export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarVie
     // When inside the persistent desktop shell context, inject mainPanel into
     // the navigator-level SidebarView and render nothing ourselves. This keeps
     // the rail and secondary panel stable across route changes.
-    // Gate on isFocused so only the currently active route injects — this
+    // useFocusEffect ensures only the currently focused route injects — this
     // prevents stale content when navigating between routes that are all
-    // kept mounted by the Drawer (lazy: false).
-    React.useLayoutEffect(() => {
-        if (!desktopShell || !isFocused) return;
-        desktopShell.setMainPanel(mainPanel ?? null);
-    }, [desktopShell, isFocused, mainPanel]);
+    // kept mounted by the Drawer (lazy: false). It also re-injects whenever
+    // mainPanel or desktopShell changes while the screen is focused.
+    useFocusEffect(
+        React.useCallback(() => {
+            if (!desktopShell) return;
+            desktopShell.setMainPanel(mainPanel ?? null);
+        }, [desktopShell, mainPanel]),
+    );
 
     if (desktopShell) {
         return null;

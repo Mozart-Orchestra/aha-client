@@ -2076,6 +2076,15 @@ class Sync {
         env?: Record<string, string>;
     }): Promise<string | null> {
         try {
+            if (!this.encryption.getMachineEncryption(machineId)) {
+                log.log(`Machine encryption missing for ${machineId}; refreshing machines before spawn`);
+                await this.machinesSync.invalidateAndAwait();
+            }
+
+            if (!this.encryption.getMachineEncryption(machineId)) {
+                throw new Error(`Machine encryption not found for ${machineId} after refresh`);
+            }
+
             const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-aha-session', {
                 ...params,
                 machineId,
@@ -3062,6 +3071,22 @@ export async function syncRestore(credentials: AuthCredentials) {
     }
     isInitialized = true;
     await syncInit(credentials, true);
+}
+
+/**
+ * Force reinitialize sync with new credentials.
+ * Used when credentials change (e.g. terminal/connect re-auth).
+ * Tears down existing socket and creates fresh encryption + connection.
+ */
+export async function syncReinitialize(credentials: AuthCredentials) {
+    console.log('🔄 Sync: Reinitializing with new credentials');
+    try {
+        apiSocket.disconnect();
+    } catch (e) {
+        console.warn('Failed to disconnect socket during reinit:', e);
+    }
+    isInitialized = true;
+    await syncInit(credentials, false);
 }
 
 async function syncInit(credentials: AuthCredentials, restore: boolean) {

@@ -66,6 +66,7 @@ interface FloatingIslandSidebarProps {
     statusItems?: FloatingIslandStatusItem[];
     conversationItems?: FloatingIslandConversationItem[];
     conversationSectionLabel?: string;
+    conversationHeaderAction?: () => void;
     agentEmptyText?: string;
     conversationEmptyText?: string;
 }
@@ -199,6 +200,14 @@ const styles = StyleSheet.create(() => ({
         paddingTop: 10,
         paddingBottom: 6,
         gap: 4,
+    },
+    sectionLabelRow: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        justifyContent: 'space-between' as const,
+    },
+    sectionAddButton: {
+        padding: 2,
     },
     sectionScroll: {
         flex: 1,
@@ -455,6 +464,7 @@ export function FloatingIslandSidebar({
     statusItems = [],
     conversationItems = [],
     conversationSectionLabel = 'Conversations',
+    conversationHeaderAction,
     agentEmptyText = 'No active agents',
     conversationEmptyText = 'No conversations yet',
 }: FloatingIslandSidebarProps) {
@@ -522,7 +532,14 @@ export function FloatingIslandSidebar({
 
             {/* Teams / Conversations — top section, takes all available space with scroll */}
             <View style={styles.sectionWrapper}>
-                <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{conversationSectionLabel}</Text>
+                <View style={styles.sectionLabelRow}>
+                    <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{conversationSectionLabel}</Text>
+                    {conversationHeaderAction ? (
+                        <Pressable onPress={conversationHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
+                            <Ionicons name="add" size={16} color="#8C9CAA" />
+                        </Pressable>
+                    ) : null}
+                </View>
                 <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={false}>
                     {conversationItems.length > 0 ? (
                         conversationItems.map((item) => (

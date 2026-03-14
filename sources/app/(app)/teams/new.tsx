@@ -318,6 +318,8 @@ export default function NewTeamScreen() {
 
     const [title, setTitle] = React.useState('');
     const [target, setTarget] = React.useState('');
+    const [creationMode, setCreationMode] = React.useState<'manual' | 'prompt'>('prompt');
+    const [taskPrompt, setTaskPrompt] = React.useState('');
     const [roleCounts, setRoleCounts] = React.useState<Record<string, number>>(() => ({ ...INITIAL_ROLE_COUNTS }));
     // Track agent type per role (defaults to global agentType)
     const [roleAgentTypes, setRoleAgentTypes] = React.useState<Record<string, 'claude' | 'codex'>>({});
@@ -508,12 +510,21 @@ export default function NewTeamScreen() {
             const resolvedCwd = cwd.trim();
             const resolvedAgentBinary = agentBinary.trim();
             const machineIdForSpawn = selectedMachineId;
-            const hasRequestedSpawns = Object.values(roleCounts).some(c => c > 0);
+            const isPromptMode = creationMode === 'prompt';
+            const hasRequestedSpawns = isPromptMode ? (taskPrompt.trim().length > 0) : Object.values(roleCounts).some(c => c > 0);
             let roomIdForNavigation: string | null = null;
 
             let agentType: 'claude' | 'codex' = 'claude';
             if (resolvedAgentBinary && resolvedAgentBinary.toLowerCase().includes('codex')) {
                 agentType = 'codex';
+            }
+
+            if (isPromptMode && !taskPrompt.trim()) {
+                await Modal.alert(
+                    t('common.error'),
+                    'Please enter a task prompt for the team.'
+                );
+                return;
             }
 
             // 1. Prepare manually selected members
@@ -660,45 +671,85 @@ export default function NewTeamScreen() {
                 if (hasRequestedSpawns) {
                     const targetMachine = machineIdForSpawn ? storage.getState().machines[machineIdForSpawn] : null;
 
-                    for (const [roleId, count] of Object.entries(roleCounts)) {
-                        for (let i = 0; i < count; i++) {
-                            try {
-                                const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
-                                const tag = `team-${Date.now()}-${roleId}-${i}`;
+                    if (isPromptMode) {
+                        // Prompt mode: spawn a single org-manager seed agent with the task prompt
+                        const roleId = 'org-manager';
+                        const agentTitle = 'Org-manager 1';
+                        const tag = `team-${Date.now()}-${roleId}-0`;
 
-                                // Spawn WITH teamId, role, name, and path
-                                if (targetMachine?.active && resolvedCwd) {
-                                    try {
-                                        const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
-                                            directory: resolvedCwd,
-                                            agent: getRoleAgentType(roleId),
-                                            sessionTag: tag,
-                                            teamId: artifactId,
-                                            role: roleId,
-                                            sessionName: agentTitle,
-                                            sessionPath: resolvedCwd,
-                                            env: {
-                                                HAPPY_AGENT_LANGUAGE: agentLanguage
-                                            }
-                                        });
-                                        if (spawnedSessionId) {
-                                            spawnedMembers.push({
-                                                sessionId: spawnedSessionId,
-                                                roleId,
-                                                displayName: agentTitle,
-                                                tag
-                                            });
-                                        } else {
-                                            console.warn(`Spawned agent ${roleId} but no sessionId was returned`);
-                                        }
-                                    } catch (spawnError) {
-                                        console.error('Failed to auto-spawn:', spawnError);
+                        if (targetMachine?.active && resolvedCwd) {
+                            try {
+                                const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
+                                    directory: resolvedCwd,
+                                    agent: getRoleAgentType(roleId),
+                                    sessionTag: tag,
+                                    teamId: artifactId,
+                                    role: roleId,
+                                    sessionName: agentTitle,
+                                    sessionPath: resolvedCwd,
+                                    env: {
+                                        HAPPY_AGENT_LANGUAGE: agentLanguage,
+                                        AHA_TASK_PROMPT: taskPrompt.trim()
                                     }
-                                } else if (!targetMachine?.active) {
-                                    console.warn('Selected machine is offline; skipping auto-spawn.');
+                                });
+                                if (spawnedSessionId) {
+                                    spawnedMembers.push({
+                                        sessionId: spawnedSessionId,
+                                        roleId,
+                                        displayName: agentTitle,
+                                        tag
+                                    });
+                                } else {
+                                    console.warn(`Spawned org-manager but no sessionId was returned`);
                                 }
-                            } catch (e) {
-                                console.error(`Failed to spawn agent ${roleId}:`, e);
+                            } catch (spawnError) {
+                                console.error('Failed to auto-spawn org-manager:', spawnError);
+                            }
+                        } else if (!targetMachine?.active) {
+                            console.warn('Selected machine is offline; skipping auto-spawn.');
+                        }
+                    } else {
+                        // Manual mode: spawn agents by role counts
+                        for (const [roleId, count] of Object.entries(roleCounts)) {
+                            for (let i = 0; i < count; i++) {
+                                try {
+                                    const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
+                                    const tag = `team-${Date.now()}-${roleId}-${i}`;
+
+                                    // Spawn WITH teamId, role, name, and path
+                                    if (targetMachine?.active && resolvedCwd) {
+                                        try {
+                                            const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
+                                                directory: resolvedCwd,
+                                                agent: getRoleAgentType(roleId),
+                                                sessionTag: tag,
+                                                teamId: artifactId,
+                                                role: roleId,
+                                                sessionName: agentTitle,
+                                                sessionPath: resolvedCwd,
+                                                env: {
+                                                    HAPPY_AGENT_LANGUAGE: agentLanguage
+                                                }
+                                            });
+                                            if (spawnedSessionId) {
+                                                spawnedMembers.push({
+                                                    sessionId: spawnedSessionId,
+                                                    roleId,
+                                                    displayName: agentTitle,
+                                                    tag
+                                                });
+                                            } else {
+                                                console.warn(`Spawned agent ${roleId} but no sessionId was returned`);
+                                            }
+                                        } catch (spawnError) {
+                                            console.error('Failed to auto-spawn:', spawnError);
+                                        }
+                                    } else if (!targetMachine?.active) {
+                                        console.warn('Selected machine is offline; skipping auto-spawn.');
+                                    }
+                                } catch (e) {
+                                    console.error(`Failed to spawn agent ${roleId}:`, e);
+                                }
                             }
                         }
                     }
@@ -814,7 +865,7 @@ export default function NewTeamScreen() {
         } finally {
             setIsSaving(false);
         }
-    }, [title, target, roleCounts, selectedSessions, isSaving, router, desktopBridge, sessionRoles, sessionLookup, cwd, agentBinary, selectedMachineId, agentType, recentMachinePaths, getRoleAgentType, agentLanguage]);
+    }, [title, target, roleCounts, selectedSessions, isSaving, router, desktopBridge, sessionRoles, sessionLookup, cwd, agentBinary, selectedMachineId, agentType, recentMachinePaths, getRoleAgentType, agentLanguage, creationMode, taskPrompt]);
 
     const HeaderRight = React.useCallback(() => (
         <Pressable
@@ -934,6 +985,76 @@ export default function NewTeamScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Creation Mode</Text>
+                        <View style={{ flexDirection: 'row', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.divider }}>
+                            <Pressable
+                                onPress={() => setCreationMode('prompt')}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 12,
+                                    alignItems: 'center',
+                                    backgroundColor: creationMode === 'prompt' ? theme.colors.button.primary.background : theme.colors.surface,
+                                }}
+                            >
+                                <Text style={{
+                                    fontSize: 14,
+                                    fontWeight: '600',
+                                    color: creationMode === 'prompt' ? '#FFF' : theme.colors.text,
+                                }}>Prompt</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => setCreationMode('manual')}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 12,
+                                    alignItems: 'center',
+                                    backgroundColor: creationMode === 'manual' ? theme.colors.button.primary.background : theme.colors.surface,
+                                    borderLeftWidth: 1,
+                                    borderLeftColor: theme.colors.divider,
+                                }}
+                            >
+                                <Text style={{
+                                    fontSize: 14,
+                                    fontWeight: '600',
+                                    color: creationMode === 'manual' ? '#FFF' : theme.colors.text,
+                                }}>Manual</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+
+                    {creationMode === 'prompt' && (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Task Prompt</Text>
+                            <TextInput
+                                style={[
+                                    styles.input,
+                                    {
+                                        minHeight: 120,
+                                        textAlignVertical: 'top',
+                                        paddingTop: 14,
+                                    },
+                                    Platform.OS === 'web' && {
+                                        outlineStyle: 'none',
+                                        outline: 'none',
+                                        outlineWidth: 0,
+                                        outlineColor: 'transparent'
+                                    } as any
+                                ]}
+                                value={taskPrompt}
+                                onChangeText={setTaskPrompt}
+                                placeholder="描述你的任务，AI 将自动组建团队..."
+                                placeholderTextColor={theme.colors.input.placeholder}
+                                multiline
+                                editable={!isSaving}
+                            />
+                            <Text style={styles.helperText}>
+                                An org-manager agent will be spawned to analyze your task and assemble the right team automatically.
+                            </Text>
+                        </View>
+                    )}
+
+                    {creationMode === 'manual' && (
+                    <View style={styles.inputGroup}>
                         <Text style={styles.label}>Team Composition (Auto-Spawn)</Text>
                         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: theme.colors.divider }}>
                             {LOCALIZED_TEAM_ROLES.map((role, index) => {
@@ -1010,6 +1131,7 @@ export default function NewTeamScreen() {
                         </View>
 
                     </View>
+                    )}
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Automation Settings</Text>

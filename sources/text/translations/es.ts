@@ -83,6 +83,9 @@ export const es: TranslationStructure = {
         enterSecretKey: 'Ingresa tu clave secreta',
         invalidSecretKey: 'Clave secreta inválida. Verifica e intenta de nuevo.',
         enterUrlManually: 'Ingresar URL manualmente',
+        myKey: 'Mi clave secreta',
+        myKeyDescription: 'Restaurar esta clave en cualquier dispositivo conecta todas las máquinas vinculadas — todas estarán activas y podrán comunicarse.',
+        restoreDescription: 'Ingresa tu clave secreta para restaurar este dispositivo. Todas las máquinas vinculadas anteriormente se reconectarán automáticamente.',
     },
 
     settings: {

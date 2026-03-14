@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { TokenStorage, AuthCredentials } from '@/auth/tokenStorage';
-import { syncCreate } from '@/sync/sync';
+import { syncCreate, syncReinitialize } from '@/sync/sync';
 import * as Updates from 'expo-updates';
 import { clearPersistence } from '@/sync/persistence';
 import { Platform } from 'react-native';
@@ -28,7 +28,12 @@ export function AuthProvider({ children, initialCredentials }: { children: React
         const newCredentials: AuthCredentials = { token, secret };
         const success = await TokenStorage.setCredentials(newCredentials);
         if (success) {
-            await syncCreate(newCredentials);
+            if (isAuthenticated) {
+                // Re-auth: must reinitialize sync with new encryption keys
+                await syncReinitialize(newCredentials);
+            } else {
+                await syncCreate(newCredentials);
+            }
             setCredentials(newCredentials);
             setIsAuthenticated(true);
         } else {

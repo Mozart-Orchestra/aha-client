@@ -178,6 +178,10 @@ export interface KanbanTeamMember {
     roleId: string;
     displayName?: string;
     focusAreas?: string[];
+    specId?: string;
+    parentSessionId?: string;
+    executionPlane?: string;
+    runtimeType?: string;
 }
 
 export interface KanbanTeamRole {

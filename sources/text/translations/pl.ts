@@ -94,6 +94,9 @@ export const pl: TranslationStructure = {
         enterSecretKey: 'Proszę wprowadzić klucz tajny',
         invalidSecretKey: 'Nieprawidłowy klucz tajny. Sprawdź i spróbuj ponownie.',
         enterUrlManually: 'Wprowadź URL ręcznie',
+        myKey: 'Mój klucz tajny',
+        myKeyDescription: 'Przywrócenie tego klucza na dowolnym urządzeniu łączy wszystkie powiązane maszyny — wszystkie będą aktywne i będą mogły się komunikować.',
+        restoreDescription: 'Wprowadź swój klucz tajny, aby przywrócić to urządzenie. Wszystkie poprzednio powiązane maszyny połączą się automatycznie.',
     },
 
     settings: {

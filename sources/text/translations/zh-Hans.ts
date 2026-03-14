@@ -85,6 +85,9 @@ export const zhHans: TranslationStructure = {
         enterSecretKey: '请输入密钥',
         invalidSecretKey: '无效的密钥，请检查后重试。',
         enterUrlManually: '手动输入 URL',
+        myKey: '我的密钥',
+        myKeyDescription: '在任意设备上恢复此密钥，即可连接所有绑定的机器——它们将全部激活并可互相通信。',
+        restoreDescription: '输入您的密钥以恢复此设备。之前链接到此密钥的所有机器将自动重新连接。',
     },
 
     settings: {

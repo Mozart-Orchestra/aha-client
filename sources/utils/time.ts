@@ -9,6 +9,14 @@ export function exponentialBackoffDelay(currentFailureCount: number, minDelay: n
 
 export type BackoffFunc = <T>(callback: () => Promise<T>) => Promise<T>;
 
+/** Error that should not be retried by backoff */
+export class NonRetryableError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'NonRetryableError';
+    }
+}
+
 export function createBackoff(
     opts?: {
         onError?: (e: any, failuresCount: number) => void,
@@ -25,6 +33,9 @@ export function createBackoff(
             try {
                 return await callback();
             } catch (e) {
+                if (e instanceof NonRetryableError) {
+                    throw e;
+                }
                 if (currentFailureCount < maxFailureCount) {
                     currentFailureCount++;
                 }

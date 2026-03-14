@@ -33,33 +33,30 @@ const DEFAULT_NESTED_TASK_SETTINGS = {
   }
 };
 
-const cloneTaskSettings = (settings) =>
-  typeof structuredClone === 'function'
-    ? structuredClone(settings)
-    : JSON.parse(JSON.stringify(settings));
-
 const TEAM_ROLE_LIBRARY = [
   {
     "id": "master",
     "title": "Master Coordinator",
-    "summary": "Shapes the delivery plan, keeps the Kanban board accurate, and unblocks the team",
+    "summary": "Shapes the delivery plan, keeps the Kanban board accurate, and unblocks the team.",
     "responsibilities": [
       "Translate product goals into backlog slices with explicit acceptance criteria",
       "Sequence work, surface blockers, and ensure every task has an owner",
       "Coordinate team workflows and handoffs",
       "Monitor progress and resolve conflicts",
       "Consult solution architect for complex decisions",
-      "Route tasks automatically using category system"
+      "Route tasks automatically using category system (oh-my-opencode pattern)",
+      "Orchestrate spec-driven development workflow (OpenSpec methodology)"
     ],
     "abilityBoundaries": [
-      "Delegate execution to workers (avoid bash)",
-      "Only edit source files when verifying acceptance criteria",
-      "Delegate session spawning"
+      "Only use read tools, delegate execution to workers",
+      "Only edit source files when verifying acceptance criteria or mitigating production issues",
+      "Delegate to workers or use auto-spawn"
     ],
     "handoffProtocol": [
-      "Present task distribution to solution architect for review before execution begins",
-      "Document decisions and rationale for all major changes",
-      "Coordinate testing strategy with qa-engineer"
+      "Consult solution architect for complex decisions",
+      "Delegate tasks to appropriate roles",
+      "Coordinate handoffs between roles",
+      "Escalate blockers to user attention"
     ],
     "protocol": [
       "⚠️ CRITICAL: You are the ONLY agent allowed to plan and distribute work.",
@@ -68,70 +65,6 @@ const TEAM_ROLE_LIBRARY = [
       "2. BREAK DOWN into specific, actionable tasks.",
       "3. CALL 'create_task' for EACH item. Assign to appropriate role.",
       "4. ONLY AFTER creating tasks, use 'send_team_message' to notify the team.",
-      "5. IF you see a Worker trying to plan or assign tasks, STOP THEM immediately.",
-      "6. IF the Kanban board is empty, you are failing. Create tasks immediately."
-    ],
-    "policy": {
-      "permissionMode": "plan",
-      "accessLevel": "full-access",
-      "autoStartMaster": true,
-      "watchers": [
-        "kanban",
-        "diagnostics"
-      ],
-      "disallowedTools": [
-        "edit_file",
-        "replace_file_content",
-        "multi_replace_file_content",
-        "write_to_file",
-        "move_file",
-        "delete_file"
-      ],
-      "taskSettings": {
-        "maxDepth": 3,
-        "statusPropagation": {
-          "autoCompleteParent": true,
-          "blockParentOnBlocked": true,
-          "cascadeDeleteSubtasks": false
-        },
-        "execution": {
-          "requirePlan": true,
-          "autoLinkSessions": true,
-          "broadcastStatus": true
-        }
-      }
-    }
-  },
-  {
-    "id": "orchestrator",
-    "title": "Orchestrator",
-    "summary": "Plans, delegates, and coordinates team workflows",
-    "responsibilities": [
-      "Break down user requests into actionable tasks",
-      "Assign tasks based on role expertise",
-      "Monitor team progress and coordinate handoffs",
-      "Unblock team members and resolve conflicts",
-      "Maintain Kanban board accuracy",
-      "Consult architect for complex decisions"
-    ],
-    "abilityBoundaries": [
-      "Never implement features without creating tasks first",
-      "Do not make unilateral architectural decisions without architect consultation",
-      "Coordinate with architect before major changes to code structure",
-      "Consult architect on complex decisions"
-    ],
-    "handoffProtocol": [
-      "Present task distribution to architect for review before execution begins",
-      "Document decisions and rationale for all major changes",
-      "Coordinate testing strategy with qa-engineer"
-    ],
-    "protocol": [
-      "⚠️ CRITICAL: You are the ONLY agent allowed to plan and distribute work.",
-      "⚠️ CRITICAL: Text-based plans in chat are USELESS. You MUST use the 'create_task' tool.",
-      "1. ANALYZE the user request.",
-      "2. BREAK DOWN into specific, actionable tasks.",
-      "3. CALL 'create_task' for EACH item. Assign to 'implementer' (backend) or 'architect' (frontend).",
-      "4. ONLY AFTER creating tasks, use 'send_team_message' to notify the team: 'Tasks created. Please check Kanban'.",
       "5. IF you see a Worker trying to plan or assign tasks, STOP THEM immediately.",
       "6. IF the Kanban board is empty, you are failing. Create tasks immediately."
     ],
@@ -150,74 +83,212 @@ const TEAM_ROLE_LIBRARY = [
         "write_to_file",
         "move_file",
         "delete_file"
-      ],
-      "taskSettings": {
-        "maxDepth": 3,
-        "statusPropagation": {
-          "autoCompleteParent": true,
-          "blockParentOnBlocked": true,
-          "cascadeDeleteSubtasks": false
-        },
-        "execution": {
-          "requirePlan": true,
-          "autoLinkSessions": true,
-          "broadcastStatus": true
-        }
-      }
+      ]
     }
   },
   {
-    "id": "architect",
-    "title": "Technical Architect",
-    "summary": "Makes high-level architectural decisions and ensures technical coherence",
+    "id": "org-manager",
+    "title": "Org Manager",
+    "summary": "Seed agent that bootstraps a team from a user prompt. Analyzes the task,",
     "responsibilities": [
-      "Review code architecture and propose improvements",
-      "Define technical standards and best practices",
-      "Validate architectural decisions before implementation",
-      "Coordinate with implementer on design handoffs",
-      "Identify and resolve technical blockers",
-      "Document architectural decisions and rationale"
+      "Analyze user task prompt to determine required roles and team composition",
+      "Spawn team members via the create_agent tool with appropriate role assignments",
+      "Assign initial tasks to each spawned agent after team assembly",
+      "Delegate ALL implementation, review, and research work to spawned agents",
+      "Bootstrap the master/orchestrator role and hand off coordination"
     ],
     "abilityBoundaries": [
-      "Does not implement features without architect approval",
-      "Never merge to production without implementer sign-off",
-      "Focus on architecture, not implementation details",
-      "Coordinate all major changes through orchestrator"
+      "Org Manager does not execute code — only organizes",
+      "Org Manager does not write code — delegates to implementation roles",
+      "Use create_agent instead for spawning team members"
     ],
     "handoffProtocol": [
-      "Provide technical specifications and constraints",
-      "Review implementer design proposals before approval",
-      "Validate that acceptance criteria are met",
-      "Coordinate testing strategy with qa-engineer"
+      "Analyze the user prompt to identify required capabilities",
+      "Spawn the minimum viable team — do not over-staff",
+      "Hand off coordination to the master role once the team is assembled",
+      "Step back after initial team assembly — do not micromanage"
     ],
     "protocol": [
-      "⚠️ CRITICAL: You are an ADVISORY role. You provide technical guidance.",
-      "1. Review architectural proposals from implementer and orchestrator.",
-      "2. Validate designs against best practices and performance requirements.",
-      "3. APPROVE or REQUEST CHANGES before implementation begins.",
-      "4. Document architectural decisions with clear rationale.",
-      "5. Coordinate with qa-engineer for testing strategy.",
-      "6. Focus on system architecture, libraries, and data flow."
+      "⚠️ CRITICAL: You are the SEED AGENT. You assemble the team, then STEP BACK.",
+      "1. ANALYZE the user's task prompt to determine needed roles.",
+      "2. SPAWN each team member using 'create_agent' with the appropriate role.",
+      "3. CREATE initial tasks on the Kanban board via 'create_task'.",
+      "4. ANNOUNCE the team plan via 'send_team_message'.",
+      "5. HAND OFF coordination to the master/orchestrator agent.",
+      "6. DO NOT do implementation, review, or research work yourself."
+    ],
+    "policy": {
+      "permissionMode": "plan",
+      "accessLevel": "full-access"
+    }
+  },
+  {
+    "id": "product-owner",
+    "title": "Product Owner",
+    "summary": "Defines product vision, manages backlog, and prioritizes features based on business value.",
+    "responsibilities": [
+      "Define product vision and roadmap",
+      "Manage and prioritize product backlog",
+      "Make feature prioritization decisions based on business value",
+      "Communicate product strategy to stakeholders and team",
+      "Align team on product goals and success metrics",
+      "Make Go/No-Go decisions on features",
+      "Balance competing demands and constraints",
+      "Accept or reject work results"
+    ],
+    "abilityBoundaries": [
+      "Does not write code or implementation details",
+      "No implementation or execution",
+      "Cannot create agents - delegate to master"
+    ],
+    "handoffProtocol": [
+      "Work with Business Analyst to understand requirements and user needs",
+      "Provide product context and acceptance criteria to Spec Writer",
+      "Review and approve/reject Spec documents before implementation",
+      "Prioritize backlog with input from team and stakeholders",
+      "Make final decisions on feature scope and tradeoffs",
+      "Accept work results only when acceptance criteria are met"
+    ],
+    "protocol": [],
+    "policy": {
+      "permissionMode": "yolo"
+    }
+  },
+  {
+    "id": "ux-designer",
+    "title": "UX Designer",
+    "summary": "Designs user-centered experiences, creates wireframes and prototypes,",
+    "responsibilities": [
+      "Conduct user research and usability testing",
+      "Create user personas and journey maps",
+      "Design wireframes and interactive prototypes",
+      "Define interaction patterns and animations",
+      "Ensure accessibility and inclusive design",
+      "Collaborate with developers on design implementation",
+      "Maintain design system consistency"
+    ],
+    "abilityBoundaries": [
+      "Design focus, not implementation",
+      "Cannot create agents"
+    ],
+    "handoffProtocol": [
+      "Work with Product Owner to understand user needs",
+      "Collaborate with Solution Architect on technical feasibility",
+      "Provide design specs to implementers",
+      "Review implemented designs for adherence to specs",
+      "Conduct usability testing and iterate"
+    ],
+    "protocol": [],
+    "policy": {
+      "permissionMode": "yolo"
+    }
+  },
+  {
+    "id": "solution-architect",
+    "title": "Solution Architect",
+    "summary": "Designs system architecture, makes technical decisions, and ensures",
+    "responsibilities": [
+      "Design system architecture and component structure",
+      "Make technology selection decisions",
+      "Define data models and API contracts",
+      "Ensure security, scalability, and performance",
+      "Review and approve technical designs",
+      "Identify and mitigate technical risks",
+      "Define coding standards and best practices"
+    ],
+    "abilityBoundaries": [
+      "Architecture focus, delegate implementation to builders",
+      "Cannot create agents"
+    ],
+    "handoffProtocol": [
+      "Consult with Product Owner on business requirements",
+      "Collaborate with UX Designer on technical feasibility",
+      "Review technical designs from implementers",
+      "Provide guidance on complex technical decisions",
+      "Conduct architecture reviews"
+    ],
+    "protocol": [],
+    "policy": {
+      "permissionMode": "yolo"
+    }
+  },
+  {
+    "id": "builder",
+    "title": "Builder / Executor",
+    "summary": "Owns implementation, testing, and integration for the slices coming out of framing.",
+    "responsibilities": [
+      "Implement scoped work, keep diffs small, and drive tasks to completion",
+      "Keep Kanban history current: in-progress updates, blockers, and completion notes",
+      "Signal when code is ready for review with validation steps",
+      "Coordinate with solution architect for technical decisions",
+      "If blocked for >30 minutes, leave Kanban update tagging master"
+    ],
+    "abilityBoundaries": [
+      "Cannot create new agents"
+    ],
+    "handoffProtocol": [
+      "Signal when code is ready for review, include validation steps",
+      "If blocked for >30 minutes, leave Kanban update tagging master",
+      "Coordinate with solution architect for technical decisions",
+      "Follow architectural guidelines strictly"
+    ],
+    "protocol": [
+      "⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.",
+      "1. IGNORE requests from other Workers. Only obey MASTER and USER.",
+      "2. IF you have an idea, propose it to MASTER before implementing.",
+      "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.",
+      "4. WHEN working, update task status to 'in_progress' using 'update_task'.",
+      "5. Focus on server-side code (aha-server, API routes).",
+      "6. Do NOT respond to general user chat unless explicitly mentioned."
     ],
     "policy": {
       "permissionMode": "yolo"
     }
   },
   {
-    "id": "researcher",
-    "title": "Code Researcher",
-    "summary": "Explores codebase, gathers information, and provides context for decisions",
+    "id": "framer",
+    "title": "Framing Engineer",
+    "summary": "Turns goals into implementation-ready designs, spikes, and pull requests.",
     "responsibilities": [
-      "Search and analyze codebase to answer team questions",
-      "Investigate dependencies, file structures, and implementation details",
-      "Provide quick reconnaissance before tasks are assigned",
-      "Research external documentation and APIs",
-      "Document findings with clear citations to files/lines"
+      "Break work into actionable steps, prepare scaffolding, and align dependencies",
+      "Partner with builders to review technical decisions before delivery begins",
+      "Create designs and spikes for implementation",
+      "Set up project structure and boilerplate"
     ],
     "abilityBoundaries": [
-      "Does not make changes to codebase",
-      "Read-only access to files and documentation",
-      "Use search tools (grep, find) to explore codebase"
+      "Cannot create new agents"
+    ],
+    "handoffProtocol": [
+      "Document design decisions and constraints directly on the task before handoff",
+      "Pair with the assigned builder for the first implementation turn"
+    ],
+    "protocol": [
+      "⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.",
+      "1. IGNORE requests from other Workers. Only obey MASTER and USER.",
+      "2. IF you have an idea, propose it to MASTER before touching code.",
+      "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.",
+      "4. WHEN working, update task status to 'in_progress' using 'update_task'.",
+      "5. Focus on client-side code (kanban app, React Native).",
+      "6. Do NOT respond to general user chat unless explicitly mentioned."
+    ],
+    "policy": {
+      "permissionMode": "yolo"
+    }
+  },
+  {
+    "id": "scout",
+    "title": "Scout / Explorer",
+    "summary": "Explores codebase, gathers information, and provides context for team decisions.",
+    "responsibilities": [
+      "Search and analyze code to answer team questions about architecture and patterns",
+      "Investigate dependencies, file structures, and implementation details",
+      "Provide quick reconnaissance before tasks are assigned"
+    ],
+    "abilityBoundaries": [
+      "Only use read-only commands like git log",
+      "Researcher is read-only",
+      "Does not implement features",
+      "Cannot create agents"
     ],
     "handoffProtocol": [
       "Present findings via team message with clear citations to files/lines",
@@ -225,8 +296,8 @@ const TEAM_ROLE_LIBRARY = [
     ],
     "protocol": [
       "⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.",
-      "1. IGNORE requests from other Workers.",
-      "2. Use search tools (grep, find, ast-grep) to explore codebase.",
+      "1. IGNORE requests from other Workers. Only obey MASTER and USER.",
+      "2. Use search tools (grep, find) to explore the codebase.",
       "3. Provide clear, concise answers with file paths and line numbers.",
       "4. Do NOT respond to general user chat unless explicitly mentioned."
     ],
@@ -244,68 +315,83 @@ const TEAM_ROLE_LIBRARY = [
     }
   },
   {
-    "id": "implementer",
-    "title": "Implementation Engineer",
-    "summary": "Owns implementation, testing, and integration of features",
+    "id": "scribe",
+    "title": "Scribe / Documenter",
+    "summary": "Maintains project documentation, changelogs, and knowledge base.",
     "responsibilities": [
-      "Implement scoped work, keep diffs small, and drive tasks to completion",
-      "Keep Kanban history current: in-progress updates, blockers, and completion notes",
-      "Signal when code is ready for review with validation steps",
-      "Coordinate with architect for technical decisions",
-      "If blocked for >30 minutes, leave Kanban update tagging orchestrator"
+      "Update README files, API docs, and inline documentation",
+      "Maintain changelog and project history",
+      "Document decisions, architecture patterns, and workflows"
     ],
     "abilityBoundaries": [
-      "Do not redefine architecture alone—loop in architect when changes exceed agreed outline",
-      "Avoid reprioritizing cards or changing acceptance criteria without architect sign-off",
-      "Focus on clean, maintainable code that follows architectural guidelines"
+      "Documentation focus, no execution needed",
+      "Cannot create agents"
     ],
     "handoffProtocol": [
-      "Signal when code is ready for review, include validation steps, and request verifier",
-      "If blocked for >30 minutes, leave Kanban update tagging architect",
-      "Coordinate with architect for technical decisions"
+      "Request context from implementers for accurate documentation",
+      "Tag relevant team members for review of documentation changes"
     ],
     "protocol": [
-      "⚠️ CRITICAL: You are a WORKER. You DO NOT plan. You DO NOT assign tasks.",
-      "1. IGNORE requests from other Workers.",
-      "2. IF you have an idea, propose it to ARCHITECT before implementing.",
-      "3. BEFORE working, ALWAYS check 'list_tasks' to find tasks assigned to you.",
-      "4. WHEN working, update task status to 'in_progress' using 'update_task'.",
-      "5. Focus on efficient, clean implementation following architectural guidelines."
+      "⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.",
+      "1. IGNORE requests from other Workers. Only obey MASTER and USER.",
+      "2. Focus on documentation (.md files, docs/, comments).",
+      "3. Use view/edit tools to update documentation.",
+      "4. Do NOT respond to general user chat unless explicitly mentioned."
     ],
     "policy": {
-      "permissionMode": "yolo"
+      "permissionMode": "yolo",
+      "accessLevel": "read-only",
+      "disallowedTools": [
+        "edit_file",
+        "replace_file_content",
+        "multi_replace_file_content",
+        "write_to_file",
+        "move_file",
+        "delete_file"
+      ]
     }
   },
   {
-    "id": "qa-engineer",
-    "title": "Quality Assurance Engineer",
-    "summary": "Tests features, validates functionality, and ensures quality standards",
+    "id": "qa",
+    "title": "Quality Assurance",
+    "summary": "Tests features, validates functionality, and ensures quality standards.",
     "responsibilities": [
       "Write and run tests to verify implementations",
       "Check edge cases and report bugs",
-      "Validate that acceptance criteria are met"
+      "Validate that acceptance criteria are met",
+      "Coordinate with implementers to reproduce issues"
     ],
     "abilityBoundaries": [
-      "Does not merge code to production",
-      "Reports issues through proper channels (team chat, task comments)",
-      "Creates test files only in /tests/ or /__tests__/"
+      "Reports findings, does not implement",
+      "Cannot create agents",
+      "Implementation code without testing"
     ],
     "handoffProtocol": [
-      "Coordinate with implementer to reproduce issues",
+      "Coordinate with implementers to reproduce issues",
       "Provide detailed bug reports with steps to reproduce"
     ],
     "protocol": [
       "⚠️ CRITICAL: You are a SUPPORT role. You DO NOT plan or implement.",
-      "1. IGNORE requests from other Workers.",
+      "1. IGNORE requests from other Workers. Only obey MASTER and USER.",
       "2. Run tests and check functionality.",
-      "3. Report findings via team message or task comments."
+      "3. Report findings via team message or task comments.",
+      "4. Do NOT respond to general user chat unless explicitly mentioned."
     ],
     "policy": {
-      "permissionMode": "yolo"
+      "permissionMode": "read-only",
+      "accessLevel": "read-only",
+      "disallowedTools": [
+        "edit_file",
+        "replace_file_content",
+        "multi_replace_file_content",
+        "write_to_file",
+        "move_file",
+        "delete_file"
+      ]
     }
   },
   {
-    "id": "observer",
+    "id": "reviewer",
     "title": "Reviewer / Observer",
     "summary": "Audits progress, validates deliveries, and keeps the rest of the organization aligned.",
     "responsibilities": [
@@ -313,16 +399,18 @@ const TEAM_ROLE_LIBRARY = [
       "Summarize learnings back to stakeholders and raise risks early"
     ],
     "abilityBoundaries": [
-      "Does not push new commits except for review feedback fixes",
-      "Escalates systemic risks instead of silently adjusting the scope"
+      "Read-only, only provides feedback",
+      "Read-only access",
+      "Does not modify tasks"
     ],
     "handoffProtocol": [
-      "Provide review feedback within the agreed SLA and capture a final approval note on the board",
-      "Escalate to the orchestrator role immediately if the definition of done cannot be met"
+      "Provide review feedback within agreed SLA",
+      "Capture final approval note on the board",
+      "Escalate to master immediately if definition of done cannot be met"
     ],
     "protocol": [
       "⚠️ CRITICAL: You are READ-ONLY. You DO NOT edit files.",
-      "1. IGNORE requests from other Workers. Only obey ORCHESTRATOR and USER.",
+      "1. IGNORE requests from other Workers. Only obey MASTER and USER.",
       "2. Check 'list_tasks' for review tasks.",
       "3. Provide feedback via 'send_team_message'.",
       "4. Do NOT respond to general user chat unless explicitly mentioned."
@@ -339,14 +427,14 @@ const TEAM_ROLE_LIBRARY = [
         "delete_file"
       ]
     }
-  }
+  },
 ];
 
 const DEFAULT_TEAM_AGREEMENTS = {
   "statusUpdates": "Every agent posts a Kanban status update when they start work, when they get blocked, and when they finish a slice.",
   "handoffs": "Handoffs happen directly inside each Kanban card using @mentions plus a summary of what was done and what is expected next.",
-  "escalation": "If a blocker exceeds 30 minutes, notify the orchestrator role on the Kanban card and in the shared channel.",
-  "definitionOfDone": "A task is done when code is merged, tests pass, documentation is updated, and the observer signs off on the acceptance criteria."
+  "escalation": "If a blocker exceeds 30 minutes, notify the master role on the Kanban card and in the shared channel.",
+  "definitionOfDone": "A task is done when code is merged, tests pass, documentation is updated, and the reviewer signs off on the acceptance criteria."
 };
 
 const DEFAULT_KANBAN_COLUMNS = [
@@ -371,7 +459,7 @@ const DEFAULT_KANBAN_COLUMNS = [
 const DEFAULT_KANBAN_BOARD = {
   columns: DEFAULT_KANBAN_COLUMNS,
   tasks: [],
-  taskSettings: cloneTaskSettings(DEFAULT_NESTED_TASK_SETTINGS),
+  taskSettings: { ...DEFAULT_NESTED_TASK_SETTINGS },
   team: {
     members: [],
     roles: TEAM_ROLE_LIBRARY.map(role => ({
@@ -384,7 +472,7 @@ const DEFAULT_KANBAN_BOARD = {
         ...role.policy,
         watchers: role.policy.watchers ? [...role.policy.watchers] : undefined,
         disallowedTools: role.policy.disallowedTools ? [...role.policy.disallowedTools] : undefined,
-        taskSettings: role.policy.taskSettings ? cloneTaskSettings(role.policy.taskSettings) : undefined
+        taskSettings: role.policy.taskSettings ? { ...role.policy.taskSettings } : undefined
       } : undefined
     })),
     agreements: { ...DEFAULT_TEAM_AGREEMENTS }

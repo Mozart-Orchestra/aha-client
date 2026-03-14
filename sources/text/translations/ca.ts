@@ -83,6 +83,9 @@ export const ca: TranslationStructure = {
         enterSecretKey: 'Introdueix la teva clau secreta',
         invalidSecretKey: 'Clau secreta no vàlida. Comprova-ho i torna-ho a provar.',
         enterUrlManually: 'Introdueix l\'URL manualment',
+        myKey: 'La meva clau secreta',
+        myKeyDescription: 'Restaurar aquesta clau a qualsevol dispositiu connecta totes les màquines vinculades — totes estaran actives i podran comunicar-se.',
+        restoreDescription: 'Introdueix la teva clau secreta per restaurar aquest dispositiu. Totes les màquines vinculades anteriorment es reconnectaran automàticament.',
     },
 
     settings: {

@@ -171,6 +171,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     router.push(`/teams/${team.id}` as never);
                 },
             }))}
+            conversationHeaderAction={() => router.push('/teams/new' as never)}
             conversationEmptyText="No teams yet"
         />
     );

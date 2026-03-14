@@ -153,6 +153,12 @@ export const SettingsView = React.memo(function SettingsView() {
                     onPress={() => router.push('/settings/account')}
                 />
                 <Item
+                    title={t('settings.syncDeviceTitle')}
+                    subtitle={t('settings.syncDeviceSubtitle')}
+                    icon={<Ionicons name="sync-outline" size={29} color="#FF9500" />}
+                    onPress={() => router.push('/restore')}
+                />
+                <Item
                     title={t('settings.appearance')}
                     subtitle={t('settings.appearanceSubtitle')}
                     icon={<Ionicons name="color-palette-outline" size={29} color="#5856D6" />}

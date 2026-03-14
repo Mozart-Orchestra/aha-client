@@ -83,6 +83,9 @@ export const en = {
         enterSecretKey: 'Please enter a secret key',
         invalidSecretKey: 'Invalid secret key. Please check and try again.',
         enterUrlManually: 'Enter URL manually',
+        myKey: 'My Secret Key',
+        myKeyDescription: 'Restoring this key on any device connects all machines bound to it — they will all be active and able to communicate.',
+        restoreDescription: 'Enter your secret key to restore this device. All machines previously linked to this key will reconnect automatically.',
     },
 
     settings: {

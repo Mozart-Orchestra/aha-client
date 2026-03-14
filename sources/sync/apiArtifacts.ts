@@ -1,5 +1,5 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
-import { backoff } from '@/utils/time';
+import { backoff, NonRetryableError } from '@/utils/time';
 import { getServerUrl } from './serverConfig';
 import { Artifact, ArtifactCreateRequest, ArtifactUpdateRequest, ArtifactUpdateResponse } from './artifactTypes';
 
@@ -42,7 +42,7 @@ export async function fetchArtifact(credentials: AuthCredentials, artifactId: st
 
         if (!response.ok) {
             if (response.status === 404) {
-                throw new Error('Artifact not found');
+                throw new NonRetryableError('Artifact not found');
             }
             throw new Error(`Failed to fetch artifact: ${response.status}`);
         }
@@ -73,7 +73,7 @@ export async function createArtifact(
 
         if (!response.ok) {
             if (response.status === 409) {
-                throw new Error('Artifact ID already exists');
+                throw new NonRetryableError('Artifact ID already exists');
             }
             throw new Error(`Failed to create artifact: ${response.status}`);
         }
@@ -105,7 +105,7 @@ export async function updateArtifact(
 
         if (!response.ok) {
             if (response.status === 404) {
-                throw new Error('Artifact not found');
+                throw new NonRetryableError('Artifact not found');
             }
             throw new Error(`Failed to update artifact: ${response.status}`);
         }
@@ -134,7 +134,7 @@ export async function deleteArtifact(
 
         if (!response.ok) {
             if (response.status === 404) {
-                throw new Error('Artifact not found');
+                throw new NonRetryableError('Artifact not found');
             }
             throw new Error(`Failed to delete artifact: ${response.status}`);
         }
