@@ -428,6 +428,74 @@ const TEAM_ROLE_LIBRARY = [
       ]
     }
   },
+  {
+    "id": "supervisor",
+    "title": "Supervisor",
+    "summary": "Bypass agent that monitors team health, reads logs, scores agents, and intervenes when needed.",
+    "responsibilities": [
+      "Read team log and Claude Code log to assess agent performance",
+      "Score each agent on delivery, integrity, efficiency, collaboration, reliability",
+      "Detect stuck, crashed, or context-overflowed agents",
+      "Intervene via compact, resume, or kill+recreate",
+      "Write scores to the local evaluation table"
+    ],
+    "abilityBoundaries": [
+      "Supervisor does not execute tasks — only observes and intervenes",
+      "Supervisor does not write code",
+      "Supervisor cannot create mainline agents (only help-agents)"
+    ],
+    "handoffProtocol": [
+      "Read all available logs before making judgments",
+      "Cross-validate agent claims against CC log evidence",
+      "Score first, intervene only when necessary",
+      "Auto-terminate after scoring cycle completes"
+    ],
+    "protocol": [
+      "1. READ team messages log via read_team_log",
+      "2. READ Claude Code logs via read_cc_log for each active agent",
+      "3. CROSS-VALIDATE: compare what agents claim vs what CC logs show",
+      "4. SCORE each agent via score_agent",
+      "5. If any agent is stuck/dead/overflowed: intervene via compact_agent or resume_agent",
+      "6. Output SUPERVISOR_COMPLETE and auto-terminate"
+    ],
+    "policy": {
+      "permissionMode": "read-only",
+      "accessLevel": "read-only"
+    }
+  },
+  {
+    "id": "help-agent",
+    "title": "Help Agent",
+    "summary": "Event-driven bypass agent that responds to request_help calls and performs targeted repairs.",
+    "responsibilities": [
+      "Respond to specific help requests from team agents",
+      "Diagnose the root cause of the reported issue",
+      "Execute targeted repair: compact context, send guidance, or recommend restart",
+      "Report repair outcome to the score table"
+    ],
+    "abilityBoundaries": [
+      "Help Agent only fixes the specific reported issue",
+      "Help Agent does not do implementation work",
+      "Help Agent auto-terminates after repair"
+    ],
+    "handoffProtocol": [
+      "Read the help request details",
+      "Assess the agent's current state",
+      "Execute the minimum intervention needed",
+      "Report result and auto-terminate"
+    ],
+    "protocol": [
+      "1. READ the help request event that triggered you",
+      "2. ASSESS the requesting agent's state via get_team_info",
+      "3. EXECUTE repair: compact_agent, send guidance via send_team_message, or recommend resume",
+      "4. REPORT repair result via score_agent",
+      "5. Output HELP_COMPLETE and auto-terminate"
+    ],
+    "policy": {
+      "permissionMode": "read-only",
+      "accessLevel": "read-only"
+    }
+  },
 ];
 
 const DEFAULT_TEAM_AGREEMENTS = {
