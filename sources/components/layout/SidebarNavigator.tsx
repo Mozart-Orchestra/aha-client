@@ -76,8 +76,8 @@ export const SidebarNavigator = React.memo(() => {
                   * expo-router can mount/unmount route components. Route
                   * pages call SidebarView which, inside this context,
                   * injects their mainPanel and returns null. The overlay
-                  * is invisible and non-interactive so it never blocks
-                  * the persistent shell above.
+                  * is mounted far off-screen so it never blocks or steals
+                  * pointer events from the persistent shell above.
                   */}
                 <DesktopShellContext.Provider value={desktopCtxValue}>
                     <View style={styles.routingOverlay} pointerEvents="none">
@@ -101,13 +101,13 @@ export const SidebarNavigator = React.memo(() => {
 
 const styles = StyleSheet.create({
     routingOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        // opacity:0 keeps the layer hidden; pointerEvents="none" on the
-        // View prevents it from capturing any gestures or clicks.
+        position: 'fixed',
+        top: -20000,
+        left: -20000,
+        width: 1,
+        height: 1,
+        overflow: 'hidden',
         opacity: 0,
+        zIndex: -1,
     },
 });

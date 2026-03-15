@@ -77,6 +77,15 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             }
         }
 
+        result.sort((a, b) => {
+            const updatedAtDelta = b.session.updatedAt - a.session.updatedAt;
+            if (updatedAtDelta !== 0) {
+                return updatedAtDelta;
+            }
+
+            return b.session.createdAt - a.session.createdAt;
+        });
+
         return result.slice(0, 6);
     }, [sessionListData]);
 

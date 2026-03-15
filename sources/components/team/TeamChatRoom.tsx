@@ -757,7 +757,7 @@ const MessageBubble = ({
     const isLong = message.content.length > MAX_LENGTH || message.content.split('\n').length > 5;
 
     const shouldShowExpand = hasShortContent || isLong;
-    const showCardBody = isMyMessage || message.type !== 'chat' || !!message.metadata?.taskId || !!message.shortContent;
+    const showCardBody = isEdzlf || isMyMessage || message.type !== 'chat' || !!message.metadata?.taskId || !!message.shortContent;
     const mentionedAgents = React.useMemo(() => {
         const uniqueSessionIds = [...new Set(message.mentions ?? [])];
         return uniqueSessionIds.map((sessionId) => resolveAgentIdentity(sessionId));
@@ -1073,12 +1073,20 @@ const MessageBubble = ({
                             style={[
                                 styles.messageBubble,
                                 isMyMessage && styles.myMessageBubble,
+                                isEdzlf && {
+                                    borderRadius: 20,
+                                    borderBottomLeftRadius: 20,
+                                    borderBottomRightRadius: 20,
+                                    overflow: 'hidden' as const,
+                                },
                                 isEdzlf && !isMyMessage && {
                                     backgroundColor: 'transparent',
                                     shadowOpacity: 0,
                                     shadowRadius: 0,
                                     elevation: 0,
                                     padding: 0,
+                                    borderBottomLeftRadius: 20,
+                                    borderBottomRightRadius: 20,
                                 },
                             ]}
                             onPress={handleBubblePress}

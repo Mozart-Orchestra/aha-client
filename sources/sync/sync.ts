@@ -2074,6 +2074,16 @@ class Sync {
         sessionName?: string;
         sessionPath?: string;
         env?: Record<string, string>;
+        // Governance identity fields (Phase 1 — M3)
+        runId?: string;
+        executionPlane?: 'mainline' | 'bypass';
+        parentSessionId?: string;
+        parentGenomeId?: string;
+        generation?: number;
+        triggerEventId?: string;
+        bypassProfile?: 'init' | 'periodic' | 'event' | 'reactive';
+        lifecycleTokenId?: string;
+        ttlSeconds?: number;
     }): Promise<string | null> {
         try {
             if (!this.encryption.getMachineEncryption(machineId)) {
@@ -2093,7 +2103,16 @@ class Sync {
                 role: params.role,
                 sessionName: params.sessionName,
                 sessionPath: params.sessionPath,
-                env: params.env
+                env: params.env,
+                runId: params.runId,
+                executionPlane: params.executionPlane,
+                parentSessionId: params.parentSessionId,
+                parentGenomeId: params.parentGenomeId,
+                generation: params.generation,
+                triggerEventId: params.triggerEventId,
+                bypassProfile: params.bypassProfile,
+                lifecycleTokenId: params.lifecycleTokenId,
+                ttlSeconds: params.ttlSeconds,
             });
             const sessionId = result?.sessionId || (result?.type === 'success' ? result?.sessionId : null);
             if (result?.type === 'requestToApproveDirectoryCreation') {

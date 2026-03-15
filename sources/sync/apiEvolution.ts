@@ -5,9 +5,15 @@
  * Exposes bypass agent lifecycle and genome registry endpoints.
  *
  * Endpoints:
- *   GET    /v1/teams/:teamId/bypass-agents        - List active bypass agents
- *   DELETE /v1/teams/:teamId/bypass-agents/:id    - Retire a bypass agent
- *   GET    /v1/genomes                            - List genomes (filterable by teamId)
+ *   GET    /v1/teams/:teamId/bypass-agents              - List active bypass agents
+ *   DELETE /v1/teams/:teamId/bypass-agents/:id          - Retire a bypass agent
+ *   POST   /v1/teams/:teamId/bypass-agents/leases       - Create a bypass agent lease
+ *   GET    /v1/teams/:teamId/bypass-agents/leases/:id   - Get lease status
+ *   GET    /v1/genomes                                  - List genomes (filterable by teamId)
+ *   GET    /v1/genomes/:id/lineage                      - Get genome lineage edges
+ *   GET    /v1/genomes/:id/scorecard                    - Get genome scorecard
+ *   GET    /v1/runs                                     - List runs for a team
+ *   GET    /v1/teams/:teamId/repair-signals             - List repair signals
  */
 
 import { AuthCredentials } from '@/auth/tokenStorage';
@@ -180,5 +186,259 @@ export async function fetchGenomes(
         }
 
         return await response.json() as GenomesResponse;
+    });
+}
+
+// ============================================================================
+// Phase 3 — Bypass Lifecycle
+// ============================================================================
+
+export type BypassLeaseStatus = 'active' | 'retired' | 'expired';
+
+/**
+ * A server-side lease that authorises a bypass agent to operate.
+ * Created before spawning; the daemon passes lifecycleTokenId at spawn time.
+ */
+export interface BypassAgentLease {
+    id: string;
+    teamId: string;
+    sessionId: string | null;
+    status: BypassLeaseStatus;
+    bypassProfile: 'init' | 'periodic' | 'event' | 'reactive';
+    ttlSeconds: number;
+    createdAt: string;
+    expiresAt: string | null;
+    retiredAt: string | null;
+}
+
+export interface CreateBypassLeaseParams {
+    bypassProfile: 'init' | 'periodic' | 'event' | 'reactive';
+    ttlSeconds: number;
+    runId?: string;
+    triggerEventId?: string;
+    parentSessionId?: string;
+}
+
+/**
+ * Create a bypass agent lease before spawning a bypass session.
+ * The returned lease id should be passed as lifecycleTokenId when spawning.
+ */
+export async function createBypassLease(
+    credentials: AuthCredentials,
+    teamId: string,
+    params: CreateBypassLeaseParams
+): Promise<BypassAgentLease> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents/leases`,
+            {
+                method: 'POST',
+                headers: authHeaders(credentials.token),
+                body: JSON.stringify(params),
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as BypassAgentLease;
+    });
+}
+
+/**
+ * Get the current status of a bypass agent lease.
+ * Useful for checking if a lease is still active before acting on it.
+ */
+export async function getBypassLease(
+    credentials: AuthCredentials,
+    teamId: string,
+    leaseId: string
+): Promise<BypassAgentLease> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents/leases/${leaseId}`,
+            { headers: authHeaders(credentials.token) }
+        );
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as BypassAgentLease;
+    });
+}
+
+// ============================================================================
+// Phase 4 — Market / Lineage / Scorecard
+// ============================================================================
+
+/**
+ * A run represents one execution of a team (one Ralph Loop iteration or manual spawn).
+ * Runs are indexed by runId and group all sessions spawned together.
+ */
+export interface AgentRun {
+    id: string;
+    teamId: string;
+    startedAt: string;
+    finishedAt: string | null;
+    status: 'running' | 'completed' | 'failed' | 'aborted';
+    sessionCount: number;
+    bypassSessionCount: number;
+}
+
+export interface AgentRunsResponse {
+    runs: AgentRun[];
+    total: number;
+}
+
+/**
+ * An edge in the genome lineage graph, connecting parent and child genomes.
+ */
+export interface LineageEdge {
+    id: string;
+    parentGenomeId: string;
+    childGenomeId: string;
+    mutationNote: string | null;
+    createdAt: string;
+}
+
+/**
+ * Scorecard for a genome — aggregate quality metrics derived from hook events.
+ */
+export interface GenomeScorecard {
+    genomeId: string;
+    delivery: number;       // 0-100
+    integrity: number;      // 0-100
+    efficiency: number;     // 0-100
+    collaboration: number;  // 0-100
+    reliability: number;    // 0-100
+    runCount: number;
+    lastScoredAt: string | null;
+}
+
+/**
+ * A repair signal emitted by a supervisor agent when it detects a problem.
+ */
+export interface RepairSignal {
+    id: string;
+    teamId: string;
+    sessionId: string;
+    supervisorSessionId: string;
+    type: 'stuck' | 'context_overflow' | 'need_collaborator' | 'error' | 'custom';
+    description: string;
+    resolvedAt: string | null;
+    createdAt: string;
+}
+
+export interface RepairSignalsResponse {
+    signals: RepairSignal[];
+    total: number;
+}
+
+/**
+ * List runs for a team, most recent first.
+ */
+export async function fetchRunsByTeam(
+    credentials: AuthCredentials,
+    teamId: string,
+    options?: { limit?: number; offset?: number }
+): Promise<AgentRunsResponse> {
+    const API_ENDPOINT = getServerUrl();
+    const params = new URLSearchParams({ teamId });
+
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.offset) params.set('offset', String(options.offset));
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/runs?${params.toString()}`,
+            { headers: authHeaders(credentials.token) }
+        );
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as AgentRunsResponse;
+    });
+}
+
+/**
+ * Get the lineage graph edges for a genome (parent → child mutations).
+ */
+export async function fetchGenomeLineage(
+    credentials: AuthCredentials,
+    genomeId: string
+): Promise<LineageEdge[]> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/genomes/${genomeId}/lineage`,
+            { headers: authHeaders(credentials.token) }
+        );
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        const body = await response.json() as { edges: LineageEdge[] };
+        return body.edges;
+    });
+}
+
+/**
+ * Get the aggregate scorecard for a genome.
+ */
+export async function fetchGenomeScorecard(
+    credentials: AuthCredentials,
+    genomeId: string
+): Promise<GenomeScorecard> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/genomes/${genomeId}/scorecard`,
+            { headers: authHeaders(credentials.token) }
+        );
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as GenomeScorecard;
+    });
+}
+
+/**
+ * List open (unresolved) repair signals for a team.
+ */
+export async function fetchRepairSignals(
+    credentials: AuthCredentials,
+    teamId: string,
+    options?: { resolved?: boolean; limit?: number }
+): Promise<RepairSignalsResponse> {
+    const API_ENDPOINT = getServerUrl();
+    const params = new URLSearchParams();
+
+    if (options?.resolved !== undefined) params.set('resolved', String(options.resolved));
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const query = params.toString();
+    const url = `${API_ENDPOINT}/v1/teams/${teamId}/repair-signals${query ? `?${query}` : ''}`;
+
+    return await backoff(async () => {
+        const response = await fetch(url, { headers: authHeaders(credentials.token) });
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as RepairSignalsResponse;
     });
 }

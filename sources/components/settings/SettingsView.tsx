@@ -1,16 +1,13 @@
-import { View, Platform, Linking } from 'react-native';
+import { View, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import * as React from 'react';
 import { Text } from '@/components/ui/StyledText';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
-import { useLocalSettingMutable, useSetting } from '@/sync/storage';
-import { Modal } from '@/modal';
-import { useMultiClick } from '@/hooks/useMultiClick';
+import { useLocalSetting, useSetting } from '@/sync/storage';
 import { useAllMachines } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { useUnistyles } from 'react-native-unistyles';
@@ -23,22 +20,13 @@ import { t } from '@/text';
 export const SettingsView = React.memo(function SettingsView() {
     const { theme } = useUnistyles();
     const router = useRouter();
-    const appVersion = Constants.expoConfig?.version || '1.0.0';
-    const [devModeEnabled, setDevModeEnabled] = useLocalSettingMutable('devModeEnabled');
+    const devModeEnabled = useLocalSetting('devModeEnabled');
     const experiments = useSetting('experiments');
     const allMachines = useAllMachines();
     const profile = useProfile();
     const displayName = getDisplayName(profile);
     const avatarUrl = getAvatarUrl(profile);
     const bio = getBio(profile);
-
-    const handleGitHub = async () => {
-        const url = 'https://github.com/slopus/happy';
-        const supported = await Linking.canOpenURL(url);
-        if (supported) {
-            await Linking.openURL(url);
-        }
-    };
 
     const handleReportIssue = async () => {
         const url = 'https://github.com/slopus/happy/issues';
@@ -47,20 +35,6 @@ export const SettingsView = React.memo(function SettingsView() {
             await Linking.openURL(url);
         }
     };
-
-    // Use the multi-click hook for version clicks
-    const handleVersionClick = useMultiClick(() => {
-        // Toggle dev mode
-        const newDevMode = !devModeEnabled;
-        setDevModeEnabled(newDevMode);
-        Modal.alert(
-            t('modals.developerMode'),
-            newDevMode ? t('modals.developerModeEnabled') : t('modals.developerModeDisabled')
-        );
-    }, {
-        requiredClicks: 10,
-        resetTimeout: 2000
-    });
 
 
     return (
@@ -143,8 +117,7 @@ export const SettingsView = React.memo(function SettingsView() {
                 </ItemGroup>
             )}
 
-            {/* Features */}
-            <ItemGroup title={t('settings.features')}>
+            <ItemGroup>
                 <Item
                     title={t('settings.account')}
                     subtitle={t('settings.accountSubtitle')}
@@ -156,24 +129,6 @@ export const SettingsView = React.memo(function SettingsView() {
                     subtitle={t('settings.syncDeviceSubtitle')}
                     icon={<Ionicons name="link-outline" size={29} color="#FF9500" />}
                     onPress={() => router.push('/restore')}
-                />
-                <Item
-                    title={t('settings.appearance')}
-                    subtitle={t('settings.appearanceSubtitle')}
-                    icon={<Ionicons name="color-palette-outline" size={29} color="#5856D6" />}
-                    onPress={() => router.push('/settings/appearance')}
-                />
-                <Item
-                    title={t('settings.voiceAssistant')}
-                    subtitle={t('settings.voiceAssistantSubtitle')}
-                    icon={<Ionicons name="mic-outline" size={29} color="#34C759" />}
-                    onPress={() => router.push('/settings/voice')}
-                />
-                <Item
-                    title={t('settings.featuresTitle')}
-                    subtitle={t('settings.featuresSubtitle')}
-                    icon={<Ionicons name="flask-outline" size={29} color="#FF9500" />}
-                    onPress={() => router.push('/settings/features')}
                 />
                 {experiments && (
                     <Item
@@ -205,57 +160,9 @@ export const SettingsView = React.memo(function SettingsView() {
                     onPress={() => router.push('/changelog')}
                 />
                 <Item
-                    title={t('settings.github')}
-                    icon={<Ionicons name="logo-github" size={29} color={theme.colors.text} />}
-                    detail="slopus/happy"
-                    onPress={handleGitHub}
-                />
-                <Item
                     title={t('settings.reportIssue')}
                     icon={<Ionicons name="bug-outline" size={29} color="#FF3B30" />}
                     onPress={handleReportIssue}
-                />
-                <Item
-                    title={t('settings.privacyPolicy')}
-                    icon={<Ionicons name="shield-checkmark-outline" size={29} color="#007AFF" />}
-                    onPress={async () => {
-                        const url = 'https://happy.engineering/privacy/';
-                        const supported = await Linking.canOpenURL(url);
-                        if (supported) {
-                            await Linking.openURL(url);
-                        }
-                    }}
-                />
-                <Item
-                    title={t('settings.termsOfService')}
-                    icon={<Ionicons name="document-text-outline" size={29} color="#007AFF" />}
-                    onPress={async () => {
-                        const url = 'https://github.com/slopus/happy/blob/main/TERMS.md';
-                        const supported = await Linking.canOpenURL(url);
-                        if (supported) {
-                            await Linking.openURL(url);
-                        }
-                    }}
-                />
-                {Platform.OS === 'ios' && (
-                    <Item
-                        title={t('settings.eula')}
-                        icon={<Ionicons name="document-text-outline" size={29} color="#007AFF" />}
-                        onPress={async () => {
-                            const url = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
-                            const supported = await Linking.canOpenURL(url);
-                            if (supported) {
-                                await Linking.openURL(url);
-                            }
-                        }}
-                    />
-                )}
-                <Item
-                    title={t('common.version')}
-                    detail={appVersion}
-                    icon={<Ionicons name="information-circle-outline" size={29} color={theme.colors.textSecondary} />}
-                    onPress={handleVersionClick}
-                    showChevron={false}
                 />
             </ItemGroup>
 

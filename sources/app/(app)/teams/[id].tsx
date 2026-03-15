@@ -380,6 +380,7 @@ const SHELL_TABS = [
     { id: 'chat', label: 'Chat' },
     { id: 'board', label: 'Board' },
     { id: 'info', label: 'Info' },
+    { id: 'evolution', label: 'Evolution' },
 ] as const;
 const TEAM_DASHBOARD_TABS = ['chat', 'board', 'info', 'evolution'] as const;
 type TeamDashboardTab = typeof TEAM_DASHBOARD_TABS[number];
