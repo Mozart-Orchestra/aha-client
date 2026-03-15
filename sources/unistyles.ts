@@ -47,6 +47,8 @@ StyleSheet.configure({
     themes: appThemes,
 })
 
+UnistylesRuntime.setAdaptiveThemes(false);
+
 // Set initial root view background color based on theme
 const setRootBackgroundColor = () => {
     const color = themePreference === 'dark'

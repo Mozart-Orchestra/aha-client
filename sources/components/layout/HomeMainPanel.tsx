@@ -15,8 +15,6 @@ import { useArtifacts, useAllSessions, useIsDataReady } from '@/sync/storage';
 import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
 function useIsExperiencedUser(): boolean {
     const artifacts = useArtifacts();
     const sessions = useAllSessions();
@@ -24,8 +22,6 @@ function useIsExperiencedUser(): boolean {
     const hasSession = sessions.length > 0;
     return hasTeam || hasSession;
 }
-
-// ─── Subcomponents ──────────────────────────────────────────────────────────
 
 interface ActionCardProps {
     icon: keyof typeof Ionicons.glyphMap;
@@ -38,6 +34,7 @@ interface ActionCardProps {
 function ActionCard({ icon, title, subtitle, onPress, accent = false }: ActionCardProps) {
     const styles = stylesheet;
     const { theme } = useUnistyles();
+
     return (
         <Pressable
             style={({ pressed }) => [
@@ -71,15 +68,92 @@ function ActionCard({ icon, title, subtitle, onPress, accent = false }: ActionCa
     );
 }
 
-// ─── New user panel ──────────────────────────────────────────────────────────
+function HelpCard() {
+    const styles = stylesheet;
+    const { theme } = useUnistyles();
+    const [expanded, setExpanded] = React.useState(false);
+
+    const keywords = [
+        t('home.helpKeywordCrossDevice'),
+        t('home.helpKeywordRemote'),
+        t('home.helpKeywordCluster'),
+        t('home.helpKeywordEvolution'),
+    ];
+
+    const faqItems = [
+        {
+            question: t('home.helpQuestionWhat'),
+            answer: t('home.helpAnswerWhat'),
+        },
+        {
+            question: t('home.helpQuestionStart'),
+            answer: t('home.helpAnswerStart'),
+        },
+        {
+            question: t('home.helpQuestionDevices'),
+            answer: t('home.helpAnswerDevices'),
+        },
+        {
+            question: t('home.helpQuestionCluster'),
+            answer: t('home.helpAnswerCluster'),
+        },
+    ];
+
+    return (
+        <View style={styles.helpCard}>
+            <Pressable
+                style={({ pressed }) => [
+                    styles.helpHeader,
+                    pressed && styles.cardPressed,
+                ]}
+                onPress={() => setExpanded(value => !value)}
+            >
+                <View style={styles.helpIconWrap}>
+                    <Ionicons name="help-buoy-outline" size={20} color={theme.colors.text} />
+                </View>
+                <View style={styles.helpHeaderBody}>
+                    <Text style={styles.helpTitle}>{t('home.helpTitle')}</Text>
+                    <Text style={styles.helpSubtitle}>{t('home.helpSubtitle')}</Text>
+                </View>
+                <View style={styles.helpToggle}>
+                    <Text style={styles.helpToggleText}>
+                        {expanded ? t('home.helpCollapse') : t('home.helpExpand')}
+                    </Text>
+                    <Ionicons
+                        name={expanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+                        size={16}
+                        color={theme.colors.textSecondary}
+                    />
+                </View>
+            </Pressable>
+
+            <View style={styles.keywordRow}>
+                {keywords.map((keyword) => (
+                    <View key={keyword} style={styles.keywordChip}>
+                        <Text style={styles.keywordChipText}>{keyword}</Text>
+                    </View>
+                ))}
+            </View>
+
+            {expanded && (
+                <View style={styles.faqList}>
+                    {faqItems.map((item) => (
+                        <View key={item.question} style={styles.faqItem}>
+                            <Text style={styles.faqQuestion}>{item.question}</Text>
+                            <Text style={styles.faqAnswer}>{item.answer}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+}
 
 function NewUserPanel() {
     const router = useRouter();
     const styles = stylesheet;
-    const { theme, runtime } = useUnistyles();
-    // On native (no nav header), respect device safe area for status bar.
-    // On web, ThreeColumnShell already handles safe area at the shell level.
-    const topInset = Platform.OS !== 'web' ? runtime.insets.top : 0;
+    const { theme, rt } = useUnistyles();
+    const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
 
     const handleCreateTeam = React.useCallback(() => {
         router.push('/teams/new' as never);
@@ -95,7 +169,6 @@ function NewUserPanel() {
             contentContainerStyle={[styles.scrollContent, { paddingTop: 24 + topInset }]}
             showsVerticalScrollIndicator={false}
         >
-            {/* Header */}
             <View style={styles.header}>
                 <View style={styles.logoWrap}>
                     <Image
@@ -111,8 +184,15 @@ function NewUserPanel() {
                 </View>
             </View>
 
-            {/* Section: Getting started */}
-            <Text style={styles.sectionLabel}>{t('home.gettingStarted')}</Text>
+            <HelpCard />
+
+            <ActionCard
+                icon="add"
+                title={t('home.createTeamTitle')}
+                subtitle={t('home.createTeamSubtitle')}
+                onPress={handleCreateTeam}
+                accent
+            />
 
             <ActionCard
                 icon="book-outline"
@@ -120,20 +200,6 @@ function NewUserPanel() {
                 subtitle={t('home.docsSubtitle')}
                 onPress={() => router.push('/agents' as never)}
             />
-
-            {/* Section: Team */}
-            <Text style={styles.sectionLabel}>{t('home.teamSection')}</Text>
-
-            <ActionCard
-                icon="people-outline"
-                title={t('home.createTeamTitle')}
-                subtitle={t('home.createTeamSubtitle')}
-                onPress={handleCreateTeam}
-                accent
-            />
-
-            {/* Section: Devices */}
-            <Text style={styles.sectionLabel}>{t('home.devicesSection')}</Text>
 
             <ActionCard
                 icon="phone-portrait-outline"
@@ -145,13 +211,11 @@ function NewUserPanel() {
     );
 }
 
-// ─── Experienced user panel ──────────────────────────────────────────────────
-
 function ExperiencedUserPanel() {
     const router = useRouter();
     const styles = stylesheet;
-    const { runtime } = useUnistyles();
-    const topInset = Platform.OS !== 'web' ? runtime.insets.top : 0;
+    const { rt } = useUnistyles();
+    const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
 
     const handleReport = React.useCallback(() => {
         router.push('/teams' as never);
@@ -175,29 +239,22 @@ function ExperiencedUserPanel() {
             contentContainerStyle={[styles.scrollContent, { paddingTop: 24 + topInset }]}
             showsVerticalScrollIndicator={false}
         >
-            {/* Section: Work */}
-            <Text style={styles.sectionLabel}>{t('home.workSection')}</Text>
+            <HelpCard />
+
+            <ActionCard
+                icon="add"
+                title={t('home.createTeamTitle')}
+                subtitle={t('home.createTeamSubtitle')}
+                onPress={handleCreateTeam}
+                accent
+            />
 
             <ActionCard
                 icon="bar-chart-outline"
                 title={t('home.reportTitle')}
                 subtitle={t('home.reportSubtitle')}
                 onPress={handleReport}
-                accent
             />
-
-            {/* Section: Team */}
-            <Text style={styles.sectionLabel}>{t('home.teamSection')}</Text>
-
-            <ActionCard
-                icon="people-outline"
-                title={t('home.createTeamTitle')}
-                subtitle={t('home.createTeamSubtitle')}
-                onPress={handleCreateTeam}
-            />
-
-            {/* Section: Devices */}
-            <Text style={styles.sectionLabel}>{t('home.devicesSection')}</Text>
 
             <ActionCard
                 icon="phone-portrait-outline"
@@ -205,9 +262,6 @@ function ExperiencedUserPanel() {
                 subtitle={t('home.syncDeviceSubtitle')}
                 onPress={handleSync}
             />
-
-            {/* Section: Explore */}
-            <Text style={styles.sectionLabel}>{t('home.exploreSection')}</Text>
 
             <ActionCard
                 icon="storefront-outline"
@@ -219,8 +273,6 @@ function ExperiencedUserPanel() {
     );
 }
 
-// ─── Main export ─────────────────────────────────────────────────────────────
-
 export const HomeMainPanel = React.memo(() => {
     const isDataReady = useIsDataReady();
     const isExperienced = useIsExperiencedUser();
@@ -231,8 +283,6 @@ export const HomeMainPanel = React.memo(() => {
 
     return isExperienced ? <ExperiencedUserPanel /> : <NewUserPanel />;
 });
-
-// ─── Styles ──────────────────────────────────────────────────────────────────
 
 const stylesheet = StyleSheet.create((theme) => ({
     scroll: {
@@ -267,22 +317,13 @@ const stylesheet = StyleSheet.create((theme) => ({
     headerTitle: {
         fontSize: 20,
         color: theme.colors.text,
-        ...Typography.default('bold'),
+        ...Typography.default('semiBold'),
     },
     headerSubtitle: {
         marginTop: 2,
         fontSize: 13,
         color: theme.colors.textSecondary,
         ...Typography.default(),
-    },
-    sectionLabel: {
-        fontSize: 11,
-        letterSpacing: 0.5,
-        color: theme.colors.textSecondary,
-        marginBottom: 8,
-        marginTop: 24,
-        ...Typography.default('semiBold'),
-        textTransform: 'uppercase',
     },
     card: {
         flexDirection: 'row',
@@ -338,5 +379,95 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     cardSubtitleAccent: {
         color: 'rgba(255,255,255,0.75)',
+    },
+    helpCard: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        padding: 16,
+        marginBottom: 10,
+    },
+    helpHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    helpIconWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: 14,
+        backgroundColor: theme.colors.groupped.background,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    helpHeaderBody: {
+        flex: 1,
+        minWidth: 0,
+    },
+    helpTitle: {
+        fontSize: 16,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    helpSubtitle: {
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 19,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
+    },
+    helpToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginLeft: 8,
+    },
+    helpToggleText: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        ...Typography.default('semiBold'),
+    },
+    keywordRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginTop: 16,
+    },
+    keywordChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: theme.colors.groupped.background,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    keywordChipText: {
+        fontSize: 12,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    faqList: {
+        marginTop: 18,
+        gap: 14,
+    },
+    faqItem: {
+        paddingTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.divider,
+    },
+    faqQuestion: {
+        fontSize: 14,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    faqAnswer: {
+        marginTop: 6,
+        fontSize: 13,
+        lineHeight: 19,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
     },
 }));

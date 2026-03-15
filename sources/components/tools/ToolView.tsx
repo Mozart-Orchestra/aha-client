@@ -10,11 +10,12 @@ import { useElapsedTime } from '@/hooks/useElapsedTime';
 import { ToolError } from './ToolError';
 import { knownTools } from '@/components/tools/knownTools';
 import { Metadata } from '@/sync/storageTypes';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PermissionFooter } from './PermissionFooter';
 import { parseToolUseError } from '@/utils/toolErrorParser';
 import { formatMCPTitle } from './views/MCPToolView';
 import { t } from '@/text';
+import { getSingleRouteParam } from '@/utils/returnNavigation';
 
 interface ToolViewProps {
     metadata: Metadata | null;
@@ -28,6 +29,8 @@ interface ToolViewProps {
 export const ToolView = React.memo<ToolViewProps>((props) => {
     const { tool, onPress, sessionId, messageId } = props;
     const router = useRouter();
+    const params = useLocalSearchParams<{ returnTo?: string }>();
+    const returnTo = getSingleRouteParam(params.returnTo);
     const { theme } = useUnistyles();
 
     // Create default onPress handler for navigation
@@ -35,9 +38,16 @@ export const ToolView = React.memo<ToolViewProps>((props) => {
         if (onPress) {
             onPress();
         } else if (sessionId && messageId) {
-            router.push(`/session/${sessionId}/message/${messageId}`);
+            router.push({
+                pathname: '/session/[id]/message/[messageId]',
+                params: {
+                    id: sessionId,
+                    messageId,
+                    ...(returnTo ? { returnTo } : {}),
+                },
+            } as any);
         }
-    }, [onPress, sessionId, messageId, router]);
+    }, [messageId, onPress, returnTo, router, sessionId]);
 
     // Enable pressable if either onPress is provided or we have navigation params
     const isPressable = !!(onPress || (sessionId && messageId));

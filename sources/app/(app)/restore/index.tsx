@@ -1,27 +1,32 @@
-import React, { useState, memo } from 'react';
-import { View, Text, TextInput, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { memo, useState } from 'react';
+import { View, Text, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { normalizeSecretKey, formatSecretKeyForBackup } from '@/auth/secretKeyBackup';
-import { authGetToken } from '@/auth/authGetToken';
-import { decodeBase64 } from '@/encryption/base64';
+import { formatSecretKeyForBackup } from '@/auth/secretKeyBackup';
 import { ItemList } from '@/components/ui/ItemList';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { Item } from '@/components/ui/Item';
-import { RoundButton } from '@/components/ui/RoundButton';
 import { Typography } from '@/constants/Typography';
 import { Modal } from '@/modal';
+import { useConnectAccount } from '@/hooks/useConnectAccount';
+import { SidebarView } from '@/components/layout/SidebarView';
+import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
+import { goBackOrReturn } from '@/utils/returnNavigation';
 import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 export default memo(function Restore() {
     const { theme } = useUnistyles();
+    const styles = stylesheet;
     const auth = useAuth();
     const router = useRouter();
-    const [restoreKey, setRestoreKey] = useState('');
+    const { width: windowWidth } = useWindowDimensions();
+    const isDesktopShell = Platform.OS === 'web' && windowWidth >= DESKTOP_BREAKPOINT;
+    const { connectWithUrl, isLoading: isConnecting } = useConnectAccount();
     const [showSecret, setShowSecret] = useState(false);
     const [copiedRecently, setCopiedRecently] = useState(false);
 
@@ -39,36 +44,59 @@ export default memo(function Restore() {
         }
     };
 
-    const handleRestore = async () => {
-        const trimmedKey = restoreKey.trim();
-        if (!trimmedKey) {
-            Modal.alert(t('common.error'), t('connect.enterSecretKey'));
-            return;
-        }
-
-        try {
-            const normalizedKey = normalizeSecretKey(trimmedKey);
-            const secretBytes = decodeBase64(normalizedKey, 'base64url');
-            if (secretBytes.length !== 32) {
-                throw new Error('Invalid secret key length');
+    const handleEnterUrlManually = async () => {
+        const url = await Modal.prompt(
+            t('settingsAccount.linkNewDevice'),
+            undefined,
+            {
+                placeholder: 'happy:///account?...',
+                cancelText: t('common.cancel'),
+                confirmText: t('common.authenticate'),
             }
+        );
 
-            const token = await authGetToken(secretBytes);
-            if (!token) {
-                throw new Error('Failed to authenticate with provided key');
-            }
-
-            // auth.login stores credentials and syncs — binds this machine to the key
-            await auth.login(token, normalizedKey);
-            router.back();
-        } catch {
-            Modal.alert(t('common.error'), t('connect.invalidSecretKey'));
+        if (url?.trim()) {
+            await connectWithUrl(url.trim());
         }
     };
 
-    return (
-        <ItemList>
-            {/* Current key — only visible when already authenticated (restored) */}
+    const handleExitRestore = React.useCallback(() => {
+        goBackOrReturn(router, undefined, '/settings');
+    }, [router]);
+
+    useEscapeAction(isDesktopShell, handleExitRestore);
+
+    const content = (
+        <ItemList
+            style={styles.page}
+            containerStyle={[
+                styles.contentContainer,
+                { maxWidth: Math.min(layout.maxWidth, 880), alignSelf: 'center', width: '100%' },
+            ]}
+        >
+            <View style={styles.hero}>
+                <Text style={styles.eyebrow}>{t('home.devicesSection')}</Text>
+                <Text style={styles.title}>{t('navigation.linkNewDevice')}</Text>
+                <Text style={styles.subtitle}>{t('home.syncDeviceSubtitle')}</Text>
+            </View>
+
+            <ItemGroup footer={t('settings.syncDeviceSubtitle')}>
+                <Item
+                    title={t('connect.enterUrlManually')}
+                    subtitle={t('connect.enterUrlDescription')}
+                    icon={<Ionicons name="link-outline" size={29} color="#007AFF" />}
+                    onPress={handleEnterUrlManually}
+                    disabled={isConnecting}
+                    showChevron={false}
+                />
+                <Item
+                    title={t('navigation.restoreWithSecretKey')}
+                    subtitle={t('connect.restoreDescription')}
+                    icon={<Ionicons name="key-outline" size={29} color="#FF9500" />}
+                    onPress={() => router.push('/restore/manual' as never)}
+                />
+            </ItemGroup>
+
             {auth.isAuthenticated && (
                 <ItemGroup
                     title={t('connect.myKey')}
@@ -78,19 +106,18 @@ export default memo(function Restore() {
                         title={t('settingsAccount.secretKey')}
                         subtitle={showSecret ? t('settingsAccount.tapToHide') : t('settingsAccount.tapToReveal')}
                         icon={<Ionicons name={showSecret ? 'eye-off-outline' : 'eye-outline'} size={29} color="#FF9500" />}
-                        onPress={() => setShowSecret(v => !v)}
+                        onPress={() => setShowSecret(value => !value)}
                         showChevron={false}
                     />
                 </ItemGroup>
             )}
 
-            {/* Secret key text — shown when revealed */}
             {auth.isAuthenticated && showSecret && (
                 <ItemGroup>
                     <Pressable onPress={handleCopySecret}>
-                        <View style={[stylesheet.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
-                            <View style={stylesheet.secretKeyHeader}>
-                                <Text style={stylesheet.secretKeyLabel}>
+                        <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
+                            <View style={styles.secretKeyHeader}>
+                                <Text style={styles.secretKeyLabel}>
                                     {t('settingsAccount.secretKeyLabel')}
                                 </Text>
                                 <Ionicons
@@ -99,55 +126,63 @@ export default memo(function Restore() {
                                     color={copiedRecently ? '#34C759' : theme.colors.textSecondary}
                                 />
                             </View>
-                            <Text style={stylesheet.secretKeyText}>
+                            <Text style={styles.secretKeyText}>
                                 {formattedSecret}
                             </Text>
                         </View>
                     </Pressable>
                 </ItemGroup>
             )}
-
-            {/* Restore with secret key */}
-            <ItemGroup
-                title={t('connect.restoreAccount')}
-                footer={t('connect.restoreDescription')}
-            >
-                <View style={stylesheet.inputSection}>
-                    <TextInput
-                        style={[stylesheet.textInput, { color: theme.colors.input.text }]}
-                        placeholder="XXXXX-XXXXX-XXXXX..."
-                        placeholderTextColor={theme.colors.input.placeholder}
-                        value={restoreKey}
-                        onChangeText={setRestoreKey}
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                        multiline
-                        numberOfLines={4}
-                    />
-                    <RoundButton
-                        title={t('connect.restoreAccount')}
-                        action={handleRestore}
-                    />
-                </View>
-            </ItemGroup>
         </ItemList>
+    );
+
+    return (
+        <>
+            <Stack.Screen
+                options={{
+                    headerShown: !isDesktopShell,
+                    headerTitle: t('navigation.linkNewDevice'),
+                    headerBackTitle: t('common.back'),
+                }}
+            />
+            {isDesktopShell ? <SidebarView mainPanel={content} /> : content}
+        </>
     );
 });
 
 const stylesheet = StyleSheet.create((theme) => ({
-    inputSection: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+    page: {
+        flex: 1,
+        backgroundColor: theme.colors.groupped.background,
     },
-    textInput: {
-        backgroundColor: theme.colors.input.background,
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 16,
-        fontFamily: 'IBMPlexMono-Regular',
+    contentContainer: {
+        paddingBottom: 24,
+    },
+    hero: {
+        paddingHorizontal: 28,
+        paddingTop: 24,
+        paddingBottom: 8,
+    },
+    eyebrow: {
+        fontSize: 11,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        color: theme.colors.textSecondary,
+        ...Typography.default('semiBold'),
+    },
+    title: {
+        marginTop: 10,
+        fontSize: 30,
+        lineHeight: 34,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    subtitle: {
+        marginTop: 8,
         fontSize: 14,
-        minHeight: 100,
-        textAlignVertical: 'top',
+        lineHeight: 21,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
     },
     secretKeyContainer: {
         backgroundColor: theme.colors.surface,

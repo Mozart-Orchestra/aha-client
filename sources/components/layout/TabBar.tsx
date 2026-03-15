@@ -91,6 +91,17 @@ export const TabBar = React.memo(({ activeTab, onTabPress }: TabBarProps) => {
     const insets = useSafeAreaInsets();
     const settings = useSettings();
 
+    const getTabLabel = React.useCallback((tab: (typeof NAV_TABS)[number]) => {
+        switch (tab.tabLabelKey) {
+            case 'tabs.sessions':
+                return t('tabs.sessions');
+            case 'tabs.settings':
+                return t('tabs.settings');
+            default:
+                return tab.key.charAt(0).toUpperCase() + tab.key.slice(1);
+        }
+    }, []);
+
     const tabs: { key: TabType; icon: any; label: string }[] = React.useMemo(() => {
         const baseTabs: { key: TabType; icon: any; label: string }[] = [];
 
@@ -104,12 +115,11 @@ export const TabBar = React.memo(({ activeTab, onTabPress }: TabBarProps) => {
             if (!tab.showInTabBar || tab.tabIcon == null) {
                 continue;
             }
-            const label = tab.tabLabelKey ? t(tab.tabLabelKey as any) : tab.key.charAt(0).toUpperCase() + tab.key.slice(1);
-            baseTabs.push({ key: tab.key, icon: tab.tabIcon, label });
+            baseTabs.push({ key: tab.key, icon: tab.tabIcon, label: getTabLabel(tab) });
         }
 
         return baseTabs;
-    }, [settings.experiments]);
+    }, [getTabLabel, settings.experiments]);
 
     return (
         <View style={[styles.outerContainer, { paddingBottom: insets.bottom }]}>

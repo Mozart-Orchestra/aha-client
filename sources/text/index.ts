@@ -5,9 +5,9 @@ import { es } from './translations/es';
 import { pt } from './translations/pt';
 import { ca } from './translations/ca';
 import { zhHans } from './translations/zh-Hans';
-import * as Localization from 'expo-localization';
-import { loadSettings } from '@/sync/persistence';
+import { loadLocalSettings, loadSettings } from '@/sync/persistence';
 import { type SupportedLanguage, SUPPORTED_LANGUAGES, SUPPORTED_LANGUAGE_CODES, DEFAULT_LANGUAGE } from './_all';
+import { getCachedAutomaticLanguage, refreshAutomaticLanguagePreference } from './automaticLanguage';
 
 /**
  * Extract all possible dot-notation keys from the nested translation object
@@ -87,57 +87,26 @@ const _typeCheck: Record<SupportedLanguage, TranslationStructure> = translations
 //
 
 let currentLanguage: SupportedLanguage = DEFAULT_LANGUAGE;
-
-// Read from settings
-let settings = loadSettings();
-let found = false;
-if (settings.settings.preferredLanguage && settings.settings.preferredLanguage in translations) {
-    currentLanguage = settings.settings.preferredLanguage as SupportedLanguage;
-    found = true;
-    console.log(`[i18n] Using preferred language: ${currentLanguage}`);
+const initialSettings = loadSettings();
+const initialLocalSettings = loadLocalSettings();
+if (initialSettings.settings.preferredLanguage && initialSettings.settings.preferredLanguage in translations) {
+    currentLanguage = initialSettings.settings.preferredLanguage as SupportedLanguage;
+} else {
+    currentLanguage = getCachedAutomaticLanguage(initialLocalSettings);
 }
 
-// Read from device
-if (!found) {
-    let locales = Localization.getLocales();
-    console.log(`[i18n] Device locales:`, locales.map(l => l.languageCode));
-    for (let l of locales) {
-        if (l.languageCode) {
-            // Expo added special handling for Chinese variants using script code https://github.com/expo/expo/pull/34984
-            if (l.languageCode === 'zh') {
-                let chineseVariant: string | null = null;
-                
-                // We only have translations for simplified Chinese right now, but looking for help with traditional Chinese.
-                if (l.languageScriptCode === 'Hans') {
-                    chineseVariant = 'zh-Hans';
-                // } else if (l.languageScriptCode === 'Hant') {
-                //     chineseVariant = 'zh-Hant';
-                }
-                
-                console.log(`[i18n] Chinese script code: ${l.languageScriptCode} -> ${chineseVariant}`);
-                
-                if (chineseVariant && chineseVariant in translations) {
-                    currentLanguage = chineseVariant as SupportedLanguage;
-                    console.log(`[i18n] Using Chinese variant: ${currentLanguage}`);
-                    break;
-                }
-                
-                currentLanguage = 'zh-Hans';
-                console.log(`[i18n] Falling back to simplified Chinese: zh-Hans`);
-                break;
-            }
-            
-            // Direct match for non-Chinese languages
-            if (l.languageCode in translations) {
-                currentLanguage = l.languageCode as SupportedLanguage;
-                console.log(`[i18n] Using device locale: ${currentLanguage}`);
-                break;
-            }
-        }
+export async function initializeTextLanguage(): Promise<SupportedLanguage> {
+    const settings = loadSettings();
+
+    if (settings.settings.preferredLanguage && settings.settings.preferredLanguage in translations) {
+        currentLanguage = settings.settings.preferredLanguage as SupportedLanguage;
+        return currentLanguage;
     }
-}
 
-console.log(`[i18n] Final language: ${currentLanguage}`);
+    const automaticLanguage = await refreshAutomaticLanguagePreference();
+    currentLanguage = automaticLanguage.language;
+    return currentLanguage;
+}
 
 /**
  * Main translation function with strict typing

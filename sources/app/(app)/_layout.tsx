@@ -64,7 +64,7 @@ export default function RootLayout() {
                 options={{
                     headerShown: true,
                     headerBackTitle: t('common.back'),
-                    headerTitle: t('common.message')
+                    headerTitle: t('common.message'),
                 }}
             />
             <Stack.Screen

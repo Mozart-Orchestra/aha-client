@@ -131,6 +131,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 count: selectedAgentId === agent.id ? 0 : undefined,
                 onPress: () => {
                     setSelectedAgentId(agent.id);
+                    navigateToSession(agent.id);
                 },
                 onDoublePress: () => {
                     setSelectedAgentId(agent.id);

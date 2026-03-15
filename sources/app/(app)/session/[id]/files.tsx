@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { View, ActivityIndicator, Platform, TextInput } from 'react-native';
 import { t } from '@/text';
-import { useRoute } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Octicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/StyledText';
@@ -15,11 +14,14 @@ import { useSessionGitStatus, useSessionProjectGitStatus } from '@/sync/storage'
 import { useUnistyles, StyleSheet } from 'react-native-unistyles';
 import { layout } from '@/utils/layout';
 import { FileIcon } from '@/components/ui/FileIcon';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
+import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 
 export default function FilesScreen() {
-    const route = useRoute();
     const router = useRouter();
-    const sessionId = (route.params! as any).id as string;
+    const params = useLocalSearchParams<{ id: string; returnTo?: string }>();
+    const sessionId = getSingleRouteParam(params.id) || '';
+    const returnTo = getSingleRouteParam(params.returnTo);
     
     const [gitStatusFiles, setGitStatusFiles] = React.useState<GitStatusFiles | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -29,8 +31,12 @@ export default function FilesScreen() {
     // Use project git status first, fallback to session git status for backward compatibility
     const projectGitStatus = useSessionProjectGitStatus(sessionId);
     const sessionGitStatus = useSessionGitStatus(sessionId);
-    const gitStatus = projectGitStatus || sessionGitStatus;
     const { theme } = useUnistyles();
+    const handleExitFiles = React.useCallback(() => {
+        goBackOrReturn(router, returnTo, `/session/${sessionId}`);
+    }, [returnTo, router, sessionId]);
+
+    useEscapeAction(Platform.OS === 'web', handleExitFiles);
     
     // Load git status files
     const loadGitStatusFiles = React.useCallback(async () => {
@@ -90,8 +96,15 @@ export default function FilesScreen() {
     const handleFilePress = React.useCallback((file: GitFileStatus | FileItem) => {
         // Navigate to file viewer with the file path (base64 encoded for special characters)
         const encodedPath = btoa(file.fullPath);
-        router.push(`/session/${sessionId}/file?path=${encodedPath}`);
-    }, [router, sessionId]);
+        router.push({
+            pathname: '/session/[id]/file',
+            params: {
+                id: sessionId,
+                path: encodedPath,
+                ...(returnTo ? { returnTo } : {}),
+            },
+        } as any);
+    }, [returnTo, router, sessionId]);
 
     const renderFileIcon = (file: GitFileStatus) => {
         return <FileIcon fileName={file.fileName} size={32} />;

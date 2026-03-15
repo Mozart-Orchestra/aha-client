@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { layout } from '@/utils/layout';
 import { useHeaderHeight, useIsTablet } from '@/utils/responsive';
 import { Typography } from '@/constants/Typography';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { StyleSheet } from 'react-native-unistyles';
 
 interface HeaderProps {
@@ -120,6 +121,20 @@ const NavigationHeaderComponent: React.FC<NativeStackHeaderProps> = React.memo((
         // In tablet mode, index 0 is the empty screen, index 1 is the first real screen
         return currentIndex <= 1;
     }, [isTablet, navigation]);
+
+    const isManagedSessionSubroute = route.name.startsWith('session/[id]/');
+
+    useEscapeAction(
+        Platform.OS === 'web'
+        && !!back
+        && !shouldHideBackButton
+        && !isManagedSessionSubroute,
+        () => {
+            if (navigation.canGoBack()) {
+                navigation.goBack();
+            }
+        }
+    );
 
     // Extract title - handle both string and function types
     let title: React.ReactNode | null = null;

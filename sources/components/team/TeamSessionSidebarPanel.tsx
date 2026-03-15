@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 
 import { useArtifact, useArtifacts, useAllSessions } from '@/sync/storage';
 import { getSessionName } from '@/utils/sessionUtils';
+import { pushSessionRoute } from '@/utils/returnNavigation';
 
 import { FloatingIslandSidebar } from '../layout/FloatingIslandSidebar';
 import { ThreeColumnShellVariant } from '../layout/ThreeColumnShell';
@@ -43,12 +44,14 @@ function formatListTime(timestamp: number): string {
 interface TeamSessionSidebarPanelProps {
     teamId: string;
     currentSessionId: string;
+    returnTo?: string;
     variant?: ThreeColumnShellVariant;
 }
 
 export const TeamSessionSidebarPanel = React.memo(({
     teamId,
     currentSessionId,
+    returnTo,
     variant = 'default',
 }: TeamSessionSidebarPanelProps) => {
     const router = useRouter();
@@ -107,15 +110,13 @@ export const TeamSessionSidebarPanel = React.memo(({
                 dotColor: agent.dotColor,
                 selected: agent.id === currentSessionId,
                 onPress: () => {
-                    router.push({
-                        pathname: '/session/[id]',
-                        params: {
-                            id: agent.id,
-                            teamId,
-                            teamName: teamTitle,
-                            roleName: agent.role,
-                        },
-                    } as any);
+                    pushSessionRoute(router, {
+                        id: agent.id,
+                        teamId,
+                        teamName: teamTitle,
+                        roleName: agent.role,
+                        returnTo,
+                    });
                 },
             }))}
             agentSectionLabel="Agents"

@@ -17,7 +17,6 @@ import { sync } from '@/sync/sync';
 import { getServerInfo } from '@/sync/serverConfig';
 import { useUnistyles } from 'react-native-unistyles';
 import { Switch } from '@/components/ui/Switch';
-import { useConnectAccount } from '@/hooks/useConnectAccount';
 import { getDisplayName, getAvatarUrl } from '@/sync/profile';
 import { Image } from 'expo-image';
 import { useHappyAction } from '@/hooks/useHappyAction';
@@ -31,7 +30,6 @@ export default React.memo(() => {
     const [showSecret, setShowSecret] = useState(false);
     const [copiedRecently, setCopiedRecently] = useState(false);
     const [analyticsOptOut, setAnalyticsOptOut] = useSettingMutable('analyticsOptOut');
-    const { connectAccount, connectWithUrl, isLoading: isConnecting } = useConnectAccount();
     const profile = useProfile();
 
     // Get the current secret key
@@ -129,32 +127,9 @@ export default React.memo(() => {
                     />
                     <Item
                         title={t('settingsAccount.linkNewDevice')}
-                        subtitle={isConnecting ? t('common.scanning') : t('settingsAccount.linkNewDeviceSubtitle')}
-                        icon={<Ionicons name="qr-code-outline" size={29} color="#007AFF" />}
-                        onPress={connectAccount}
-                        disabled={isConnecting}
-                        showChevron={false}
-                    />
-                    <Item
-                        title={t('connect.enterUrlManually')}
+                        subtitle={t('settingsAccount.linkNewDeviceSubtitle')}
                         icon={<Ionicons name="link-outline" size={29} color="#007AFF" />}
-                        onPress={async () => {
-                            const url = await Modal.prompt(
-                                t('settingsAccount.linkNewDevice'),
-                                undefined,
-                                {
-                                    placeholder: 'happy:///account?...',
-                                    cancelText: t('common.cancel'),
-                                    confirmText: t('common.authenticate')
-                                }
-                            );
-
-                            if (url?.trim()) {
-                                connectWithUrl(url.trim());
-                            }
-                        }}
-                        disabled={isConnecting}
-                        showChevron={false}
+                        onPress={() => router.push('/restore')}
                     />
                 </ItemGroup>
 

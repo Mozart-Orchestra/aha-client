@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View, ScrollView, ActivityIndicator, Platform, Pressable } from 'react-native';
-import { useRoute } from '@react-navigation/native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/StyledText';
 import { SimpleSyntaxHighlighter } from '@/components/ui/SimpleSyntaxHighlighter';
 import { Typography } from '@/constants/Typography';
@@ -12,6 +11,8 @@ import { useUnistyles, StyleSheet } from 'react-native-unistyles';
 import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import { FileIcon } from '@/components/ui/FileIcon';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
+import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 
 interface FileContent {
     content: string;
@@ -69,11 +70,12 @@ const DiffDisplay: React.FC<{ diffContent: string }> = ({ diffContent }) => {
 };
 
 export default function FileScreen() {
-    const route = useRoute();
+    const router = useRouter();
     const { theme } = useUnistyles();
-    const { id: sessionId } = useLocalSearchParams<{ id: string }>();
-    const searchParams = useLocalSearchParams();
-    const encodedPath = searchParams.path as string;
+    const searchParams = useLocalSearchParams<{ id: string; path?: string; returnTo?: string }>();
+    const sessionId = getSingleRouteParam(searchParams.id) || '';
+    const encodedPath = getSingleRouteParam(searchParams.path) || '';
+    const returnTo = getSingleRouteParam(searchParams.returnTo);
     let filePath = '';
     
     // Decode base64 path with error handling
@@ -89,6 +91,11 @@ export default function FileScreen() {
     const [displayMode, setDisplayMode] = React.useState<'file' | 'diff'>('diff');
     const [isLoading, setIsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
+    const handleExitFile = React.useCallback(() => {
+        goBackOrReturn(router, returnTo, `/session/${sessionId}`);
+    }, [returnTo, router, sessionId]);
+
+    useEscapeAction(Platform.OS === 'web', handleExitFile);
 
     // Determine file language from extension
     const getFileLanguage = React.useCallback((path: string): string | null => {

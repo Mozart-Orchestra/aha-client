@@ -4,11 +4,11 @@ import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
 import { useSettingMutable, useLocalSettingMutable } from '@/sync/storage';
 import { useRouter } from 'expo-router';
-import * as Localization from 'expo-localization';
 import { useUnistyles, UnistylesRuntime } from 'react-native-unistyles';
 import { Switch } from '@/components/ui/Switch';
 import * as SystemUI from 'expo-system-ui';
 import { darkTheme, lightTheme } from '@/theme';
+import { useLocalSettings } from '@/sync/storage';
 import { t, getLanguageNativeName, SUPPORTED_LANGUAGES } from '@/text';
 
 // Define known avatar styles for this version of the app
@@ -32,19 +32,16 @@ export default function AppearanceSettingsScreen() {
     const [compactSessionView, setCompactSessionView] = useSettingMutable('compactSessionView');
     const [themePreference, setThemePreference] = useLocalSettingMutable('themePreference');
     const [preferredLanguage] = useSettingMutable('preferredLanguage');
+    const localSettings = useLocalSettings();
     
     // Ensure we have a valid style for display, defaulting to gradient for unknown values
     const displayStyle: KnownAvatarStyle = isKnownAvatarStyle(avatarStyle) ? avatarStyle : 'gradient';
+    const automaticLanguage = localSettings.autoDetectedLanguage === 'zh-Hans' ? 'zh-Hans' : 'en';
     
     // Language display
     const getLanguageDisplayText = () => {
         if (preferredLanguage === null) {
-            const deviceLocale = Localization.getLocales()?.[0]?.languageTag ?? 'en-US';
-            const deviceLanguage = deviceLocale.split('-')[0].toLowerCase();
-            const detectedLanguageName = deviceLanguage in SUPPORTED_LANGUAGES ? 
-                                        getLanguageNativeName(deviceLanguage as keyof typeof SUPPORTED_LANGUAGES) : 
-                                        getLanguageNativeName('en');
-            return `${t('settingsLanguage.automatic')} (${detectedLanguageName})`;
+            return `${t('settingsLanguage.automatic')} (${getLanguageNativeName(automaticLanguage)})`;
         } else if (preferredLanguage && preferredLanguage in SUPPORTED_LANGUAGES) {
             return getLanguageNativeName(preferredLanguage as keyof typeof SUPPORTED_LANGUAGES);
         }

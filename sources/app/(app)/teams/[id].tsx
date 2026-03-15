@@ -40,6 +40,7 @@ import { FloatingIslandSidebar } from '@/components/layout/FloatingIslandSidebar
 import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { getSessionName } from '@/utils/sessionUtils';
+import { buildTeamReturnPath, getSingleRouteParam, pushSessionRoute } from '@/utils/returnNavigation';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -380,6 +381,8 @@ const SHELL_TABS = [
     { id: 'board', label: 'Board' },
     { id: 'info', label: 'Info' },
 ] as const;
+const TEAM_DASHBOARD_TABS = ['chat', 'board', 'info', 'evolution'] as const;
+type TeamDashboardTab = typeof TEAM_DASHBOARD_TABS[number];
 
 const SHELL_ROLE_COLORS: Record<string, string> = {
     master: '#007AFF',
@@ -424,7 +427,7 @@ function getMessagePreview(message: TeamMessage): string {
 }
 
 export default function TeamDashboardScreen() {
-    const { id, roomId: roomIdParam } = useLocalSearchParams();
+    const { id, roomId: roomIdParam, tab } = useLocalSearchParams();
     const teamId = id as string;
     const router = useRouter();
     const { theme } = useUnistyles();
@@ -438,7 +441,14 @@ export default function TeamDashboardScreen() {
     const isDesktopShell = Platform.OS === 'web' && width >= 1180;
     const shellVariant = 'default' as const;
     const shellTheme = getThreeColumnShellTokens(shellVariant);
-    const [activeTab, setActiveTab] = React.useState<'chat' | 'board' | 'info' | 'evolution'>('chat');
+    const tabParam = getSingleRouteParam(tab);
+    const normalizedInitialTab = React.useMemo<TeamDashboardTab>(() => {
+        if (tabParam && (TEAM_DASHBOARD_TABS as readonly string[]).includes(tabParam)) {
+            return tabParam as TeamDashboardTab;
+        }
+        return 'chat';
+    }, [tabParam]);
+    const [activeTab, setActiveTab] = React.useState<TeamDashboardTab>(normalizedInitialTab);
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
@@ -459,6 +469,13 @@ export default function TeamDashboardScreen() {
         }
     }, [artifact?.body]);
     const roomId = (roomIdParam as string) || artifactRoomId || teamId || undefined;
+    const teamReturnTo = React.useMemo(() => {
+        return buildTeamReturnPath({
+            teamId,
+            tab: activeTab,
+            roomId,
+        });
+    }, [activeTab, roomId, teamId]);
     const desktopRoom = React.useMemo(() => {
         if (!roomId || !collaborationState) return null;
         return collaborationState.rooms.find((room: any) => room.id === roomId) ?? null;
@@ -473,6 +490,24 @@ export default function TeamDashboardScreen() {
         const displayName = getDisplayName(profile);
         return displayName || sync.anonID; // Fallback to session ID if no display name
     }, [profile]);
+
+    React.useEffect(() => {
+        if (normalizedInitialTab !== activeTab) {
+            setActiveTab(normalizedInitialTab);
+        }
+    }, [activeTab, normalizedInitialTab]);
+
+    const selectTab = React.useCallback((nextTab: TeamDashboardTab) => {
+        setActiveTab(nextTab);
+        router.replace({
+            pathname: '/teams/[id]',
+            params: {
+                id: teamId,
+                ...(roomId ? { roomId } : {}),
+                tab: nextTab,
+            },
+        } as any);
+    }, [roomId, router, teamId]);
 
     React.useEffect(() => {
         if (desktopBridge) {
@@ -821,12 +856,12 @@ export default function TeamDashboardScreen() {
         setShowTaskDetail(false);
 
         // 切换到 Chat 标签
-        setActiveTab('chat');
+        selectTab('chat');
 
         // TODO: 可以在这里实现滚动到相关消息的功能
         // 可能需要在 TeamChatRoom 中添加一个 ref 来支持滚动到特定消息
         console.log('Discussing task:', task.id, 'Found', relatedMessages.length, 'related messages');
-    }, [taskChatSync]);
+    }, [selectTab, taskChatSync]);
 
     const normalizeStatus = React.useCallback((status: string): string => {
         const statusMap: Record<string, string> = {
@@ -1308,6 +1343,7 @@ export default function TeamDashboardScreen() {
                     myRole="user"
                     myDisplayName={myDisplayName}
                     members={roster}
+                    returnTo={teamReturnTo}
                     messages={teamMessages}
                     onMessagesChange={setTeamMessages}
                     taskChatSync={taskChatSync}
@@ -1337,15 +1373,13 @@ export default function TeamDashboardScreen() {
                     : entry.tasks.length > 0 ? entry.tasks.length : undefined,
                 onPress: () => {
                     setSelectedAgentId(entry.member.sessionId);
-                    router.push({
-                        pathname: '/session/[id]',
-                        params: {
-                            id: entry.member.sessionId,
-                            teamId: teamId,
-                            teamName: artifact?.title || desktopRoom?.name || 'Team',
-                            roleName: entry.session?.metadata?.role || entry.role?.id || '',
-                        },
-                    } as any);
+                    pushSessionRoute(router, {
+                        id: entry.member.sessionId,
+                        teamId,
+                        teamName: artifact?.title || desktopRoom?.name || 'Team',
+                        roleName: entry.session?.metadata?.role || entry.role?.id || '',
+                        returnTo: teamReturnTo,
+                    });
                 },
             }))}
             statusItems={[
@@ -1410,7 +1444,7 @@ export default function TeamDashboardScreen() {
                                 <Pressable
                                     key={tab.id}
                                     onPress={() => {
-                                        setActiveTab(tab.id);
+                                        selectTab(tab.id);
                                         setShowMenu(false);
                                     }}
                                     style={[
@@ -1602,7 +1636,7 @@ export default function TeamDashboardScreen() {
                             {(['chat', 'board', 'info', 'evolution'] as const).map((tab) => (
                                 <Pressable
                                     key={tab}
-                                    onPress={() => setActiveTab(tab)}
+                                    onPress={() => selectTab(tab)}
                                     style={{
                                         flex: 1,
                                         paddingVertical: 8,

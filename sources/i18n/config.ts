@@ -1,8 +1,8 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import * as Localization from 'expo-localization';
-import { getLocales } from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loadSettings } from '@/sync/persistence';
+import { refreshAutomaticLanguagePreference } from '@/text/automaticLanguage';
 
 // Import translation files
 import enCommon from '../locales/en/common.json';
@@ -46,31 +46,17 @@ import zhMcpResponses from './mcp/zh/responses.json';
 // Language storage key
 const LANGUAGE_KEY = '@happy_app_language';
 
-// Get device locale
-const getDeviceLocale = (): string => {
-  const locales = getLocales();
-  if (locales && locales.length > 0) {
-    const locale = locales[0].languageCode || 'en';
-    // Map device locale to supported locales
-    if (locale === 'zh' || locale === 'zh-CN') {
-      return 'zh';
-    }
-    return 'en';
-  }
-  return 'en';
-};
+const mapToI18nLanguage = (language: string): string => language === 'zh-Hans' ? 'zh' : 'en';
 
 // Load saved language preference
 const loadSavedLanguage = async (): Promise<string> => {
-  try {
-    const savedLanguage = await AsyncStorage.getItem(LANGUAGE_KEY);
-    if (savedLanguage) {
-      return savedLanguage;
-    }
-  } catch (error) {
-    console.error('Error loading saved language:', error);
+  const settings = loadSettings();
+  if (settings.settings.preferredLanguage) {
+    return mapToI18nLanguage(settings.settings.preferredLanguage);
   }
-  return getDeviceLocale();
+
+  const automaticLanguage = await refreshAutomaticLanguagePreference();
+  return mapToI18nLanguage(automaticLanguage.language);
 };
 
 // Save language preference

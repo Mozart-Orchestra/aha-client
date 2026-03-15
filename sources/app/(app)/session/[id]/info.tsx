@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, Animated } from 'react-native';
+import { View, Text, Animated, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/constants/Typography';
@@ -20,6 +20,8 @@ import { CodeView } from '@/components/session/CodeView';
 import { Session } from '@/sync/storageTypes';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { HappyError } from '@/utils/errors';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
+import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 
 // Animated status dot component
 function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: boolean; size?: number }) {
@@ -60,12 +62,15 @@ function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: 
     );
 }
 
-function SessionInfoContent({ session }: { session: Session }) {
+function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?: string }) {
     const { theme } = useUnistyles();
     const router = useRouter();
     const devModeEnabled = __DEV__;
     const sessionName = getSessionName(session);
     const sessionStatus = useSessionStatus(session);
+    const handleExitSessionInfo = useCallback(() => {
+        goBackOrReturn(router, returnTo, `/session/${session.id}`);
+    }, [returnTo, router, session.id]);
     
     // Check if CLI version is outdated
     const isCliOutdated = session.metadata?.version && !isVersionSupported(session.metadata.version, MINIMUM_CLI_VERSION);
@@ -91,12 +96,16 @@ function SessionInfoContent({ session }: { session: Session }) {
     }, [session]);
 
     // Use HappyAction for archiving - it handles errors automatically
-    const [archivingSession, performArchive] = useHappyAction(async () => {
+    const [, performArchive] = useHappyAction(async () => {
         const result = await sessionKill(session.id);
         if (!result.success) {
             throw new HappyError(result.message || t('sessionInfo.failedToArchiveSession'), false);
         }
-        // Success - navigate back
+        // Exit the archived session context entirely.
+        if (returnTo) {
+            handleExitSessionInfo();
+            return;
+        }
         router.back();
         router.back();
     });
@@ -117,7 +126,7 @@ function SessionInfoContent({ session }: { session: Session }) {
     }, [performArchive]);
 
     // Use HappyAction for deletion - it handles errors automatically
-    const [deletingSession, performDelete] = useHappyAction(async () => {
+    const [, performDelete] = useHappyAction(async () => {
         const result = await sessionDelete(session.id);
         if (!result.success) {
             throw new HappyError(result.message || t('sessionInfo.failedToDeleteSession'), false);
@@ -456,9 +465,16 @@ function SessionInfoContent({ session }: { session: Session }) {
 
 export default React.memo(() => {
     const { theme } = useUnistyles();
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const router = useRouter();
+    const params = useLocalSearchParams<{ id: string; returnTo?: string }>();
+    const id = getSingleRouteParam(params.id) || '';
+    const returnTo = getSingleRouteParam(params.returnTo);
     const session = useSession(id);
     const isDataReady = useIsDataReady();
+
+    useEscapeAction(Platform.OS === 'web', () => {
+        goBackOrReturn(router, returnTo, `/session/${id}`);
+    });
 
     // Handle three states: loading, deleted, and exists
     if (!isDataReady) {
@@ -482,5 +498,5 @@ export default React.memo(() => {
         );
     }
 
-    return <SessionInfoContent session={session} />;
+    return <SessionInfoContent session={session} returnTo={returnTo} />;
 });

@@ -1,66 +1,96 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { View, Text, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import { ItemList } from '@/components/ui/ItemList';
+import { ItemGroup } from '@/components/ui/ItemGroup';
 import { RoundButton } from '@/components/ui/RoundButton';
 import { Typography } from '@/constants/Typography';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
 import { authGetToken } from '@/auth/authGetToken';
-import { decodeBase64, encodeBase64 } from '@/encryption/base64';
-import { generateAuthKeyPair, authQRStart, QRAuthKeyPair } from '@/auth/authQRStart';
-import { authQRWait } from '@/auth/authQRWait';
+import { decodeBase64 } from '@/encryption/base64';
+import { SidebarView } from '@/components/layout/SidebarView';
+import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
 import { layout } from '@/utils/layout';
 import { Modal } from '@/modal';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
+import { goBackOrReturn } from '@/utils/returnNavigation';
 import { t } from '@/text';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { QRCode } from '@/components/qr/QRCode';
 
 const stylesheet = StyleSheet.create((theme) => ({
-    scrollView: {
+    page: {
         flex: 1,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: theme.colors.groupped.background,
     },
-    container: {
-        flex: 1,
-        alignItems: 'center',
-        paddingHorizontal: 24,
+    contentContainer: {
+        paddingBottom: 24,
     },
-    contentWrapper: {
-        width: '100%',
-        maxWidth: layout.maxWidth,
-        paddingVertical: 24,
+    hero: {
+        paddingHorizontal: 28,
+        paddingTop: 24,
+        paddingBottom: 8,
     },
-    instructionText: {
-        fontSize: 16,
+    eyebrow: {
+        fontSize: 11,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
         color: theme.colors.textSecondary,
-        marginBottom: 20,
-        ...Typography.default(),
+        ...Typography.default('semiBold'),
     },
-    secondInstructionText: {
-        fontSize: 16,
-        color: theme.colors.textSecondary,
-        marginBottom: 20,
-        marginTop: 30,
-        ...Typography.default(),
+    title: {
+        marginTop: 10,
+        fontSize: 30,
+        lineHeight: 34,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
     },
-    qrInstructions: {
+    subtitle: {
+        marginTop: 8,
         fontSize: 14,
+        lineHeight: 21,
         color: theme.colors.textSecondary,
-        marginBottom: 16,
-        lineHeight: 22,
-        textAlign: 'center',
         ...Typography.default(),
+    },
+    inlineInfo: {
+        flexDirection: 'row',
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+        alignItems: 'flex-start',
+    },
+    inlineInfoBody: {
+        flex: 1,
+    },
+    inlineInfoTitle: {
+        fontSize: 15,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    inlineInfoSubtitle: {
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 19,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
+    },
+    inputSection: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
     },
     textInput: {
         backgroundColor: theme.colors.input.background,
         padding: 16,
-        borderRadius: 8,
-        marginBottom: 24,
+        borderRadius: 12,
         fontFamily: 'IBMPlexMono-Regular',
         fontSize: 14,
         minHeight: 120,
         textAlignVertical: 'top',
         color: theme.colors.input.text,
+    },
+    buttonWrap: {
+        marginTop: 16,
     },
 }));
 
@@ -69,7 +99,15 @@ export default function Restore() {
     const styles = stylesheet;
     const auth = useAuth();
     const router = useRouter();
+    const { width: windowWidth } = useWindowDimensions();
+    const isDesktopShell = Platform.OS === 'web' && windowWidth >= DESKTOP_BREAKPOINT;
     const [restoreKey, setRestoreKey] = useState('');
+
+    const handleExitRestore = React.useCallback(() => {
+        goBackOrReturn(router, undefined, '/restore');
+    }, [router]);
+
+    useEscapeAction(isDesktopShell, handleExitRestore);
 
     const handleRestore = async () => {
         const trimmedKey = restoreKey.trim();
@@ -80,41 +118,50 @@ export default function Restore() {
         }
 
         try {
-            // Normalize the key (handles both base64url and formatted input)
             const normalizedKey = normalizeSecretKey(trimmedKey);
-
-            // Validate the secret key format
             const secretBytes = decodeBase64(normalizedKey, 'base64url');
             if (secretBytes.length !== 32) {
                 throw new Error('Invalid secret key length');
             }
 
-            // Get token from secret
             const token = await authGetToken(secretBytes);
             if (!token) {
                 throw new Error('Failed to authenticate with provided key');
             }
 
-            // Login with new credentials
             await auth.login(token, normalizedKey);
-
-            // Dismiss
             router.back();
-
         } catch (error) {
             console.error('Restore error:', error);
             Modal.alert(t('common.error'), t('connect.invalidSecretKey'));
         }
     };
 
-    return (
-        <ScrollView style={styles.scrollView}>
-            <View style={styles.container}>
-                <View style={styles.contentWrapper}>
-                    <Text style={styles.instructionText}>
-                        Enter your secret key to restore access to your account.
-                    </Text>
+    const content = (
+        <ItemList
+            style={styles.page}
+            containerStyle={[
+                styles.contentContainer,
+                { maxWidth: Math.min(layout.maxWidth, 880), alignSelf: 'center', width: '100%' },
+            ]}
+        >
+            <View style={styles.hero}>
+                <Text style={styles.eyebrow}>{t('home.devicesSection')}</Text>
+                <Text style={styles.title}>{t('navigation.restoreWithSecretKey')}</Text>
+                <Text style={styles.subtitle}>{t('connect.restoreDescription')}</Text>
+            </View>
 
+            <ItemGroup footer={t('connect.restoreDescription')}>
+                <View style={styles.inlineInfo}>
+                    <Ionicons name="key-outline" size={24} color="#FF9500" />
+                    <View style={styles.inlineInfoBody}>
+                        <Text style={styles.inlineInfoTitle}>{t('connect.restoreAccount')}</Text>
+                        <Text style={styles.inlineInfoSubtitle}>
+                            {t('connect.restoreKeyHint')}
+                        </Text>
+                    </View>
+                </View>
+                <View style={styles.inputSection}>
                     <TextInput
                         style={styles.textInput}
                         placeholder="XXXXX-XXXXX-XXXXX..."
@@ -127,12 +174,27 @@ export default function Restore() {
                         numberOfLines={4}
                     />
 
-                    <RoundButton
-                        title={t('connect.restoreAccount')}
-                        action={handleRestore}
-                    />
+                    <View style={styles.buttonWrap}>
+                        <RoundButton
+                            title={t('connect.restoreAccount')}
+                            action={handleRestore}
+                        />
+                    </View>
                 </View>
-            </View>
-        </ScrollView>
+            </ItemGroup>
+        </ItemList>
+    );
+
+    return (
+        <>
+            <Stack.Screen
+                options={{
+                    headerShown: !isDesktopShell,
+                    headerTitle: t('navigation.restoreWithSecretKey'),
+                    headerBackTitle: t('common.back'),
+                }}
+            />
+            {isDesktopShell ? <SidebarView mainPanel={content} /> : content}
+        </>
     );
 }

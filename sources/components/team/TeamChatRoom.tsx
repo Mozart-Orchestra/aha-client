@@ -26,6 +26,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Modal } from '@/modal';
+import { pushSessionRoute } from '@/utils/returnNavigation';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
@@ -169,6 +170,56 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     myCopiedIndicator: {
         color: 'rgba(255,255,255,0.9)',
+    },
+    associationPanel: {
+        marginTop: 10,
+        gap: 8,
+    },
+    associationSection: {
+        gap: 6,
+    },
+    associationSectionLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        color: theme.colors.textSecondary,
+    },
+    associationCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 9,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    associationCardMyMessage: {
+        backgroundColor: 'rgba(255,255,255,0.14)',
+        borderColor: 'rgba(255,255,255,0.18)',
+    },
+    associationAvatar: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    associationMeta: {
+        flex: 1,
+        minWidth: 0,
+    },
+    associationName: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    associationRole: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        marginTop: 1,
     },
     systemMessage: {
         alignSelf: 'center',
@@ -541,6 +592,27 @@ const getRoleVisual = (roleId?: string, displayName?: string): RoleVisual => {
     };
 };
 
+interface TeamChatMember {
+    member: { sessionId: string; displayName?: string; roleId?: string };
+    session?: {
+        active: boolean;
+        updatedAt: number;
+        metadata?: {
+            role?: string;
+            name?: string;
+        } | null;
+    };
+    role?: { title: string };
+}
+
+interface TeamChatAgentIdentity {
+    sessionId: string;
+    displayName: string;
+    roleId?: string;
+    roleLabel: string;
+    isOnline: boolean;
+}
+
 // 🆕 Task Card Component for displaying task references in chat
 interface TaskCardProps {
     task: KanbanTask;
@@ -615,16 +687,29 @@ interface MessageBubbleProps {
     isMyMessage: boolean;
     styles: any;
     onAvatarPress: (sessionId: string) => void;
+    resolveAgentIdentity: (sessionId: string, fallbackRole?: string, fallbackName?: string) => TeamChatAgentIdentity;
     variant: TeamChatRoomVariant;
     // 🆕 Task references support
     taskChatSync?: ReturnType<typeof useTaskChatSync>;
 }
 
-const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, variant, taskChatSync }: MessageBubbleProps) => {
+const MessageBubble = ({
+    message,
+    isMyMessage,
+    styles,
+    onAvatarPress,
+    resolveAgentIdentity,
+    variant,
+    taskChatSync,
+}: MessageBubbleProps) => {
+    const { theme } = useUnistyles();
     const [expanded, setExpanded] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
     const [imageLoading, setImageLoading] = React.useState(true);
     const [showFullImage, setShowFullImage] = React.useState(false);
+    const [showAssociations, setShowAssociations] = React.useState(false);
+    const singlePressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastPressAtRef = React.useRef(0);
     const isEdzlf = variant === 'edzlf';
     const roleVisual = React.useMemo(() => {
         return getRoleVisual(message.fromRole, message.fromDisplayName);
@@ -673,12 +758,67 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, variant, t
 
     const shouldShowExpand = hasShortContent || isLong;
     const showCardBody = isMyMessage || message.type !== 'chat' || !!message.metadata?.taskId || !!message.shortContent;
+    const mentionedAgents = React.useMemo(() => {
+        const uniqueSessionIds = [...new Set(message.mentions ?? [])];
+        return uniqueSessionIds.map((sessionId) => resolveAgentIdentity(sessionId));
+    }, [message.mentions, resolveAgentIdentity]);
+    const originAgent = React.useMemo(() => {
+        if (!message.fromSessionId) {
+            return null;
+        }
+        return resolveAgentIdentity(message.fromSessionId, message.fromRole, message.fromDisplayName);
+    }, [message.fromDisplayName, message.fromRole, message.fromSessionId, resolveAgentIdentity]);
+    const hasAssociations = !!originAgent || mentionedAgents.length > 0;
 
     // Get short text for collapsed view
     const getShortText = React.useCallback(() => {
         if (message.shortContent) return message.shortContent;
         return message.content.substring(0, MAX_LENGTH) + '...';
     }, [message.shortContent, message.content]);
+
+    React.useEffect(() => {
+        return () => {
+            if (singlePressTimerRef.current) {
+                clearTimeout(singlePressTimerRef.current);
+            }
+        };
+    }, []);
+
+    const toggleBubbleDetails = React.useCallback(() => {
+        if (hasAssociations) {
+            setShowAssociations((previous) => !previous);
+            return;
+        }
+
+        if (shouldShowExpand) {
+            setExpanded((previous) => !previous);
+        }
+    }, [hasAssociations, shouldShowExpand]);
+
+    const handleBubblePress = React.useCallback(() => {
+        if (!message.fromSessionId) {
+            toggleBubbleDetails();
+            return;
+        }
+
+        const now = Date.now();
+        const isDoublePress = now - lastPressAtRef.current < 260;
+        lastPressAtRef.current = now;
+
+        if (isDoublePress) {
+            if (singlePressTimerRef.current) {
+                clearTimeout(singlePressTimerRef.current);
+                singlePressTimerRef.current = null;
+            }
+            onAvatarPress(message.fromSessionId);
+            return;
+        }
+
+        singlePressTimerRef.current = setTimeout(() => {
+            singlePressTimerRef.current = null;
+            toggleBubbleDetails();
+        }, 230);
+    }, [message.fromSessionId, onAvatarPress, toggleBubbleDetails]);
 
     const renderContent = () => {
         // 🆕 Render image if present
@@ -788,6 +928,88 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, variant, t
         );
     };
 
+    const renderAssociationCard = (agent: TeamChatAgentIdentity, key: string) => {
+        const agentVisual = getRoleVisual(agent.roleId, agent.displayName);
+        const associationTextColor = isMyMessage ? '#FFFFFF' : styles.associationName.color;
+        const associationMetaColor = isMyMessage ? 'rgba(255,255,255,0.78)' : styles.associationRole.color;
+
+        return (
+            <Pressable
+                key={key}
+                onPress={() => onAvatarPress(agent.sessionId)}
+                style={[
+                    styles.associationCard,
+                    isMyMessage && styles.associationCardMyMessage,
+                    isEdzlf && !isMyMessage && {
+                        backgroundColor: '#F7FAFC',
+                        borderColor: '#D9E4EA',
+                    },
+                ]}
+            >
+                <View style={[styles.associationAvatar, { backgroundColor: agentVisual.avatarBackground }]}>
+                    {agentVisual.avatarIcon ? (
+                        <Ionicons name={agentVisual.avatarIcon} size={12} color="#FFFFFF" />
+                    ) : (
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>
+                            {agentVisual.avatarLabel || getAvatarContent(agent.roleId, agent.displayName)}
+                        </Text>
+                    )}
+                </View>
+                <View style={styles.associationMeta}>
+                    <Text style={[styles.associationName, { color: associationTextColor }]} numberOfLines={1}>
+                        {agent.displayName}
+                    </Text>
+                    <Text style={[styles.associationRole, { color: associationMetaColor }]} numberOfLines={1}>
+                        {agent.roleLabel}
+                    </Text>
+                </View>
+                <Ionicons
+                    name="arrow-forward"
+                    size={12}
+                    color={isMyMessage ? 'rgba(255,255,255,0.72)' : theme.colors.textSecondary}
+                />
+            </Pressable>
+        );
+    };
+
+    const renderAssociations = () => {
+        if (!showAssociations || !hasAssociations) {
+            return null;
+        }
+
+        return (
+            <View style={styles.associationPanel}>
+                {originAgent ? (
+                    <View style={styles.associationSection}>
+                        <Text
+                            style={[
+                                styles.associationSectionLabel,
+                                isMyMessage && { color: 'rgba(255,255,255,0.72)' },
+                            ]}
+                        >
+                            Origin Session
+                        </Text>
+                        {renderAssociationCard(originAgent, `origin-${originAgent.sessionId}`)}
+                    </View>
+                ) : null}
+
+                {mentionedAgents.length > 0 ? (
+                    <View style={styles.associationSection}>
+                        <Text
+                            style={[
+                                styles.associationSectionLabel,
+                                isMyMessage && { color: 'rgba(255,255,255,0.72)' },
+                            ]}
+                        >
+                            @ Mentions
+                        </Text>
+                        {mentionedAgents.map((agent) => renderAssociationCard(agent, `mention-${agent.sessionId}`))}
+                    </View>
+                ) : null}
+            </View>
+        );
+    };
+
     return (
         <View style={{ marginBottom: 2 }}>
             {!isMyMessage && !isEdzlf && (
@@ -822,26 +1044,30 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, variant, t
                 <View style={[styles.messageBubbleContainer, isEdzlf && { maxWidth: isMyMessage ? '52%' : '82%' }]}>
                     {renderDesktopHeader()}
                     {isEdzlf && !showCardBody && !isMyMessage ? (
-                        <Pressable
-                            onLongPress={handleCopyMessage}
-                            delayLongPress={500}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 }}
-                        >
-                            <View
-                                style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: 5,
-                                    backgroundColor: roleVisual.dotColor || '#34C759',
-                                }}
-                            />
-                            <View style={{ flex: 1 }}>
-                                {renderContent()}
-                            </View>
-                            {copied ? (
-                                <Text style={{ fontSize: 11, color: '#7E93A3', fontWeight: '600' }}>Copied</Text>
-                            ) : null}
-                        </Pressable>
+                        <View>
+                            <Pressable
+                                onPress={handleBubblePress}
+                                onLongPress={handleCopyMessage}
+                                delayLongPress={500}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 }}
+                            >
+                                <View
+                                    style={{
+                                        width: 10,
+                                        height: 10,
+                                        borderRadius: 5,
+                                        backgroundColor: roleVisual.dotColor || '#34C759',
+                                    }}
+                                />
+                                <View style={{ flex: 1 }}>
+                                    {renderContent()}
+                                </View>
+                                {copied ? (
+                                    <Text style={{ fontSize: 11, color: '#7E93A3', fontWeight: '600' }}>Copied</Text>
+                                ) : null}
+                            </Pressable>
+                            {renderAssociations()}
+                        </View>
                     ) : (
                         <Pressable
                             style={[
@@ -855,7 +1081,7 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, variant, t
                                     padding: 0,
                                 },
                             ]}
-                            onPress={() => shouldShowExpand && setExpanded(!expanded)}
+                            onPress={handleBubblePress}
                             onLongPress={handleCopyMessage}
                             delayLongPress={500}
                         >
@@ -886,10 +1112,14 @@ const MessageBubble = ({ message, isMyMessage, styles, onAvatarPress, variant, t
                                 {renderContent()}
 
                                 {shouldShowExpand && (
-                                    <Text style={[styles.expandText, isMyMessage && styles.myExpandText]}>
-                                        {expanded ? 'Show Less' : 'Show More'}
-                                    </Text>
+                                    <Pressable onPress={() => setExpanded((previous) => !previous)} hitSlop={6}>
+                                        <Text style={[styles.expandText, isMyMessage && styles.myExpandText]}>
+                                            {expanded ? 'Show Less' : 'Show More'}
+                                        </Text>
+                                    </Pressable>
                                 )}
+
+                                {renderAssociations()}
 
                                 {!isEdzlf && (
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -977,11 +1207,8 @@ interface TeamChatRoomProps {
     mySessionId?: string;
     myRole?: string;
     myDisplayName?: string;
-    members?: Array<{
-        member: { sessionId: string; displayName?: string; roleId?: string };
-        session?: { active: boolean; updatedAt: number };
-        role?: { title: string };
-    }>;
+    members?: TeamChatMember[];
+    returnTo?: string;
     // 🆕 Chat-Board 同步相关 props
     messages?: TeamMessage[];
     onMessagesChange?: (messages: TeamMessage[]) => void;
@@ -996,6 +1223,7 @@ export default function TeamChatRoom({
     myRole,
     myDisplayName,
     members = [],
+    returnTo,
     messages: externalMessages,
     onMessagesChange,
     taskChatSync,
@@ -1267,6 +1495,39 @@ export default function TeamChatRoom({
         return members.filter(m => m.session?.active);
     }, [members]);
 
+    const memberDirectory = React.useMemo<Record<string, TeamChatAgentIdentity>>(() => {
+        return members.reduce<Record<string, TeamChatAgentIdentity>>((accumulator, entry) => {
+            const roleId = entry.member.roleId || entry.session?.metadata?.role;
+            accumulator[entry.member.sessionId] = {
+                sessionId: entry.member.sessionId,
+                displayName: entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId.slice(0, 8),
+                roleId,
+                roleLabel: entry.role?.title || roleId || 'Agent',
+                isOnline: !!entry.session?.active,
+            };
+            return accumulator;
+        }, {});
+    }, [members]);
+
+    const resolveAgentIdentity = React.useCallback((
+        sessionId: string,
+        fallbackRole?: string,
+        fallbackName?: string,
+    ): TeamChatAgentIdentity => {
+        const knownAgent = memberDirectory[sessionId];
+        if (knownAgent) {
+            return knownAgent;
+        }
+
+        return {
+            sessionId,
+            displayName: fallbackName || sessionId.slice(0, 8),
+            roleId: fallbackRole,
+            roleLabel: fallbackRole || 'Agent',
+            isOnline: false,
+        };
+    }, [memberDirectory]);
+
     const lastResponseBySession = React.useMemo<Record<string, number>>(() => {
         const map: Record<string, number> = {};
         messages.forEach(message => {
@@ -1277,15 +1538,13 @@ export default function TeamChatRoom({
     }, [messages]);
 
     const handleAvatarPress = (sessionId: string) => {
-        const member = members.find(m => m.member.sessionId === sessionId);
-        router.push({
-            pathname: '/(app)/session/[id]',
-            params: {
-                id: sessionId,
-                teamId: teamId,
-                teamName: teamName,
-                roleName: member?.role?.title || member?.member.roleId || 'Agent'
-            }
+        const agent = resolveAgentIdentity(sessionId);
+        pushSessionRoute(router, {
+            id: sessionId,
+            teamId,
+            teamName,
+            roleName: agent.roleLabel,
+            returnTo,
         });
     };
 
@@ -1873,6 +2132,7 @@ export default function TeamChatRoom({
                                 isMyMessage={message.fromRole === 'user' && (!message.fromSessionId || message.fromSessionId === mySessionId)}
                                 styles={styles}
                                 onAvatarPress={handleAvatarPress}
+                                resolveAgentIdentity={resolveAgentIdentity}
                                 variant={variant}
                                 taskChatSync={taskChatSync}
                             />

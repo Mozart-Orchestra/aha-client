@@ -23,6 +23,7 @@ import { isRunningOnMac } from '@/utils/platform';
 import { useDeviceType, useHeaderHeight, useIsLandscape, useIsTablet } from '@/utils/responsive';
 import { formatPathRelativeToHome, getSessionAvatarId, getSessionName, useSessionStatus } from '@/utils/sessionUtils';
 import { isVersionSupported, MINIMUM_CLI_VERSION } from '@/utils/versionUtils';
+import { goBackOrReturn } from '@/utils/returnNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
@@ -31,7 +32,7 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnistyles } from 'react-native-unistyles';
 
-export const SessionView = React.memo((props: { id: string, teamName?: string, roleName?: string }) => {
+export const SessionView = React.memo((props: { id: string, teamName?: string, roleName?: string, returnTo?: string }) => {
     const sessionId = props.id;
     const router = useRouter();
     const session = useSession(sessionId);
@@ -41,6 +42,9 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
     const isLandscape = useIsLandscape();
     const deviceType = useDeviceType();
     const headerHeight = useHeaderHeight();
+    const handleBackPress = React.useCallback(() => {
+        goBackOrReturn(router, props.returnTo);
+    }, [props.returnTo, router]);
 
     // Compute header props based on session state
     const headerProps = useMemo(() => {
@@ -87,12 +91,18 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
             title: getSessionName(session),
             subtitle: subtitle,
             avatarId: getSessionAvatarId(session),
-            onAvatarPress: () => router.push(`/session/${sessionId}/info`),
+            onAvatarPress: () => router.push({
+                pathname: '/session/[id]/info',
+                params: {
+                    id: sessionId,
+                    ...(props.returnTo ? { returnTo: props.returnTo } : {}),
+                },
+            } as any),
             isConnected: isConnected,
             flavor: session.metadata?.flavor || null,
             tintColor: isConnected ? '#000' : '#8E8E93'
         };
-    }, [session, isDataReady, sessionId, router, props.teamName, props.roleName]);
+    }, [session, isDataReady, sessionId, router, props.teamName, props.roleName, props.returnTo]);
 
     return (
         <>
@@ -128,7 +138,7 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
                 }}>
                     <ChatHeaderView
                         {...headerProps}
-                        onBackPress={() => router.back()}
+                        onBackPress={handleBackPress}
                     />
                 </View>
             )}
@@ -149,7 +159,7 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
                     </View>
                 ) : (
                     // Normal session view
-                    <SessionViewLoaded key={sessionId} sessionId={sessionId} session={session} />
+                    <SessionViewLoaded key={sessionId} sessionId={sessionId} session={session} returnTo={props.returnTo} />
                 )}
             </View>
         </>
@@ -157,7 +167,7 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
 });
 
 
-function SessionViewLoaded({ sessionId, session }: { sessionId: string, session: Session }) {
+function SessionViewLoaded({ sessionId, session, returnTo }: { sessionId: string, session: Session, returnTo?: string }) {
     const { theme } = useUnistyles();
     const router = useRouter();
     const safeArea = useSafeAreaInsets();
@@ -187,6 +197,9 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
 
     // Use draft hook for auto-saving message drafts
     const { clearDraft } = useDraft(sessionId, message, setMessage);
+    const handleBackPress = React.useCallback(() => {
+        goBackOrReturn(router, returnTo);
+    }, [returnTo, router]);
 
     // Handle dismissing CLI version warning
     const handleDismissCliWarning = React.useCallback(() => {
@@ -209,17 +222,6 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
     const updateModelMode = React.useCallback((mode: ModelMode) => {
         storage.getState().updateSessionModelMode(sessionId, mode);
     }, [sessionId]);
-
-    // Memoize header-dependent styles to prevent re-renders
-    const headerDependentStyles = React.useMemo(() => ({
-        contentContainer: {
-            flex: 1
-        },
-        flatListStyle: {
-            marginTop: 0 // No marginTop needed since header is handled by parent
-        },
-    }), []);
-
 
     // Handle microphone button press - memoized to prevent button flashing
     const handleMicrophonePress = React.useCallback(async () => {
@@ -314,7 +316,13 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
             isMicActive={micButtonState.isMicActive}
             onAbort={() => sessionAbort(sessionId)}
             showAbortButton={sessionStatus.state === 'thinking' || sessionStatus.state === 'waiting'}
-            onFileViewerPress={experiments ? () => router.push(`/session/${sessionId}/files`) : undefined}
+            onFileViewerPress={experiments ? () => router.push({
+                pathname: '/session/[id]/files',
+                params: {
+                    id: sessionId,
+                    ...(returnTo ? { returnTo } : {}),
+                },
+            } as any) : undefined}
             // Autocomplete configuration
             autocompletePrefixes={['@', '/']}
             autocompleteSuggestions={(query) => getSuggestions(sessionId, query)}
@@ -398,7 +406,7 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
             {
                 isLandscape && deviceType === 'phone' && (
                     <Pressable
-                        onPress={() => router.back()}
+                        onPress={handleBackPress}
                         style={{
                             position: 'absolute',
                             top: safeArea.top + 8,

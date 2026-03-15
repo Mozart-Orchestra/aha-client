@@ -99,7 +99,7 @@ export const SidebarNavigator = React.memo(() => {
     );
 });
 
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create({
     routingOverlay: {
         position: 'absolute',
         top: 0,
@@ -110,4 +110,4 @@ const styles = StyleSheet.create(() => ({
         // View prevents it from capturing any gestures or clicks.
         opacity: 0,
     },
-}));
+});

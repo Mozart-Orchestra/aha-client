@@ -9,12 +9,19 @@ const ThemePreferenceSchema = z.preprocess(
     z.enum(['light', 'dark'])
 );
 
+const AutomaticLanguageSchema = z.enum(['en', 'zh-Hans']);
+const AutomaticLanguageSourceSchema = z.enum(['ip', 'device']);
+
 export const LocalSettingsSchema = z.object({
     // Developer settings (device-specific)
     debugMode: z.boolean().describe('Enable debug logging'),
     devModeEnabled: z.boolean().describe('Enable developer menu in settings'),
     commandPaletteEnabled: z.boolean().describe('Enable CMD+K command palette (web only)'),
     themePreference: ThemePreferenceSchema.describe('Theme preference: light or dark'),
+    autoDetectedLanguage: AutomaticLanguageSchema.nullable().describe('Last automatically detected app language'),
+    autoDetectedLanguageSource: AutomaticLanguageSourceSchema.nullable().describe('Source for automatic language detection'),
+    autoDetectedLanguageCountryCode: z.string().nullable().describe('Country code used for automatic language detection'),
+    autoDetectedLanguageUpdatedAt: z.number().nullable().describe('Timestamp of the last automatic language detection'),
     markdownCopyV2: z.boolean().describe('Replace native paragraph selection with long-press modal for full markdown copy'),
     // CLI version acknowledgments - keyed by machineId
     acknowledgedCliVersions: z.record(z.string(), z.string()).describe('Acknowledged CLI versions per machine'),
@@ -38,6 +45,10 @@ export const localSettingsDefaults: LocalSettings = {
     devModeEnabled: false,
     commandPaletteEnabled: false,
     themePreference: 'light',
+    autoDetectedLanguage: null,
+    autoDetectedLanguageSource: null,
+    autoDetectedLanguageCountryCode: null,
+    autoDetectedLanguageUpdatedAt: null,
     markdownCopyV2: false,
     acknowledgedCliVersions: {},
 };

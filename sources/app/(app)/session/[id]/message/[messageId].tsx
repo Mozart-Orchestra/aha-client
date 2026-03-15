@@ -13,6 +13,8 @@ import { Message } from '@/sync/typesMessage';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Typography } from '@/constants/Typography';
 import { t } from '@/text';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
+import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 
 const DESKTOP_BREAKPOINT = 1180;
 
@@ -35,7 +37,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
+        borderBottomColor: theme.colors.divider,
         backgroundColor: theme.colors.surface,
         gap: 6,
     },
@@ -49,7 +51,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingVertical: 2,
         borderRadius: 5,
         borderWidth: 1,
-        borderColor: theme.colors.border,
+        borderColor: theme.colors.divider,
         backgroundColor: theme.colors.surfaceHigh,
         marginLeft: 4,
     },
@@ -71,7 +73,10 @@ const stylesheet = StyleSheet.create((theme) => ({
 }));
 
 export default React.memo(() => {
-    const { id: sessionId, messageId } = useLocalSearchParams<{ id: string; messageId: string }>();
+    const params = useLocalSearchParams<{ id: string; messageId: string; returnTo?: string }>();
+    const sessionId = getSingleRouteParam(params.id) || '';
+    const messageId = getSingleRouteParam(params.messageId) || '';
+    const returnTo = getSingleRouteParam(params.returnTo);
     const router = useRouter();
     const { width } = useWindowDimensions();
     const session = useSession(sessionId!);
@@ -80,19 +85,11 @@ export default React.memo(() => {
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const isDesktopShell = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
+    const handleExitMessage = React.useCallback(() => {
+        goBackOrReturn(router, returnTo, `/session/${sessionId}`);
+    }, [returnTo, router, sessionId]);
 
-    // ESC key to go back (web desktop only)
-    React.useEffect(() => {
-        if (!isDesktopShell) return;
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                router.back();
-            }
-        };
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [isDesktopShell, router]);
+    useEscapeAction(isDesktopShell, handleExitMessage);
 
     // Trigger session visibility when component mounts
     React.useEffect(() => {
@@ -104,9 +101,9 @@ export default React.memo(() => {
     // Navigate back if message doesn't exist after messages are loaded
     React.useEffect(() => {
         if (messagesLoaded && !message) {
-            router.back();
+            handleExitMessage();
         }
-    }, [messagesLoaded, message, router]);
+    }, [handleExitMessage, messagesLoaded, message]);
 
     const loading = (
         <View style={styles.loadingContainer}>
@@ -130,7 +127,7 @@ export default React.memo(() => {
         const mainPanel = (
             <View style={styles.desktopPanel}>
                 {/* Back bar with ESC hint */}
-                <Pressable style={styles.backBar} onPress={() => router.back()}>
+                <Pressable style={styles.backBar} onPress={handleExitMessage}>
                     <Ionicons name="chevron-back" size={16} color={theme.colors.textSecondary} />
                     <Text style={styles.backLabel}>{t('common.back')}</Text>
                     <View style={styles.escBadge}>

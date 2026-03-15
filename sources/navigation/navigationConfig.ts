@@ -94,6 +94,9 @@ export const NAV_TABS: readonly NavTabDefinition[] = [
  * Falls back to 'home' for unrecognised paths.
  */
 export function getActiveTabFromPathname(pathname: string): NavTabKey {
+    if (pathname.startsWith('/restore')) {
+        return 'settings';
+    }
     if (pathname.startsWith('/settings')) {
         return 'settings';
     }
@@ -117,7 +120,10 @@ export function isEmbeddedDesktopRoute(pathname: string): boolean {
         pathname === '/'
         || pathname === '/agents'
         || pathname === '/teams'
+        || pathname === '/teams/new'
         || /^\/teams\/[^/]+$/.test(pathname)
+        || pathname === '/restore'
+        || pathname.startsWith('/restore/')
         || pathname.startsWith('/session/')
     );
 }

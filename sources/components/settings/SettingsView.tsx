@@ -18,7 +18,6 @@ import { layout } from '@/utils/layout';
 import { useProfile } from '@/sync/storage';
 import { getDisplayName, getAvatarUrl, getBio } from '@/sync/profile';
 import { Avatar } from '@/components/avatar/Avatar';
-import { LanguageSelector } from '@/components/settings/LanguageSelector';
 import { t } from '@/text';
 
 export const SettingsView = React.memo(function SettingsView() {
@@ -155,7 +154,7 @@ export const SettingsView = React.memo(function SettingsView() {
                 <Item
                     title={t('settings.syncDeviceTitle')}
                     subtitle={t('settings.syncDeviceSubtitle')}
-                    icon={<Ionicons name="sync-outline" size={29} color="#FF9500" />}
+                    icon={<Ionicons name="link-outline" size={29} color="#FF9500" />}
                     onPress={() => router.push('/restore')}
                 />
                 <Item
@@ -164,8 +163,6 @@ export const SettingsView = React.memo(function SettingsView() {
                     icon={<Ionicons name="color-palette-outline" size={29} color="#5856D6" />}
                     onPress={() => router.push('/settings/appearance')}
                 />
-                {/* Language Selector - Custom Component */}
-                <LanguageSelector />
                 <Item
                     title={t('settings.voiceAssistant')}
                     subtitle={t('settings.voiceAssistantSubtitle')}

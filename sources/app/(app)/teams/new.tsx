@@ -14,6 +14,8 @@ import { getRecentPathForMachine, updateRecentMachinePaths, getKnownPathsForMach
 import { getLocalizedTeamRoles } from '@/team-config/i18n';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
+import { useEscapeAction } from '@/hooks/useEscapeAction';
+import { goBackOrReturn } from '@/utils/returnNavigation';
 
 // Use localized team roles instead of hardcoded ones
 const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
@@ -44,8 +46,8 @@ import { useDesktopBridge, DesktopRoomMemberInput } from '@/desktop/useDesktopBr
 type PromptAgentPreference = 'claude' | 'codex' | 'mixed';
 
 const PROMPT_AGENT_PREFERENCE_LABELS: Record<PromptAgentPreference, string> = {
-    claude: 'Claude Code only',
-    codex: 'Codex only',
+    claude: 'Claude Code',
+    codex: 'Codex',
     mixed: 'Mixed',
 };
 
@@ -446,6 +448,12 @@ export default function NewTeamScreen() {
     const defaultRoleId = 'implementer';
     const promptPrimaryMachineId = promptMachineIds[0] ?? null;
     const pathSourceMachineId = creationMode === 'prompt' ? promptPrimaryMachineId : selectedMachineId;
+
+    const handleExitNewTeam = React.useCallback(() => {
+        goBackOrReturn(router, undefined, '/teams');
+    }, [router]);
+
+    useEscapeAction(isDesktopShell, handleExitNewTeam);
 
     // Track if machine change was user-initiated (not from machines array refresh)
     const userChangedMachineRef = React.useRef(false);
@@ -1084,29 +1092,6 @@ export default function NewTeamScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>Team Goal</Text>
-                <TextInput
-                    style={[
-                        styles.input,
-                        targetFocused && styles.inputFocused,
-                        Platform.OS === 'web' && {
-                            outlineStyle: 'none',
-                            outline: 'none',
-                            outlineWidth: 0,
-                            outlineColor: 'transparent'
-                        } as any
-                    ]}
-                    value={target}
-                    onChangeText={setTarget}
-                    placeholder="e.g. Build a new landing page"
-                    placeholderTextColor={theme.colors.input.placeholder}
-                    onFocus={() => setTargetFocused(true)}
-                    onBlur={() => setTargetFocused(false)}
-                    editable={!isSaving}
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
                 <Text style={styles.label}>Creation Mode</Text>
                 <View style={{ flexDirection: 'row', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.divider }}>
                     <Pressable
@@ -1144,6 +1129,32 @@ export default function NewTeamScreen() {
                 </View>
             </View>
 
+            {creationMode === 'manual' && (
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Team Goal</Text>
+                    <TextInput
+                        style={[
+                            styles.input,
+                            targetFocused && styles.inputFocused,
+                            Platform.OS === 'web' && {
+                                outlineStyle: 'none',
+                                outline: 'none',
+                                outlineWidth: 0,
+                                outlineColor: 'transparent'
+                            } as any
+                        ]}
+                        value={target}
+                        onChangeText={setTarget}
+                        placeholder="e.g. Build a new landing page"
+                        placeholderTextColor={theme.colors.input.placeholder}
+                        onFocus={() => setTargetFocused(true)}
+                        onBlur={() => setTargetFocused(false)}
+                        editable={!isSaving}
+                        returnKeyType="next"
+                    />
+                </View>
+            )}
+
             {creationMode === 'prompt' && (
                 <>
                     <View style={styles.inputGroup}>
@@ -1176,7 +1187,7 @@ export default function NewTeamScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Runtime Preference</Text>
+                        <Text style={styles.label}>Type</Text>
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             {(['claude', 'codex', 'mixed'] as const).map((option) => {
                                 const isSelected = promptAgentPreference === option;
@@ -1201,7 +1212,7 @@ export default function NewTeamScreen() {
                             })}
                         </View>
                         <Text style={styles.helperText}>
-                            This is passed to org-manager as a preference: pure Claude Code, pure Codex, or mixed.
+                            Passed to org-manager as a preference only: pure Claude Code, pure Codex, or mixed.
                         </Text>
                     </View>
 

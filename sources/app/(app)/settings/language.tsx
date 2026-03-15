@@ -3,12 +3,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
-import { useSettingMutable } from '@/sync/storage';
-import { useUnistyles } from 'react-native-unistyles';
-import { t, getLanguageNativeName, SUPPORTED_LANGUAGES, SUPPORTED_LANGUAGE_CODES, type SupportedLanguage } from '@/text';
+import { useLocalSettings, useSettingMutable } from '@/sync/storage';
+import { t, getLanguageNativeName, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/text';
 import { Modal } from '@/modal';
 import { useUpdates } from '@/hooks/useUpdates';
-import * as Localization from 'expo-localization';
+import { PRIMARY_LANGUAGE_CODES } from '@/text/automaticLanguage';
 
 type LanguageOption = 'auto' | SupportedLanguage;
 
@@ -19,21 +18,20 @@ interface LanguageItem {
 }
 
 export default function LanguageSettingsScreen() {
-    const { theme } = useUnistyles();
     const [preferredLanguage, setPreferredLanguage] = useSettingMutable('preferredLanguage');
+    const localSettings = useLocalSettings();
     const { reloadApp } = useUpdates();
 
-    // Get device locale for automatic detection
-    const deviceLocale = Localization.getLocales()?.[0]?.languageTag ?? 'en-US';
-    const deviceLanguage = deviceLocale.split('-')[0].toLowerCase();
-    const detectedLanguageName = deviceLanguage in SUPPORTED_LANGUAGES ? 
-                                 getLanguageNativeName(deviceLanguage as keyof typeof SUPPORTED_LANGUAGES) : 
-                                 getLanguageNativeName('en');
+    const detectedLanguage = localSettings.autoDetectedLanguage === 'zh-Hans' ? 'zh-Hans' : 'en';
+    const detectedLanguageName = getLanguageNativeName(detectedLanguage);
+    const isPrimaryPreferredLanguage = preferredLanguage === 'en' || preferredLanguage === 'zh-Hans';
 
     // Current selection
-    const currentSelection: LanguageOption = preferredLanguage === null ? 'auto' : 
-                                           SUPPORTED_LANGUAGE_CODES.includes(preferredLanguage as SupportedLanguage) ? 
-                                           preferredLanguage as SupportedLanguage : 'auto';
+    const currentSelection: LanguageOption = preferredLanguage === null
+        ? 'auto'
+        : isPrimaryPreferredLanguage
+            ? preferredLanguage as SupportedLanguage
+            : 'auto';
 
     // Language options - dynamically generated from supported languages
     const languageOptions: LanguageItem[] = [
@@ -42,7 +40,7 @@ export default function LanguageSettingsScreen() {
             title: t('settingsLanguage.automatic'),
             subtitle: `${t('settingsLanguage.automaticSubtitle')} (${detectedLanguageName})`
         },
-        ...SUPPORTED_LANGUAGE_CODES.map(code => ({
+        ...PRIMARY_LANGUAGE_CODES.map(code => ({
             key: code,
             title: getLanguageNativeName(code)
         }))
