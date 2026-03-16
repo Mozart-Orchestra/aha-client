@@ -903,7 +903,7 @@ export default function TeamsScreen() {
                                 </Text>
                             </View>
                             <View style={styles.desktopMetaPill}>
-                                <Text style={styles.desktopMetaPillText}>Artifact synced</Text>
+                                <Text style={styles.desktopMetaPillText}>{t('teams.artifactSynced')}</Text>
                             </View>
                         </View>
                     </View>
@@ -1110,7 +1110,7 @@ export default function TeamsScreen() {
                                     ]}
                                 >
                                     <Ionicons name="archive-outline" size={18} color={theme.colors.text} />
-                                    <Text style={styles.batchActionButtonText}>Archive</Text>
+                                    <Text style={styles.batchActionButtonText}>{t('teams.archiveAction')}</Text>
                                 </Pressable>
                                 <Pressable
                                     onPress={handleBatchDelete}
@@ -1123,7 +1123,7 @@ export default function TeamsScreen() {
                                 >
                                     <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
                                     <Text style={[styles.batchActionButtonText, styles.batchActionButtonTextDestructive]}>
-                                        Delete
+                                        {t('teams.deleteAction')}
                                     </Text>
                                 </Pressable>
                             </View>
@@ -1222,7 +1222,7 @@ export default function TeamsScreen() {
                                     ]}
                                 >
                                     <Ionicons name="archive-outline" size={18} color={theme.colors.text} />
-                                    <Text style={styles.batchActionButtonText}>Archive</Text>
+                                    <Text style={styles.batchActionButtonText}>{t('teams.archiveAction')}</Text>
                                 </Pressable>
                                 <Pressable
                                     onPress={handleBatchDelete}
@@ -1235,7 +1235,7 @@ export default function TeamsScreen() {
                                 >
                                     <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
                                     <Text style={[styles.batchActionButtonText, styles.batchActionButtonTextDestructive]}>
-                                        Delete
+                                        {t('teams.deleteAction')}
                                     </Text>
                                 </Pressable>
                             </View>

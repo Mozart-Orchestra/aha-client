@@ -1147,7 +1147,7 @@ export default function NewTeamScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>Team Name</Text>
+                <Text style={styles.label}>{t('newTeam.teamNameLabel')}</Text>
                 <TextInput
                     style={[
                         styles.input,
@@ -1171,7 +1171,7 @@ export default function NewTeamScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>Creation Mode</Text>
+                <Text style={styles.label}>{t('newTeam.creationModeLabel')}</Text>
                 <View style={{ flexDirection: 'row', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.divider }}>
                     <Pressable
                         onPress={() => setCreationMode('prompt')}
@@ -1186,7 +1186,7 @@ export default function NewTeamScreen() {
                             fontSize: 14,
                             fontWeight: '600',
                             color: creationMode === 'prompt' ? '#FFF' : theme.colors.text,
-                        }}>Prompt</Text>
+                        }}>{t('newTeam.modePrompt')}</Text>
                     </Pressable>
                     <Pressable
                         onPress={() => setCreationMode('manual')}
@@ -1203,14 +1203,14 @@ export default function NewTeamScreen() {
                             fontSize: 14,
                             fontWeight: '600',
                             color: creationMode === 'manual' ? '#FFF' : theme.colors.text,
-                        }}>Manual</Text>
+                        }}>{t('newTeam.modeManual')}</Text>
                     </Pressable>
                 </View>
             </View>
 
             {creationMode === 'manual' && (
                 <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Team Goal</Text>
+                    <Text style={styles.label}>{t('newTeam.teamGoalLabel')}</Text>
                     <TextInput
                         style={[
                             styles.input,
@@ -1237,7 +1237,7 @@ export default function NewTeamScreen() {
             {creationMode === 'prompt' && (
                 <>
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Task Prompt</Text>
+                        <Text style={styles.label}>{t('newTeam.taskPromptLabel')}</Text>
                         <TextInput
                             style={[
                                 styles.input,
@@ -1266,7 +1266,7 @@ export default function NewTeamScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Type</Text>
+                        <Text style={styles.label}>{t('newTeam.agentTypeLabel')}</Text>
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             {(['claude', 'codex', 'mixed'] as const).map((option) => {
                                 const isSelected = promptAgentPreference === option;
@@ -1291,15 +1291,15 @@ export default function NewTeamScreen() {
                             })}
                         </View>
                         <Text style={styles.helperText}>
-                            Passed to org-manager as a preference only: pure Claude Code, pure Codex, or mixed.
+                            {t('newTeam.agentTypeHelperText')}
                         </Text>
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Machines</Text>
+                        <Text style={styles.label}>{t('newTeam.machinesLabel')}</Text>
                         {promptMachines.length === 0 ? (
                             <Text style={styles.helperText}>
-                                Start the Kanban CLI on your computer to make machines available.
+                                {t('newTeam.noMachinesHelperText')}
                             </Text>
                         ) : (
                             <>
@@ -1331,7 +1331,7 @@ export default function NewTeamScreen() {
                                                         style={styles.inlineButton}
                                                         onPress={() => handleSetPromptPrimaryMachine(machine.id)}
                                                     >
-                                                        <Text style={styles.inlineButtonText}>Set primary</Text>
+                                                        <Text style={styles.inlineButtonText}>{t('newTeam.setPrimaryButton')}</Text>
                                                     </Pressable>
                                                 )}
                                                 {promptMachineIds.length > 1 && (
@@ -1339,7 +1339,7 @@ export default function NewTeamScreen() {
                                                         style={styles.inlineButton}
                                                         onPress={() => handleRemovePromptMachine(machine.id)}
                                                     >
-                                                        <Text style={styles.inlineButtonText}>Remove</Text>
+                                                        <Text style={styles.inlineButtonText}>{t('newTeam.removeButton')}</Text>
                                                     </Pressable>
                                                 )}
                                             </View>
@@ -1383,7 +1383,7 @@ export default function NewTeamScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>Working Directory</Text>
+                        <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>{t('newTeam.workingDirectoryLabel')}</Text>
                         <TextInput
                             style={[
                                 styles.input,
@@ -1397,7 +1397,7 @@ export default function NewTeamScreen() {
                         />
                         {selectedMachine && (
                             <Pressable style={styles.inlineButton} onPress={handleUseSuggestedPath}>
-                                <Text style={styles.inlineButtonText}>Use last path</Text>
+                                <Text style={styles.inlineButtonText}>{t('newTeam.useLastPathButton')}</Text>
                             </Pressable>
                         )}
                         {availablePaths.length > 0 && (
@@ -1407,7 +1407,7 @@ export default function NewTeamScreen() {
                                     onPress={() => setIsPathDropdownOpen(prev => !prev)}
                                 >
                                     <Text style={styles.pathDropdownToggleText}>
-                                        {isPathDropdownOpen ? 'Hide recent paths' : 'Choose from recent paths'}
+                                        {isPathDropdownOpen ? t('newTeam.hideRecentPaths') : t('newTeam.chooseFromRecentPaths')}
                                     </Text>
                                     <Ionicons
                                         name={isPathDropdownOpen ? 'chevron-up' : 'chevron-down'}
@@ -1428,7 +1428,7 @@ export default function NewTeamScreen() {
                                             >
                                                 <Text style={styles.pathOptionText}>{path}</Text>
                                                 {selectedMachine?.metadata?.homeDir === path && (
-                                                    <Text style={styles.pathOptionSubText}>Home Directory</Text>
+                                                    <Text style={styles.pathOptionSubText}>{t('newTeam.homeDirectoryLabel')}</Text>
                                                 )}
                                             </Pressable>
                                         ))}
@@ -1494,7 +1494,7 @@ export default function NewTeamScreen() {
                                                             fontSize: 12,
                                                             fontWeight: '600',
                                                             color: currentAgentType === 'claude' ? '#FFF' : theme.colors.text,
-                                                        }}>Claude</Text>
+                                                        }}>{ t('agentInput.agent.claude') }</Text>
                                                     </Pressable>
                                                     <Pressable
                                                         onPress={() => updateRoleAgentType(role.id, 'codex')}
@@ -1510,7 +1510,7 @@ export default function NewTeamScreen() {
                                                             fontSize: 12,
                                                             fontWeight: '600',
                                                             color: currentAgentType === 'codex' ? '#FFF' : theme.colors.text,
-                                                        }}>Codex</Text>
+                                                        }}>{ t('agentInput.agent.codex') }</Text>
                                                     </Pressable>
                                                 </View>
                                             </View>
@@ -1522,13 +1522,13 @@ export default function NewTeamScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Automation Settings</Text>
+                        <Text style={styles.label}>{t('newTeam.automationSettingsLabel')}</Text>
                         <View style={{ gap: 16 }}>
                             <View>
-                                <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>Machine</Text>
+                                <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>{t('newTeam.machineLabel')}</Text>
                                 {machines.length === 0 ? (
                                     <Text style={styles.helperText}>
-                                        Start the Kanban CLI on your computer to spawn teammates automatically.
+                                        {t('newTeam.noMachinesSpawnHelperText')}
                                     </Text>
                                 ) : (
                                     <View style={styles.machineList}>
@@ -1564,7 +1564,7 @@ export default function NewTeamScreen() {
                             </View>
 
                             <View>
-                                <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>Agent Type</Text>
+                                <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>{t('newTeam.agentTypeSectionLabel')}</Text>
                                 <View style={styles.agentChipGroup}>
                                     {(['claude', 'codex'] as const).map(type => {
                                         const isSelected = agentType === type;
@@ -1590,7 +1590,7 @@ export default function NewTeamScreen() {
                             </View>
 
                             <View>
-                                <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>Working Directory</Text>
+                                <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>{t('newTeam.workingDirectoryLabel')}</Text>
                                 <TextInput
                                     style={[
                                         styles.input,
@@ -1604,7 +1604,7 @@ export default function NewTeamScreen() {
                                 />
                                 {selectedMachine && (
                                     <Pressable style={styles.inlineButton} onPress={handleUseSuggestedPath}>
-                                        <Text style={styles.inlineButtonText}>Use last path</Text>
+                                        <Text style={styles.inlineButtonText}>{t('newTeam.useLastPathButton')}</Text>
                                     </Pressable>
                                 )}
                                 {availablePaths.length > 0 && (
@@ -1635,7 +1635,7 @@ export default function NewTeamScreen() {
                                                     >
                                                         <Text style={styles.pathOptionText}>{path}</Text>
                                                         {selectedMachine?.metadata?.homeDir === path && (
-                                                            <Text style={styles.pathOptionSubText}>Home Directory</Text>
+                                                            <Text style={styles.pathOptionSubText}>{t('newTeam.homeDirectoryLabel')}</Text>
                                                         )}
                                                     </Pressable>
                                                 ))}
@@ -1747,10 +1747,10 @@ export default function NewTeamScreen() {
         <View style={styles.desktopMainPanel}>
             <View style={styles.desktopHeader}>
                 <View style={styles.desktopHeaderCopy}>
-                    <Text style={styles.desktopEyebrow}>Teams</Text>
-                    <Text style={styles.desktopTitle}>Create Team</Text>
+                    <Text style={styles.desktopEyebrow}>{t('newTeam.pageEyebrow')}</Text>
+                    <Text style={styles.desktopTitle}>{t('newTeam.pageTitle')}</Text>
                     <Text style={styles.desktopSubtitle}>
-                        Assemble a new team, choose how agents should be spawned, and define the kickoff prompt or manual composition.
+                        {t('newTeam.pageSubtitle')}
                     </Text>
                 </View>
                 <Pressable
@@ -1761,7 +1761,7 @@ export default function NewTeamScreen() {
                     {isSaving ? (
                         <ActivityIndicator size="small" color="#FFF" />
                     ) : (
-                        <Text style={styles.desktopCreateButtonText}>Create team</Text>
+                        <Text style={styles.desktopCreateButtonText}>{t('newTeam.createButton')}</Text>
                     )}
                 </Pressable>
             </View>
