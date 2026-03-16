@@ -30,6 +30,7 @@ import {
     type Genome,
 } from '@/sync/apiEvolution';
 import { Modal } from '@/modal';
+import { searchGenomes, parseFeedback } from '@/utils/genomeHub';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -340,9 +341,80 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
                 )}
             </View>
 
+            {/* ── Supervisor Evaluation Reports ────────────────────────── */}
+            <SupervisorReports />
+
         </ScrollView>
     );
 });
+
+// ─── Supervisor Reports ───────────────────────────────────────────────────────
+
+function SupervisorReports() {
+    const { theme } = useUnistyles();
+    const [genomes, setGenomes] = React.useState<Array<{ name: string; namespace: string | null; avgScore: number; evaluationCount: number; latestAction: string; suggestions: string[] }>>([]);
+
+    React.useEffect(() => {
+        searchGenomes({ namespace: '@official', limit: 20 })
+            .then(result => {
+                const scored = result.genomes
+                    .map(g => {
+                        const fb = parseFeedback(g.feedbackData);
+                        if (!fb || fb.evaluationCount < 1) return null;
+                        return {
+                            name: g.name,
+                            namespace: g.namespace,
+                            avgScore: fb.avgScore,
+                            evaluationCount: fb.evaluationCount,
+                            latestAction: fb.latestAction,
+                            suggestions: fb.suggestions?.slice(0, 2) ?? [],
+                        };
+                    })
+                    .filter(Boolean) as typeof genomes;
+                scored.sort((a, b) => b.evaluationCount - a.evaluationCount);
+                setGenomes(scored);
+            })
+            .catch(() => {});
+    }, []);
+
+    if (genomes.length === 0) return null;
+
+    return (
+        <View style={{ marginTop: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+                <Ionicons name="star-outline" size={18} color={theme.colors.textLink} />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.text }}>Supervisor Evaluation Reports</Text>
+            </View>
+            {genomes.map(g => {
+                const scoreColor = g.avgScore >= 85 ? '#22c55e' : g.avgScore >= 70 ? '#f59e0b' : '#ef4444';
+                const actionColor = g.latestAction === 'keep' ? '#22c55e' : g.latestAction === 'discard' ? '#ef4444' : '#f59e0b';
+                return (
+                    <View key={`${g.namespace}/${g.name}`} style={{ borderRadius: 10, borderWidth: 1, borderColor: theme.colors.divider, backgroundColor: theme.colors.surface, padding: 12, marginBottom: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text }}>
+                                {g.namespace}/{g.name}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={{ fontSize: 12, color: scoreColor, fontWeight: '700' }}>★ {g.avgScore}</Text>
+                                <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>({g.evaluationCount} evals)</Text>
+                                <View style={{ backgroundColor: actionColor + '22', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 10, color: actionColor, fontWeight: '600' }}>{g.latestAction}</Text>
+                                </View>
+                            </View>
+                        </View>
+                        {g.suggestions.length > 0 && (
+                            <View style={{ gap: 3 }}>
+                                {g.suggestions.map((s, i) => (
+                                    <Text key={i} style={{ fontSize: 11, color: theme.colors.textSecondary }}>• {s}</Text>
+                                ))}
+                            </View>
+                        )}
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 

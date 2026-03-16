@@ -2240,7 +2240,14 @@ class Sync {
             const isDuplicate = currentMessages.find(m => m.id === message.id);
 
             if (!isDuplicate) {
-                this.teamMessagesCache.set(teamId, [...currentMessages, message as any]);
+                const updated = [...currentMessages, message as any];
+                this.teamMessagesCache.set(teamId, updated);
+                // Persist to sessionStorage so messages survive reconnects (not localStorage — too large)
+                try {
+                    if (typeof sessionStorage !== 'undefined') {
+                        sessionStorage.setItem(`team_msgs_${teamId}`, JSON.stringify(updated.slice(-500)));
+                    }
+                } catch { /* storage full — skip */ }
 
                 // Only notify subscribers for new messages
                 const subscribers = this.teamMessageSubscriptions.get(teamId);
@@ -2799,14 +2806,28 @@ class Sync {
      * 获取团队消息列表
      */
     async getTeamMessages(teamId: string): Promise<import('@/sync/teamMessageTypes').TeamMessageListResponse> {
-        // 先检查缓存
+        // 先检查内存缓存
         const cached = this.teamMessagesCache.get(teamId);
-        if (cached) {
+        if (cached && cached.length > 0) {
             return {
                 messages: cached,
                 hasMore: false
             };
         }
+
+        // Restore from sessionStorage if available (survives page refresh, not app close)
+        try {
+            if (typeof sessionStorage !== 'undefined') {
+                const stored = sessionStorage.getItem(`team_msgs_${teamId}`);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        this.teamMessagesCache.set(teamId, parsed);
+                        return { messages: parsed, hasMore: false };
+                    }
+                }
+            }
+        } catch { /* ignore */ }
 
         try {
             // 从服务器获取（临时实现：从 artifact body 中读取）

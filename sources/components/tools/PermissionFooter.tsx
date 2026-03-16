@@ -5,6 +5,7 @@ import { sessionAllow, sessionDeny } from '@/sync/ops';
 import { useUnistyles } from 'react-native-unistyles';
 import { storage } from '@/sync/storage';
 import { t } from '@/text';
+import { trackAgentScopeViolation } from '@/track';
 
 interface PermissionFooterProps {
     permission: {
@@ -84,6 +85,7 @@ export const PermissionFooter: React.FC<PermissionFooterProps> = ({ permission, 
         setLoadingButton('deny');
         try {
             await sessionDeny(sessionId, permission.id);
+            trackAgentScopeViolation(sessionId, '', toolName);
         } catch (error) {
             console.error('Failed to deny permission:', error);
         } finally {
@@ -120,10 +122,11 @@ export const PermissionFooter: React.FC<PermissionFooterProps> = ({ permission, 
     
     const handleCodexAbort = async () => {
         if (permission.status !== 'pending' || loadingButton !== null || loadingForSession) return;
-        
+
         setLoadingButton('abort');
         try {
             await sessionDeny(sessionId, permission.id, undefined, undefined, 'abort');
+            trackAgentScopeViolation(sessionId, '', toolName);
         } catch (error) {
             console.error('Failed to abort permission:', error);
         } finally {

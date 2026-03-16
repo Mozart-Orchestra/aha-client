@@ -153,6 +153,20 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 4,
         overflow: 'hidden',
     },
+    taskActiveExecution: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 999,
+        backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    },
+    taskActiveExecutionText: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#FF9500',
+    },
     addTaskButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1109,7 +1123,7 @@ export default function TeamDashboardScreen() {
             ...assignedIds
         ]));
 
-        return allSessionIds.map((sessionId, index) => {
+        const entries = allSessionIds.map((sessionId, index) => {
             const session = sessionLookup.get(sessionId);
             const existingMember = memberMap.get(sessionId);
 
@@ -1136,6 +1150,27 @@ export default function TeamDashboardScreen() {
             const tasks = kanbanData.tasks.filter(t => t.assigneeId === sessionId);
 
             return { member, session, role, index, tasks };
+        });
+
+        // Stable sort: role priority first (master/orchestrator → coordinator → worker → bypass),
+        // then insertion order (index). Never sort by activity time.
+        const ROLE_PRIORITY: Record<string, number> = {
+            master: 0, orchestrator: 0,
+            architect: 1, 'solution-architect': 1,
+            implementer: 2, builder: 2, framer: 2,
+            'qa-engineer': 3, qa: 3, reviewer: 3,
+            researcher: 4, scout: 4,
+            supervisor: 99, 'help-agent': 99, 'org-manager': 100,
+        };
+        return entries.sort((a, b) => {
+            // Terminated (inactive) agents always go to the bottom
+            const aDead = a.session && !a.session.active ? 1 : 0;
+            const bDead = b.session && !b.session.active ? 1 : 0;
+            if (aDead !== bDead) return aDead - bDead;
+            const pa = ROLE_PRIORITY[a.member.roleId || a.session?.metadata?.role || ''] ?? 5;
+            const pb = ROLE_PRIORITY[b.member.roleId || b.session?.metadata?.role || ''] ?? 5;
+            if (pa !== pb) return pa - pb;
+            return a.index - b.index; // stable: preserve insertion order within same role tier
         });
     }, [kanbanData.team?.members, artifact?.sessions, sessionLookup, roleDefinitions, kanbanData.tasks]);
 
@@ -1336,6 +1371,11 @@ export default function TeamDashboardScreen() {
                                 .map(task => {
                                     const linkedSessions = taskSessionLinks.get(task.id) || [];
                                     const sessionCount = linkedSessions.length;
+                                    const activeLink = task.executionLinks?.find(l => l.status === 'active');
+                                    const activeAgentSession = activeLink ? sessionLookup.get(activeLink.sessionId) : null;
+                                    const activeAgentName = activeAgentSession
+                                        ? getSessionName(activeAgentSession)
+                                        : activeLink?.sessionId?.slice(0, 8) ?? null;
 
                                     return (
                                     <Pressable
@@ -1357,8 +1397,14 @@ export default function TeamDashboardScreen() {
                                         })()}
 
                                         {/* 🆕 Linked sessions 显示 */}
-                                        {(sessionCount > 0 || task.priority) && (
+                                        {(sessionCount > 0 || task.priority || activeAgentName) && (
                                             <View style={styles.taskMeta}>
+                                                {activeAgentName && (
+                                                    <View style={styles.taskActiveExecution}>
+                                                        <Ionicons name="flash" size={11} color="#FF9500" />
+                                                        <Text style={styles.taskActiveExecutionText}>{activeAgentName}</Text>
+                                                    </View>
+                                                )}
                                                 {sessionCount > 0 && (
                                                     <View style={styles.taskSessionsLink}>
                                                         <Ionicons

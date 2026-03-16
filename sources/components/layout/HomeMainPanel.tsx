@@ -12,6 +12,7 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Image } from 'expo-image';
 
 import { useArtifacts, useAllSessions, useIsDataReady } from '@/sync/storage';
+import type { Session } from '@/sync/storageTypes';
 import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
 
@@ -149,6 +150,101 @@ function HelpCard() {
     );
 }
 
+function isTeamAgentSession(session: Session): boolean {
+    return Boolean(session.metadata?.teamId || session.metadata?.role);
+}
+
+function formatCompactTokens(tokens: number): string {
+    if (tokens >= 1_000_000) {
+        return `${(tokens / 1_000_000).toFixed(1)}M`;
+    }
+    if (tokens >= 1_000) {
+        return tokens >= 10_000 ? `${Math.round(tokens / 1_000)}K` : `${(tokens / 1_000).toFixed(1)}K`;
+    }
+    return tokens.toLocaleString();
+}
+
+function formatApproxCost(cost: number): string {
+    return `~$${cost.toFixed(4)}`;
+}
+
+function WorkspaceStatsCard() {
+    const styles = stylesheet;
+    const { theme } = useUnistyles();
+    const artifacts = useArtifacts();
+    const sessions = useAllSessions();
+
+    const stats = React.useMemo(() => {
+        const teamCount = artifacts.filter((artifact) => artifact.type === 'team').length;
+        const agentSessions = sessions.filter(isTeamAgentSession);
+        const activeAgentCount = agentSessions.filter((session) => session.active).length;
+
+        const usageTotals = agentSessions.reduce((acc, session) => {
+            const usage = session.latestUsage;
+            if (!usage) {
+                return acc;
+            }
+
+            acc.inputTokens += usage.inputTokens;
+            acc.outputTokens += usage.outputTokens;
+            return acc;
+        }, {
+            inputTokens: 0,
+            outputTokens: 0,
+        });
+
+        const totalTokens = usageTotals.inputTokens + usageTotals.outputTokens;
+        const totalCost = ((usageTotals.inputTokens * 3) + (usageTotals.outputTokens * 15)) / 1_000_000;
+
+        return {
+            teamCount,
+            totalAgents: agentSessions.length,
+            activeAgentCount,
+            totalTokens,
+            totalCost,
+        };
+    }, [artifacts, sessions]);
+
+    if (stats.teamCount === 0 && stats.totalAgents === 0 && stats.totalTokens === 0) {
+        return null;
+    }
+
+    return (
+        <View style={styles.statsCard}>
+            <View style={styles.statsHeader}>
+                <View style={[styles.statsIconWrap, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <Ionicons name="analytics-outline" size={18} color={theme.colors.text} />
+                </View>
+                <View style={styles.statsHeaderBody}>
+                    <Text style={styles.statsTitle}>{t('home.reportTitle')}</Text>
+                    <Text style={styles.statsSubtitle}>{t('home.reportSubtitle')}</Text>
+                </View>
+            </View>
+
+            <View style={styles.statsGrid}>
+                <View style={styles.statsMetricCard}>
+                    <Text style={styles.statsMetricLabel}>{t('usage.totalTokens')}</Text>
+                    <Text style={styles.statsMetricValue}>{formatCompactTokens(stats.totalTokens)} tok</Text>
+                </View>
+
+                <View style={styles.statsMetricCard}>
+                    <Text style={styles.statsMetricLabel}>{t('usage.totalCost')}</Text>
+                    <Text style={styles.statsMetricValue}>{formatApproxCost(stats.totalCost)}</Text>
+                </View>
+
+                <View style={[styles.statsMetricCard, styles.statsMetricCardWide]}>
+                    <Text style={styles.statsMetricLabel}>
+                        {t('sidebar.online')} {t('sidebar.agents')}
+                    </Text>
+                    <Text style={styles.statsMetricValue}>
+                        {stats.activeAgentCount} / {stats.totalAgents}
+                    </Text>
+                </View>
+            </View>
+        </View>
+    );
+}
+
 function NewUserPanel() {
     const router = useRouter();
     const styles = stylesheet;
@@ -240,6 +336,8 @@ function ExperiencedUserPanel() {
             showsVerticalScrollIndicator={false}
         >
             <HelpCard />
+
+            <WorkspaceStatsCard />
 
             <ActionCard
                 icon="add"
@@ -387,6 +485,73 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderColor: theme.colors.divider,
         padding: 16,
         marginBottom: 10,
+    },
+    statsCard: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        padding: 16,
+        marginBottom: 10,
+    },
+    statsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    statsIconWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statsHeaderBody: {
+        flex: 1,
+        minWidth: 0,
+    },
+    statsTitle: {
+        fontSize: 16,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    statsSubtitle: {
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 18,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
+    },
+    statsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginTop: 16,
+    },
+    statsMetricCard: {
+        minWidth: 140,
+        flexGrow: 1,
+        flexBasis: '48%',
+        backgroundColor: theme.colors.groupped.background,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    statsMetricCardWide: {
+        flexBasis: '100%',
+    },
+    statsMetricLabel: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        ...Typography.default('semiBold'),
+    },
+    statsMetricValue: {
+        marginTop: 8,
+        fontSize: 22,
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
     },
     helpHeader: {
         flexDirection: 'row',

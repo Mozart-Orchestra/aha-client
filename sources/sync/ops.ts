@@ -6,6 +6,7 @@
 import { apiSocket } from './apiSocket';
 import { sync } from './sync';
 import type { MachineMetadata } from './storageTypes';
+import { trackConflictDetected } from '@/track';
 
 // Strict type definitions for all operations
 
@@ -383,6 +384,11 @@ export async function sessionWriteFile(
             'writeFile',
             request
         );
+        // Detect concurrent write conflicts: if hash was provided for conflict detection
+        // but the write failed, another agent likely modified the file first
+        if (!response.success && expectedHash != null) {
+            trackConflictDetected(sessionId, '', 'file_edit');
+        }
         return response;
     } catch (error) {
         return {

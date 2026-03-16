@@ -14,6 +14,7 @@ import {
 } from '@/utils/taskHelpers';
 import { sync } from '@/sync/sync';
 import { storage, useAllSessions } from '@/sync/storage';
+import { getSessionName as resolveSessionName } from '@/utils/sessionUtils';
 import { Modal as CustomModal } from '@/modal';
 import { useAuth } from '@/auth/AuthContext';
 
@@ -61,7 +62,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
     const getSessionName = React.useCallback((sessionId?: string | null): string => {
         if (!sessionId) return '';
         const session = allSessions.find(s => s.id === sessionId);
-        return session?.displayName || session?.name || sessionId.slice(0, 8);
+        return session ? resolveSessionName(session) : sessionId.slice(0, 8);
     }, [allSessions]);
 
     const selectedTask = pendingTasks.find(t => t.id === selectedTaskId);

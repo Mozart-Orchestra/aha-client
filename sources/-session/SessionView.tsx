@@ -18,7 +18,7 @@ import { useSession } from '@/sync/storage';
 import { Session } from '@/sync/storageTypes';
 import { sync } from '@/sync/sync';
 import { t } from '@/text';
-import { tracking, trackMessageSent } from '@/track';
+import { tracking, trackMessageSent, trackSessionActivated } from '@/track';
 import { isRunningOnMac } from '@/utils/platform';
 import { useDeviceType, useHeaderHeight, useIsLandscape, useIsTablet } from '@/utils/responsive';
 import { formatPathRelativeToHome, getSessionAvatarId, getSessionName, useSessionStatus } from '@/utils/sessionUtils';
@@ -36,6 +36,7 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
     const sessionId = props.id;
     const router = useRouter();
     const session = useSession(sessionId);
+    const sessionUsage = useSessionUsage(sessionId);
     const isDataReady = useIsDataReady();
     const { theme } = useUnistyles();
     const safeArea = useSafeAreaInsets();
@@ -87,6 +88,21 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
             }
         }
 
+        // Append token usage info if available
+        const latestUsage = sessionUsage ?? session.latestUsage ?? null;
+        if (latestUsage) {
+            const tokenTotal = latestUsage.inputTokens + latestUsage.outputTokens +
+                latestUsage.cacheCreation + latestUsage.cacheRead;
+            if (tokenTotal > 0) {
+                const tokenStr = tokenTotal >= 1_000_000
+                    ? `${(tokenTotal / 1_000_000).toFixed(1)}M tok`
+                    : tokenTotal >= 1_000
+                    ? `${Math.round(tokenTotal / 1_000)}k tok`
+                    : `${tokenTotal} tok`;
+                subtitle = subtitle ? `${subtitle} · ${tokenStr}` : tokenStr;
+            }
+        }
+
         return {
             title: getSessionName(session),
             subtitle: subtitle,
@@ -102,7 +118,7 @@ export const SessionView = React.memo((props: { id: string, teamName?: string, r
             flavor: session.metadata?.flavor || null,
             tintColor: isConnected ? '#000' : '#8E8E93'
         };
-    }, [session, isDataReady, sessionId, router, props.teamName, props.roleName, props.returnTo]);
+    }, [session, isDataReady, sessionId, router, props.teamName, props.roleName, props.returnTo, sessionUsage]);
 
     return (
         <>
@@ -306,6 +322,10 @@ function SessionViewLoaded({ sessionId, session, returnTo }: { sessionId: string
             }}
             onSend={() => {
                 if (message.trim()) {
+                    // Track session activation on first message
+                    if (messages.length === 0) {
+                        trackSessionActivated(sessionId);
+                    }
                     setMessage('');
                     clearDraft();
                     sync.sendMessage(sessionId, message);

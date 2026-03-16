@@ -18,6 +18,7 @@ import { authGetToken } from '@/auth/authGetToken';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
+import { PreviewSessionCard } from '@/components/session/PreviewSessionCard';
 import { encodeBase64 } from '@/encryption/base64';
 import { getCurrentLanguage, t } from '@/text';
 import { trackAccountCreated, trackAccountRestored } from '@/track';
@@ -280,44 +281,6 @@ const styles = StyleSheet.create(() => ({
         fontWeight: '700',
         color: '#2BC866',
     },
-    landingPreviewCard: {
-        borderRadius: 14,
-        borderWidth: 1.5,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        marginTop: 12,
-    },
-    landingPreviewCardTop: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 10,
-    },
-    landingPreviewStatusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginTop: 4,
-    },
-    landingPreviewInfo: {
-        flex: 1,
-        minWidth: 0,
-    },
-    landingPreviewCardTitle: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#1A1209',
-    },
-    landingPreviewCardSubtitle: {
-        marginTop: 4,
-        fontSize: 12,
-        lineHeight: 18,
-        color: '#8A7F74',
-    },
-    landingPreviewMeta: {
-        marginTop: 10,
-        fontSize: 11,
-        color: '#A09487',
-    },
     landingPreviewActions: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
@@ -422,38 +385,6 @@ function TrustItem({
         <View style={styles.landingTrustItem}>
             <Ionicons name={icon} size={14} color="#B2A596" />
             <Text style={styles.landingTrustText}>{label}</Text>
-        </View>
-    );
-}
-
-function PreviewSessionCard({
-    accentColor,
-    backgroundColor,
-    borderColor,
-    title,
-    subtitle,
-    meta,
-    children,
-}: {
-    accentColor: string;
-    backgroundColor: string;
-    borderColor: string;
-    title: string;
-    subtitle: string;
-    meta: string;
-    children?: React.ReactNode;
-}) {
-    return (
-        <View style={[styles.landingPreviewCard, { backgroundColor, borderColor }]}>
-            <View style={styles.landingPreviewCardTop}>
-                <View style={[styles.landingPreviewStatusDot, { backgroundColor: accentColor }]} />
-                <View style={styles.landingPreviewInfo}>
-                    <Text style={styles.landingPreviewCardTitle}>{title}</Text>
-                    <Text style={styles.landingPreviewCardSubtitle}>{subtitle}</Text>
-                </View>
-            </View>
-            <Text style={styles.landingPreviewMeta}>{meta}</Text>
-            {children}
         </View>
     );
 }

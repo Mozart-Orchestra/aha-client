@@ -2,9 +2,16 @@ import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import { t } from '@/text';
+import {
+    useSession,
+    useSessionGitStatus,
+    useSessionMessageCount,
+    useSessionProjectGitStatus,
+    useSessionUsage,
+} from '@/sync/storage';
 
 import { Text } from '@/components/ui/StyledText';
 
@@ -31,8 +38,9 @@ interface FloatingIslandAgentItem {
     name: string;
     dotColor: string;
     selected?: boolean;
-    count?: number;
     description?: string;
+    score?: number;
+    scoreCount?: number;
     onPress?: () => void;
     onDoublePress?: () => void;
     onLongPress?: () => void;
@@ -220,43 +228,115 @@ const styles = StyleSheet.create(() => ({
         paddingHorizontal: 12,
         gap: 4,
     },
-    sectionCapped: {
-        maxHeight: 220,
+    sectionExpanded: {
+        flex: 1,
+        minHeight: 0,
         paddingHorizontal: 12,
         paddingTop: 10,
         paddingBottom: 6,
         gap: 4,
     },
+    sectionCountBadge: {
+        minWidth: 24,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sectionCountText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
     emptyText: {
         fontSize: 13,
         padding: 8,
-    },
-    expandedArea: {
-        paddingHorizontal: 8,
-        paddingBottom: 6,
-        gap: 4,
-    },
-    expandedDesc: {
-        fontSize: 11,
-    },
-    expandedAction: {
-        flexDirection: 'row' as const,
-        alignItems: 'center' as const,
-        gap: 4,
-        alignSelf: 'flex-start' as const,
-        paddingVertical: 4,
-        paddingHorizontal: 8,
-        borderRadius: 6,
-    },
-    expandedActionText: {
-        fontSize: 11,
-        fontWeight: '600' as const,
     },
     dotPressable: {
         width: 8,
         height: 8,
     },
+    monitoringSection: {
+        flex: 2,
+        minHeight: 0,
+    },
+    workspaceSection: {
+        flex: 1,
+        minHeight: 0,
+        paddingHorizontal: 12,
+        paddingTop: 10,
+        paddingBottom: 6,
+        gap: 4,
+    },
+    agentRow: {
+        alignItems: 'flex-start',
+        paddingVertical: 10,
+    },
+    agentBody: {
+        flex: 1,
+        minWidth: 0,
+        gap: 6,
+    },
+    agentHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    agentName: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    agentMetaWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    agentMetaChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    agentMetaText: {
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    agentScoreBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 999,
+    },
+    agentScoreText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
 }));
+
+function formatCompactNumber(value: number): string {
+    if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1)}M`;
+    }
+    if (value >= 1000) {
+        return value >= 10000 ? `${Math.round(value / 1000)}K` : `${(value / 1000).toFixed(1)}K`;
+    }
+    return String(value);
+}
+
+function getScoreColor(score: number): string {
+    if (score >= 85) {
+        return '#22c55e';
+    }
+    if (score >= 70) {
+        return '#f59e0b';
+    }
+    return '#ef4444';
+}
 
 function AgentRow({
     item,
@@ -265,8 +345,19 @@ function AgentRow({
     item: FloatingIslandAgentItem;
     tokens: ReturnType<typeof getThreeColumnShellTokens>;
 }) {
-    const [expanded, setExpanded] = React.useState(false);
+    const { theme } = useUnistyles();
+    const session = useSession(item.id);
+    const latestUsage = useSessionUsage(item.id) ?? session?.latestUsage ?? null;
+    const { count: messageCount, isLoaded: messagesLoaded } = useSessionMessageCount(item.id);
+    const projectGitStatus = useSessionProjectGitStatus(item.id);
+    const sessionGitStatus = useSessionGitStatus(item.id);
+    const gitStatus = projectGitStatus || sessionGitStatus;
     const lastPressMsRef = React.useRef(0);
+
+    const contextSize = latestUsage?.contextSize ?? 0;
+    const hasGitStats = !!gitStatus && gitStatus.lastUpdatedAt > 0;
+    const lineChangeText = hasGitStats ? `${formatCompactNumber(gitStatus.linesChanged)} Δ` : null;
+    const scoreColor = item.score !== undefined ? getScoreColor(item.score) : null;
 
     const handlePress = React.useCallback(() => {
         const now = Date.now();
@@ -276,14 +367,6 @@ function AgentRow({
         } else {
             lastPressMsRef.current = now;
             item.onPress?.();
-        }
-    }, [item]);
-
-    const handleLongPress = React.useCallback(() => {
-        if (item.onLongPress) {
-            item.onLongPress();
-        } else {
-            setExpanded((prev) => !prev);
         }
     }, [item]);
 
@@ -297,14 +380,14 @@ function AgentRow({
                 disabled={!item.onPress && !item.onDoublePress}
                 style={[
                     styles.row,
+                    styles.agentRow,
                     item.selected && [
                         styles.rowSelected,
                         { borderColor: tokens.panelDivider },
                     ],
                 ]}
                 onPress={handlePress}
-                onLongPress={handleLongPress}
-                delayLongPress={500}
+                onLongPress={item.onLongPress}
             >
                 {item.selected ? (
                     <LinearGradient
@@ -324,42 +407,64 @@ function AgentRow({
                 >
                     <View style={[styles.rowDot, { backgroundColor: item.dotColor }]} />
                 </Pressable>
-                <Text
-                    style={[
-                        styles.rowText,
-                        item.selected ? styles.rowTextSelected : null,
-                        { color: item.selected ? tokens.panelTitle : '#2D4154' },
-                    ]}
-                >
-                    {item.name}
-                </Text>
-                <View style={styles.rowSpacer} />
-                {item.count !== undefined ? (
-                    <View style={[styles.badge, { backgroundColor: '#7C95A9' }]}>
-                        <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>{item.count}</Text>
-                    </View>
-                ) : null}
-            </Pressable>
-            {expanded ? (
-                <View style={styles.expandedArea}>
-                    {item.description ? (
-                        <Text style={[styles.expandedDesc, { color: '#8A9BAA' }]}>
-                            {item.description}
-                        </Text>
-                    ) : null}
-                    {item.onDoublePress ? (
-                        <Pressable
-                            onPress={item.onDoublePress}
-                            style={[styles.expandedAction, { backgroundColor: '#E8F0F6' }]}
+                <View style={styles.agentBody}>
+                    <View style={styles.agentHeaderRow}>
+                        <Text
+                            numberOfLines={1}
+                            style={[
+                                styles.agentName,
+                                item.selected ? styles.rowTextSelected : null,
+                                { color: item.selected ? tokens.panelTitle : '#2D4154' },
+                            ]}
                         >
-                            <Ionicons name="arrow-forward-circle-outline" size={13} color="#2D5A7A" />
-                            <Text style={[styles.expandedActionText, { color: '#2D5A7A' }]}>
-                                Go to session
-                            </Text>
-                        </Pressable>
-                    ) : null}
+                            {item.name}
+                        </Text>
+                        {item.score !== undefined && scoreColor ? (
+                            <View style={[styles.agentScoreBadge, { backgroundColor: scoreColor + '16' }]}>
+                                <Ionicons name="star" size={11} color={scoreColor} />
+                                <Text style={[styles.agentScoreText, { color: scoreColor }]}>
+                                    {Math.round(item.score)}
+                                    {item.scoreCount ? ` · ${item.scoreCount}` : ''}
+                                </Text>
+                            </View>
+                        ) : null}
+                    </View>
+                    <View style={styles.agentMetaWrap}>
+                        {item.description ? (
+                            <View style={[styles.agentMetaChip, { backgroundColor: '#EAF1F5' }]}>
+                                <Ionicons name="sparkles-outline" size={11} color="#516575" />
+                                <Text style={[styles.agentMetaText, { color: '#516575' }]}>
+                                    {item.description}
+                                </Text>
+                            </View>
+                        ) : null}
+                        {messagesLoaded ? (
+                            <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                <Ionicons name="chatbubble-ellipses-outline" size={11} color={theme.colors.textSecondary} />
+                                <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
+                                    {formatCompactNumber(messageCount)} msg
+                                </Text>
+                            </View>
+                        ) : null}
+                        {latestUsage ? (
+                            <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                <Ionicons name="flash-outline" size={11} color={theme.colors.textSecondary} />
+                                <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
+                                    {formatCompactNumber(contextSize)} ctx
+                                </Text>
+                            </View>
+                        ) : null}
+                        {lineChangeText ? (
+                            <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                <Ionicons name="git-branch-outline" size={11} color={theme.colors.textSecondary} />
+                                <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
+                                    {lineChangeText}
+                                </Text>
+                            </View>
+                        ) : null}
+                    </View>
                 </View>
-            ) : null}
+            </Pressable>
         </View>
     );
 }
@@ -532,49 +637,71 @@ export function FloatingIslandSidebar({
 
             <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
 
-            {/* Teams / Conversations — top section, takes all available space with scroll */}
-            <View style={styles.sectionWrapper}>
+            <View style={styles.monitoringSection}>
+                <View style={styles.sectionFixed}>
+                    <View style={styles.sectionLabelRow}>
+                        <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>Status</Text>
+                        {statusItems.reduce((sum, item) => sum + (item.count || 0), 0) > 0 ? (
+                            <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
+                                <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
+                                    {statusItems.reduce((sum, item) => sum + (item.count || 0), 0)}
+                                </Text>
+                            </View>
+                        ) : null}
+                    </View>
+                    {statusItems.map((item) => (
+                        <StatusRow key={item.id} item={item} />
+                    ))}
+                </View>
+
+                <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
+
+                <View style={styles.sectionExpanded}>
+                    <View style={styles.sectionLabelRow}>
+                        <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{agentSectionLabel}</Text>
+                        <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
+                            <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
+                                {agentItems.length}
+                            </Text>
+                        </View>
+                    </View>
+                    <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
+                        {agentItems.length > 0 ? (
+                            agentItems.map((item) => (
+                                <AgentRow key={item.id} item={item} tokens={tokens} />
+                            ))
+                        ) : (
+                            <Text style={[styles.emptyText, { color: '#93A4B1' }]}>{agentEmptyText}</Text>
+                        )}
+                    </ScrollView>
+                </View>
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
+
+            <View style={styles.workspaceSection}>
                 <View style={styles.sectionLabelRow}>
                     <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{conversationSectionLabel}</Text>
-                    {conversationHeaderAction ? (
-                        <Pressable onPress={conversationHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
-                            <Ionicons name="add" size={16} color="#8C9CAA" />
-                        </Pressable>
-                    ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
+                            <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
+                                {conversationItems.length}
+                            </Text>
+                        </View>
+                        {conversationHeaderAction ? (
+                            <Pressable onPress={conversationHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
+                                <Ionicons name="add" size={16} color="#8C9CAA" />
+                            </Pressable>
+                        ) : null}
+                    </View>
                 </View>
-                <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
                     {conversationItems.length > 0 ? (
                         conversationItems.map((item) => (
                             <ConversationRow key={item.id} item={item} tokens={tokens} />
                         ))
                     ) : (
                         <Text style={[styles.emptyText, { color: '#93A4B1' }]}>{conversationEmptyText}</Text>
-                    )}
-                </ScrollView>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
-
-            {/* Status — fixed, no scroll */}
-            <View style={styles.sectionFixed}>
-                <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>Status</Text>
-                {statusItems.map((item) => (
-                    <StatusRow key={item.id} item={item} />
-                ))}
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
-
-            {/* Agents — fixed at bottom, capped height with scroll for overflow */}
-            <View style={styles.sectionCapped}>
-                <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{agentSectionLabel}</Text>
-                <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={false}>
-                    {agentItems.length > 0 ? (
-                        agentItems.map((item) => (
-                            <AgentRow key={item.id} item={item} tokens={tokens} />
-                        ))
-                    ) : (
-                        <Text style={[styles.emptyText, { color: '#93A4B1' }]}>{agentEmptyText}</Text>
                     )}
                 </ScrollView>
             </View>

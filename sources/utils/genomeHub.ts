@@ -5,6 +5,21 @@
 
 const BASE = (process.env.EXPO_PUBLIC_GENOME_HUB_URL ?? 'http://localhost:3006').replace(/\/$/, '');
 
+export interface GenomeFeedback {
+    evaluationCount: number;
+    avgScore: number;
+    dimensions: {
+        delivery: number;
+        integrity: number;
+        efficiency: number;
+        collaboration: number;
+        reliability: number;
+    };
+    distribution: { excellent: number; good: number; fair: number; poor: number };
+    suggestions: string[];
+    latestAction: string;
+}
+
 export interface GenomeRecord {
     id: string;
     namespace: string | null;
@@ -16,9 +31,19 @@ export interface GenomeRecord {
     category: string | null;
     isPublic: boolean;
     spawnCount: number;
+    feedbackData: string | null;
     publisherId: string | null;
     createdAt: string;
     updatedAt: string;
+}
+
+export function parseFeedback(feedbackData: string | null): GenomeFeedback | null {
+    if (!feedbackData) return null;
+    try {
+        return JSON.parse(feedbackData) as GenomeFeedback;
+    } catch {
+        return null;
+    }
 }
 
 export interface SearchResult {

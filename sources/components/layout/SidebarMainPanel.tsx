@@ -7,6 +7,7 @@ import { useArtifacts, useProfile } from '@/sync/storage';
 import type { Session } from '@/sync/storageTypes';
 import { getSessionName } from '@/utils/sessionUtils';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
+import { fetchGenomeByName, parseFeedback } from '@/utils/genomeHub';
 
 import { t } from '@/text';
 
@@ -23,6 +24,25 @@ const AGENT_DOT_COLORS: Record<string, string> = {
 };
 
 const CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#1A1209', '#B89A6F', '#6886A3'];
+
+type RoleScore = {
+    score: number;
+    evaluationCount: number;
+};
+
+function normalizeRoleKey(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+function buildRoleCandidates(value: string): string[] {
+    const normalized = normalizeRoleKey(value);
+    return Array.from(new Set([
+        value.trim(),
+        normalized,
+        normalized.replace(/[\s_]+/g, '-'),
+        normalized.replace(/[\s-]+/g, '_'),
+    ].filter(Boolean)));
+}
 
 function formatListTime(timestamp: number): string {
     const now = new Date();
@@ -54,7 +74,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
         const result: { id: string; name: string; dotColor: string; description: string; session: Session }[] = [];
 
         for (const item of sessionListData) {
-            if (item.type === 'session' && item.session.active) {
+            if (item.type === 'session' && (item.session.active || item.session.presence === 'online' || item.session.thinking)) {
                 const flavor = item.session.metadata?.flavor ?? item.session.metadata?.role ?? '';
                 result.push({
                     id: item.session.id,
@@ -88,14 +108,13 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             return b.session.createdAt - a.session.createdAt;
         });
 
-        return result.slice(0, 6);
+        return result;
     }, [sessionListData]);
 
     const teams = React.useMemo(() => {
         return allArtifacts
             .filter((artifact) => artifact.type === 'team')
             .sort((a, b) => b.updatedAt - a.updatedAt)
-            .slice(0, 5)
             .map((team, index) => ({
                 id: team.id,
                 name: team.title || t('teams.untitledTeam'),
@@ -105,23 +124,102 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             }));
     }, [allArtifacts]);
 
+    const [roleScores, setRoleScores] = React.useState<Record<string, RoleScore | null>>({});
+
+    const roleKeys = React.useMemo(() => {
+        return Array.from(new Set(
+            agents
+                .map((agent) => agent.description?.trim())
+                .filter((value): value is string => !!value)
+                .map(normalizeRoleKey)
+        ));
+    }, [agents]);
+
+    React.useEffect(() => {
+        const missingRoleKeys = roleKeys.filter((roleKey) => !(roleKey in roleScores));
+        if (missingRoleKeys.length === 0) {
+            return;
+        }
+
+        let cancelled = false;
+
+        (async () => {
+            const resolvedEntries = await Promise.all(
+                missingRoleKeys.map(async (roleKey) => {
+                    for (const candidate of buildRoleCandidates(roleKey)) {
+                        try {
+                            const genome = await fetchGenomeByName('@official', candidate);
+                            const feedback = parseFeedback(genome?.feedbackData ?? null);
+                            if (feedback && feedback.evaluationCount > 0) {
+                                return [roleKey, {
+                                    score: feedback.avgScore,
+                                    evaluationCount: feedback.evaluationCount,
+                                }] as const;
+                            }
+                        } catch {
+                            // Ignore missing or unreachable genome hub entries.
+                        }
+                    }
+
+                    return [roleKey, null] as const;
+                })
+            );
+
+            if (cancelled) {
+                return;
+            }
+
+            setRoleScores((prev) => {
+                const next = { ...prev };
+                for (const [roleKey, score] of resolvedEntries) {
+                    next[roleKey] = score;
+                }
+                return next;
+            });
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [roleKeys, roleScores]);
+
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        if (agents.length > 0 && !selectedAgentId) {
+        if (agents.length > 0 && (!selectedAgentId || !agents.some((agent) => agent.id === selectedAgentId))) {
             setSelectedAgentId(agents[0].id);
         }
     }, [agents, selectedAgentId]);
 
     React.useEffect(() => {
-        if (teams.length > 0 && !selectedTeamId) {
+        if (teams.length > 0 && (!selectedTeamId || !teams.some((team) => team.id === selectedTeamId))) {
             setSelectedTeamId(teams[0].id);
         }
     }, [teams, selectedTeamId]);
 
     const displayName = getDisplayName(profile) || profile.github?.login || t('sidebar.workspace');
     const activeCount = agents.length;
+
+    const statusCounts = React.useMemo(() => {
+        return agents.reduce((acc, agent) => {
+            const hasPendingRequests = !!agent.session.agentState?.requests && Object.keys(agent.session.agentState.requests).length > 0;
+
+            if (hasPendingRequests) {
+                acc.needsDecision += 1;
+            } else if (agent.session.thinking) {
+                acc.working += 1;
+            } else if (agent.session.presence === 'online') {
+                acc.online += 1;
+            }
+
+            return acc;
+        }, {
+            needsDecision: 0,
+            working: 0,
+            online: 0,
+        });
+    }, [agents]);
 
     return (
         <FloatingIslandSidebar
@@ -138,8 +236,9 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 name: agent.name,
                 dotColor: agent.dotColor,
                 description: agent.description || undefined,
+                score: roleScores[normalizeRoleKey(agent.description || '')]?.score,
+                scoreCount: roleScores[normalizeRoleKey(agent.description || '')]?.evaluationCount,
                 selected: selectedAgentId === agent.id,
-                count: selectedAgentId === agent.id ? 0 : undefined,
                 onPress: () => {
                     setSelectedAgentId(agent.id);
                     navigateToSession(agent.id);
@@ -156,7 +255,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     label: t('sidebar.needsDecision'),
                     color: '#FF3B30',
                     backgroundColor: '#FF3B300D',
-                    count: undefined,
+                    count: statusCounts.needsDecision || undefined,
                 },
                 {
                     id: 'working',
@@ -164,16 +263,18 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     label: t('sidebar.working'),
                     color: '#FF9500',
                     backgroundColor: '#FF950012',
-                    count: activeCount || undefined,
+                    count: statusCounts.working || undefined,
                 },
                 {
-                    id: 'team-review',
-                    icon: 'people',
-                    label: t('sidebar.teamReview'),
-                    color: '#8A7F74',
-                    backgroundColor: '#00000000',
+                    id: 'online',
+                    icon: 'checkmark-circle',
+                    label: t('sidebar.online'),
+                    color: '#34C759',
+                    backgroundColor: '#34C75912',
+                    count: statusCounts.online || undefined,
                 },
             ]}
+            conversationSectionLabel={t('sidebar.workspace')}
             conversationItems={teams.map((team) => ({
                 ...team,
                 avatarIcon: 'grid-outline',

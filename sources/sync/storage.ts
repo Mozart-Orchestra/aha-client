@@ -1148,13 +1148,23 @@ export function useSession(id: string): Session | null {
     return storage(useShallow((state) => state.sessions[id] ?? null));
 }
 
-const emptyArray: unknown[] = [];
+const emptyArray: Message[] = [];
 
 export function useSessionMessages(sessionId: string): { messages: Message[], isLoaded: boolean } {
     return storage(useShallow((state) => {
         const session = state.sessionMessages[sessionId];
         return {
             messages: session?.messages ?? emptyArray,
+            isLoaded: session?.isLoaded ?? false
+        };
+    }));
+}
+
+export function useSessionMessageCount(sessionId: string): { count: number, isLoaded: boolean } {
+    return storage(useShallow((state) => {
+        const session = state.sessionMessages[sessionId];
+        return {
+            count: session?.messages.length ?? 0,
             isLoaded: session?.isLoaded ?? false
         };
     }));

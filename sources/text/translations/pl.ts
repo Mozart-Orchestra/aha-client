@@ -494,6 +494,17 @@ export const pl: TranslationStructure = {
 
     sidebar: {
         sessionsTitle: 'Aha',
+        workspace: 'Workspace',
+        online: 'Online',
+        needsDecision: 'Needs Decision',
+        working: 'Working',
+        teamReview: 'Team Review',
+        noTeamsYet: 'No teams yet',
+        openTeamWorkspace: 'Open team workspace',
+        agents: 'Agents',
+        conversations: 'Conversations',
+        noActiveAgents: 'No active agents',
+        noConversationsYet: 'No conversations yet',
     },
 
     toolView: {
@@ -904,6 +915,8 @@ export const pl: TranslationStructure = {
         last30Days: 'Ostatnie 30 dni',
         totalTokens: 'Łącznie tokenów',
         totalCost: 'Całkowity koszt',
+        estimatedHoursSaved: 'Est. Hours Saved',
+        estimatedHoursSavedHint: 'Based on ~50K tokens/hr of AI-equivalent work',
         tokens: 'Tokeny',
         cost: 'Koszt',
         usageOverTime: 'Użycie w czasie',
@@ -1116,6 +1129,7 @@ export const pl: TranslationStructure = {
         selectedCount: ({ count }: { count: number }) => `${count} Selected`,
         editButton: 'Edit',
         selectAll: 'Select All',
+        artifactSynced: 'Artifact synced',
     },
 
     zen: {

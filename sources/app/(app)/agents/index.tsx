@@ -12,7 +12,7 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { t } from '@/text';
-import { searchGenomes, parseTags, parseCorpsSpec, type GenomeRecord } from '@/utils/genomeHub';
+import { searchGenomes, parseTags, parseCorpsSpec, parseFeedback, type GenomeRecord } from '@/utils/genomeHub';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { trackAgentsPageViewed } from '@/track';
 
@@ -90,6 +90,20 @@ function GenomeCard({ genome }: { genome: GenomeRecord }) {
                 <Text style={[stylesheet.spawnText, { color: theme.colors.textSecondary }]}>
                     {t('agents.spawnCount', { count: genome.spawnCount })}
                 </Text>
+                {(() => {
+                    const fb = parseFeedback(genome.feedbackData);
+                    if (!fb || fb.evaluationCount < 1) return null;
+                    const score = fb.avgScore;
+                    const color = score >= 85 ? '#22c55e' : score >= 70 ? '#f59e0b' : '#ef4444';
+                    return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 8 }}>
+                            <Ionicons name="star" size={11} color={color} />
+                            <Text style={{ fontSize: 11, color, fontWeight: '600' }}>
+                                {score} ({fb.evaluationCount})
+                            </Text>
+                        </View>
+                    );
+                })()}
             </View>
         </View>
     );
