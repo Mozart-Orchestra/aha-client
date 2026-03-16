@@ -241,21 +241,23 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: '#EDF3F6CC',
         borderTopWidth: 1,
         borderTopColor: '#DEE8EE',
-        paddingHorizontal: 22,
-        paddingVertical: 14,
+        paddingHorizontal: Platform.select({ web: 22, default: 18 }),
+        paddingVertical: Platform.select({ web: 14, default: 12 }),
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
+        alignItems: 'flex-end',
+        gap: Platform.select({ web: 8, default: 10 }),
     },
     inputWrapper: {
         flex: 1,
-        height: 40,
-        borderRadius: 999,
-        paddingHorizontal: 16,
-        maxHeight: 120,
+        minHeight: Platform.select({ web: 44, default: 48 }),
+        maxHeight: Platform.select({ web: 132, default: 138 }),
+        borderRadius: Platform.select({ web: 22, default: 24 }),
+        paddingHorizontal: Platform.select({ web: 16, default: 15 }),
+        paddingVertical: Platform.select({ web: 10, default: 11 }),
         borderWidth: 1,
         borderColor: '#D9E4EA',
         overflow: 'hidden',
+        justifyContent: 'center',
         shadowColor: '#7A8C9B',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -270,9 +272,11 @@ const stylesheet = StyleSheet.create((theme) => ({
         elevation: 2,
     },
     input: {
-        fontSize: 13,
+        fontSize: Platform.select({ web: 13, default: 14 }),
+        lineHeight: Platform.select({ web: 18, default: 20 }),
         color: '#233648',
-        minHeight: 20,
+        minHeight: Platform.select({ web: 22, default: 24 }),
+        maxHeight: Platform.select({ web: 112, default: 116 }),
         paddingTop: 0,
         paddingBottom: 0,
     } as any,
@@ -301,7 +305,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        marginBottom: 2,
+        marginBottom: Platform.select({ web: 4, default: 6 }),
     },
     // 🆕 Smaller buttons for vertical layout
     attachButtonSmall: {
@@ -1222,6 +1226,10 @@ interface TeamChatRoomProps {
     onMessagesChange?: (messages: TeamMessage[]) => void;
     taskChatSync?: ReturnType<typeof useTaskChatSync>;
     variant?: TeamChatRoomVariant;
+    composerPrefill?: {
+        text: string;
+        token: number;
+    } | null;
 }
 
 export default function TeamChatRoom({
@@ -1236,6 +1244,7 @@ export default function TeamChatRoom({
     onMessagesChange,
     taskChatSync,
     variant = 'default',
+    composerPrefill = null,
 }: TeamChatRoomProps) {
     const { theme } = useUnistyles();
     const styles = stylesheet;
@@ -1300,6 +1309,25 @@ export default function TeamChatRoom({
         fileSize?: number;
     } | null>(null);
     const [uploadProgress, setUploadProgress] = React.useState(0);
+    const inputRef = React.useRef<TextInput>(null);
+
+    React.useEffect(() => {
+        if (!composerPrefill?.text) {
+            return;
+        }
+
+        setInputText(composerPrefill.text);
+
+        const focusInput = () => {
+            inputRef.current?.focus();
+        };
+
+        if (Platform.OS === 'web') {
+            requestAnimationFrame(() => requestAnimationFrame(focusInput));
+        } else {
+            setTimeout(focusInput, 80);
+        }
+    }, [composerPrefill]);
     const [isCompressing, setIsCompressing] = React.useState(false);
     // 🆕 Clipboard image detection state
     const [clipboardHasImage, setClipboardHasImage] = React.useState(false);
@@ -1558,7 +1586,43 @@ export default function TeamChatRoom({
 
     const renderStatusHeader = () => {
         if (isEdzlf) {
-            return null;
+            return (
+                <View
+                    style={{
+                        marginHorizontal: 26,
+                        marginTop: 18,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#233648' }}>
+                            {activeMembers.length} Online
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#7E93A3' }}>
+                            / {members.length} Total
+                        </Text>
+                    </View>
+                    <View style={{ flex: 1 }} />
+                    <Pressable
+                        onPress={() => setShowStatus(!showStatus)}
+                        style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#F8FBFD',
+                            borderWidth: 1,
+                            borderColor: '#D9E4EA',
+                        }}
+                    >
+                        <Ionicons name={showStatus ? "chevron-up" : "chevron-down"} size={15} color="#7E93A3" />
+                    </Pressable>
+                </View>
+            );
         }
 
         return (
@@ -1593,14 +1657,111 @@ export default function TeamChatRoom({
     };
 
     const renderStatusList = () => {
-        if (isEdzlf) return null;
         if (!showStatus) return null;
+
+        if (isEdzlf) {
+            return (
+                <>
+                    <Pressable
+                        onPress={() => setShowStatus(false)}
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 40,
+                        }}
+                    />
+                    <View
+                        style={{
+                            position: 'absolute',
+                            top: 64,
+                            right: 26,
+                            width: 320,
+                            maxWidth: '78%',
+                            maxHeight: 340,
+                            backgroundColor: '#F8FBFD',
+                            borderWidth: 1,
+                            borderColor: '#D9E4EA',
+                            borderRadius: 14,
+                            overflow: 'hidden',
+                            shadowColor: '#000000',
+                            shadowOffset: { width: 0, height: 8 },
+                            shadowOpacity: 0.12,
+                            shadowRadius: 24,
+                            elevation: 8,
+                            zIndex: 50,
+                        }}
+                    >
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {members.map((m, index) => {
+                                const isOnline = m.session?.active;
+                                const lastResponse = lastResponseBySession[m.member.sessionId];
+                                const lastResponseLabel = formatRelativeTime(lastResponse);
+
+                                return (
+                                    <Pressable
+                                        key={m.member.sessionId}
+                                        onPress={() => {
+                                            setShowStatus(false);
+                                            handleAvatarPress(m.member.sessionId);
+                                        }}
+                                        style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 10,
+                                            borderBottomWidth: index === members.length - 1 ? 0 : 1,
+                                            borderBottomColor: '#E2EBF0',
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <View style={{
+                                                width: 28,
+                                                height: 28,
+                                                borderRadius: 14,
+                                                backgroundColor: '#EEF4F7',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderWidth: 1,
+                                                borderColor: isOnline ? theme.colors.success : theme.colors.divider
+                                            }}>
+                                                <Text style={{ fontSize: 12 }}>
+                                                    {getAvatarContent(m.member.roleId, m.member.displayName)}
+                                                </Text>
+                                            </View>
+                                            <View>
+                                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#233648' }}>
+                                                    {m.member.displayName || m.member.sessionId.substring(0, 8)}
+                                                </Text>
+                                                <Text style={{ fontSize: 11, color: '#7E93A3' }}>
+                                                    {m.role?.title || m.member.roleId || 'Unknown Role'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={{ fontSize: 11, color: isOnline ? theme.colors.success : theme.colors.textSecondary, fontWeight: isOnline ? '600' : '400' }}>
+                                                {isOnline ? 'Online' : 'Offline'}
+                                            </Text>
+                                            <Text style={{ fontSize: 10, color: '#7E93A3', marginTop: 2 }}>
+                                                Active: {lastResponseLabel}
+                                            </Text>
+                                        </View>
+                                    </Pressable>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                </>
+            );
+        }
 
         return (
             <View style={{ backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.divider }}>
                 {members.map((m) => {
                     const isOnline = m.session?.active;
-                    const lastActive = m.session?.updatedAt ? new Date(m.session.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never';
                     const lastResponse = lastResponseBySession[m.member.sessionId];
                     const lastResponseLabel = formatRelativeTime(lastResponse);
 
@@ -1618,7 +1779,7 @@ export default function TeamChatRoom({
                                 borderBottomColor: theme.colors.groupped.background
                             }}
                         >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{
                                     width: 32,
                                     height: 32,
@@ -2103,19 +2264,6 @@ export default function TeamChatRoom({
                     }
                 }}
             >
-                {isEdzlf ? (
-                    <View style={{ marginBottom: 18 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
-                            <Text style={{ fontSize: 12, color: '#8B9AAA' }}>
-                                {activeMembers.length} Online / {members.length} Total
-                            </Text>
-                        </View>
-                        <Text style={{ fontSize: 10, color: '#9AA8B4', textAlign: 'center' }}>
-                            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                    </View>
-                ) : null}
                 {uniqueMessages.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.textSecondary} />
@@ -2307,6 +2455,7 @@ export default function TeamChatRoom({
                     style={[styles.inputWrapper, isInputFocused && styles.inputWrapperFocused]}
                 >
                     <TextInput
+                        ref={inputRef}
                         style={styles.input}
                         value={inputText}
                         onChangeText={setInputText}

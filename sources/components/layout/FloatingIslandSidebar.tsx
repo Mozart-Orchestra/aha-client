@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet } from 'react-native-unistyles';
 
+import { t } from '@/text';
+
 import { Text } from '@/components/ui/StyledText';
 
 import {
@@ -460,13 +462,13 @@ export function FloatingIslandSidebar({
     variant = 'default',
     header,
     agentItems = [],
-    agentSectionLabel = 'Agents',
+    agentSectionLabel = t('sidebar.agents'),
     statusItems = [],
     conversationItems = [],
-    conversationSectionLabel = 'Conversations',
+    conversationSectionLabel = t('sidebar.conversations'),
     conversationHeaderAction,
-    agentEmptyText = 'No active agents',
-    conversationEmptyText = 'No conversations yet',
+    agentEmptyText = t('sidebar.noActiveAgents'),
+    conversationEmptyText = t('sidebar.noConversationsYet'),
 }: FloatingIslandSidebarProps) {
     const tokens = getThreeColumnShellTokens(variant);
 

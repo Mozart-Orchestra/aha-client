@@ -1,5 +1,4 @@
 import { View, Linking } from 'react-native';
-import { Image } from 'expo-image';
 import * as React from 'react';
 import { Text } from '@/components/ui/StyledText';
 import { useRouter } from 'expo-router';
@@ -7,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
-import { useLocalSetting, useSetting } from '@/sync/storage';
+import { useLocalSetting } from '@/sync/storage';
 import { useAllMachines } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { useUnistyles } from 'react-native-unistyles';
@@ -21,7 +20,6 @@ export const SettingsView = React.memo(function SettingsView() {
     const { theme } = useUnistyles();
     const router = useRouter();
     const devModeEnabled = useLocalSetting('devModeEnabled');
-    const experiments = useSetting('experiments');
     const allMachines = useAllMachines();
     const profile = useProfile();
     const displayName = getDisplayName(profile);
@@ -29,7 +27,7 @@ export const SettingsView = React.memo(function SettingsView() {
     const bio = getBio(profile);
 
     const handleReportIssue = async () => {
-        const url = 'https://github.com/slopus/happy/issues';
+        const url = 'https://github.com/aha-reborn/aha/issues';
         const supported = await Linking.canOpenURL(url);
         if (supported) {
             await Linking.openURL(url);
@@ -64,13 +62,11 @@ export const SettingsView = React.memo(function SettingsView() {
                             )}
                         </>
                     ) : (
-                        // Logo view: Original logo + version
+                        // Brand text: show "Aha" when no profile is connected
                         <>
-                            <Image
-                                source={theme.dark ? require('@/assets/images/logotype-light.png') : require('@/assets/images/logotype-dark.png')}
-                                contentFit="contain"
-                                style={{ width: 300, height: 90, marginBottom: 12 }}
-                            />
+                            <Text style={{ fontSize: 36, fontWeight: '700', color: theme.colors.text, marginBottom: 12, letterSpacing: 1 }}>
+                                Aha
+                            </Text>
                         </>
                     )}
                 </View>
@@ -130,14 +126,33 @@ export const SettingsView = React.memo(function SettingsView() {
                     icon={<Ionicons name="link-outline" size={29} color="#FF9500" />}
                     onPress={() => router.push('/restore')}
                 />
-                {experiments && (
-                    <Item
-                        title={t('settings.usage')}
-                        subtitle={t('settings.usageSubtitle')}
-                        icon={<Ionicons name="analytics-outline" size={29} color="#007AFF" />}
-                        onPress={() => router.push('/settings/usage')}
-                    />
-                )}
+                <Item
+                    title={t('settings.usage')}
+                    subtitle={t('settings.usageSubtitle')}
+                    icon={<Ionicons name="analytics-outline" size={29} color="#007AFF" />}
+                    onPress={() => router.push('/settings/usage')}
+                />
+            </ItemGroup>
+
+            <ItemGroup>
+                <Item
+                    title={t('settings.appearance')}
+                    subtitle={t('settings.appearanceSubtitle')}
+                    icon={<Ionicons name="color-palette-outline" size={29} color="#5856D6" />}
+                    onPress={() => router.push('/settings/appearance')}
+                />
+                <Item
+                    title={t('settings.featuresTitle')}
+                    subtitle={t('settings.featuresSubtitle')}
+                    icon={<Ionicons name="flask-outline" size={29} color="#34C759" />}
+                    onPress={() => router.push('/settings/features')}
+                />
+                <Item
+                    title={t('settings.voiceAssistant')}
+                    subtitle={t('settings.voiceAssistantSubtitle')}
+                    icon={<Ionicons name="mic-outline" size={29} color="#FF9500" />}
+                    onPress={() => router.push('/settings/voice')}
+                />
             </ItemGroup>
 
             {/* Developer */}

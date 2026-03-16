@@ -9,6 +9,7 @@ import { layout } from '@/utils/layout';
 import { useLocalSetting } from '@/sync/storage';
 import { StyleSheet } from 'react-native-unistyles';
 import { t } from '@/text';
+import { ToolPayloadView } from './ToolPayloadView';
 
 interface ToolFullViewProps {
     tool: ToolCall;
@@ -49,7 +50,7 @@ export function ToolFullView({ tool, metadata, messages = [] }: ToolFullViewProp
                                 <Ionicons name="log-in" size={20} color="#5856D6" />
                                 <Text style={styles.sectionTitle}>{t('tools.fullView.inputParams')}</Text>
                             </View>
-                            <CodeView code={JSON.stringify(tool.input, null, 2)} />
+                            <ToolPayloadView value={tool.input} />
                         </View>
                     )}
 
@@ -60,9 +61,7 @@ export function ToolFullView({ tool, metadata, messages = [] }: ToolFullViewProp
                                 <Ionicons name="log-out" size={20} color="#34C759" />
                                 <Text style={styles.sectionTitle}>{t('tools.fullView.output')}</Text>
                             </View>
-                            <CodeView
-                                code={typeof tool.result === 'string' ? tool.result : JSON.stringify(tool.result, null, 2)}
-                            />
+                            <ToolPayloadView value={tool.result} />
                         </View>
                     )}
 

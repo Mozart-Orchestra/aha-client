@@ -118,6 +118,7 @@ export const UsagePanel: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
     const auth = useAuth();
     const [period, setPeriod] = useState<TimePeriod>('7days');
     const [chartMetric, setChartMetric] = useState<'tokens' | 'cost'>('tokens');
+    const [modelMetric, setModelMetric] = useState<'tokens' | 'cost'>('tokens');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [usageData, setUsageData] = useState<UsageDataPoint[]>([]);
@@ -169,6 +170,10 @@ export const UsagePanel: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
     const formatCost = (cost: number): string => {
         return `$${cost.toFixed(4)}`;
     };
+
+    // ~50K tokens per hour of equivalent AI work (calibrated from user research)
+    const AVG_TOKENS_PER_HOUR = 50000;
+    const estimatedHoursSaved = totals.totalTokens / AVG_TOKENS_PER_HOUR;
     
     const periodLabels: Record<TimePeriod, string> = {
         'today': t('usage.today'),
@@ -193,12 +198,14 @@ export const UsagePanel: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
         );
     }
     
-    // Get top models by usage
-    const topModels = Object.entries(totals.tokensByModel)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5);
-    
-    const maxModelTokens = Math.max(...Object.values(totals.tokensByModel), 1);
+    // Get top models by usage (tokens or cost)
+    const topModels = modelMetric === 'tokens'
+        ? Object.entries(totals.tokensByModel).sort(([, a], [, b]) => b - a).slice(0, 5)
+        : Object.entries(totals.costByModel).sort(([, a], [, b]) => b - a).slice(0, 5);
+
+    const maxModelValue = modelMetric === 'tokens'
+        ? Math.max(...Object.values(totals.tokensByModel), 1)
+        : Math.max(...Object.values(totals.costByModel), 0.0001);
     
     return (
         <ScrollView style={styles.container}>
@@ -226,6 +233,12 @@ export const UsagePanel: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
                 <View style={styles.statRow}>
                     <Text style={styles.statLabel}>{t('usage.totalCost')}</Text>
                     <Text style={styles.statValue}>{formatCost(totals.totalCost)}</Text>
+                </View>
+                <View style={styles.statRow}>
+                    <Text style={styles.statLabel}>{t('usage.estimatedHoursSaved')}</Text>
+                    <Text style={[styles.statValue, { color: '#34C759' }]}>
+                        ~{estimatedHoursSaved.toFixed(1)}h
+                    </Text>
                 </View>
             </View>
             
@@ -265,14 +278,33 @@ export const UsagePanel: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
             {/* Usage by Model */}
             {topModels.length > 0 && (
                 <ItemGroup title={t('usage.byModel')}>
-                    <View style={{ padding: 16 }}>
-                        {topModels.map(([model, tokens]) => (
+                    <View style={styles.metricToggle}>
+                        <Pressable
+                            style={[styles.metricButton, modelMetric === 'tokens' && styles.metricButtonActive]}
+                            onPress={() => setModelMetric('tokens')}
+                        >
+                            <Text style={[styles.metricText, modelMetric === 'tokens' && styles.metricTextActive]}>
+                                {t('usage.tokens')}
+                            </Text>
+                        </Pressable>
+                        <Pressable
+                            style={[styles.metricButton, modelMetric === 'cost' && styles.metricButtonActive]}
+                            onPress={() => setModelMetric('cost')}
+                        >
+                            <Text style={[styles.metricText, modelMetric === 'cost' && styles.metricTextActive]}>
+                                {t('usage.cost')}
+                            </Text>
+                        </Pressable>
+                    </View>
+                    <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                        {topModels.map(([model, value]) => (
                             <UsageBar
                                 key={model}
                                 label={model}
-                                value={tokens}
-                                maxValue={maxModelTokens}
+                                value={value}
+                                maxValue={maxModelValue}
                                 color="#007AFF"
+                                formatValue={modelMetric === 'cost' ? (v) => `$${v.toFixed(4)}` : undefined}
                             />
                         ))}
                     </View>

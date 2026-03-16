@@ -22,6 +22,7 @@ import { getTempData, type NewSessionData } from '@/utils/tempDataStore';
 import { linkTaskToSession } from '@/-zen/model/taskSessionLink';
 import { PermissionMode, ModelMode } from '@/components/settings/PermissionModeSelector';
 import { getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
+import { trackSessionCreated } from '@/track';
 
 // Simple temporary state for passing selections back from picker screens
 let onMachineSelected: (machineId: string) => void = () => { };
@@ -34,6 +35,13 @@ export const callbacks = {
         onPathSelected(path);
     }
 }
+
+const EXAMPLE_PROMPTS = [
+    { icon: '🐛', label: 'Fix a bug', prompt: 'Help me find and fix a bug in my code' },
+    { icon: '📖', label: 'Code review', prompt: 'Review my recent changes and suggest improvements' },
+    { icon: '✨', label: 'New feature', prompt: 'Help me implement a new feature' },
+    { icon: '🔍', label: 'Explain code', prompt: 'Explain how this code works' },
+];
 
 function NewSessionScreen() {
     const { theme } = useUnistyles();
@@ -359,6 +367,7 @@ function NewSessionScreen() {
                         return 'session'
                     },
                 });
+                trackSessionCreated();
             } else {
                 throw new Error('Session spawning failed - no session ID returned.');
             }
@@ -396,6 +405,43 @@ function NewSessionScreen() {
                 alignSelf: 'center',
                 paddingTop: safeArea.top,
             }}>
+                {input === '' && (
+                    <View style={{
+                        paddingHorizontal: screenWidth > 700 ? 16 : 8,
+                        paddingBottom: 12,
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        justifyContent: 'center',
+                        gap: 8,
+                    }}>
+                        {EXAMPLE_PROMPTS.map((item) => (
+                            <Pressable
+                                key={item.label}
+                                onPress={() => setInput(item.prompt)}
+                                style={(p) => ({
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 8,
+                                    borderRadius: 20,
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.button.secondary.border || theme.colors.border,
+                                    backgroundColor: p.pressed ? theme.colors.input.background : 'transparent',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                })}
+                            >
+                                <Text style={{ fontSize: 14 }}>{item.icon}</Text>
+                                <Text style={{
+                                    fontSize: 13,
+                                    color: theme.colors.textSecondary || theme.colors.button.secondary.tint,
+                                }}>
+                                    {item.label}
+                                </Text>
+                            </Pressable>
+                        ))}
+                    </View>
+                )}
+
                 {/* Session type selector - only show when experiments are enabled */}
                 {experimentsEnabled && (
                     <View style={[

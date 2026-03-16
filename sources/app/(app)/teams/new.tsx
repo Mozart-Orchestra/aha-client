@@ -3,6 +3,7 @@ import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Platform, us
 import { Text } from '@/components/ui/StyledText';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
+import { trackTeamCreated } from '@/track';
 import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { Modal } from '@/modal';
@@ -16,6 +17,7 @@ import { SidebarView } from '@/components/layout/SidebarView';
 import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { goBackOrReturn } from '@/utils/returnNavigation';
+import { fetchGenomeByName } from '@/utils/genomeHub';
 
 // Use localized team roles instead of hardcoded ones
 const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
@@ -371,6 +373,41 @@ const stylesheet = StyleSheet.create((theme) => ({
     }
 }));
 
+const QUICK_TEMPLATES = [
+    {
+        id: 'content',
+        emoji: '✍️',
+        title: 'Content Studio',
+        subtitle: 'Write, SEO, social',
+        teamName: 'Content Production Team',
+        prompt: 'Build a parallel content production team. A researcher finds trending topics, a writer drafts the article, an SEO specialist optimizes for search, and a social media agent prepares platform-specific copy. Deliver a complete content package ready to publish.',
+    },
+    {
+        id: 'research',
+        emoji: '🔍',
+        title: 'Research Team',
+        subtitle: 'Multi-source analysis',
+        teamName: 'Research & Analysis Team',
+        prompt: 'Create a parallel research team where multiple scout agents collect information from different sources simultaneously, an analyst consolidates findings, and a scribe produces a final report with source citations for every data point.',
+    },
+    {
+        id: 'legal',
+        emoji: '⚖️',
+        title: 'Contract Review',
+        subtitle: 'Parallel doc analysis',
+        teamName: 'Legal Review Team',
+        prompt: 'Set up a contract review team. Analyst agents review documents in parallel, identify clause deviations from standard templates, flag risk levels (high/medium/low), and produce a concise summary memo with key risks for final approval.',
+    },
+    {
+        id: 'intelligence',
+        emoji: '📊',
+        title: 'Market Intel',
+        subtitle: 'Competitor tracking',
+        teamName: 'Competitive Intelligence Team',
+        prompt: 'Build a market intelligence team that monitors competitors, industry news, and market trends. Deliver a daily briefing with actionable insights, new product launches, pricing changes, and significant developments requiring attention.',
+    },
+] as const;
+
 export default function NewTeamScreen() {
     const { theme } = useUnistyles();
     const styles = stylesheet;
@@ -396,8 +433,7 @@ export default function NewTeamScreen() {
     const [title, setTitle] = React.useState('');
     const [target, setTarget] = React.useState('');
     const [creationMode, setCreationMode] = React.useState<'manual' | 'prompt'>('prompt');
-    const [taskPrompt, setTaskPrompt] = React.useState('');
-    const [promptAgentPreference, setPromptAgentPreference] = React.useState<PromptAgentPreference>(() => {
+    const [taskPrompt, setTaskPrompt] = React.useState('');    const [promptAgentPreference, setPromptAgentPreference] = React.useState<PromptAgentPreference>(() => {
         if (lastUsedAgent === 'codex') {
             return 'codex';
         }
@@ -769,15 +805,17 @@ export default function NewTeamScreen() {
                         const roleId = 'org-manager';
                         const agentTitle = 'Org-manager 1';
                         try {
+                            const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
                             const sessionId = await desktopBridge.startAgentSession({
                                 roomId: room.id,
                                 title: agentTitle,
                                 env: {
-                                    HAPPY_AGENT_ROLE: roleId,
-                                    HAPPY_ROOM_ID: room.id,
-                                    HAPPY_ROOM_NAME: title.trim(),
-                                    HAPPY_AGENT_TYPE: promptAgentPreference === 'codex' ? 'codex' : 'claude',
-                                    AHA_TASK_PROMPT: promptTaskRequest
+                                    AHA_AGENT_ROLE: roleId,
+                                    AHA_ROOM_ID: room.id,
+                                    AHA_ROOM_NAME: title.trim(),
+                                    AHA_AGENT_TYPE: promptAgentPreference === 'codex' ? 'codex' : 'claude',
+                                    AHA_TASK_PROMPT: promptTaskRequest,
+                                    ...(orgManagerGenome ? { AHA_SPEC_ID: orgManagerGenome.id } : {}),
                                 },
                                 cwd: resolvedCwd || undefined,
                             });
@@ -800,10 +838,10 @@ export default function NewTeamScreen() {
                                         roomId: room.id,
                                         title: agentTitle,
                                         env: {
-                                            HAPPY_AGENT_ROLE: roleId,
-                                            HAPPY_ROOM_ID: room.id,
-                                            HAPPY_ROOM_NAME: title.trim(),
-                                            HAPPY_AGENT_TYPE: getRoleAgentType(roleId)
+                                            AHA_AGENT_ROLE: roleId,
+                                            AHA_ROOM_ID: room.id,
+                                            AHA_ROOM_NAME: title.trim(),
+                                            AHA_AGENT_TYPE: getRoleAgentType(roleId)
                                         },
                                         cwd: resolvedCwd || undefined,
                                         cliPath: resolvedAgentBinary || undefined
@@ -870,6 +908,8 @@ export default function NewTeamScreen() {
 
                         if (targetMachine?.active && resolvedCwd) {
                             try {
+                                // Resolve org-manager genome from hub so the agent loads its DNA
+                                const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
                                 const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
                                     directory: resolvedCwd,
                                     agent: promptAgentPreference === 'codex' ? 'codex' : 'claude',
@@ -878,6 +918,7 @@ export default function NewTeamScreen() {
                                     role: roleId,
                                     sessionName: agentTitle,
                                     sessionPath: resolvedCwd,
+                                    ...(orgManagerGenome ? { specId: orgManagerGenome.id } : {}),
                                     env: {
                                         AHA_TASK_PROMPT: promptTaskRequest
                                     }
@@ -1028,6 +1069,9 @@ export default function NewTeamScreen() {
                 );
             }
 
+            const totalAgents = Object.values(roleCounts).reduce((sum, count) => sum + count, 0);
+            trackTeamCreated(creationMode, totalAgents);
+
             if (resolvedCwd && machineIdForSpawn) {
                 const updatedPaths = updateRecentMachinePaths(recentMachinePaths, machineIdForSpawn, resolvedCwd);
                 sync.applySettings({ recentMachinePaths: updatedPaths });
@@ -1067,6 +1111,41 @@ export default function NewTeamScreen() {
 
     const formContent = (
         <>
+            <View style={styles.inputGroup}>
+                <Text style={styles.label}>{t('newTeam.quickStartLabel')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
+                    <View style={{ flexDirection: 'row', gap: 10, paddingRight: 16 }}>
+                        {QUICK_TEMPLATES.map(tpl => {
+                            const localizedTitle = t(`newTeam.templates.${tpl.id}.title` as any) || tpl.title;
+                            const localizedSubtitle = t(`newTeam.templates.${tpl.id}.subtitle` as any) || tpl.subtitle;
+                            return (
+                                <Pressable
+                                    key={tpl.id}
+                                    onPress={() => {
+                                        setTitle(tpl.teamName);
+                                        setTaskPrompt(tpl.prompt);
+                                        setCreationMode('prompt');
+                                    }}
+                                    style={{
+                                        backgroundColor: theme.colors.surface,
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: theme.colors.divider,
+                                        padding: 12,
+                                        minWidth: 130,
+                                        maxWidth: 150,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 22, marginBottom: 6 }}>{tpl.emoji}</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text }}>{localizedTitle}</Text>
+                                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 3 }}>{localizedSubtitle}</Text>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+                </ScrollView>
+            </View>
+
             <View style={styles.inputGroup}>
                 <Text style={styles.label}>Team Name</Text>
                 <TextInput
@@ -1220,7 +1299,7 @@ export default function NewTeamScreen() {
                         <Text style={styles.label}>Machines</Text>
                         {promptMachines.length === 0 ? (
                             <Text style={styles.helperText}>
-                                Start the Happy CLI on your computer to make machines available.
+                                Start the Kanban CLI on your computer to make machines available.
                             </Text>
                         ) : (
                             <>
@@ -1449,7 +1528,7 @@ export default function NewTeamScreen() {
                                 <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>Machine</Text>
                                 {machines.length === 0 ? (
                                     <Text style={styles.helperText}>
-                                        Start the Happy CLI on your computer to spawn teammates automatically.
+                                        Start the Kanban CLI on your computer to spawn teammates automatically.
                                     </Text>
                                 ) : (
                                     <View style={styles.machineList}>

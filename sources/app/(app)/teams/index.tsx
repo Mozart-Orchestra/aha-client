@@ -636,11 +636,11 @@ export default function TeamsScreen() {
         }
 
         const confirmed = await Modal.confirm(
-            'Archive Teams',
-            `Archive ${selectedTeams.size} team(s) and all their associated sessions?`,
+            t('teams.archiveTeams'),
+            t('teams.archiveConfirm', { count: selectedTeams.size }),
             {
-                confirmText: 'Archive',
-                cancelText: 'Cancel',
+                confirmText: t('teams.archiveAction'),
+                cancelText: t('common.cancel'),
             }
         );
 
@@ -652,12 +652,12 @@ export default function TeamsScreen() {
             setIsBatchProcessing(true);
             const result = await sync.batchArchiveTeams(Array.from(selectedTeams));
             if (result.success) {
-                Modal.alert('Success', `Archived ${result.archived} team(s).`);
+                Modal.alert(t('common.success'), t('teams.archiveSuccess', { count: result.archived }));
                 exitSelectionMode();
             }
         } catch (error) {
             console.error('Failed to batch archive teams:', error);
-            Modal.alert('Error', 'Failed to archive teams. Please try again.');
+            Modal.alert(t('common.error'), t('teams.archiveFailed'));
         } finally {
             setIsBatchProcessing(false);
         }
@@ -669,11 +669,11 @@ export default function TeamsScreen() {
         }
 
         const confirmed = await Modal.confirm(
-            'Delete Teams',
-            `Permanently delete ${selectedTeams.size} team(s) and all their associated sessions? This cannot be undone.`,
+            t('teams.deleteTeams'),
+            t('teams.deleteTeamsConfirm', { count: selectedTeams.size }),
             {
-                confirmText: 'Delete',
-                cancelText: 'Cancel',
+                confirmText: t('teams.deleteAction'),
+                cancelText: t('common.cancel'),
                 destructive: true,
             }
         );
@@ -686,12 +686,12 @@ export default function TeamsScreen() {
             setIsBatchProcessing(true);
             const result = await sync.batchDeleteTeams(Array.from(selectedTeams));
             if (result.success) {
-                Modal.alert('Success', `Deleted ${result.deleted} team(s).`);
+                Modal.alert(t('common.success'), t('teams.deleteSuccess', { count: result.deleted }));
                 exitSelectionMode();
             }
         } catch (error) {
             console.error('Failed to batch delete teams:', error);
-            Modal.alert('Error', 'Failed to delete teams. Please try again.');
+            Modal.alert(t('common.error'), t('teams.deleteFailed'));
         } finally {
             setIsBatchProcessing(false);
         }
@@ -728,8 +728,8 @@ export default function TeamsScreen() {
     const handleDelete = React.useCallback(async (teamId: string, event: GestureResponderEvent) => {
         event.stopPropagation();
         const confirmed = await Modal.confirm(
-            'Delete Team',
-            'Are you sure you want to delete this team? This action cannot be undone.'
+            t('teams.deleteTeam'),
+            t('teams.deleteTeamConfirm')
         );
 
         if (!confirmed) {
@@ -740,7 +740,7 @@ export default function TeamsScreen() {
             await sync.deleteArtifact(teamId);
         } catch (error) {
             console.error('Failed to delete team:', error);
-            await Modal.alert(t('common.error'), 'Failed to delete team');
+            await Modal.alert(t('common.error'), t('teams.deleteTeamFailed'));
         }
     }, []);
 
@@ -777,10 +777,10 @@ export default function TeamsScreen() {
                     tintColor={theme.colors.textSecondary}
                 />
                 <Text style={styles.emptyTitle}>
-                    No Teams Yet
+                    {t('teams.noTeamsYet')}
                 </Text>
                 <Text style={styles.emptyDescription}>
-                    Create a team to collaborate with multiple agents.
+                    {t('teams.noTeamsDescription')}
                 </Text>
             </View>
         );
@@ -817,11 +817,11 @@ export default function TeamsScreen() {
                         ]}
                         numberOfLines={1}
                     >
-                        {item.title || 'Untitled Team'}
+                        {item.title || t('teams.untitledTeam')}
                     </Text>
                     <View style={styles.teamMeta}>
                         <Text style={styles.teamDate}>
-                            {item.sessions?.length || 0} members • {formatUpdatedDate(item.updatedAt)}
+                            {t('teams.membersLabel', { count: item.sessions?.length || 0 })} • {formatUpdatedDate(item.updatedAt)}
                         </Text>
                     </View>
                 </View>
@@ -859,7 +859,7 @@ export default function TeamsScreen() {
     const renderDesktopTeamItem = React.useCallback(({ item }: { item: DecryptedArtifact }) => {
         const isSelected = selectedTeams.has(item.id);
         const memberCount = item.sessions?.length || 0;
-        const teamName = item.title || 'Untitled Team';
+        const teamName = item.title || t('teams.untitledTeam');
 
         return (
             <Pressable
@@ -894,12 +894,12 @@ export default function TeamsScreen() {
                             {teamName}
                         </Text>
                         <Text style={styles.desktopTeamMetaText} numberOfLines={2}>
-                            {memberCount} members • Updated {formatUpdatedDate(item.updatedAt)}
+                            {t('teams.membersLabel', { count: memberCount })} • {formatUpdatedDate(item.updatedAt)}
                         </Text>
                         <View style={styles.desktopMetaRow}>
                             <View style={styles.desktopMetaPill}>
                                 <Text style={styles.desktopMetaPillText}>
-                                    {memberCount} agents
+                                    {t('agents.memberCount', { count: memberCount })}
                                 </Text>
                             </View>
                             <View style={styles.desktopMetaPill}>
@@ -962,12 +962,12 @@ export default function TeamsScreen() {
                             />
                         </View>
                         <View style={styles.desktopHeaderInfo}>
-                            <Text style={styles.desktopEyebrow}>Teams</Text>
+                            <Text style={styles.desktopEyebrow}>{t('teams.title')}</Text>
                             <Text style={[styles.desktopTitle, { color: desktopTheme.panelTitle }]}>
-                                Workspace Teams
+                                {t('teams.workspaceTeams')}
                             </Text>
                             <Text style={[styles.desktopSubtitle, { color: desktopTheme.panelTextSecondary }]}>
-                                Open, select, archive, or create teams.
+                                {t('teams.workspaceTeamsDescription')}
                             </Text>
                         </View>
                         <View style={styles.desktopHeaderActions}>
@@ -1160,15 +1160,15 @@ export default function TeamsScreen() {
             <Stack.Screen
                 options={{
                     headerShown: !isDesktopShell,
-                    headerTitle: isSelectionMode ? `${selectedTeams.size} Selected` : 'Teams',
+                    headerTitle: isSelectionMode ? t('teams.selectedCount', { count: selectedTeams.size }) : t('teams.title'),
                     headerLeft: isSelectionMode ? () => (
                         <Pressable onPress={exitSelectionMode} style={{ padding: 8 }}>
-                            <Text style={{ color: theme.colors.text, fontSize: 16 }}>Cancel</Text>
+                            <Text style={{ color: theme.colors.text, fontSize: 16 }}>{t('common.cancel')}</Text>
                         </Pressable>
                     ) : undefined,
                     headerRight: isSelectionMode ? () => (
                         <Pressable onPress={selectAllTeams} style={{ padding: 8 }}>
-                            <Text style={{ color: theme.colors.text, fontSize: 16 }}>Select All</Text>
+                            <Text style={{ color: theme.colors.text, fontSize: 16 }}>{t('teams.selectAll')}</Text>
                         </Pressable>
                     ) : () => (
                         <Pressable
@@ -1182,7 +1182,7 @@ export default function TeamsScreen() {
                                     fontSize: 16,
                                 }}
                             >
-                                Edit
+                                {t('teams.editButton')}
                             </Text>
                         </Pressable>
                     ),

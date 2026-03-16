@@ -8,6 +8,8 @@ import type { Session } from '@/sync/storageTypes';
 import { getSessionName } from '@/utils/sessionUtils';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 
+import { t } from '@/text';
+
 import { FloatingIslandSidebar } from './FloatingIslandSidebar';
 import { ThreeColumnShellVariant } from './ThreeColumnShell';
 
@@ -96,8 +98,8 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             .slice(0, 5)
             .map((team, index) => ({
                 id: team.id,
-                name: team.title || 'Untitled team',
-                lastMessage: 'Open team workspace',
+                name: team.title || t('teams.untitledTeam'),
+                lastMessage: t('sidebar.openTeamWorkspace'),
                 time: formatListTime(team.updatedAt),
                 avatarColor: CONVERSATION_COLORS[index % CONVERSATION_COLORS.length],
             }));
@@ -118,7 +120,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
         }
     }, [teams, selectedTeamId]);
 
-    const displayName = getDisplayName(profile) || profile.github?.login || 'Workspace';
+    const displayName = getDisplayName(profile) || profile.github?.login || t('sidebar.workspace');
     const activeCount = agents.length;
 
     return (
@@ -126,7 +128,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             variant={variant}
             header={{
                 title: displayName,
-                subtitle: activeCount > 0 ? `${activeCount} active · Online` : 'Online',
+                subtitle: activeCount > 0 ? `${activeCount} active · ${t('sidebar.online')}` : t('sidebar.online'),
                 icon: 'person',
                 iconGradientColors: ['#314658', '#1E2D3C'],
                 trailingIcon: 'chevron-down',
@@ -151,7 +153,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 {
                     id: 'needs-decision',
                     icon: 'radio-button-on',
-                    label: 'Needs Decision',
+                    label: t('sidebar.needsDecision'),
                     color: '#FF3B30',
                     backgroundColor: '#FF3B300D',
                     count: undefined,
@@ -159,7 +161,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 {
                     id: 'working',
                     icon: 'pulse',
-                    label: 'Working',
+                    label: t('sidebar.working'),
                     color: '#FF9500',
                     backgroundColor: '#FF950012',
                     count: activeCount || undefined,
@@ -167,7 +169,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 {
                     id: 'team-review',
                     icon: 'people',
-                    label: 'Team Review',
+                    label: t('sidebar.teamReview'),
                     color: '#8A7F74',
                     backgroundColor: '#00000000',
                 },
@@ -182,7 +184,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 },
             }))}
             conversationHeaderAction={() => router.push('/teams/new' as never)}
-            conversationEmptyText="No teams yet"
+            conversationEmptyText={t('sidebar.noTeamsYet')}
         />
     );
 });

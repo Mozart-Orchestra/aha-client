@@ -197,7 +197,7 @@ const styles = StyleSheet.create(() => ({
         flex: 1,
         alignSelf: 'stretch',
         borderRadius: 24,
-        overflow: 'hidden',
+        overflow: Platform.OS === 'web' ? ('auto' as any) : 'hidden',
         borderWidth: 1,
         shadowColor: '#7A8C9B',
         shadowOffset: { width: 8, height: 14 },

@@ -3,6 +3,7 @@ import { useWindowDimensions } from 'react-native';
 import { useMemo } from 'react';
 import { calculateDeviceDimensions, determineDeviceType, calculateHeaderHeight } from './deviceCalculations';
 import { isRunningOnMac } from './platform';
+import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
 
 // Re-export calculation functions for use in other components
 export { calculateDeviceDimensions, determineDeviceType, calculateHeaderHeight };
@@ -21,6 +22,11 @@ export function getHeaderHeight(isLandscape: boolean, deviceType: 'phone' | 'tab
 
 // Device type detection based on screen size and aspect ratio
 export function getDeviceType(): 'phone' | 'tablet' {
+    if (Platform.OS === 'web') {
+        const { width } = Dimensions.get('window');
+        return width >= DESKTOP_BREAKPOINT ? 'tablet' : 'phone';
+    }
+
     const { width, height } = Dimensions.get('screen');
 
     const dimensions = calculateDeviceDimensions({
@@ -42,6 +48,10 @@ export function useDeviceType(): 'phone' | 'tablet' {
     const { width, height } = useWindowDimensions();
     
     return useMemo(() => {
+        if (Platform.OS === 'web') {
+            return width >= DESKTOP_BREAKPOINT ? 'tablet' : 'phone';
+        }
+
         const dimensions = calculateDeviceDimensions({
             widthPoints: width,
             heightPoints: height,

@@ -13,7 +13,7 @@ import {
     deleteTask as deleteTaskUtil
 } from '@/utils/taskHelpers';
 import { sync } from '@/sync/sync';
-import { storage } from '@/sync/storage';
+import { storage, useAllSessions } from '@/sync/storage';
 import { Modal as CustomModal } from '@/modal';
 import { useAuth } from '@/auth/AuthContext';
 
@@ -36,6 +36,7 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
 }) => {
     const { theme } = useUnistyles();
     const auth = useAuth();
+    const allSessions = useAllSessions();
     const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
     const [rejectionReason, setRejectionReason] = React.useState('');
     const [processingTaskIds, setProcessingTaskIds] = React.useState<Set<string>>(new Set());
@@ -56,6 +57,12 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
             return next;
         });
     }, []);
+
+    const getSessionName = React.useCallback((sessionId?: string | null): string => {
+        if (!sessionId) return '';
+        const session = allSessions.find(s => s.id === sessionId);
+        return session?.displayName || session?.name || sessionId.slice(0, 8);
+    }, [allSessions]);
 
     const selectedTask = pendingTasks.find(t => t.id === selectedTaskId);
     const isRejectProcessing = selectedTask ? processingTaskIds.has(selectedTask.id) : false;
@@ -266,26 +273,76 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
                                             )}
                                         </View>
 
-                                        {/* Task Description */}
-                                        {task.description && (
-                                            <Text style={[styles.taskDescription, { color: theme.colors.textSecondary }]}>
-                                                {task.description}
-                                            </Text>
-                                        )}
-
-                                        {/* Task Metadata */}
-                                        <View style={styles.taskMeta}>
-                                            {task.assigneeId && (
-                                                <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
-                                                    Assigned to: @{task.assigneeId}
-                                                </Text>
-                                            )}
+                                        {/* Proposal Source row */}
+                                        <View style={styles.proposalRow}>
                                             {task.source === 'ai' && (
-                                                <View style={styles.aiBadge}>
-                                                    <Text style={styles.aiBadgeText}>AI Generated</Text>
+                                                <View style={styles.proposalSourceBadge}>
+                                                    <Ionicons name="hardware-chip-outline" size={12} color="#4F46E5" />
+                                                    <Text style={styles.proposalSourceText}>AI proposed</Text>
                                                 </View>
                                             )}
+                                            {task.source === 'user' && (
+                                                <View style={[styles.proposalSourceBadge, { backgroundColor: '#D1FAE5' }]}>
+                                                    <Ionicons name="person-outline" size={12} color="#065F46" />
+                                                    <Text style={[styles.proposalSourceText, { color: '#065F46' }]}>User proposed</Text>
+                                                </View>
+                                            )}
+                                            {task.reporterId && (
+                                                <Text style={[styles.metaText, { color: theme.colors.textSecondary, marginLeft: 8 }]}
+                                                    numberOfLines={1}>
+                                                    by {getSessionName(task.reporterId)}
+                                                </Text>
+                                            )}
+                                            {task.assigneeId && (
+                                                <Text style={[styles.metaText, { color: theme.colors.textSecondary, marginLeft: 'auto' }]}
+                                                    numberOfLines={1}>
+                                                    → {getSessionName(task.assigneeId)}
+                                                </Text>
+                                            )}
                                         </View>
+
+                                        {/* Intent & Scope */}
+                                        {task.description && (
+                                            <>
+                                                <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
+                                                    Intent &amp; scope
+                                                </Text>
+                                                <Text style={[styles.taskDescription, { color: theme.colors.textSecondary }]}>
+                                                    {task.description}
+                                                </Text>
+                                            </>
+                                        )}
+
+                                        {/* Impact indicators */}
+                                        {((task.dependencies && task.dependencies.length > 0) ||
+                                          (task.blocks && task.blocks.length > 0) ||
+                                          (task.tags && task.tags.length > 0)) && (
+                                            <View style={styles.impactRow}>
+                                                {task.dependencies && task.dependencies.length > 0 && (
+                                                    <View style={styles.impactChip}>
+                                                        <Ionicons name="git-merge-outline" size={11} color={theme.colors.textSecondary} />
+                                                        <Text style={[styles.impactChipText, { color: theme.colors.textSecondary }]}>
+                                                            {task.dependencies.length} dep{task.dependencies.length > 1 ? 's' : ''}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                {task.blocks && task.blocks.length > 0 && (
+                                                    <View style={[styles.impactChip, { backgroundColor: '#FEF3C7' }]}>
+                                                        <Ionicons name="warning-outline" size={11} color="#92400E" />
+                                                        <Text style={[styles.impactChipText, { color: '#92400E' }]}>
+                                                            unblocks {task.blocks.length}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                {task.tags && task.tags.map(tag => (
+                                                    <View key={tag} style={[styles.impactChip, { backgroundColor: theme.colors.groupped?.background }]}>
+                                                        <Text style={[styles.impactChipText, { color: theme.colors.textSecondary }]}>
+                                                            #{tag}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        )}
 
                                         {/* Actions */}
                                         <View style={styles.taskActions}>
@@ -505,6 +562,53 @@ const styles = StyleSheet.create((theme) => ({
         fontSize: 12,
         fontWeight: '600',
         color: '#4F46E5',
+    },
+    proposalRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        marginBottom: 10,
+        gap: 4,
+    },
+    proposalSourceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E0E7FF',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        gap: 4,
+    },
+    proposalSourceText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#4F46E5',
+    },
+    sectionLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    impactRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 12,
+    },
+    impactChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E0E7FF',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 999,
+        gap: 4,
+    },
+    impactChipText: {
+        fontSize: 11,
+        fontWeight: '500',
     },
     taskActions: {
         flexDirection: 'row',

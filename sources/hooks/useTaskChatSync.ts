@@ -14,6 +14,8 @@ import {
     syncTaskStatusToChat,
     createTaskFromChatMessage,
     formatTaskReference,
+    createTaskMetadata,
+    generateTaskMessage,
 } from '@/utils/taskChatSync';
 
 interface UseTaskChatSyncOptions {
@@ -152,7 +154,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
 
         // 发送确认消息到聊天
         const confirmationMessage: TeamMessage = {
-            id: `msg-confirm-${randomUUID()}`,
+            id: randomUUID(),
             teamId,
             fromDisplayName: creatorName,
             content: `✅ 已创建任务：**${task.title}**\n\n${formatTaskReference(task)}`,
@@ -169,6 +171,41 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
 
         return task;
     }, [teamId, onTaskCreate, onMessageSend]);
+
+    /**
+     * 通过人工 UI 创建任务，并同步通知到聊天
+     */
+    const createTaskWithSync = useCallback(async (
+        taskData: Partial<KanbanTask>,
+        actorName: string = '用户'
+    ): Promise<KanbanTask | null> => {
+        const task = await onTaskCreate?.({
+            ...taskData,
+            source: 'user',
+            approvalStatus: 'approved',
+        });
+
+        if (!task) {
+            return null;
+        }
+
+        const message: TeamMessage = {
+            id: randomUUID(),
+            teamId,
+            fromDisplayName: actorName,
+            content: generateTaskMessage('created', task, actorName),
+            type: 'task-update',
+            timestamp: Date.now(),
+            metadata: createTaskMetadata(task.id, 'created', {
+                status: task.status,
+                priority: task.priority,
+            }),
+            shortContent: `任务已创建: ${task.title}`,
+        };
+
+        await onMessageSend?.(message);
+        return task;
+    }, [onMessageSend, onTaskCreate, teamId]);
 
     /**
      * 将消息关联到现有任务
@@ -209,7 +246,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
 
         // 发送通知
         const notification: TeamMessage = {
-            id: `msg-link-${randomUUID()}`,
+            id: randomUUID(),
             teamId,
             fromDisplayName: actorName,
             content: `关联了消息到任务：**${task.title}**`,
@@ -261,6 +298,7 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         getMessagesForTask,
         getTasksForMessage,
         updateTaskWithSync,
+        createTaskWithSync,
         createTaskFromMessage,
         linkMessageToTask,
         shouldCreateTaskFromMessage,

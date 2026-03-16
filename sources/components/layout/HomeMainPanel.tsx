@@ -278,7 +278,7 @@ export const HomeMainPanel = React.memo(() => {
     const isExperienced = useIsExperiencedUser();
 
     if (!isDataReady) {
-        return null;
+        return <NewUserPanel />;
     }
 
     return isExperienced ? <ExperiencedUserPanel /> : <NewUserPanel />;

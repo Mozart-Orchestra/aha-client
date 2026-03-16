@@ -6,6 +6,17 @@
 
 import type { KanbanTask } from '@/sync/kanbanTypes';
 import type { TeamMessage, TeamMessageMetadata } from '@/sync/teamMessageTypes';
+import { randomUUID } from '@/utils/uuid';
+
+const MAX_TEAM_MESSAGE_CONTENT_LENGTH = 2000;
+
+function clampTeamMessageContent(content: string): string {
+    if (content.length <= MAX_TEAM_MESSAGE_CONTENT_LENGTH) {
+        return content;
+    }
+
+    return `${content.slice(0, MAX_TEAM_MESSAGE_CONTENT_LENGTH - 1)}…`;
+}
 
 /**
  * 从消息内容中提取任务信息
@@ -71,14 +82,18 @@ export function generateTaskMessage(
     const actor = actorName || '有人';
     const actionText = actionTexts[action];
 
-    const description = task.description ? `> ${task.description}\n\n` : '';
+    const rawDescription = task.description ? task.description.trim() : '';
+    const truncatedDescription = rawDescription.length > 360
+        ? `${rawDescription.slice(0, 360)}…`
+        : rawDescription;
+    const description = truncatedDescription ? `> ${truncatedDescription}\n\n` : '';
     const priority = task.priority || '未设置';
 
-    return `${actor} ${actionText}：**${task.title}**
+    return clampTeamMessageContent(`${actor} ${actionText}：**${task.title}**
 
 ${description}**状态**: ${task.status}
 **优先级**: ${priority}
-**查看**: #task-${task.id}`;
+**查看**: #task-${task.id}`);
 }
 
 /**
@@ -177,9 +192,9 @@ export function createTaskUpdateMessage(
         .join(', ');
 
     return {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        id: randomUUID(),
         teamId: '', // 需要外部设置
-        content: generateTaskMessage('updated', task, actorName) + `\n\n变更: ${changeDetails}`,
+        content: clampTeamMessageContent(generateTaskMessage('updated', task, actorName) + `\n\n变更: ${changeDetails}`),
         type: 'task-update',
         timestamp: Date.now(),
         metadata: createTaskMetadata(task.id, 'updated', changes),
@@ -214,10 +229,10 @@ export async function syncTaskStatusToChat(
     sendMessage: (message: TeamMessage) => Promise<void>
 ): Promise<void> {
     const message: TeamMessage = {
-        id: `msg-task-${task.id}-${Date.now()}`,
+        id: randomUUID(),
         teamId: '', // 需要外部设置
         fromDisplayName: actorName,
-        content: `任务状态变更：**${task.title}**\n\n${oldStatus} → ${newStatus}\n\n${formatTaskReference(task)}`,
+        content: clampTeamMessageContent(`任务状态变更：**${task.title}**\n\n${oldStatus} → ${newStatus}\n\n${formatTaskReference(task)}`),
         type: 'task-update',
         timestamp: Date.now(),
         metadata: createTaskMetadata(task.id, 'updated', {

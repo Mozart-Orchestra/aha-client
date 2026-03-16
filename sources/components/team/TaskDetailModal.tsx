@@ -13,6 +13,7 @@ import {
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { KanbanTask, KanbanColumn } from '@/sync/kanbanTypes';
+import { trackTaskFeedback } from '@/track';
 
 interface TaskDetailModalProps {
     visible: boolean;
@@ -20,6 +21,7 @@ interface TaskDetailModalProps {
     columns: KanbanColumn[];
     onClose: () => void;
     onSave?: (taskId: string, updates: Partial<KanbanTask>) => Promise<void>;
+    onDelete?: (taskId: string) => Promise<void>;
     onDiscuss?: (task: KanbanTask) => void;
     allSessions?: any[];
     /** When true, renders as an absolute overlay within its parent instead of a system Modal. */
@@ -38,6 +40,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     columns,
     onClose,
     onSave,
+    onDelete,
     onDiscuss,
     allSessions,
     contained = false,
@@ -48,11 +51,13 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const [subtasks, setSubtasks] = useState<Subtask[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [feedbackGiven, setFeedbackGiven] = useState<1 | -1 | null>(null);
 
     // 当 task 改变时,重置状态
     React.useEffect(() => {
         if (task) {
             setSaveError(null);
+            setFeedbackGiven(null);
             setEditedTask({
                 title: task.title,
                 description: task.description || '',
@@ -142,15 +147,23 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     // Handler for status selection
     const handleStatusPress = () => {
         if (!isEditing || !columns) return;
-        // TODO: Show status picker modal
-        console.log('Status picker not implemented');
+        const columnIds = columns.map((column) => column.id);
+        if (columnIds.length === 0) return;
+
+        const currentStatus = editedTask.status || task.status || columnIds[0];
+        const currentIndex = Math.max(0, columnIds.indexOf(currentStatus));
+        const nextStatus = columnIds[(currentIndex + 1) % columnIds.length];
+        setEditedTask((previous) => ({ ...previous, status: nextStatus }));
     };
 
     // Handler for priority selection
     const handlePriorityPress = () => {
         if (!isEditing) return;
-        // TODO: Show priority picker modal
-        console.log('Priority picker not implemented');
+        const priorities: NonNullable<KanbanTask['priority']>[] = ['low', 'medium', 'high', 'urgent'];
+        const currentPriority = editedTask.priority || task.priority || 'medium';
+        const currentIndex = Math.max(0, priorities.indexOf(currentPriority));
+        const nextPriority = priorities[(currentIndex + 1) % priorities.length];
+        setEditedTask((previous) => ({ ...previous, priority: nextPriority }));
     };
 
     // Handler for subtask toggle
@@ -164,6 +177,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const handleAddSubtask = () => {
         // TODO: Show add subtask modal
         console.log('Add subtask not implemented');
+    };
+
+    const handleDelete = async () => {
+        if (!onDelete || !task) return;
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+            await onDelete(task.id);
+        } catch (error) {
+            console.error('Failed to delete task:', error);
+            setSaveError(error instanceof Error ? error.message : 'Failed to delete task');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const overlayStyle = contained ? stylesheet.overlayContained : stylesheet.overlay;
@@ -332,6 +359,43 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 <Text style={stylesheet.noActivity}>No recent activity</Text>
                                 {/* TODO: 显示活动历史 */}
                             </View>
+
+                            {/* Feedback — shown only for done tasks */}
+                            {task.status === 'done' && !isEditing && (
+                                <View style={[stylesheet.section, { alignItems: 'center', paddingVertical: 12 }]}>
+                                    {feedbackGiven === null ? (
+                                        <>
+                                            <Text style={[stylesheet.sectionTitle, { marginBottom: 10 }]}>
+                                                How did AI do on this task?
+                                            </Text>
+                                            <View style={{ flexDirection: 'row', gap: 20 }}>
+                                                <Pressable
+                                                    onPress={() => {
+                                                        setFeedbackGiven(1);
+                                                        trackTaskFeedback(task.id, 1);
+                                                    }}
+                                                    style={{ padding: 8 }}
+                                                >
+                                                    <Ionicons name="thumbs-up" size={28} color={theme.colors.success} />
+                                                </Pressable>
+                                                <Pressable
+                                                    onPress={() => {
+                                                        setFeedbackGiven(-1);
+                                                        trackTaskFeedback(task.id, -1);
+                                                    }}
+                                                    style={{ padding: 8 }}
+                                                >
+                                                    <Ionicons name="thumbs-down" size={28} color={theme.colors.textSecondary} />
+                                                </Pressable>
+                                            </View>
+                                        </>
+                                    ) : (
+                                        <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>
+                                            {feedbackGiven === 1 ? 'Thanks for the feedback!' : 'Got it, we\'ll improve.'}
+                                        </Text>
+                                    )}
+                                </View>
+                            )}
                         </ScrollView>
 
                         {/* Footer Actions */}
@@ -352,6 +416,22 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                         <Ionicons name="create" size={18} color="#FFF" />
                                         <Text style={stylesheet.footerButtonText}>Edit</Text>
                                     </Pressable>
+                                    {onDelete ? (
+                                        <Pressable
+                                            style={[stylesheet.footerButton, stylesheet.deleteButton]}
+                                            onPress={handleDelete}
+                                            disabled={isSaving}
+                                        >
+                                            {isSaving ? (
+                                                <ActivityIndicator size="small" color="#FFF" />
+                                            ) : (
+                                                <>
+                                                    <Ionicons name="trash" size={18} color="#FFF" />
+                                                    <Text style={stylesheet.footerButtonText}>Delete</Text>
+                                                </>
+                                            )}
+                                        </Pressable>
+                                    ) : null}
                                 </>
                             ) : (
                                 <>
@@ -606,6 +686,9 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     editButton: {
         backgroundColor: theme.colors.button.primary.background,
+    },
+    deleteButton: {
+        backgroundColor: theme.colors.textDestructive,
     },
     cancelButton: {
         backgroundColor: theme.colors.groupped.background,

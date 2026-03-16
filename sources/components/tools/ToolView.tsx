@@ -4,7 +4,6 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import { getToolViewComponent } from './views/_all';
 import { Message, ToolCall } from '@/sync/typesMessage';
-import { CodeView } from '../session/CodeView';
 import { ToolSectionView } from './ToolSectionView';
 import { useElapsedTime } from '@/hooks/useElapsedTime';
 import { ToolError } from './ToolError';
@@ -16,6 +15,7 @@ import { parseToolUseError } from '@/utils/toolErrorParser';
 import { formatMCPTitle } from './views/MCPToolView';
 import { t } from '@/text';
 import { getSingleRouteParam } from '@/utils/returnNavigation';
+import { ToolPayloadView } from './ToolPayloadView';
 
 interface ToolViewProps {
     metadata: Metadata | null;
@@ -240,15 +240,13 @@ export const ToolView = React.memo<ToolViewProps>((props) => {
                         {/* Default content when no custom view available */}
                         {tool.input && (
                             <ToolSectionView title={t('toolView.input')}>
-                                <CodeView code={JSON.stringify(tool.input, null, 2)} />
+                                <ToolPayloadView value={tool.input} />
                             </ToolSectionView>
                         )}
 
                         {tool.state === 'completed' && tool.result && (
                             <ToolSectionView title={t('toolView.output')}>
-                                <CodeView
-                                    code={typeof tool.result === 'string' ? tool.result : JSON.stringify(tool.result, null, 2)}
-                                />
+                                <ToolPayloadView value={tool.result} />
                             </ToolSectionView>
                         )}
                     </View>

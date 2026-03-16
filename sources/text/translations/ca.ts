@@ -111,7 +111,7 @@ export const ca: TranslationStructure = {
         developer: 'Desenvolupador',
         developerTools: 'Eines de desenvolupador',
         about: 'Quant a',
-        aboutFooter: 'Happy Coder és un client mòbil de Codex i Claude Code. Tot està xifrat punt a punt i el teu compte es guarda només al teu dispositiu. No està afiliat amb Anthropic.',
+        aboutFooter: 'Aha és una plataforma de treball de Codex i Claude Code. Tot està xifrat punt a punt i el teu compte es guarda només al teu dispositiu. No està afiliat amb Anthropic.',
         whatsNew: 'Novetats',
         whatsNewSubtitle: 'Mira les últimes actualitzacions i millores',
         reportIssue: 'Informa d\'un problema',
@@ -245,7 +245,7 @@ export const ca: TranslationStructure = {
     newSession: {
         // Used by new-session screen and launch flows
         title: 'Inicia una nova sessió',
-        noMachinesFound: 'No s\'han trobat màquines. Inicia una sessió de Happy al teu ordinador primer.',
+        noMachinesFound: 'No s\'han trobat màquines. Inicia una sessió de Kanban al teu ordinador primer.',
         allMachinesOffline: 'Totes les màquines estan fora de línia',
         machineDetails: 'Veure detalls de la màquina →',
         directoryDoesNotExist: 'Directori no trobat',
@@ -296,7 +296,7 @@ export const ca: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Configuració del servidor',
         enterServerUrl: 'Introdueix una URL del servidor',
-        notValidHappyServer: 'No és un servidor Happy vàlid',
+        notValidHappyServer: 'No és un servidor Kanban vàlid',
         changeServer: 'Canvia el servidor',
         continueWithServer: 'Continuar amb aquest servidor?',
         resetToDefault: 'Reinicia per defecte',
@@ -316,9 +316,9 @@ export const ca: TranslationStructure = {
         killSessionConfirm: 'Segur que vols finalitzar aquesta sessió?',
         archiveSession: 'Arxiva la sessió',
         archiveSessionConfirm: 'Segur que vols arxivar aquesta sessió?',
-        happySessionIdCopied: 'ID de la sessió de Happy copiat al porta-retalls',
-        failedToCopySessionId: 'Ha fallat copiar l\'ID de la sessió de Happy',
-        happySessionId: 'ID de la sessió de Happy',
+        happySessionIdCopied: 'ID de la sessió de Kanban copiat al porta-retalls',
+        failedToCopySessionId: 'Ha fallat copiar l\'ID de la sessió de Kanban',
+        happySessionId: 'ID de la sessió de Kanban',
         claudeCodeSessionId: 'ID de la sessió de Claude Code',
         claudeCodeSessionIdCopied: 'ID de la sessió de Claude Code copiat al porta-retalls',
         aiProvider: 'Proveïdor d\'IA',
@@ -341,7 +341,7 @@ export const ca: TranslationStructure = {
         path: 'Camí',
         operatingSystem: 'Sistema operatiu',
         processId: 'ID del procés',
-        happyHome: 'Directori de Happy',
+        happyHome: 'Directori de Kanban',
         copyMetadata: 'Copia les metadades',
         agentState: 'Estat de l\'agent',
         controlledByUser: 'Controlat per l\'usuari',
@@ -353,7 +353,7 @@ export const ca: TranslationStructure = {
         cliVersionOutdated: 'Actualització del CLI requerida',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Versió ${currentVersion} instal·lada. Actualitzeu a ${requiredVersion} o posterior`,
-        updateCliInstructions: 'Si us plau executeu npm install -g happy-coder@latest',
+        updateCliInstructions: 'Si us plau executeu npm install -g kanban-coder@latest',
         deleteSession: 'Elimina la sessió',
         deleteSessionSubtitle: 'Elimina permanentment aquesta sessió',
         deleteSessionConfirm: 'Eliminar la sessió permanentment?',
@@ -404,7 +404,7 @@ export const ca: TranslationStructure = {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
             readyToCode: 'Llest per programar?',
-            installCli: 'Instal·la el Happy CLI',
+            installCli: 'Instal·la el Kanban CLI',
             runIt: 'Executa\'l',
             scanQrCode: 'Escaneja el codi QR',
             openCamera: 'Obre la càmera',
@@ -652,7 +652,7 @@ export const ca: TranslationStructure = {
         invalidConnectionLink: 'Enllaç de connexió no vàlid',
         invalidConnectionLinkDescription: 'L\'enllaç de connexió falta o no és vàlid. Comprova l\'URL i torna-ho a provar.',
         connectTerminal: 'Connecta el terminal',
-        terminalRequestDescription: 'Un terminal està sol·licitant connectar-se al teu compte de Happy Coder. Això permetrà al terminal enviar i rebre missatges de forma segura.',
+        terminalRequestDescription: 'Un terminal està sol·licitant connectar-se al teu compte de Aha. Això permetrà al terminal enviar i rebre missatges de forma segura.',
         connectionDetails: 'Detalls de la connexió',
         publicKey: 'Clau pública',
         encryption: 'Xifratge',
@@ -723,7 +723,7 @@ export const ca: TranslationStructure = {
 
     machine: {
         offlineUnableToSpawn: 'El llançador està desactivat mentre la màquina està fora de línia',
-        offlineHelp: '• Assegura\'t que l\'ordinador estigui en línia\n• Executa `happy daemon status` per diagnosticar\n• Fas servir l\'última versió del CLI? Actualitza amb `npm install -g happy-coder@latest`',
+        offlineHelp: '• Assegura\'t que l\'ordinador estigui en línia\n• Executa `kanban daemon status` per diagnosticar\n• Fas servir l\'última versió del CLI? Actualitza amb `npm install -g kanban-coder@latest`',
         launchNewSessionInDirectory: 'Inicia una nova sessió al directori',
         daemon: 'Dimoni',
         status: 'Estat',
@@ -1089,12 +1089,72 @@ export const ca: TranslationStructure = {
 
     agents: {
         title: 'Agents',
-        placeholder: 'Gestió d\'agents properament',
+        placeholder: 'Gestió d\'agents aviat',
+        marketplace: 'Mercat',
+        marketplaceSubtitle: 'Descobreix agents d\'IA per al teu equip',
+        searchPlaceholder: 'Cerca agents...',
+        all: 'Tots',
+        coordination: 'Coordinació',
+        support: 'Suport',
+        execution: 'Execució',
+        official: 'Oficial',
+        noResults: 'No s\'han trobat agents',
+        noResultsHint: 'Prova una cerca o categoria diferent',
+        spawnCount: ({ count }: { count: number }) => `${count} execucions`,
+        versionLabel: ({ version }: { version: number }) => `v${version}`,
+        agentsTab: 'Agents',
+        corpsTab: 'Cossos',
+        corpsSubtitle: 'Plantilles d\'equip llestes per usar',
+        members: 'Membres',
+        memberCount: ({ count }: { count: number }) => `${count} agents`,
+        noCorps: 'No s\'han trobat cossos',
+        noCorpsHint: 'Els cossos són plantilles d\'equip amb múltiples agents',
+        deployCorps: 'Desplegar',
     },
 
     favorites: {
         title: 'Preferits',
         placeholder: 'No hi ha preferits encara',
+    },
+
+    newTeam: {
+        quickStartLabel: 'Quick Start',
+        templates: {
+            content: { title: 'Content Studio', subtitle: 'Write, SEO, social' },
+            research: { title: 'Research Team', subtitle: 'Multi-source analysis' },
+            legal: { title: 'Contract Review', subtitle: 'Parallel doc analysis' },
+            intelligence: { title: 'Market Intel', subtitle: 'Competitor tracking' },
+        },
+    },
+
+    teams: {
+        noTeamsYet: 'No Teams Yet',
+        noTeamsDescription: 'Create a team to collaborate with multiple agents.',
+        title: 'Teams',
+        workspaceTeams: 'Workspace Teams',
+        workspaceTeamsDescription: 'Open, select, archive, or create teams.',
+        untitledTeam: 'Untitled Team',
+        archiveTeams: 'Archive Teams',
+        archiveConfirm: ({ count }: { count: number }) => `Archive ${count} team(s) and all their associated sessions?`,
+        archiveAction: 'Archive',
+        archiveSuccess: ({ count }: { count: number }) => `Archived ${count} team(s).`,
+        archiveFailed: 'Failed to archive teams. Please try again.',
+        deleteTeams: 'Delete Teams',
+        deleteTeamsConfirm: ({ count }: { count: number }) => `Permanently delete ${count} team(s) and all their associated sessions? This cannot be undone.`,
+        deleteTeam: 'Delete Team',
+        deleteTeamConfirm: 'Are you sure you want to delete this team? This action cannot be undone.',
+        deleteAction: 'Delete',
+        deleteSuccess: ({ count }: { count: number }) => `Deleted ${count} team(s).`,
+        deleteFailed: 'Failed to delete teams. Please try again.',
+        deleteTeamFailed: 'Failed to delete team',
+        membersLabel: ({ count }: { count: number }) => `${count} members`,
+        selectedCount: ({ count }: { count: number }) => `${count} Selected`,
+        editButton: 'Edit',
+        selectAll: 'Select All',
+    },
+
+    zen: {
+        noTasksYet: 'No tasks yet. Tap + to add one.',
     },
 } as const;
 

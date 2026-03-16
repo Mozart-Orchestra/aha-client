@@ -22,7 +22,7 @@ import { loadPendingSettings, savePendingSettings } from './persistence';
 import { initializeTracking, tracking } from '@/track';
 import { parseToken } from '@/utils/parseToken';
 import { RevenueCat, LogLevel, PaywallResult } from './revenueCat';
-import { trackPaywallPresented, trackPaywallPurchased, trackPaywallCancelled, trackPaywallRestored, trackPaywallError } from '@/track';
+import { trackPaywallPresented, trackPaywallPurchased, trackPaywallCancelled, trackPaywallRestored, trackPaywallError, trackSessionTokenUsage } from '@/track';
 import { getServerUrl } from './serverConfig';
 import { config } from '@/config';
 import { log } from '@/log';
@@ -818,6 +818,11 @@ class Sync {
             return decryptedArtifact;
         } catch (error) {
             console.error(`Failed to fetch artifact ${artifactId}:`, error);
+            const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+            if (message.includes('artifact not found')) {
+                console.warn(`Artifact ${artifactId} not found on server (404). Deleting locally.`);
+                storage.getState().deleteArtifact(artifactId);
+            }
             return null;
         }
     }
@@ -2730,6 +2735,15 @@ class Sync {
         }
 
         // daemon-status ephemeral updates are deprecated, machine status is handled via machine-activity
+
+        // Track token usage events
+        if (updateData.type === 'usage') {
+            trackSessionTokenUsage(
+                updateData.tokens.input,
+                updateData.tokens.output,
+                updateData.cost.total,
+            );
+        }
     }
 
     //

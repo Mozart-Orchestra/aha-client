@@ -15,7 +15,7 @@ export const SidebarNavigator = React.memo(() => {
     const { width: windowWidth } = useWindowDimensions();
 
     const isDesktopWeb = Platform.OS === 'web' && windowWidth >= DESKTOP_BREAKPOINT;
-    const isEmbedded = isDesktopWeb && isEmbeddedDesktopRoute(pathname);
+    const isEmbedded = auth.isAuthenticated && isDesktopWeb && isEmbeddedDesktopRoute(pathname);
     // On web, only the isEmbedded path handles the desktop shell. Below DESKTOP_BREAKPOINT
     // the app shows mobile layout (hidden drawer). Never use the permanent-drawer tablet
     // path on web — it causes a duplicate ThreeColumnShell because both the Drawer's

@@ -111,7 +111,7 @@ export const en = {
         developer: 'Developer',
         developerTools: 'Developer Tools',
         about: 'About',
-        aboutFooter: 'Kanban Coder is a Codex and Claude Code mobile client. It\'s fully end-to-end encrypted and your account is stored only on your device. Not affiliated with Anthropic.',
+        aboutFooter: 'Aha is a Codex and Claude Code AI workbench. It\'s fully end-to-end encrypted and your account is stored only on your device. Not affiliated with Anthropic.',
         whatsNew: 'What\'s New',
         whatsNewSubtitle: 'See the latest updates and improvements',
         reportIssue: 'Report an Issue',
@@ -400,6 +400,16 @@ export const en = {
         marketplaceSubtitle: 'Discover and install AI agents',
     },
 
+    newTeam: {
+        quickStartLabel: 'Quick Start',
+        templates: {
+            content: { title: 'Content Studio', subtitle: 'Write, SEO, social' },
+            research: { title: 'Research Team', subtitle: 'Multi-source analysis' },
+            legal: { title: 'Contract Review', subtitle: 'Parallel doc analysis' },
+            intelligence: { title: 'Market Intel', subtitle: 'Competitor tracking' },
+        },
+    },
+
     components: {
         emptyMainScreen: {
             // Used by EmptyMainScreen component
@@ -419,7 +429,7 @@ export const en = {
             plan: 'Plan Mode',
             bypassPermissions: 'Yolo Mode',
             badgeAcceptAllEdits: 'Accept All Edits',
-            badgeBypassAllPermissions: 'Bypass All Permissions',
+            badgeBypassAllPermissions: 'Full Auto Mode',
             badgePlanMode: 'Plan Mode',
         },
         agent: {
@@ -472,6 +482,17 @@ export const en = {
 
     sidebar: {
         sessionsTitle: 'Aha',
+        workspace: 'Workspace',
+        online: 'Online',
+        needsDecision: 'Needs Decision',
+        working: 'Working',
+        teamReview: 'Team Review',
+        noTeamsYet: 'No teams yet',
+        openTeamWorkspace: 'Open team workspace',
+        agents: 'Agents',
+        conversations: 'Conversations',
+        noActiveAgents: 'No active agents',
+        noConversationsYet: 'No conversations yet',
     },
 
     toolView: {
@@ -1344,6 +1365,8 @@ export const en = {
         last30Days: 'Last 30 days',
         totalTokens: 'Total Tokens',
         totalCost: 'Total Cost',
+        estimatedHoursSaved: 'Est. Hours Saved',
+        estimatedHoursSavedHint: 'Based on ~50K tokens/hr of AI-equivalent work',
         tokens: 'Tokens',
         cost: 'Cost',
         usageOverTime: 'Usage over time',
@@ -1354,11 +1377,61 @@ export const en = {
     agents: {
         title: 'Agents',
         placeholder: 'Agent management coming soon',
+        marketplace: 'Marketplace',
+        marketplaceSubtitle: 'Discover AI agents for your team',
+        searchPlaceholder: 'Search agents...',
+        all: 'All',
+        coordination: 'Coordination',
+        support: 'Support',
+        execution: 'Execution',
+        official: 'Official',
+        noResults: 'No agents found',
+        noResultsHint: 'Try a different search or category',
+        spawnCount: ({ count }: { count: number }) => `${count} spawns`,
+        versionLabel: ({ version }: { version: number }) => `v${version}`,
+        agentsTab: 'Agents',
+        corpsTab: 'Corps',
+        corpsSubtitle: 'Ready-to-deploy team templates',
+        members: 'Members',
+        memberCount: ({ count }: { count: number }) => `${count} agents`,
+        noCorps: 'No corps found',
+        noCorpsHint: 'Corps are team templates combining multiple agents',
+        deployCorps: 'Deploy',
     },
 
     favorites: {
         title: 'Favorites',
         placeholder: 'No favorites yet',
+    },
+
+    teams: {
+        noTeamsYet: 'No Teams Yet',
+        noTeamsDescription: 'Create a team to collaborate with multiple agents.',
+        title: 'Teams',
+        workspaceTeams: 'Workspace Teams',
+        workspaceTeamsDescription: 'Open, select, archive, or create teams.',
+        untitledTeam: 'Untitled Team',
+        archiveTeams: 'Archive Teams',
+        archiveConfirm: ({ count }: { count: number }) => `Archive ${count} team(s) and all their associated sessions?`,
+        archiveAction: 'Archive',
+        archiveSuccess: ({ count }: { count: number }) => `Archived ${count} team(s).`,
+        archiveFailed: 'Failed to archive teams. Please try again.',
+        deleteTeams: 'Delete Teams',
+        deleteTeamsConfirm: ({ count }: { count: number }) => `Permanently delete ${count} team(s) and all their associated sessions? This cannot be undone.`,
+        deleteTeam: 'Delete Team',
+        deleteTeamConfirm: 'Are you sure you want to delete this team? This action cannot be undone.',
+        deleteAction: 'Delete',
+        deleteSuccess: ({ count }: { count: number }) => `Deleted ${count} team(s).`,
+        deleteFailed: 'Failed to delete teams. Please try again.',
+        deleteTeamFailed: 'Failed to delete team',
+        membersLabel: ({ count }: { count: number }) => `${count} members`,
+        selectedCount: ({ count }: { count: number }) => `${count} Selected`,
+        editButton: 'Edit',
+        selectAll: 'Select All',
+    },
+
+    zen: {
+        noTasksYet: 'No tasks yet. Tap + to add one.',
     },
 } as const;
 

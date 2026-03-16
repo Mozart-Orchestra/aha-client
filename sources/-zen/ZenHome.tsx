@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View, ScrollView, Text, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { ZenHeader } from './components/ZenHeader';
 import { TodoList } from './components/TodoList';
@@ -209,7 +210,7 @@ export const ZenHome = () => {
                         {undoneTodos.length === 0 ? (
                             <View style={{ padding: 20, alignItems: 'center' }}>
                                 <Text style={{ color: theme.colors.textSecondary, fontSize: 16 }}>
-                                    No tasks yet. Tap + to add one.
+                                    {t('zen.noTasksYet')}
                                 </Text>
                             </View>
                         ) : (

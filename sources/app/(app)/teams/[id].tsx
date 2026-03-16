@@ -8,6 +8,7 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
+import { trackTeamViewed, trackTaskCreated, trackTaskApproval, trackTeamChatSent, trackTaskCompleted, trackTaskMoved } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useArtifact, useAllSessions, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
 import { sync } from '@/sync/sync';
@@ -28,6 +29,8 @@ import { getDisplayName } from '@/sync/profile';
 import TeamChatRoom from '@/components/team/TeamChatRoom';
 import { TaskDetailModal } from '@/components/team/TaskDetailModal';
 import { TaskApprovalModal } from '@/components/team/TaskApprovalModal';
+import { NewTaskModal } from '@/components/team/NewTaskModal';
+import { TeamStatusBar } from '@/components/team/TeamStatusBar';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
@@ -41,6 +44,9 @@ import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell'
 import { SidebarView } from '@/components/layout/SidebarView';
 import { getSessionName } from '@/utils/sessionUtils';
 import { buildTeamReturnPath, getSingleRouteParam, pushSessionRoute } from '@/utils/returnNavigation';
+import { randomUUID } from '@/utils/uuid';
+import { t } from '@/text';
+import { formatTaskReference } from '@/utils/taskChatSync';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -366,6 +372,74 @@ const stylesheet = StyleSheet.create((theme) => ({
     desktopMenuDivider: {
         height: 1,
     },
+    mobileHeaderTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 12,
+    },
+    mobileWorkspaceButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: theme.colors.groupped.background,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    mobileWorkspaceCopy: {
+        flex: 1,
+        minWidth: 0,
+    },
+    mobileWorkspaceTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    mobileWorkspaceSubtitle: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        marginTop: 2,
+    },
+    mobileHeaderIconButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.groupped.background,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    mobileWorkspaceBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(10, 16, 22, 0.16)',
+        zIndex: 1200,
+    },
+    mobileWorkspacePanel: {
+        position: 'absolute',
+        top: 82,
+        left: 12,
+        bottom: 16,
+        borderRadius: 22,
+        overflow: 'hidden',
+        backgroundColor: '#F8FBFD',
+        borderWidth: 1,
+        borderColor: '#D9E4EA',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.14,
+        shadowRadius: 32,
+        elevation: 12,
+        zIndex: 1300,
+    },
 }));
 
 const withAlpha = (color: string, alpha: number): string => {
@@ -453,23 +527,41 @@ export default function TeamDashboardScreen() {
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
+    const [showNewTaskModal, setShowNewTaskModal] = React.useState(false);
+    const [newTaskStatus, setNewTaskStatus] = React.useState('todo');
+    const [chatComposerPrefill, setChatComposerPrefill] = React.useState<{ text: string; token: number } | null>(null);
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const [showMenu, setShowMenu] = React.useState(false);
+    const [showWorkspaceDrawer, setShowWorkspaceDrawer] = React.useState(false);
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
-    const artifactRoomId = React.useMemo(() => {
-        if (!artifact?.body) return undefined;
+    const parsedArtifactBoard = React.useMemo<{
+        board: KanbanBoard | null;
+        parseError: Error | null;
+    }>(() => {
+        if (!artifact?.body) {
+            return { board: null, parseError: null };
+        }
+
         try {
-            const parsed = JSON.parse(artifact.body);
-            return parsed.roomId as string | undefined;
-        } catch {
-            return undefined;
+            return {
+                board: JSON.parse(artifact.body) as KanbanBoard,
+                parseError: null,
+            };
+        } catch (error) {
+            return {
+                board: null,
+                parseError: error instanceof Error ? error : new Error('Failed to parse team artifact body'),
+            };
         }
     }, [artifact?.body]);
-    const roomId = (roomIdParam as string) || artifactRoomId || teamId || undefined;
+    const artifactRoomId = React.useMemo(() => {
+        return parsedArtifactBoard.board?.roomId;
+    }, [parsedArtifactBoard.board]);
+    const roomId = (roomIdParam as string) || artifactRoomId || undefined;
     const teamReturnTo = React.useMemo(() => {
         return buildTeamReturnPath({
             teamId,
@@ -483,13 +575,13 @@ export default function TeamDashboardScreen() {
     }, [collaborationState, roomId]);
     const desktopBoard = React.useMemo<KanbanBoard | null>(() => {
         if (!roomId || !collaborationState) return null;
-        return collaborationState.boards.find((entry: any) => entry.roomId === roomId)?.board ?? DEFAULT_KANBAN_BOARD;
+        return collaborationState.boards.find((entry: any) => entry.roomId === roomId)?.board ?? null;
     }, [collaborationState, roomId]);
 
     // Get user's display name for chat
     const myDisplayName = React.useMemo(() => {
         const displayName = getDisplayName(profile);
-        return displayName || sync.anonID; // Fallback to session ID if no display name
+        return displayName || sync.anonID || 'Workspace'; // Fallback for unauthenticated/empty profile states
     }, [profile]);
 
     React.useEffect(() => {
@@ -497,6 +589,12 @@ export default function TeamDashboardScreen() {
             setActiveTab(normalizedInitialTab);
         }
     }, [activeTab, normalizedInitialTab]);
+
+    React.useEffect(() => {
+        if (teamId) {
+            trackTeamViewed(teamId);
+        }
+    }, [teamId]);
 
     const selectTab = React.useCallback((nextTab: TeamDashboardTab) => {
         setActiveTab(nextTab);
@@ -589,14 +687,13 @@ export default function TeamDashboardScreen() {
     // Helper to get session IDs from artifact body
     const getSessionIds = React.useCallback((): string[] => {
         if (!artifact?.body) return [];
-        try {
-            const parsed = JSON.parse(artifact.body);
-            const members = parsed.team?.members || [];
-            return members.map((m: any) => m.sessionId).filter(Boolean);
-        } catch {
-            return [];
+        if (parsedArtifactBoard.parseError || !parsedArtifactBoard.board) {
+            throw parsedArtifactBoard.parseError || new Error('Team artifact body is unavailable');
         }
-    }, [artifact?.body]);
+
+        const members = parsedArtifactBoard.board.team?.members || [];
+        return members.map((m: any) => m.sessionId).filter(Boolean);
+    }, [artifact?.body, parsedArtifactBoard.board, parsedArtifactBoard.parseError]);
 
     // Archive Team handler
     const handleArchiveTeam = React.useCallback(async () => {
@@ -761,14 +858,13 @@ export default function TeamDashboardScreen() {
             return ensureColumns(desktopBoard || DEFAULT_KANBAN_BOARD);
         }
         if (!artifact?.body) return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
-        try {
-            const parsed = JSON.parse(artifact.body);
-            return ensureColumns(parsed);
-        } catch (e) {
-            console.error('Failed to parse kanban data', e);
+        if (parsedArtifactBoard.parseError || !parsedArtifactBoard.board) {
+            console.error('Failed to parse kanban data', parsedArtifactBoard.parseError);
             return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
         }
-    }, [artifact?.body, desktopBoard, desktopBridge]);
+
+        return ensureColumns(parsedArtifactBoard.board);
+    }, [artifact?.body, desktopBoard, desktopBridge, parsedArtifactBoard.board, parsedArtifactBoard.parseError]);
 
     // 🆕 Chat-Board 双向同步 Hook
     const taskChatSync = useTaskChatSync({
@@ -820,6 +916,38 @@ export default function TeamDashboardScreen() {
             setTeamMessages(prev => [...prev, message]);
         },
         onTaskCreate: async (taskData) => {
+            if (desktopBridge && roomId) {
+                const createdTask = await desktopBridge.createTask({
+                    roomId,
+                    title: taskData.title || 'Untitled Task',
+                    description: taskData.description,
+                    status: taskData.status || 'todo',
+                    assigneeId: taskData.assigneeId,
+                    metadata: {
+                        priority: taskData.priority,
+                        dueDate: taskData.dueDate,
+                        tags: taskData.tags,
+                        source: taskData.source || 'user',
+                        approvalStatus: taskData.approvalStatus || 'approved',
+                    }
+                });
+
+                return {
+                    id: createdTask.id,
+                    title: createdTask.title,
+                    description: createdTask.description,
+                    status: createdTask.status,
+                    assigneeId: createdTask.assigneeId,
+                    createdAt: createdTask.createdAt,
+                    updatedAt: createdTask.updatedAt,
+                    priority: (createdTask.metadata?.priority as KanbanTask['priority']) || taskData.priority,
+                    dueDate: (createdTask.metadata?.dueDate as number | undefined) || taskData.dueDate,
+                    tags: (createdTask.metadata?.tags as string[] | undefined) || taskData.tags,
+                    source: (createdTask.metadata?.source as KanbanTask['source']) || (taskData.source as KanbanTask['source']) || 'user',
+                    approvalStatus: (createdTask.metadata?.approvalStatus as KanbanTask['approvalStatus']) || taskData.approvalStatus || 'approved',
+                } as KanbanTask;
+            }
+
             if (!artifact) {
                 throw new Error('No artifact available for task creation.');
             }
@@ -848,22 +976,6 @@ export default function TeamDashboardScreen() {
         },
     });
 
-    // 🆕 Discuss 按钮处理函数：跳转到 Chat 标签并高亮相关消息
-    const handleDiscussTask = React.useCallback((task: KanbanTask) => {
-        // 查找与任务相关的消息
-        const relatedMessages = taskChatSync.getMessagesForTask(task.id);
-
-        // 关闭详情弹窗
-        setShowTaskDetail(false);
-
-        // 切换到 Chat 标签
-        selectTab('chat');
-
-        // TODO: 可以在这里实现滚动到相关消息的功能
-        // 可能需要在 TeamChatRoom 中添加一个 ref 来支持滚动到特定消息
-        console.log('Discussing task:', task.id, 'Found', relatedMessages.length, 'related messages');
-    }, [selectTab, taskChatSync]);
-
     const normalizeStatus = React.useCallback((status: string): string => {
         const statusMap: Record<string, string> = {
             'in_progress': 'in-progress',
@@ -878,45 +990,63 @@ export default function TeamDashboardScreen() {
         return statusMap[status] || (status ? status.toLowerCase() : 'todo');
     }, []);
 
-    const handleAddTask = async (status: string) => {
-        const title = await Modal.prompt('New Task', 'Enter task title');
-        if (!title) return;
+    const handleAddTask = React.useCallback((status: string) => {
+        setNewTaskStatus(status);
+        setShowNewTaskModal(true);
+    }, []);
 
-        if (desktopBridge && roomId) {
-            await desktopBridge.createTask({
-                roomId,
-                title,
-                status
-            });
+    const handleDeleteTask = React.useCallback(async (taskId: string) => {
+        const task = kanbanData.tasks.find((entry) => entry.id === taskId);
+        if (!task) {
             return;
         }
 
-        if (!artifact) {
-            return;
-        }
-
-        const newTask: KanbanTask = {
-            id: Math.random().toString(36).substr(2, 9),
-            title,
-            status: status,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-
-        const newData: KanbanBoard = {
-            ...kanbanData,
-            tasks: [...kanbanData.tasks, newTask]
-        };
-
-        await sync.updateArtifact(
-            artifact.id,
-            artifact.title,
-            JSON.stringify(newData, null, 2),
-            artifact.sessions,
-            artifact.draft,
-            artifact.type
+        const confirmed = await Modal.confirm(
+            'Delete Task',
+            `Delete "${task.title}"?`,
+            { confirmText: 'Delete', destructive: true }
         );
-    };
+
+        if (!confirmed) {
+            return;
+        }
+
+        if (desktopBridge) {
+            await desktopBridge.removeTask(taskId);
+        } else if (artifact) {
+            const newData: KanbanBoard = {
+                ...kanbanData,
+                tasks: kanbanData.tasks.filter((entry) => entry.id !== taskId)
+            };
+
+            await sync.updateArtifact(
+                artifact.id,
+                artifact.title,
+                JSON.stringify(newData, null, 2),
+                artifact.sessions,
+                artifact.draft,
+                artifact.type
+            );
+        }
+
+        const message = {
+            id: randomUUID(),
+            teamId,
+            fromDisplayName: myDisplayName || '用户',
+            content: `${myDisplayName || '用户'} 删除了任务：**${task.title}**`,
+            type: 'notification' as const,
+            timestamp: Date.now(),
+            metadata: {
+                taskId,
+                _action: 'deleted',
+            },
+            shortContent: `任务已删除: ${task.title}`,
+        };
+
+        await sync.sendTeamMessage(message);
+        setTeamMessages((previous) => [...previous, message]);
+        setShowTaskDetail(false);
+    }, [artifact, desktopBridge, kanbanData, myDisplayName, teamId]);
 
     const handleMoveTask = async (task: KanbanTask) => {
         const normalized = normalizeStatus(task.status);
@@ -935,6 +1065,11 @@ export default function TeamDashboardScreen() {
                 { status: nextStatus },
                 myDisplayName || '用户'
             );
+
+            trackTaskMoved(task.id, teamId, normalized, nextStatus);
+            if (nextStatus === 'done') {
+                trackTaskCompleted(task.id, teamId);
+            }
 
             // 🆕 Phase 2: 同步状态到 Todo（如果有链接）
             if (task.todoId) {
@@ -1003,6 +1138,31 @@ export default function TeamDashboardScreen() {
             return { member, session, role, index, tasks };
         });
     }, [kanbanData.team?.members, artifact?.sessions, sessionLookup, roleDefinitions, kanbanData.tasks]);
+
+    // 🆕 Discuss 按钮处理函数：切换到 Chat 并预填 @mention 草稿
+    const handleDiscussTask = React.useCallback((task: KanbanTask) => {
+        const assigneeEntry = task.assigneeId
+            ? roster.find((entry) => entry.member.sessionId === task.assigneeId)
+            : null;
+        const masterEntry = roster.find((entry) => {
+            const roleId = entry.role?.id || entry.member.roleId || entry.session?.metadata?.role;
+            return roleId === 'master';
+        });
+
+        const mentionTarget = assigneeEntry
+            ? (assigneeEntry.role?.id || assigneeEntry.member.roleId || assigneeEntry.member.displayName || 'master')
+            : (masterEntry?.role?.id || masterEntry?.member.roleId || 'master');
+
+        const mentionText = `@${String(mentionTarget).replace(/\s+/g, '-')}`;
+        const draft = `${mentionText} Let's discuss ${formatTaskReference(task)} (${task.title}) `;
+
+        setShowTaskDetail(false);
+        selectTab('chat');
+        setChatComposerPrefill({
+            text: draft,
+            token: Date.now(),
+        });
+    }, [roster, selectTab]);
 
     const timelineEvents = React.useMemo(() => {
         return [...kanbanData.tasks]
@@ -1130,66 +1290,35 @@ export default function TeamDashboardScreen() {
         return links;
     }, [kanbanData.tasks]);
 
-    // Early returns MUST come AFTER all hooks to avoid "Rendered fewer hooks" error
-    if (desktopBridge && !desktopRoom) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" />
-            </View>
-        );
-    }
-
-    if (!desktopBridge && !artifact) {
-        return (
-            <View style={styles.loadingContainer}>
-                {isLoading ? (
-                    <ActivityIndicator size="large" />
-                ) : (
-                    <View style={{ alignItems: 'center', padding: 20 }}>
-                        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
-                        <Text style={[styles.title, { marginTop: 16, textAlign: 'center' }]}>
-                            Team Board Not Found
-                        </Text>
-                        <Text style={[styles.subtitle, { marginTop: 8, textAlign: 'center', maxWidth: 300 }]}>
-                            This team doesn't have a Kanban board yet. Initialize one to start tracking tasks.
-                        </Text>
-                        <Pressable
-                            style={{
-                                marginTop: 20,
-                                backgroundColor: theme.colors.button.primary.background,
-                                paddingHorizontal: 24,
-                                paddingVertical: 12,
-                                borderRadius: 8
-                            }}
-                            onPress={handleInitializeArtifact}
-                        >
-                            <Text style={{ color: theme.colors.button.primary.tint, fontWeight: '600' }}>
-                                Initialize Board
-                            </Text>
-                        </Pressable>
-                    </View>
-                )}
-            </View>
-        );
-    }
+    const isMissingDesktopRoom = !!desktopBridge && !desktopRoom;
+    const isMissingDesktopBoard = !!desktopBridge && !!desktopRoom && !desktopBoard;
+    const isMissingArtifact = !desktopBridge && !artifact;
+    const isArtifactParseError = !desktopBridge && !!artifact?.body && !!parsedArtifactBoard.parseError;
+    const shouldShowBoardFallback = isMissingDesktopRoom || isMissingDesktopBoard || isMissingArtifact || isArtifactParseError;
+    const fallbackTitle = isArtifactParseError
+        ? 'Team Board Failed to Load'
+        : isMissingDesktopRoom
+            ? 'Team Room Not Found'
+            : 'Team Board Not Found';
+    const fallbackDescription = isArtifactParseError
+        ? 'This team exists, but its board data could not be parsed. Fix the stored board payload before continuing.'
+        : isMissingDesktopRoom
+            ? 'This team route opened without a valid collaboration room. Re-open the team from the teams list or recreate its desktop room binding.'
+            : isMissingDesktopBoard
+                ? 'This team room exists, but no board is attached to it yet.'
+                : 'This team doesn\'t have a Kanban board yet. Initialize one to start tracking tasks.';
 
     const renderKanban = () => (
         <>
-            {/* 🆕 Pending tasks notification */}
-            {pendingTasks.length > 0 && (
-                <View style={[styles.pendingBanner, { backgroundColor: '#FFF3CD', borderColor: '#FFC107' }]}>
-                    <Ionicons name="information-circle" size={20} color="#FFC107" />
-                    <Text style={[styles.pendingBannerText, { color: '#856404' }]}>
-                        {pendingTasks.length} {pendingTasks.length === 1 ? 'task' : 'tasks'} awaiting approval
-                    </Text>
-                    <Pressable
-                        onPress={() => setShowApprovalModal(true)}
-                        style={[styles.pendingBannerButton, { backgroundColor: '#FFC107' }]}
-                    >
-                        <Text style={styles.pendingBannerButtonText}>Review</Text>
-                    </Pressable>
-                </View>
-            )}
+            {/* 三信号状态面板 — 运行中 / 等待介入 / 异常告警 */}
+            <TeamStatusBar
+                tasks={kanbanData.tasks}
+                onSignalPress={(signal) => {
+                    if (signal === 'deciding') {
+                        setShowApprovalModal(true);
+                    }
+                }}
+            />
 
             <View style={styles.boardContainer}>
                     {kanbanData.columns.map(column => (
@@ -1348,13 +1477,14 @@ export default function TeamDashboardScreen() {
                     messages={teamMessages}
                     onMessagesChange={setTeamMessages}
                     taskChatSync={taskChatSync}
+                    composerPrefill={chatComposerPrefill}
                     variant={isDesktopShell ? 'edzlf' : 'default'}
                 />
             </View>
         );
     };
 
-    const desktopSecondaryPanel = (
+    const workspaceSidebar = (
         <FloatingIslandSidebar
             variant={shellVariant}
             header={{
@@ -1373,6 +1503,7 @@ export default function TeamDashboardScreen() {
                     ? entry.tasks.length
                     : entry.tasks.length > 0 ? entry.tasks.length : undefined,
                 onPress: () => {
+                    setShowWorkspaceDrawer(false);
                     setSelectedAgentId(entry.member.sessionId);
                     pushSessionRoute(router, {
                         id: entry.member.sessionId,
@@ -1418,6 +1549,7 @@ export default function TeamDashboardScreen() {
                 avatarLabel: (team.title || 'T').slice(0, 1).toUpperCase(),
                 selected: team.id === teamId,
                 onPress: () => {
+                    setShowWorkspaceDrawer(false);
                     router.push({
                         pathname: '/teams/[id]',
                         params: { id: team.id },
@@ -1427,6 +1559,40 @@ export default function TeamDashboardScreen() {
             conversationSectionLabel="Teams"
             conversationEmptyText="No teams yet"
         />
+    );
+
+    const boardFallbackPanel = (
+        <View style={styles.loadingContainer}>
+            {((isMissingDesktopRoom && !desktopRoom && !collaborationState) || isLoading) ? (
+                <ActivityIndicator size="large" />
+            ) : (
+                <View style={{ alignItems: 'center', padding: 20 }}>
+                    <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
+                    <Text style={[styles.title, { marginTop: 16, textAlign: 'center' }]}>
+                        {fallbackTitle}
+                    </Text>
+                    <Text style={[styles.subtitle, { marginTop: 8, textAlign: 'center', maxWidth: 300 }]}>
+                        {fallbackDescription}
+                    </Text>
+                    {!desktopBridge && !isArtifactParseError ? (
+                        <Pressable
+                            style={{
+                                marginTop: 20,
+                                backgroundColor: theme.colors.button.primary.background,
+                                paddingHorizontal: 24,
+                                paddingVertical: 12,
+                                borderRadius: 8
+                            }}
+                            onPress={handleInitializeArtifact}
+                        >
+                            <Text style={{ color: theme.colors.button.primary.tint, fontWeight: '600' }}>
+                                Initialize Board
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                </View>
+            )}
+        </View>
     );
 
     const desktopMainPanel = (
@@ -1514,10 +1680,16 @@ export default function TeamDashboardScreen() {
                 ) : null}
             </View>
             <View style={styles.desktopPanelBody}>
-                {activeTab === 'chat' && renderChat()}
-                {activeTab === 'board' && renderKanban()}
-                {activeTab === 'info' && renderInfo()}
-                {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
+                {shouldShowBoardFallback ? (
+                    boardFallbackPanel
+                ) : (
+                    <>
+                        {activeTab === 'chat' && renderChat()}
+                        {activeTab === 'board' && renderKanban()}
+                        {activeTab === 'info' && renderInfo()}
+                        {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
+                    </>
+                )}
                 <TaskDetailModal
                     visible={showTaskDetail}
                     contained={true}
@@ -1525,11 +1697,22 @@ export default function TeamDashboardScreen() {
                     columns={kanbanData.columns}
                     onClose={() => setShowTaskDetail(false)}
                     onDiscuss={handleDiscussTask}
+                    onDelete={handleDeleteTask}
                     onSave={async (taskId, updates) => {
                         await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
                         setShowTaskDetail(false);
                     }}
                     allSessions={allSessions}
+                />
+                <NewTaskModal
+                    visible={showNewTaskModal}
+                    contained={true}
+                    columns={kanbanData.columns}
+                    initialStatus={newTaskStatus}
+                    onClose={() => setShowNewTaskModal(false)}
+                    onCreate={async (taskInput) => {
+                        await taskChatSync.createTaskWithSync(taskInput, myDisplayName || '用户');
+                    }}
                 />
             </View>
         </>
@@ -1537,9 +1720,26 @@ export default function TeamDashboardScreen() {
 
     const desktopShell = (
         <SidebarView
-            secondaryPanel={desktopSecondaryPanel}
+            secondaryPanel={workspaceSidebar}
             mainPanel={desktopMainPanel}
         />
+    );
+
+    const mobileWorkspaceDrawer = (
+        <>
+            <Pressable
+                style={styles.mobileWorkspaceBackdrop}
+                onPress={() => setShowWorkspaceDrawer(false)}
+            />
+            <View
+                style={[
+                    styles.mobileWorkspacePanel,
+                    { width: Math.min(360, width - 24) }
+                ]}
+            >
+                {workspaceSidebar}
+            </View>
+        </>
     );
 
     return (
@@ -1633,6 +1833,39 @@ export default function TeamDashboardScreen() {
             ) : (
                 <View style={styles.container}>
                     <View style={styles.header}>
+                        <View style={styles.mobileHeaderTopRow}>
+                            <Pressable
+                                style={styles.mobileWorkspaceButton}
+                                onPress={() => {
+                                    setShowWorkspaceDrawer((previous) => !previous);
+                                    setShowMenu(false);
+                                }}
+                            >
+                                <Ionicons name="layers-outline" size={18} color={theme.colors.text} />
+                                <View style={styles.mobileWorkspaceCopy}>
+                                    <Text style={styles.mobileWorkspaceTitle} numberOfLines={1}>
+                                        {artifact?.title || desktopRoom?.name || 'Workspace'}
+                                    </Text>
+                                    <Text style={styles.mobileWorkspaceSubtitle} numberOfLines={1}>
+                                        {onlineCount} online · {roster.length} agents · {allTeams.length} teams
+                                    </Text>
+                                </View>
+                                <Ionicons
+                                    name={showWorkspaceDrawer ? 'chevron-up' : 'chevron-down'}
+                                    size={16}
+                                    color={theme.colors.textSecondary}
+                                />
+                            </Pressable>
+                            <Pressable
+                                style={styles.mobileHeaderIconButton}
+                                onPress={() => {
+                                    setShowMenu(!showMenu);
+                                    setShowWorkspaceDrawer(false);
+                                }}
+                            >
+                                <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.text} />
+                            </Pressable>
+                        </View>
                         <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
                             {(['chat', 'board', 'info', 'evolution'] as const).map((tab) => (
                                 <Pressable
@@ -1663,28 +1896,48 @@ export default function TeamDashboardScreen() {
                         </View>
                     </View>
 
-                    {activeTab === 'chat' && renderChat()}
-                    {activeTab === 'board' && renderKanban()}
-                    {activeTab === 'info' && renderInfo()}
-                    {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
+                    {shouldShowBoardFallback ? (
+                        boardFallbackPanel
+                    ) : (
+                        <>
+                            {activeTab === 'chat' && renderChat()}
+                            {activeTab === 'board' && renderKanban()}
+                            {activeTab === 'info' && renderInfo()}
+                            {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
+                        </>
+                    )}
                 </View>
             )}
 
+            {!isDesktopShell && showWorkspaceDrawer && mobileWorkspaceDrawer}
+
             {/* 🆕 任务详情弹窗 (mobile only — desktop uses contained modal inside main panel) */}
             {!isDesktopShell && (
-                <TaskDetailModal
-                    visible={showTaskDetail}
-                    task={selectedTask}
-                    columns={kanbanData.columns}
-                    onClose={() => setShowTaskDetail(false)}
-                    onDiscuss={handleDiscussTask}
-                    onSave={async (taskId, updates) => {
-                        // 使用 taskChatSync 更新任务，会自动发送通知
-                        await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
-                        setShowTaskDetail(false);
-                    }}
-                    allSessions={allSessions}
-                />
+                <>
+                    <TaskDetailModal
+                        visible={showTaskDetail}
+                        task={selectedTask}
+                        columns={kanbanData.columns}
+                        onClose={() => setShowTaskDetail(false)}
+                        onDiscuss={handleDiscussTask}
+                        onDelete={handleDeleteTask}
+                        onSave={async (taskId, updates) => {
+                            // 使用 taskChatSync 更新任务，会自动发送通知
+                            await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
+                            setShowTaskDetail(false);
+                        }}
+                        allSessions={allSessions}
+                    />
+                    <NewTaskModal
+                        visible={showNewTaskModal}
+                        columns={kanbanData.columns}
+                        initialStatus={newTaskStatus}
+                        onClose={() => setShowNewTaskModal(false)}
+                        onCreate={async (taskInput) => {
+                            await taskChatSync.createTaskWithSync(taskInput, myDisplayName || '用户');
+                        }}
+                    />
+                </>
             )}
 
             {/* 🆕 任务审批弹窗 */}
