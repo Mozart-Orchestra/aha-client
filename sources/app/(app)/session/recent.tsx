@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, FlatList } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
-import { useAllSessions } from '@/sync/storage';
+import { useAllSessions, useSessionGitStatus } from '@/sync/storage';
 import { Session } from '@/sync/storageTypes';
 import { Avatar } from '@/components/avatar/Avatar';
 import { getSessionName, getSessionSubtitle, getSessionAvatarId } from '@/utils/sessionUtils';
@@ -79,6 +79,25 @@ const styles = StyleSheet.create((theme) => ({
     },
     sessionSubtitle: {
         fontSize: 13,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
+    },
+    sessionMeta: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 4,
+        alignItems: 'center',
+    },
+    sessionMetaChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.colors.groupped.background,
+        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+    },
+    sessionMetaText: {
+        fontSize: 11,
         color: theme.colors.textSecondary,
         ...Typography.default(),
     },
@@ -160,15 +179,77 @@ function groupSessionsByDate(sessions: Session[]): SessionHistoryItem[] {
     return items;
 }
 
+function formatTokens(tokens: number): string {
+    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tok`;
+    if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k tok`;
+    return `${tokens} tok`;
+}
+
+interface SessionCardProps {
+    session: Session;
+    isFirst: boolean;
+    isLast: boolean;
+    isSingle: boolean;
+}
+
+function SessionCard({ session, isFirst, isLast, isSingle }: SessionCardProps) {
+    const navigateToSession = useNavigateToSession();
+    const gitStatus = useSessionGitStatus(session.id);
+
+    const sessionName = getSessionName(session);
+    const sessionSubtitle = getSessionSubtitle(session);
+    const avatarId = getSessionAvatarId(session);
+
+    const usage = session.latestUsage;
+    const totalTokens = usage ? usage.inputTokens + usage.outputTokens : null;
+    const linesChanged = gitStatus?.linesChanged ?? 0;
+    const showMeta = (totalTokens !== null && totalTokens > 0) || linesChanged > 0;
+
+    return (
+        <Pressable
+            style={[
+                styles.sessionCard,
+                isSingle ? styles.sessionCardSingle :
+                isFirst ? styles.sessionCardFirst :
+                isLast ? styles.sessionCardLast : {}
+            ]}
+            onPress={() => navigateToSession(session.id)}
+        >
+            <Avatar id={avatarId} size={48} />
+            <View style={styles.sessionContent}>
+                <Text style={styles.sessionTitle} numberOfLines={1}>
+                    {sessionName}
+                </Text>
+                <Text style={styles.sessionSubtitle} numberOfLines={1}>
+                    {sessionSubtitle}
+                </Text>
+                {showMeta && (
+                    <View style={styles.sessionMeta}>
+                        {totalTokens !== null && totalTokens > 0 && (
+                            <View style={styles.sessionMetaChip}>
+                                <Text style={styles.sessionMetaText}>{formatTokens(totalTokens)}</Text>
+                            </View>
+                        )}
+                        {linesChanged > 0 && (
+                            <View style={styles.sessionMetaChip}>
+                                <Text style={styles.sessionMetaText}>±{linesChanged}</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+            </View>
+        </Pressable>
+    );
+}
+
 export default function SessionHistory() {
     const safeArea = useSafeAreaInsets();
     const allSessions = useAllSessions();
-    const navigateToSession = useNavigateToSession();
-    
+
     const groupedItems = React.useMemo(() => {
         return groupSessionsByDate(allSessions);
     }, [allSessions]);
-    
+
     const renderItem = React.useCallback(({ item, index }: { item: SessionHistoryItem, index: number }) => {
         if (item.type === 'date-header') {
             return (
@@ -179,46 +260,30 @@ export default function SessionHistory() {
                 </View>
             );
         }
-        
+
         if (item.type === 'session' && item.session) {
             const session = item.session;
-            const sessionName = getSessionName(session);
-            const sessionSubtitle = getSessionSubtitle(session);
-            const avatarId = getSessionAvatarId(session);
-            
+
             // Determine card styling based on position within date group
             const prevItem = index > 0 ? groupedItems[index - 1] : null;
             const nextItem = index < groupedItems.length - 1 ? groupedItems[index + 1] : null;
-            
+
             const isFirst = prevItem?.type === 'date-header';
             const isLast = nextItem?.type === 'date-header' || nextItem == null;
             const isSingle = isFirst && isLast;
-            
+
             return (
-                <Pressable
-                    style={[
-                        styles.sessionCard,
-                        isSingle ? styles.sessionCardSingle : 
-                        isFirst ? styles.sessionCardFirst :
-                        isLast ? styles.sessionCardLast : {}
-                    ]}
-                    onPress={() => navigateToSession(session.id)}
-                >
-                    <Avatar id={avatarId} size={48} />
-                    <View style={styles.sessionContent}>
-                        <Text style={styles.sessionTitle} numberOfLines={1}>
-                            {sessionName}
-                        </Text>
-                        <Text style={styles.sessionSubtitle} numberOfLines={1}>
-                            {sessionSubtitle}
-                        </Text>
-                    </View>
-                </Pressable>
+                <SessionCard
+                    session={session}
+                    isFirst={isFirst}
+                    isLast={isLast}
+                    isSingle={isSingle}
+                />
             );
         }
-        
+
         return null;
-    }, [groupedItems, navigateToSession]);
+    }, [groupedItems]);
     
     const keyExtractor = React.useCallback((item: SessionHistoryItem, index: number) => {
         if (item.type === 'date-header') {
