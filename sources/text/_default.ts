@@ -282,6 +282,8 @@ export const en = {
         yesterday: 'Yesterday',
         daysAgo: ({ count }: { count: number }) => `${count} ${count === 1 ? 'day' : 'days'} ago`,
         viewAll: 'View all sessions',
+        totalTokensLabel: ({ tokens }: { tokens: string }) => `${tokens} used across all sessions`,
+        viewUsageStats: '→ View usage stats',
     },
 
     session: {

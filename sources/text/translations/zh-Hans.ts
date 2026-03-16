@@ -284,6 +284,8 @@ export const zhHans: TranslationStructure = {
         yesterday: '昨天',
         daysAgo: ({ count }: { count: number }) => `${count} 天前`,
         viewAll: '查看所有会话',
+        totalTokensLabel: ({ tokens }: { tokens: string }) => `${tokens} 已消耗`,
+        viewUsageStats: '→ 查看用量统计',
     },
 
     session: {

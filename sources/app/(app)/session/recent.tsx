@@ -12,6 +12,7 @@ import { layout } from '@/utils/layout';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { Pressable } from 'react-native';
 import { t } from '@/text';
+import { useRouter } from 'expo-router';
 
 interface SessionHistoryItem {
     type: 'session' | 'date-header';
@@ -101,6 +102,27 @@ const styles = StyleSheet.create((theme) => ({
         color: theme.colors.textSecondary,
         ...Typography.default(),
     },
+    usageStatsBar: {
+        marginHorizontal: 16,
+        marginBottom: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 12,
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        justifyContent: 'space-between' as const,
+    },
+    usageStatsText: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
+    },
+    usageStatsLink: {
+        fontSize: 13,
+        color: theme.colors.accent,
+        ...Typography.default('semiBold'),
+    },
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -183,6 +205,27 @@ function formatTokens(tokens: number): string {
     if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tok`;
     if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k tok`;
     return `${tokens} tok`;
+}
+
+function UsageStatsBar({ sessions }: { sessions: Session[] }) {
+    const router = useRouter();
+    const totalTokens = sessions.reduce((sum, s) => {
+        const u = s.latestUsage;
+        return sum + (u ? u.inputTokens + u.outputTokens : 0);
+    }, 0);
+
+    if (totalTokens === 0) return null;
+
+    return (
+        <Pressable onPress={() => router.push('/settings/usage')} style={styles.usageStatsBar}>
+            <Text style={styles.usageStatsText}>
+                {t('sessionHistory.totalTokensLabel', { tokens: formatTokens(totalTokens) })}
+            </Text>
+            <Text style={styles.usageStatsLink}>
+                {t('sessionHistory.viewUsageStats')}
+            </Text>
+        </Pressable>
+    );
 }
 
 interface SessionCardProps {
@@ -324,7 +367,8 @@ export default function SessionHistory() {
                     data={groupedItems}
                     renderItem={renderItem}
                     keyExtractor={keyExtractor}
-                    contentContainerStyle={{ 
+                    ListHeaderComponent={<UsageStatsBar sessions={allSessions} />}
+                    contentContainerStyle={{
                         paddingBottom: safeArea.bottom + 16,
                         paddingTop: 8,
                     }}

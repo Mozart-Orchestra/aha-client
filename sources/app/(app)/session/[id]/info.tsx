@@ -24,8 +24,13 @@ import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 
 // Animated status dot component
-function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: boolean; size?: number }) {
-    const pulseAnim = React.useRef(new Animated.Value(1)).current;
+function formatTokensCompact(tokens: number): string {
+    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tok`;
+    if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k tok`;
+    return `${tokens} tok`;
+}
+
+function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: boolean; size?: number }) {    const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
     React.useEffect(() => {
         if (isPulsing) {
@@ -191,6 +196,20 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                                 {sessionStatus.statusText}
                             </Text>
                         </View>
+                        {session.latestUsage && (() => {
+                            const totalTok = session.latestUsage.inputTokens + session.latestUsage.outputTokens;
+                            const cost = (session.latestUsage.inputTokens * 3 + session.latestUsage.outputTokens * 15) / 1_000_000;
+                            return (
+                                <Text style={{
+                                    fontSize: 13,
+                                    color: theme.colors.textSecondary,
+                                    marginTop: 6,
+                                    ...Typography.default(),
+                                }}>
+                                    {formatTokensCompact(totalTok)}{' · '}{t('sessionInfo.costUnit', { usd: cost })}
+                                </Text>
+                            );
+                        })()}
                     </View>
                 </View>
 
@@ -255,6 +274,46 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                         showChevron={false}
                     />
                 </ItemGroup>
+
+                {/* Token Usage */}
+                {session.latestUsage && (
+                    <ItemGroup title={t('sessionInfo.usageSection')}>
+                        <Item
+                            title={t('sessionInfo.inputTokens')}
+                            detail={t('sessionInfo.tokensUnit', { n: session.latestUsage.inputTokens })}
+                            icon={<Ionicons name="arrow-up-circle-outline" size={29} color="#007AFF" />}
+                            showChevron={false}
+                        />
+                        <Item
+                            title={t('sessionInfo.outputTokens')}
+                            detail={t('sessionInfo.tokensUnit', { n: session.latestUsage.outputTokens })}
+                            icon={<Ionicons name="arrow-down-circle-outline" size={29} color="#34C759" />}
+                            showChevron={false}
+                        />
+                        {session.latestUsage.cacheRead > 0 && (
+                            <Item
+                                title={t('sessionInfo.cacheRead')}
+                                detail={t('sessionInfo.tokensUnit', { n: session.latestUsage.cacheRead })}
+                                icon={<Ionicons name="flash-outline" size={29} color="#FF9500" />}
+                                showChevron={false}
+                            />
+                        )}
+                        {session.latestUsage.contextSize > 0 && (
+                            <Item
+                                title={t('sessionInfo.contextSize')}
+                                detail={t('sessionInfo.tokensUnit', { n: session.latestUsage.contextSize })}
+                                icon={<Ionicons name="resize-outline" size={29} color="#8E8E93" />}
+                                showChevron={false}
+                            />
+                        )}
+                        <Item
+                            title={t('sessionInfo.estimatedCost')}
+                            detail={t('sessionInfo.costUnit', { usd: (session.latestUsage.inputTokens * 3 + session.latestUsage.outputTokens * 15) / 1_000_000 })}
+                            icon={<Ionicons name="cash-outline" size={29} color="#30D158" />}
+                            showChevron={false}
+                        />
+                    </ItemGroup>
+                )}
 
                 {/* Quick Actions */}
                 <ItemGroup title={t('sessionInfo.quickActions')}>
