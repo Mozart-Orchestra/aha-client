@@ -42,6 +42,8 @@ import { UserProfile } from './friendTypes';
 import { initializeTodoSync } from '../-zen/model/ops';
 import { DEFAULT_KANBAN_BOARD } from '@/sync/kanbanTypes';
 import type { KanbanBoard, KanbanTeamMember } from '@/sync/kanbanTypes';
+import { canonicalizeTeamMentions, type TeamMentionCandidate } from './teamMessageTypes';
+import { getNextPersistedMessageCount } from './persistedMessageCount';
 
 const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
     if (!body) {
@@ -74,6 +76,78 @@ const extractTeamSessionIds = (body: string | null | undefined): string[] => {
     } catch {
         return [];
     }
+};
+
+const buildTeamMentionCandidates = (
+    teamId: string,
+    sessions: Session[],
+    artifact?: DecryptedArtifact | null
+): TeamMentionCandidate[] => {
+    const candidates = new Map<string, TeamMentionCandidate>();
+    const artifactSessionIds = new Set(artifact?.sessions ?? []);
+
+    const upsertCandidate = (sessionId: string, updates: Partial<TeamMentionCandidate>) => {
+        if (!sessionId) {
+            return;
+        }
+
+        const existing = candidates.get(sessionId) ?? { sessionId, aliases: [] };
+        const aliasSet = new Set(existing.aliases ?? []);
+
+        updates.aliases?.forEach((alias) => {
+            if (alias) {
+                aliasSet.add(alias);
+            }
+        });
+
+        candidates.set(sessionId, {
+            sessionId,
+            displayName: updates.displayName ?? existing.displayName,
+            roleId: updates.roleId ?? existing.roleId,
+            aliases: [...aliasSet],
+        });
+    };
+
+    sessions.forEach((session) => {
+        if (session.metadata?.teamId !== teamId && !artifactSessionIds.has(session.id)) {
+            return;
+        }
+
+        upsertCandidate(session.id, {
+            displayName: session.metadata?.name,
+            roleId: session.metadata?.role,
+            aliases: [
+                session.metadata?.name,
+                session.metadata?.role,
+                session.metadata?.flavor ?? undefined,
+            ].filter((value): value is string => !!value),
+        });
+    });
+
+    if (artifact?.body) {
+        try {
+            const board = JSON.parse(artifact.body);
+            const members = Array.isArray(board?.team?.members) ? board.team.members : [];
+            members.forEach((member: any) => {
+                if (!member || typeof member.sessionId !== 'string') {
+                    return;
+                }
+
+                upsertCandidate(member.sessionId, {
+                    displayName: typeof member.displayName === 'string' ? member.displayName : undefined,
+                    roleId: typeof member.roleId === 'string' ? member.roleId : undefined,
+                    aliases: [
+                        typeof member.displayName === 'string' ? member.displayName : undefined,
+                        typeof member.roleId === 'string' ? member.roleId : undefined,
+                    ].filter((value): value is string => !!value),
+                });
+            });
+        } catch {
+            // Ignore malformed team artifact bodies and fall back to session metadata only.
+        }
+    }
+
+    return [...candidates.values()];
 };
 
 class Sync {
@@ -548,6 +622,7 @@ class Sync {
             createdAt: number;
             updatedAt: number;
             lastMessage: ApiMessage | null;
+            persistedMessageCount?: number;
         }>;
 
         // Initialize all session encryptions first
@@ -1456,12 +1531,6 @@ class Sync {
                         parsedSettings = { ...settingsDefaults };
                     }
 
-                    // Log
-                    console.log('settings', JSON.stringify({
-                        settings: parsedSettings,
-                        version: data.currentVersion
-                    }));
-
                     // Apply settings to storage
                     storage.getState().applySettings(parsedSettings, data.currentVersion);
 
@@ -1510,12 +1579,6 @@ class Sync {
             parsedSettings = { ...settingsDefaults };
         }
 
-        // Log
-        console.log('settings', JSON.stringify({
-            settings: parsedSettings,
-            version: data.settingsVersion
-        }));
-
         // Apply settings to storage
         storage.getState().applySettings(parsedSettings, data.settingsVersion);
 
@@ -1546,16 +1609,6 @@ class Sync {
 
         const data = await response.json();
         const parsedProfile = profileParse(data);
-
-        // Log profile data for debugging
-        console.log('profile', JSON.stringify({
-            id: parsedProfile.id,
-            timestamp: parsedProfile.timestamp,
-            firstName: parsedProfile.firstName,
-            lastName: parsedProfile.lastName,
-            hasAvatar: !!parsedProfile.avatar,
-            hasGitHub: !!parsedProfile.github
-        }));
 
         // Apply profile to storage
         storage.getState().applyProfile(parsedProfile);
@@ -1910,6 +1963,7 @@ class Sync {
         // Request
         const response = await apiSocket.request(`/v1/sessions/${sessionId}/messages`);
         const data = await response.json();
+        const persistedMessageCount = typeof data.totalCount === 'number' ? data.totalCount : undefined;
 
         // Collect existing messages
         let eixstingMessages = this.sessionReceivedMessages.get(sessionId);
@@ -1945,13 +1999,14 @@ class Sync {
                 }
             }
         }
-        console.log('Batch decrypted and normalized messages in', Date.now() - start, 'ms');
-        console.log('normalizedMessages', JSON.stringify(normalizedMessages));
-        // console.log('messages', JSON.stringify(normalizedMessages));
+        log.log(`💬 fetchMessages decrypted ${normalizedMessages.length} messages in ${Date.now() - start}ms`);
 
         // Apply to storage
         this.applyMessages(sessionId, normalizedMessages);
         storage.getState().setSessionRawMessageCount(sessionId, eixstingMessages.size);
+        if (persistedMessageCount !== undefined) {
+            storage.getState().setSessionPersistedMessageCount(sessionId, persistedMessageCount);
+        }
         log.log(`💬 fetchMessages completed for session ${sessionId} - processed ${normalizedMessages.length} messages`);
     }
 
@@ -2167,7 +2222,6 @@ class Sync {
     }
 
     private handleUpdate = async (update: unknown) => {
-        console.log('🔄 Sync: handleUpdate called with:', JSON.stringify(update).substring(0, 300));
         let validatedUpdate;
         try {
             validatedUpdate = ApiUpdateContainerSchema.safeParse(update);
@@ -2177,14 +2231,10 @@ class Sync {
         }
         if (!validatedUpdate.success) {
             console.log('❌ Sync: Invalid update received:', validatedUpdate.error);
-            console.error('❌ Sync: Invalid update data:', update);
             return;
         }
         const updateData = validatedUpdate.data;
-        console.log(`🔄 Sync: Validated update type: ${updateData.body.t}`);
-
         if (updateData.body.t === 'new-message') {
-
             // Get encryption
             const encryption = this.encryption.getSessionEncryption(updateData.body.sid);
             if (!encryption) { // Should never happen
@@ -2196,41 +2246,58 @@ class Sync {
             // Decrypt message
             let lastMessage: NormalizedMessage | null = null;
             if (updateData.body.message) {
+                let existingMessages = this.sessionReceivedMessages.get(updateData.body.sid);
+                if (!existingMessages) {
+                    existingMessages = new Set<string>();
+                    this.sessionReceivedMessages.set(updateData.body.sid, existingMessages);
+                }
+
+                const alreadyReceived = existingMessages.has(updateData.body.message.id);
+                const nextPersistedCount = getNextPersistedMessageCount({
+                    currentPersistedCount: storage.getState().sessions[updateData.body.sid]?.persistedMessageCount,
+                    currentLoadedCount: storage.getState().sessionMessages[updateData.body.sid]?.rawCount ?? 0,
+                    alreadyReceived,
+                });
+                if (nextPersistedCount !== null) {
+                    const currentSession = storage.getState().sessions[updateData.body.sid];
+                    if (currentSession && nextPersistedCount > (currentSession.persistedMessageCount ?? 0)) {
+                        storage.getState().setSessionPersistedMessageCount(updateData.body.sid, nextPersistedCount);
+                    }
+                }
+
                 const decrypted = await encryption.decryptMessage(updateData.body.message);
                 if (decrypted && decrypted.content !== null) {
-                    let existingMessages = this.sessionReceivedMessages.get(updateData.body.sid);
-                    if (!existingMessages) {
-                        existingMessages = new Set<string>();
-                        this.sessionReceivedMessages.set(updateData.body.sid, existingMessages);
-                    }
-                    existingMessages.add(decrypted.id);
-                    storage.getState().setSessionRawMessageCount(updateData.body.sid, existingMessages.size);
-
-                    lastMessage = normalizeRawMessage(decrypted.id, decrypted.localId, decrypted.createdAt, decrypted.content);
-
-                    // Update session
-                    const session = storage.getState().sessions[updateData.body.sid];
-                    if (session) {
-                        this.applySessions([{
-                            ...session,
-                            updatedAt: updateData.createdAt,
-                            seq: updateData.seq
-                        }])
+                    if (existingMessages.has(decrypted.id)) {
+                        log.log(`💬 Skipping duplicate realtime message ${decrypted.id} for session ${updateData.body.sid}`);
                     } else {
-                        // Fetch sessions again if we don't have this session
-                        this.fetchSessions();
-                    }
+                        existingMessages.add(decrypted.id);
+                        storage.getState().setSessionRawMessageCount(updateData.body.sid, existingMessages.size);
 
-                    // Update messages
-                    if (lastMessage) {
-                        console.log('🔄 Sync: Applying message:', JSON.stringify(lastMessage));
-                        this.applyMessages(updateData.body.sid, [lastMessage]);
-                        let hasMutableTool = false;
-                        if (lastMessage.role === 'agent' && lastMessage.content[0] && lastMessage.content[0].type === 'tool-result') {
-                            hasMutableTool = storage.getState().isMutableToolCall(updateData.body.sid, lastMessage.content[0].tool_use_id);
+                        lastMessage = normalizeRawMessage(decrypted.id, decrypted.localId, decrypted.createdAt, decrypted.content);
+
+                        // Update session
+                        const session = storage.getState().sessions[updateData.body.sid];
+                        if (session) {
+                            this.applySessions([{
+                                ...session,
+                                updatedAt: updateData.createdAt,
+                                seq: updateData.seq
+                            }])
+                        } else {
+                            // Fetch sessions again if we don't have this session
+                            this.fetchSessions();
                         }
-                        if (hasMutableTool) {
-                            gitStatusSync.invalidate(updateData.body.sid);
+
+                        // Update messages
+                        if (lastMessage) {
+                            this.applyMessages(updateData.body.sid, [lastMessage]);
+                            let hasMutableTool = false;
+                            if (lastMessage.role === 'agent' && lastMessage.content[0] && lastMessage.content[0].type === 'tool-result') {
+                                hasMutableTool = storage.getState().isMutableToolCall(updateData.body.sid, lastMessage.content[0].tool_use_id);
+                            }
+                            if (hasMutableTool) {
+                                gitStatusSync.invalidate(updateData.body.sid);
+                            }
                         }
                     }
                 }
@@ -2876,13 +2943,21 @@ class Sync {
             const serverUrl = getServerUrl();
 
             // 获取当前 session 信息
-            const sessions = storage.getState().sessionsData || [];
+            const state = storage.getState();
+            const sessions = Object.values(state.sessions);
             const fromSessionId = request.fromSessionId;
 
             // Resolve session metadata only when we have a session ID
             const sendingSession = fromSessionId
-                ? sessions.find((s): s is import('@/sync/storageTypes').Session => typeof s !== 'string' && s.id === fromSessionId)
+                ? sessions.find((session) => session.id === fromSessionId)
                 : undefined;
+
+            const teamArtifact = state.artifacts[request.teamId] ?? null;
+            const mentionCandidates = buildTeamMentionCandidates(request.teamId, sessions, teamArtifact);
+            const canonicalMentions = canonicalizeTeamMentions(request.mentions, mentionCandidates);
+            if (request.mentions && canonicalMentions.length !== request.mentions.length) {
+                log.log(`[sendTeamMessage] Dropped unresolved or ambiguous mentions for team ${request.teamId}: ${JSON.stringify(request.mentions)}`);
+            }
 
             const fromRole = request.fromRole ?? (sendingSession?.metadata?.role);
             const fromDisplayName = request.fromDisplayName ?? (sendingSession?.metadata?.name || sendingSession?.metadata?.path);
@@ -2894,9 +2969,9 @@ class Sync {
                 ...(fromSessionId ? { fromSessionId } : {}),
                 ...(fromRole ? { fromRole } : {}),
                 ...(fromDisplayName ? { fromDisplayName } : {}),
-                content: request.content,
+                content: request.content.slice(0, 48000), // guard against server 50K limit
                 type: request.type || 'chat',
-                ...(request.mentions ? { mentions: request.mentions } : {}),
+                ...(canonicalMentions.length > 0 ? { mentions: canonicalMentions } : {}),
                 timestamp: Date.now(),
                 ...(request.metadata ? { metadata: request.metadata } : {})
             };
