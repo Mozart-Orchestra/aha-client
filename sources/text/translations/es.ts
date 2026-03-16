@@ -282,6 +282,8 @@ export const es: TranslationStructure = {
         yesterday: 'Ayer',
         daysAgo: ({ count }: { count: number }) => `hace ${count} ${count === 1 ? 'día' : 'días'}`,
         viewAll: 'Ver todas las sesiones',
+        totalTokensLabel: ({ tokens }: { tokens: string }) => `${tokens} usados en todas las sesiones`,
+        viewUsageStats: '→ Ver estadísticas de uso',
     },
 
     session: {
@@ -360,7 +362,17 @@ export const es: TranslationStructure = {
         deleteSessionWarning: 'Esta acción no se puede deshacer. Todos los mensajes y datos asociados con esta sesión se eliminarán permanentemente.',
         failedToDeleteSession: 'Error al eliminar la sesión',
         sessionDeleted: 'Sesión eliminada exitosamente',
-        
+        usageSection: 'Token Usage',
+        inputTokens: 'Input Tokens',
+        outputTokens: 'Output Tokens',
+        cacheRead: 'Cache Read',
+        cacheCreation: 'Cache Created',
+        contextSize: 'Context Size',
+        estimatedCost: 'Estimated Cost',
+        noUsageData: 'No usage data yet',
+        tokensUnit: ({ n }: { n: number }) => `${n.toLocaleString()} tok`,
+        costUnit: ({ usd }: { usd: number }) => `$${usd.toFixed(4)}`,
+
     },
 
     home: {
@@ -1022,6 +1034,33 @@ export const es: TranslationStructure = {
 
     newTeam: {
         quickStartLabel: 'Quick Start',
+        pageTitle: 'Create Team',
+        pageEyebrow: 'Teams',
+        pageSubtitle: 'Assemble a new team — describe your goal and AI will auto-build the right agents, or compose manually.',
+        createButton: 'Create team',
+        teamNameLabel: 'Team Name',
+        teamNamePlaceholder: 'e.g. Backend Team',
+        creationModeLabel: 'Creation Mode',
+        modePrompt: 'Prompt',
+        modeManual: 'Manual',
+        taskPromptLabel: 'Task Prompt',
+        taskPromptPlaceholder: 'Describe your task, AI will auto-assemble the team...',
+        teamGoalLabel: 'Team Goal',
+        agentTypeLabel: 'Type',
+        agentTypeHelperText: 'Passed to org-manager as a preference only: pure Claude Code, pure Codex, or mixed.',
+        machinesLabel: 'Machines',
+        noMachinesHelperText: 'Start the Aha CLI on your computer to make machines available.',
+        setPrimaryButton: 'Set primary',
+        removeButton: 'Remove',
+        workingDirectoryLabel: 'Working Directory',
+        useLastPathButton: 'Use last path',
+        homeDirectoryLabel: 'Home Directory',
+        hideRecentPaths: 'Hide recent paths',
+        chooseFromRecentPaths: 'Choose from recent paths',
+        automationSettingsLabel: 'Automation Settings',
+        machineLabel: 'Machine',
+        agentTypeSectionLabel: 'Agent Type',
+        noMachinesSpawnHelperText: 'Start the Aha CLI on your computer to spawn teammates automatically.',
         templates: {
             content: { title: 'Content Studio', subtitle: 'Write, SEO, social' },
             research: { title: 'Research Team', subtitle: 'Multi-source analysis' },

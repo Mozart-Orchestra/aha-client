@@ -282,10 +282,11 @@ export const ca: TranslationStructure = {
         yesterday: 'Ahir',
         daysAgo: ({ count }: { count: number }) => `fa ${count} ${count === 1 ? 'dia' : 'dies'}`,
         viewAll: 'Veure totes les sessions',
+        totalTokensLabel: ({ tokens }: { tokens: string }) => `${tokens} usats en totes les sessions`,
+        viewUsageStats: '→ Veure estadístiques d\'ús',
+        totalTokensLabel: ({ tokens }: { tokens: string }) => `${tokens} used across all sessions`,
+        viewUsageStats: '→ View usage stats',
     },
-
-    session: {
-        inputPlaceholder: 'Escriu un missatge...',
     },
 
     commandPalette: {
@@ -360,7 +361,17 @@ export const ca: TranslationStructure = {
         deleteSessionWarning: 'Aquesta acció no es pot desfer. Tots els missatges i dades associats amb aquesta sessió s\'eliminaran permanentment.',
         failedToDeleteSession: 'Error en eliminar la sessió',
         sessionDeleted: 'Sessió eliminada amb èxit',
-        
+        usageSection: 'Token Usage',
+        inputTokens: 'Input Tokens',
+        outputTokens: 'Output Tokens',
+        cacheRead: 'Cache Read',
+        cacheCreation: 'Cache Created',
+        contextSize: 'Context Size',
+        estimatedCost: 'Estimated Cost',
+        noUsageData: 'No usage data yet',
+        tokensUnit: ({ n }: { n: number }) => `${n.toLocaleString()} tok`,
+        costUnit: ({ usd }: { usd: number }) => `$${usd.toFixed(4)}`,
+
     },
 
     home: {
@@ -472,6 +483,17 @@ export const ca: TranslationStructure = {
 
     sidebar: {
         sessionsTitle: 'Aha',
+        workspace: 'Workspace',
+        online: 'Online',
+        needsDecision: 'Needs Decision',
+        working: 'Working',
+        teamReview: 'Team Review',
+        noTeamsYet: 'No teams yet',
+        openTeamWorkspace: 'Open team workspace',
+        agents: 'Agents',
+        conversations: 'Conversations',
+        noActiveAgents: 'No active agents',
+        noConversationsYet: 'No conversations yet',
     },
 
     toolView: {
@@ -868,6 +890,8 @@ export const ca: TranslationStructure = {
         last30Days: 'Últims 30 dies',
         totalTokens: 'Tokens totals',
         totalCost: 'Cost total',
+        estimatedHoursSaved: 'Est. Hours Saved',
+        estimatedHoursSavedHint: 'Based on ~50K tokens/hr of AI-equivalent work',
         tokens: 'Tokens',
         cost: 'Cost',
         usageOverTime: 'Ús al llarg del temps',
@@ -1119,6 +1143,33 @@ export const ca: TranslationStructure = {
 
     newTeam: {
         quickStartLabel: 'Quick Start',
+        pageTitle: 'Create Team',
+        pageEyebrow: 'Teams',
+        pageSubtitle: 'Assemble a new team — describe your goal and AI will auto-build the right agents, or compose manually.',
+        createButton: 'Create team',
+        teamNameLabel: 'Team Name',
+        teamNamePlaceholder: 'e.g. Backend Team',
+        creationModeLabel: 'Creation Mode',
+        modePrompt: 'Prompt',
+        modeManual: 'Manual',
+        taskPromptLabel: 'Task Prompt',
+        taskPromptPlaceholder: 'Describe your task, AI will auto-assemble the team...',
+        teamGoalLabel: 'Team Goal',
+        agentTypeLabel: 'Type',
+        agentTypeHelperText: 'Passed to org-manager as a preference only: pure Claude Code, pure Codex, or mixed.',
+        machinesLabel: 'Machines',
+        noMachinesHelperText: 'Start the Aha CLI on your computer to make machines available.',
+        setPrimaryButton: 'Set primary',
+        removeButton: 'Remove',
+        workingDirectoryLabel: 'Working Directory',
+        useLastPathButton: 'Use last path',
+        homeDirectoryLabel: 'Home Directory',
+        hideRecentPaths: 'Hide recent paths',
+        chooseFromRecentPaths: 'Choose from recent paths',
+        automationSettingsLabel: 'Automation Settings',
+        machineLabel: 'Machine',
+        agentTypeSectionLabel: 'Agent Type',
+        noMachinesSpawnHelperText: 'Start the Aha CLI on your computer to spawn teammates automatically.',
         templates: {
             content: { title: 'Content Studio', subtitle: 'Write, SEO, social' },
             research: { title: 'Research Team', subtitle: 'Multi-source analysis' },
@@ -1151,9 +1202,8 @@ export const ca: TranslationStructure = {
         selectedCount: ({ count }: { count: number }) => `${count} Selected`,
         editButton: 'Edit',
         selectAll: 'Select All',
+        artifactSynced: 'Artifact synced',
     },
-
-    zen: {
         noTasksYet: 'No tasks yet. Tap + to add one.',
     },
 } as const;
