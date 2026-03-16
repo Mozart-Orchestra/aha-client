@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { useRouter } from 'expo-router';
 
-import { useVisibleSessionListViewData } from '@/hooks/useVisibleSessionListViewData';
 import { getDisplayName } from '@/sync/profile';
-import { useArtifacts, useProfile } from '@/sync/storage';
+import { useAllSessions, useArtifacts, useProfile } from '@/sync/storage';
 import type { Session } from '@/sync/storageTypes';
 import { getSessionName } from '@/utils/sessionUtils';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
@@ -63,43 +62,44 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
     const router = useRouter();
     const profile = useProfile();
     const navigateToSession = useNavigateToSession();
-    const sessionListData = useVisibleSessionListViewData();
+    const allSessions = useAllSessions();
     const allArtifacts = useArtifacts();
+    const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+    const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
+
+    const selectedTeamArtifact = React.useMemo(() => {
+        return selectedTeamId
+            ? allArtifacts.find((artifact) => artifact.id === selectedTeamId) ?? null
+            : null;
+    }, [allArtifacts, selectedTeamId]);
 
     const agents = React.useMemo(() => {
-        if (!sessionListData) {
-            return [];
-        }
+        const teamSessionIds = new Set(selectedTeamArtifact?.sessions ?? []);
+        const sourceSessions = selectedTeamId
+            ? allSessions.filter((session) =>
+                session.metadata?.teamId === selectedTeamId || teamSessionIds.has(session.id)
+            )
+            : allSessions.filter((session) => session.active || session.presence === 'online' || session.thinking);
 
-        const result: { id: string; name: string; dotColor: string; description: string; session: Session }[] = [];
+        const result: { id: string; name: string; dotColor: string; description: string; inactive: boolean; session: Session }[] = [];
 
-        for (const item of sessionListData) {
-            if (item.type === 'session' && (item.session.active || item.session.presence === 'online' || item.session.thinking)) {
-                const flavor = item.session.metadata?.flavor ?? item.session.metadata?.role ?? '';
-                result.push({
-                    id: item.session.id,
-                    name: getSessionName(item.session),
-                    dotColor: AGENT_DOT_COLORS[flavor.toLowerCase()] ?? '#007AFF',
-                    description: flavor,
-                    session: item.session,
-                });
-            }
-
-            if (item.type === 'active-sessions') {
-                item.sessions.forEach((session) => {
-                    const flavor = session.metadata?.flavor ?? session.metadata?.role ?? '';
-                    result.push({
-                        id: session.id,
-                        name: getSessionName(session),
-                        dotColor: AGENT_DOT_COLORS[flavor.toLowerCase()] ?? '#007AFF',
-                        description: flavor,
-                        session,
-                    });
-                });
-            }
-        }
+        sourceSessions.forEach((session) => {
+            const flavor = session.metadata?.flavor ?? session.metadata?.role ?? '';
+            result.push({
+                id: session.id,
+                name: getSessionName(session),
+                dotColor: AGENT_DOT_COLORS[flavor.toLowerCase()] ?? '#007AFF',
+                description: flavor,
+                inactive: !session.active,
+                session,
+            });
+        });
 
         result.sort((a, b) => {
+            if (a.inactive !== b.inactive) {
+                return a.inactive ? 1 : -1;
+            }
+
             const updatedAtDelta = b.session.updatedAt - a.session.updatedAt;
             if (updatedAtDelta !== 0) {
                 return updatedAtDelta;
@@ -109,7 +109,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
         });
 
         return result;
-    }, [sessionListData]);
+    }, [allSessions, selectedTeamArtifact, selectedTeamId]);
 
     const teams = React.useMemo(() => {
         return allArtifacts
@@ -183,9 +183,6 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
         };
     }, [roleKeys, roleScores]);
 
-    const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
-    const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
-
     React.useEffect(() => {
         if (agents.length > 0 && (!selectedAgentId || !agents.some((agent) => agent.id === selectedAgentId))) {
             setSelectedAgentId(agents[0].id);
@@ -199,7 +196,8 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
     }, [teams, selectedTeamId]);
 
     const displayName = getDisplayName(profile) || profile.github?.login || t('sidebar.workspace');
-    const activeCount = agents.length;
+    const activeCount = agents.filter((agent) => !agent.inactive).length;
+    const totalCount = agents.length;
 
     const statusCounts = React.useMemo(() => {
         return agents.reduce((acc, agent) => {
@@ -226,7 +224,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             variant={variant}
             header={{
                 title: displayName,
-                subtitle: activeCount > 0 ? `${activeCount} active · ${t('sidebar.online')}` : t('sidebar.online'),
+                subtitle: totalCount > 0 ? `${activeCount} active · ${totalCount} total` : t('sidebar.online'),
                 icon: 'person',
                 iconGradientColors: ['#314658', '#1E2D3C'],
                 trailingIcon: 'chevron-down',
@@ -235,6 +233,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 id: agent.id,
                 name: agent.name,
                 dotColor: agent.dotColor,
+                inactive: agent.inactive,
                 description: agent.description || undefined,
                 score: roleScores[normalizeRoleKey(agent.description || '')]?.score,
                 scoreCount: roleScores[normalizeRoleKey(agent.description || '')]?.evaluationCount,

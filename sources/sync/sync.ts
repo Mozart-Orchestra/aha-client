@@ -1951,6 +1951,7 @@ class Sync {
 
         // Apply to storage
         this.applyMessages(sessionId, normalizedMessages);
+        storage.getState().setSessionRawMessageCount(sessionId, eixstingMessages.size);
         log.log(`💬 fetchMessages completed for session ${sessionId} - processed ${normalizedMessages.length} messages`);
     }
 
@@ -2197,6 +2198,14 @@ class Sync {
             if (updateData.body.message) {
                 const decrypted = await encryption.decryptMessage(updateData.body.message);
                 if (decrypted && decrypted.content !== null) {
+                    let existingMessages = this.sessionReceivedMessages.get(updateData.body.sid);
+                    if (!existingMessages) {
+                        existingMessages = new Set<string>();
+                        this.sessionReceivedMessages.set(updateData.body.sid, existingMessages);
+                    }
+                    existingMessages.add(decrypted.id);
+                    storage.getState().setSessionRawMessageCount(updateData.body.sid, existingMessages.size);
+
                     lastMessage = normalizeRawMessage(decrypted.id, decrypted.localId, decrypted.createdAt, decrypted.content);
 
                     // Update session

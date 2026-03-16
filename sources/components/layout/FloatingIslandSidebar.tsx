@@ -38,6 +38,7 @@ interface FloatingIslandAgentItem {
     name: string;
     dotColor: string;
     selected?: boolean;
+    inactive?: boolean;
     description?: string;
     score?: number;
     scoreCount?: number;
@@ -157,6 +158,23 @@ const styles = StyleSheet.create(() => ({
     badgeText: {
         fontSize: 11,
         fontWeight: '600',
+    },
+    statusCountWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    statusMiniBarTrack: {
+        width: 34,
+        height: 6,
+        borderRadius: 999,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    },
+    statusMiniBarFill: {
+        height: '100%',
+        borderRadius: 999,
+        minWidth: 6,
     },
     statusIcon: {
         width: 16,
@@ -338,6 +356,14 @@ function getScoreColor(score: number): string {
     return '#ef4444';
 }
 
+function getBarPercent(count: number, maxCount: number, minPercent: number = 18): string {
+    if (count <= 0 || maxCount <= 0) {
+        return '0%';
+    }
+
+    return `${Math.min(100, Math.max(minPercent, Math.round((count / maxCount) * 100)))}%`;
+}
+
 function AgentRow({
     item,
     tokens,
@@ -438,6 +464,14 @@ function AgentRow({
                                 </Text>
                             </View>
                         ) : null}
+                        {item.inactive ? (
+                            <View style={[styles.agentMetaChip, { backgroundColor: '#F2F4F6' }]}>
+                                <Ionicons name="pause-circle-outline" size={11} color="#8A9BAA" />
+                                <Text style={[styles.agentMetaText, { color: '#8A9BAA' }]}>
+                                    offline
+                                </Text>
+                            </View>
+                        ) : null}
                         {messagesLoaded ? (
                             <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
                                 <Ionicons name="chatbubble-ellipses-outline" size={11} color={theme.colors.textSecondary} />
@@ -471,9 +505,13 @@ function AgentRow({
 
 function StatusRow({
     item,
+    maxCount,
 }: {
     item: FloatingIslandStatusItem;
+    maxCount: number;
 }) {
+    const barWidth = item.count !== undefined ? getBarPercent(item.count, maxCount) : '0%';
+
     return (
         <View
             style={[
@@ -485,8 +523,21 @@ function StatusRow({
             <Text style={[styles.rowText, { color: '#1A1209' }]}>{item.label}</Text>
             <View style={styles.rowSpacer} />
             {item.count !== undefined ? (
-                <View style={[styles.badge, { backgroundColor: item.color + '15' }]}>
-                    <Text style={[styles.badgeText, { color: item.color }]}>{item.count}</Text>
+                <View style={styles.statusCountWrap}>
+                    <View style={styles.statusMiniBarTrack}>
+                        <View
+                            style={[
+                                styles.statusMiniBarFill,
+                                {
+                                    backgroundColor: item.color,
+                                    width: barWidth,
+                                },
+                            ]}
+                        />
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: item.color + '15' }]}>
+                        <Text style={[styles.badgeText, { color: item.color }]}>{item.count}</Text>
+                    </View>
                 </View>
             ) : null}
         </View>
@@ -576,6 +627,10 @@ export function FloatingIslandSidebar({
     conversationEmptyText = t('sidebar.noConversationsYet'),
 }: FloatingIslandSidebarProps) {
     const tokens = getThreeColumnShellTokens(variant);
+    const maxStatusCount = React.useMemo(
+        () => statusItems.reduce((max, item) => Math.max(max, item.count ?? 0), 0),
+        [statusItems]
+    );
 
     return (
         <View style={styles.container}>
@@ -650,7 +705,7 @@ export function FloatingIslandSidebar({
                         ) : null}
                     </View>
                     {statusItems.map((item) => (
-                        <StatusRow key={item.id} item={item} />
+                        <StatusRow key={item.id} item={item} maxCount={maxStatusCount} />
                     ))}
                 </View>
 

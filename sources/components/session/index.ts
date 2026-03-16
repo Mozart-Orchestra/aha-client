@@ -13,6 +13,7 @@ export { CompactGitStatus } from './CompactGitStatus';
 export { EmptyMessages } from './EmptyMessages';
 export { GitStatusBadge, useHasMeaningfulGitStatus } from './GitStatusBadge';
 export { MessageView } from './MessageView';
+export { PreviewSessionCard } from './PreviewSessionCard';
 export { ProjectGitStatus } from './ProjectGitStatus';
 export { SessionsList } from './SessionsList';
 export { SessionsListWrapper } from './SessionsListWrapper';
