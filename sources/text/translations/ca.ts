@@ -284,9 +284,10 @@ export const ca: TranslationStructure = {
         viewAll: 'Veure totes les sessions',
         totalTokensLabel: ({ tokens }: { tokens: string }) => `${tokens} usats en totes les sessions`,
         viewUsageStats: '→ Veure estadístiques d\'ús',
-        totalTokensLabel: ({ tokens }: { tokens: string }) => `${tokens} used across all sessions`,
-        viewUsageStats: '→ View usage stats',
     },
+
+    session: {
+        inputPlaceholder: 'Escriu un missatge...',
     },
 
     commandPalette: {
@@ -1204,6 +1205,8 @@ export const ca: TranslationStructure = {
         selectAll: 'Select All',
         artifactSynced: 'Artifact synced',
     },
+
+    zen: {
         noTasksYet: 'No tasks yet. Tap + to add one.',
     },
 } as const;
