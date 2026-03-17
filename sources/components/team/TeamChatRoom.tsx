@@ -1296,6 +1296,7 @@ interface TeamChatRoomProps {
         text: string;
         token: number;
     } | null;
+    fallbackMachineId?: string;
 }
 
 export default function TeamChatRoom({
@@ -1311,6 +1312,7 @@ export default function TeamChatRoom({
     taskChatSync,
     variant = 'default',
     composerPrefill = null,
+    fallbackMachineId,
 }: TeamChatRoomProps) {
     const { theme } = useUnistyles();
     const styles = stylesheet;
@@ -2344,8 +2346,13 @@ export default function TeamChatRoom({
             };
         }
 
+        // All team agents dead — fall back to any connected machine
+        if (fallbackMachineId) {
+            return { machineId: fallbackMachineId, targetSessionId };
+        }
+
         return null;
-    }, [members]);
+    }, [members, fallbackMachineId]);
 
     if (isLoading) {
         return (

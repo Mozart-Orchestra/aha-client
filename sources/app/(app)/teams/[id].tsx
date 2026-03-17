@@ -896,14 +896,6 @@ export default function TeamDashboardScreen() {
         return map;
     }, [allSessions]);
 
-    const machineLookup = React.useMemo(() => {
-        const map = new Map<string, (typeof allMachines)[number]>();
-        for (const machine of allMachines) {
-            map.set(machine.id, machine);
-        }
-        return map;
-    }, [allMachines]);
-
     const handleRecoverTeam = React.useCallback(async () => {
         setShowMenu(false);
 
@@ -972,7 +964,7 @@ export default function TeamDashboardScreen() {
                     continue;
                 }
 
-                const machine = machineLookup.get(machineId);
+                const machine = allMachines.find((entry) => entry.id === machineId);
                 if (!machine?.active) {
                     issues.push(`${label}: machine offline`);
                     continue;
@@ -1035,7 +1027,7 @@ export default function TeamDashboardScreen() {
         } finally {
             setIsRecoveringTeam(false);
         }
-    }, [kanbanData.team?.members, machineLookup, sessionLookup, teamId]);
+    }, [allMachines, kanbanData.team?.members, sessionLookup, teamId]);
 
     // 🆕 Chat-Board 双向同步 Hook
     const taskChatSync = useTaskChatSync({
@@ -1723,6 +1715,7 @@ export default function TeamDashboardScreen() {
                     taskChatSync={taskChatSync}
                     composerPrefill={chatComposerPrefill}
                     variant={isDesktopShell ? 'edzlf' : 'default'}
+                    fallbackMachineId={allMachines.find(m => m.active)?.id}
                 />
             </View>
         );
