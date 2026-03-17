@@ -8,6 +8,12 @@ const BASE = (process.env.EXPO_PUBLIC_GENOME_HUB_URL ?? 'http://localhost:3006')
 export interface GenomeFeedback {
     evaluationCount: number;
     avgScore: number;
+    sessionScore?: {
+        taskCompletion: number;
+        codeQuality: number;
+        collaboration: number;
+        overall: number;
+    };
     dimensions: {
         delivery: number;
         integrity: number;
@@ -32,8 +38,12 @@ export interface GenomeRecord {
     category: string | null;
     isPublic: boolean;
     spawnCount: number;
+    downloadCount: number;
+    starCount: number;
     feedbackData: string | null;
     publisherId: string | null;
+    parentId: string | null;
+    lifecycle: 'experimental' | 'active' | 'deprecated' | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -129,9 +139,17 @@ export function parseCorpsSpec(specJson: string): CorpsSpec | null {
 export interface GenomeSpec {
     // Tier 0 — Identity
     displayName?: string;
+    description?: string;
     baseRoleId?: string;
+    namespace?: string;
+    version?: number;
+    tags?: string[];
+    category?: string;
+    runtimeType?: 'claude' | 'codex' | 'open-code';
 
     // Tier 1 — Prompt (capabilities only, NOT raw systemPrompt)
+    systemPrompt?: string;
+    systemPromptSuffix?: string;
     responsibilities?: string[];
     protocol?: string[];
     capabilities?: string[];
@@ -151,6 +169,13 @@ export interface GenomeSpec {
     accessLevel?: string;
     executionPlane?: string;
     maxTurns?: number;
+    contextInjections?: Array<{
+        trigger: 'on_join' | 'per_tool_call' | 'on_context_threshold' | 'on_resume';
+        threshold?: number;
+        content: string;
+    }>;
+    teamRole?: string;
+    handoffProtocol?: string[];
 
     // Tier 7 — Messaging & behavior
     messaging?: {
@@ -163,6 +188,61 @@ export interface GenomeSpec {
         onBlocked?: 'report' | 'escalate' | 'retry';
         canSpawnAgents?: boolean;
         requireExplicitAssignment?: boolean;
+    };
+    memory?: {
+        type?: 'session' | 'persistent' | 'shared';
+        learnings?: string[];
+        iterationGuide?: {
+            recentChanges?: string[];
+            discoveries?: string[];
+            improvements?: string[];
+        };
+        knowledgeBase?: string[];
+    };
+    scopeOfResponsibility?: {
+        ownedPaths?: string[];
+        forbiddenPaths?: string[];
+        outOfScope?: string[];
+    };
+    modelScores?: Record<string, number>;
+    preferredModel?: string;
+    resume?: {
+        specialties?: string[];
+        workHistory?: Array<{
+            project?: string;
+            domain?: string;
+            tasksCompleted?: number;
+            avgScore?: number;
+            period?: string;
+        }>;
+        performanceRating?: number;
+        totalSessions?: number;
+        reviews?: string[];
+    };
+    operations?: {
+        commonPatterns?: string[];
+        recentChanges?: string[];
+        runtimeConfig?: string;
+    };
+    compatibility?: {
+        worksWellWith?: string[];
+        requiredMcpServers?: string[];
+        requiredEnvVars?: string[];
+        minContextTokens?: number;
+    };
+    validation?: {
+        smokeTest?: {
+            requiredTools?: string[];
+            requiredFiles?: string[];
+            healthChecks?: string[];
+        };
+        minVerifiedScore?: number;
+        minEvaluations?: number;
+    };
+    resourceBudget?: {
+        estimatedTokensPerTask?: number;
+        contextWindowSize?: 'small' | 'medium' | 'large';
+        concurrencyCapable?: boolean;
     };
 
     // Tier 8 — Hooks
@@ -184,6 +264,58 @@ export function parseSpec(specJson: string): GenomeSpec | null {
     } catch {
         return null;
     }
+}
+
+export interface FavoriteGenomeResponse {
+    genomes: GenomeRecord[];
+    total: number;
+}
+
+export interface GenomeFavoriteRecord {
+    id: string;
+    genomeId: string;
+    actorId: string;
+    createdAt: string;
+}
+
+export interface GenomeFavoriteStatus {
+    genome: GenomeRecord;
+    favorite: GenomeFavoriteRecord | null;
+    isFavorited: boolean;
+}
+
+export async function fetchFavoriteGenomes(actorId: string): Promise<FavoriteGenomeResponse> {
+    const res = await fetch(`${BASE}/genomes/favorites?actorId=${encodeURIComponent(actorId)}`);
+    if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
+    return res.json() as Promise<FavoriteGenomeResponse>;
+}
+
+export async function fetchGenomeFavoriteStatus(id: string, actorId: string): Promise<GenomeFavoriteStatus | null> {
+    try {
+        const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}/favorite/${encodeURIComponent(actorId)}`);
+        if (!res.ok) return null;
+        return res.json() as Promise<GenomeFavoriteStatus>;
+    } catch {
+        return null;
+    }
+}
+
+export async function addGenomeFavorite(id: string, actorId: string): Promise<{ genome: GenomeRecord; favorite: GenomeFavoriteRecord; created: boolean }> {
+    const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}/favorite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId }),
+    });
+    if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
+    return res.json() as Promise<{ genome: GenomeRecord; favorite: GenomeFavoriteRecord; created: boolean }>;
+}
+
+export async function removeGenomeFavorite(id: string, actorId: string): Promise<{ genome: GenomeRecord; removed: boolean }> {
+    const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}/favorite/${encodeURIComponent(actorId)}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
+    return res.json() as Promise<{ genome: GenomeRecord; removed: boolean }>;
 }
 
 /** Fetch a genome by its immutable UUID. Returns null if not found. */

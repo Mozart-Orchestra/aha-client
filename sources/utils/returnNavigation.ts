@@ -19,10 +19,15 @@ export function getSingleRouteParam(value: RouteParamValue): string | undefined 
 
 export function buildTeamReturnPath(params: {
     teamId: string;
+    mode?: string;
     tab?: string;
     roomId?: string;
 }): string {
     const queryParams: string[] = [];
+
+    if (params.mode) {
+        queryParams.push(`mode=${encodeURIComponent(params.mode)}`);
+    }
 
     if (params.tab) {
         queryParams.push(`tab=${encodeURIComponent(params.tab)}`);

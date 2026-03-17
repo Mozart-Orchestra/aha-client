@@ -1,5 +1,6 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 
 //
@@ -79,6 +80,8 @@ export async function kvGet(
             }
         });
 
+        checkAuth(response, credentials.token);
+
         if (response.status === 404) {
             return null;
         }
@@ -119,6 +122,7 @@ export async function kvList(
                 'Authorization': `Bearer ${credentials.token}`
             }
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(`Failed to list KV items: ${response.status}`);
@@ -155,6 +159,7 @@ export async function kvBulkGet(
             },
             body: JSON.stringify({ keys })
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(`Failed to bulk get KV values: ${response.status}`);
@@ -193,6 +198,7 @@ export async function kvMutate(
             },
             body: JSON.stringify({ mutations })
         });
+        checkAuth(response, credentials.token);
 
         if (response.status === 409) {
             const data = await response.json() as KvMutateErrorResponse;

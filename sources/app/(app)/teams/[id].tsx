@@ -10,7 +10,8 @@ import {
 import { Text } from '@/components/ui/StyledText';
 import { trackTeamViewed, trackTaskCreated, trackTaskApproval, trackTeamChatSent, trackTaskCompleted, trackTaskMoved } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useArtifact, useAllSessions, useAllMachines, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
+import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts, useLocalSetting } from '@/sync/storage';
+import { useShallow } from 'zustand/react/shallow';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +41,8 @@ import { getCurrentAuth } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/AuthContext';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
 import { EvolutionSection } from '@/components/settings/EvolutionSection';
+import { MatrixView } from '@/components/team/MatrixView';
+import type { MatrixRosterEntry } from '@/components/team/MatrixView';
 import { FloatingIslandSidebar } from '@/components/layout/FloatingIslandSidebar';
 import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell';
 import { SidebarView } from '@/components/layout/SidebarView';
@@ -50,6 +53,13 @@ import { t } from '@/text';
 import { formatTaskReference } from '@/utils/taskChatSync';
 import { applyDerivedLifecycleTimestamps } from '@/utils/teamLifecycle';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
+import {
+    resolveTeamWorkspaceState,
+    type TeamStandardTab,
+    type TeamWorkspaceMode,
+    type TeamWorkspacePreference,
+} from '@/utils/teamMatrix';
+import { compareTeamRosterEntries } from '@/utils/teamRoster';
 
 function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
     return `team:${teamId}:member:${memberId}`;
@@ -471,14 +481,16 @@ const withAlpha = (color: string, alpha: number): string => {
     }
 };
 
-const SHELL_TABS = [
+const STANDARD_SHELL_TABS = [
     { id: 'chat', label: 'Chat' },
     { id: 'board', label: 'Board' },
     { id: 'info', label: 'Info' },
     { id: 'evolution', label: 'Evolution' },
 ] as const;
-const TEAM_DASHBOARD_TABS = ['chat', 'board', 'info', 'evolution'] as const;
-type TeamDashboardTab = typeof TEAM_DASHBOARD_TABS[number];
+const WORKSPACE_MODE_OPTIONS = [
+    { id: 'standard', label: 'Standard' },
+    { id: 'matrix', label: 'Matrix' },
+] as const;
 
 const SHELL_ROLE_COLORS: Record<string, string> = {
     master: '#007AFF',
@@ -522,8 +534,146 @@ function getMessagePreview(message: TeamMessage): string {
     return source.length > 42 ? `${source.slice(0, 42)}...` : source;
 }
 
+const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
+    styles,
+    theme,
+    tasks,
+    approvedTasks,
+    columns,
+    taskSessionLinks,
+    sessionLookup,
+    matchesColumn,
+    onOpenTask,
+    onMoveTask,
+    onAddTask,
+}: {
+    styles: typeof stylesheet;
+    theme: any;
+    tasks: KanbanTask[];
+    approvedTasks: KanbanTask[];
+    columns: KanbanColumn[];
+    taskSessionLinks: Map<string, { sessionId: string; title: string; linkedAt: number }[]>;
+    sessionLookup: Map<string, any>;
+    matchesColumn: (task: KanbanTask, columnId: string) => boolean;
+    onOpenTask: (task: KanbanTask) => void;
+    onMoveTask: (task: KanbanTask) => void;
+    onAddTask: (columnId: string) => void;
+}) {
+    return (
+        <>
+            <TeamStatusBar tasks={tasks} />
+
+            <View style={styles.boardContainer}>
+                {columns.map((column) => (
+                    <View key={column.id} style={styles.column}>
+                        <View style={styles.columnHeader}>
+                            <Text style={styles.columnTitle}>{column.title}</Text>
+                            <Text style={styles.taskCount}>
+                                {approvedTasks.filter((task) => matchesColumn(task, column.id)).length}
+                            </Text>
+                        </View>
+
+                        <ScrollView contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                            {approvedTasks
+                                .filter((task) => matchesColumn(task, column.id))
+                                .map((task) => {
+                                    const linkedSessions = taskSessionLinks.get(task.id) || [];
+                                    const sessionCount = linkedSessions.length;
+                                    const activeLink = task.executionLinks?.find((link) => link.status === 'active');
+                                    const activeAgentSession = activeLink ? sessionLookup.get(activeLink.sessionId) : null;
+                                    const activeAgentName = activeAgentSession
+                                        ? getSessionName(activeAgentSession)
+                                        : activeLink?.sessionId?.slice(0, 8) ?? null;
+
+                                    return (
+                                        <Pressable
+                                            key={task.id}
+                                            style={styles.taskCard}
+                                            onPress={() => onOpenTask(task)}
+                                            onLongPress={() => onMoveTask(task)}
+                                        >
+                                            <Text style={styles.taskTitle}>{task.title}</Text>
+                                            {task.assigneeId && (() => {
+                                                const session = sessionLookup.get(task.assigneeId);
+                                                const name = session ? getSessionName(session) : task.assigneeId.slice(0, 8);
+                                                return (
+                                                    <Text style={styles.taskAssignee}>@{name}</Text>
+                                                );
+                                            })()}
+
+                                            {(sessionCount > 0 || task.priority || activeAgentName) && (
+                                                <View style={styles.taskMeta}>
+                                                    {activeAgentName && (
+                                                        <View style={styles.taskActiveExecution}>
+                                                            <Ionicons name="flash" size={11} color="#FF9500" />
+                                                            <Text style={styles.taskActiveExecutionText}>{activeAgentName}</Text>
+                                                        </View>
+                                                    )}
+                                                    {sessionCount > 0 && (
+                                                        <View style={styles.taskSessionsLink}>
+                                                            <Ionicons
+                                                                name="chatbubble-outline"
+                                                                size={14}
+                                                                color={theme.colors.textSecondary}
+                                                                style={styles.taskSessionsIcon}
+                                                            />
+                                                            <Text style={styles.taskSessionsText}>
+                                                                {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                    {task.priority && (
+                                                        <View
+                                                            style={[
+                                                                styles.taskPriority,
+                                                                {
+                                                                    backgroundColor: task.priority === 'high' || task.priority === 'urgent'
+                                                                        ? withAlpha(theme.colors.textDestructive, 0.125)
+                                                                        : task.priority === 'medium'
+                                                                            ? withAlpha(theme.colors.warning, 0.125)
+                                                                            : withAlpha(theme.colors.success, 0.125),
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    styles.taskSessionsText,
+                                                                    {
+                                                                        color: task.priority === 'high' || task.priority === 'urgent'
+                                                                            ? theme.colors.textDestructive
+                                                                            : task.priority === 'medium'
+                                                                                ? theme.colors.warning
+                                                                                : theme.colors.success,
+                                                                    },
+                                                                ]}
+                                                            >
+                                                                {task.priority}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                            )}
+                                        </Pressable>
+                                    );
+                                })}
+
+                            <Pressable
+                                style={styles.addTaskButton}
+                                onPress={() => onAddTask(column.id)}
+                            >
+                                <Ionicons name="add" size={16} color={theme.colors.textSecondary} />
+                                <Text style={styles.addTaskText}>Add Task</Text>
+                            </Pressable>
+                        </ScrollView>
+                    </View>
+                ))}
+            </View>
+        </>
+    );
+});
+
 export default function TeamDashboardScreen() {
-    const { id, roomId: roomIdParam, tab } = useLocalSearchParams();
+    const { id, roomId: roomIdParam, tab, mode } = useLocalSearchParams();
     const teamId = id as string;
     const router = useRouter();
     const { theme } = useUnistyles();
@@ -531,7 +681,17 @@ export default function TeamDashboardScreen() {
     const styles = stylesheet;
     const artifact = useArtifact(teamId);
     const allTeams = useArtifacts().filter(a => a.type === 'team');
-    const allSessions = useAllSessions();
+    // Stable subscription: only re-renders when session roster changes (add/remove),
+    // NOT on every agent message. Root cause fix for UI-wide flicker with 10+ agents.
+    const _sessionIds = storage(useShallow((s) =>
+        s.isDataReady
+            ? Object.values(s.sessions).sort((a, b) => a.createdAt - b.createdAt).map(s => s.id)
+            : []
+    ));
+    const allSessions = React.useMemo(() => {
+        const sessions = storage.getState().sessions;
+        return _sessionIds.map(id => sessions[id]).filter((s): s is NonNullable<typeof s> => s != null);
+    }, [_sessionIds]);
     const allMachines = useAllMachines();
     const profile = useProfile();
     const { isAuthenticated } = useAuth();
@@ -539,14 +699,21 @@ export default function TeamDashboardScreen() {
     const isDesktopShell = Platform.OS === 'web' && width >= 1180;
     const shellVariant = 'default' as const;
     const shellTheme = getThreeColumnShellTokens(shellVariant);
+    const teamWorkspacePreferences = useLocalSetting('teamWorkspacePreferences');
+    const modeParam = getSingleRouteParam(mode);
     const tabParam = getSingleRouteParam(tab);
-    const normalizedInitialTab = React.useMemo<TeamDashboardTab>(() => {
-        if (tabParam && (TEAM_DASHBOARD_TABS as readonly string[]).includes(tabParam)) {
-            return tabParam as TeamDashboardTab;
-        }
-        return 'chat';
-    }, [tabParam]);
-    const [activeTab, setActiveTab] = React.useState<TeamDashboardTab>(normalizedInitialTab);
+    const storedWorkspacePreference = React.useMemo<TeamWorkspacePreference | null>(() => {
+        return teamWorkspacePreferences[teamId] ?? null;
+    }, [teamId, teamWorkspacePreferences]);
+    const resolvedWorkspaceState = React.useMemo(() => {
+        return resolveTeamWorkspaceState({
+            modeParam,
+            tabParam,
+            preference: storedWorkspacePreference,
+        });
+    }, [modeParam, storedWorkspacePreference, tabParam]);
+    const [workspaceMode, setWorkspaceMode] = React.useState<TeamWorkspaceMode>(resolvedWorkspaceState.mode);
+    const [activeTab, setActiveTab] = React.useState<TeamStandardTab>(resolvedWorkspaceState.standardTab);
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
@@ -590,10 +757,11 @@ export default function TeamDashboardScreen() {
     const teamReturnTo = React.useMemo(() => {
         return buildTeamReturnPath({
             teamId,
-            tab: activeTab,
+            mode: workspaceMode,
+            tab: workspaceMode === 'standard' ? activeTab : undefined,
             roomId,
         });
-    }, [activeTab, roomId, teamId]);
+    }, [activeTab, roomId, teamId, workspaceMode]);
     const desktopRoom = React.useMemo(() => {
         if (!roomId || !collaborationState) return null;
         return collaborationState.rooms.find((room: any) => room.id === roomId) ?? null;
@@ -610,10 +778,13 @@ export default function TeamDashboardScreen() {
     }, [profile]);
 
     React.useEffect(() => {
-        if (normalizedInitialTab !== activeTab) {
-            setActiveTab(normalizedInitialTab);
+        if (resolvedWorkspaceState.mode !== workspaceMode) {
+            setWorkspaceMode(resolvedWorkspaceState.mode);
         }
-    }, [activeTab, normalizedInitialTab]);
+        if (resolvedWorkspaceState.standardTab !== activeTab) {
+            setActiveTab(resolvedWorkspaceState.standardTab);
+        }
+    }, [activeTab, resolvedWorkspaceState, workspaceMode]);
 
     React.useEffect(() => {
         if (teamId) {
@@ -621,17 +792,67 @@ export default function TeamDashboardScreen() {
         }
     }, [teamId]);
 
-    const selectTab = React.useCallback((nextTab: TeamDashboardTab) => {
-        setActiveTab(nextTab);
+    const persistWorkspacePreference = React.useCallback((nextPreference: {
+        mode: TeamWorkspaceMode;
+        standardTab: TeamStandardTab;
+        matrixGrid?: TeamWorkspacePreference['matrixGrid'];
+        matrixTasksVisible?: TeamWorkspacePreference['matrixTasksVisible'];
+    }) => {
+        if (!teamId) {
+            return;
+        }
+
+        const currentPreferences = storage.getState().localSettings.teamWorkspacePreferences;
+        const currentPreference = currentPreferences[teamId];
+        if (
+            currentPreference?.mode === nextPreference.mode &&
+            currentPreference?.standardTab === nextPreference.standardTab
+        ) {
+            return;
+        }
+
+        storage.getState().applyLocalSettings({
+            teamWorkspacePreferences: {
+                ...currentPreferences,
+                [teamId]: {
+                    ...currentPreference,
+                    ...nextPreference,
+                    updatedAt: Date.now(),
+                },
+            },
+        });
+    }, [teamId]);
+
+    const replaceWorkspaceRoute = React.useCallback((nextMode: TeamWorkspaceMode, nextTab: TeamStandardTab) => {
         router.replace({
             pathname: '/teams/[id]',
             params: {
                 id: teamId,
                 ...(roomId ? { roomId } : {}),
-                tab: nextTab,
+                mode: nextMode,
+                ...(nextMode === 'standard' ? { tab: nextTab } : {}),
             },
         } as any);
     }, [roomId, router, teamId]);
+
+    const selectWorkspaceMode = React.useCallback((nextMode: TeamWorkspaceMode) => {
+        setWorkspaceMode(nextMode);
+        persistWorkspacePreference({
+            mode: nextMode,
+            standardTab: activeTab,
+        });
+        replaceWorkspaceRoute(nextMode, activeTab);
+    }, [activeTab, persistWorkspacePreference, replaceWorkspaceRoute]);
+
+    const selectTab = React.useCallback((nextTab: TeamStandardTab) => {
+        setWorkspaceMode('standard');
+        setActiveTab(nextTab);
+        persistWorkspacePreference({
+            mode: 'standard',
+            standardTab: nextTab,
+        });
+        replaceWorkspaceRoute('standard', nextTab);
+    }, [persistWorkspacePreference, replaceWorkspaceRoute]);
 
     React.useEffect(() => {
         if (desktopBridge) {
@@ -695,27 +916,6 @@ export default function TeamDashboardScreen() {
                 });
         }
     }, [artifact, teamId, desktopBridge, isLoading, autoInitAttempted, isAuthenticated, isDataReady]);
-
-    // Subscribe to task events for real-time Board updates (Server-Driven Task Orchestration)
-    React.useEffect(() => {
-        if (desktopBridge) {
-            // Desktop bridge handles its own updates
-            return;
-        }
-
-        // Subscribe to task events for this team
-        const unsubscribe = sync.subscribeToTaskEvents(teamId, (event) => {
-            console.log(`🔄 Board: Received ${event.type} for task ${event.taskId}`);
-            // Refetch artifact to get updated board data
-            sync.fetchArtifactWithBody(teamId).catch(err => {
-                console.error(`Failed to refresh board after ${event.type}:`, err);
-            });
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [teamId, desktopBridge]);
 
     // Helper to get session IDs from artifact body
     const getSessionIds = React.useCallback((): string[] => {
@@ -1207,8 +1407,7 @@ export default function TeamDashboardScreen() {
             }
         };
     }, [
-        artifact,
-        allSessions,
+        artifact?.id,
         parsedArtifactBoard.board,
         teamMessages,
     ]);
@@ -1368,26 +1567,10 @@ export default function TeamDashboardScreen() {
             return { member, session, role, index, tasks, activeTask };
         });
 
-        // Stable sort: role priority first (master/orchestrator → coordinator → worker → bypass),
-        // then insertion order (index). Never sort by activity time.
-        const ROLE_PRIORITY: Record<string, number> = {
-            master: 0, orchestrator: 0,
-            architect: 1, 'solution-architect': 1,
-            implementer: 2, builder: 2, framer: 2,
-            'qa-engineer': 3, qa: 3, reviewer: 3,
-            researcher: 4, scout: 4,
-            supervisor: 99, 'help-agent': 99, 'org-manager': 100,
-        };
-        return entries.sort((a, b) => {
-            // Terminated (inactive) agents always go to the bottom
-            const aDead = a.session && !a.session.active ? 1 : 0;
-            const bDead = b.session && !b.session.active ? 1 : 0;
-            if (aDead !== bDead) return aDead - bDead;
-            const pa = ROLE_PRIORITY[a.member.roleId || a.session?.metadata?.role || ''] ?? 5;
-            const pb = ROLE_PRIORITY[b.member.roleId || b.session?.metadata?.role || ''] ?? 5;
-            if (pa !== pb) return pa - pb;
-            return a.index - b.index; // stable: preserve insertion order within same role tier
-        });
+        return entries.sort((a, b) => compareTeamRosterEntries(
+            { member: a.member, session: a.session, fallbackIndex: a.index },
+            { member: b.member, session: b.session, fallbackIndex: b.index }
+        ));
     }, [kanbanData.team?.members, artifact?.sessions, sessionLookup, roleDefinitions, kanbanData.tasks]);
 
     // 🆕 Discuss 按钮处理函数：切换到 Chat 并预填 @mention 草稿
@@ -1716,6 +1899,72 @@ export default function TeamDashboardScreen() {
         </ScrollView>
     );
 
+    // Convert roster to MatrixRosterEntry format
+    const matrixRoster: MatrixRosterEntry[] = React.useMemo(() => {
+        return roster.map((entry, idx) => ({
+            member: entry.member,
+            session: entry.session,
+            role: entry.role,
+            index: idx,
+            tasks: entry.tasks,
+            activeTask: entry.activeTask,
+        }));
+    }, [roster]);
+
+    const handleAssignTaskToAgent = React.useCallback(async (taskId: string, agentSessionId: string) => {
+        const task = kanbanData.tasks.find(t => t.id === taskId);
+        if (!task || task.assigneeId === agentSessionId) return;
+
+        const assigneeEntry = roster.find((entry) => entry.member.sessionId === agentSessionId);
+        const assigneeName = assigneeEntry?.member.displayName
+            || (assigneeEntry?.session ? getSessionName(assigneeEntry.session) : null)
+            || agentSessionId.slice(0, 8);
+
+        try {
+            await taskChatSync.updateTaskWithSync(taskId, { assigneeId: agentSessionId }, myDisplayName || 'User');
+
+            await sync.sendTeamMessage({
+                teamId,
+                id: randomUUID(),
+                content: `Assigned ${formatTaskReference(task)} to **${assigneeName}** from Matrix view.`,
+                type: 'notification',
+                mentions: [agentSessionId],
+                metadata: {
+                    taskId: task.id,
+                    taskChange: {
+                        field: 'assigneeId',
+                        oldValue: task.assigneeId ?? null,
+                        newValue: agentSessionId,
+                    },
+                    source: 'matrix-view',
+                },
+                fromDisplayName: myDisplayName || 'User',
+            });
+        } catch (error) {
+            console.error('Failed to assign task to agent:', error);
+        }
+    }, [kanbanData.tasks, myDisplayName, roster, taskChatSync, teamId]);
+
+    const renderMatrix = () => (
+        <MatrixView
+            roster={matrixRoster}
+            tasks={kanbanData.tasks}
+            initialGrid={storedWorkspacePreference?.matrixGrid}
+            onAgentPress={(sessionId) => {
+                pushSessionRoute(router, sessionId, { teamReturnTo });
+            }}
+            onAssignTask={handleAssignTaskToAgent}
+            onGridChange={(nextGrid) => {
+                persistWorkspacePreference({
+                    mode: 'matrix',
+                    standardTab: activeTab,
+                    matrixGrid: nextGrid,
+                    matrixTasksVisible: storedWorkspacePreference?.matrixTasksVisible,
+                });
+            }}
+        />
+    );
+
     const renderChat = () => {
         // Try to find current user's session in roster
         // Look for a session that doesn't have an agent role (agents have roles like 'master', 'builder', etc.)
@@ -1885,17 +2134,18 @@ export default function TeamDashboardScreen() {
             >
                 <View style={styles.desktopHeaderTopRow}>
                     <View style={styles.desktopTabsRow}>
-                        {SHELL_TABS.map((tab) => {
-                            const isActive = activeTab === tab.id;
+                        {WORKSPACE_MODE_OPTIONS.map((option) => {
+                            const isActive = workspaceMode === option.id;
                             return (
                                 <Pressable
-                                    key={tab.id}
+                                    key={option.id}
                                     onPress={() => {
-                                        selectTab(tab.id);
+                                        selectWorkspaceMode(option.id);
                                         setShowMenu(false);
                                     }}
                                     style={[
                                         styles.desktopTab,
+                                        { width: 96 },
                                         isActive && styles.desktopTabActive,
                                     ]}
                                 >
@@ -1919,11 +2169,54 @@ export default function TeamDashboardScreen() {
                                             },
                                         ]}
                                     >
-                                        {tab.label}
+                                        {option.label}
                                     </Text>
                                 </Pressable>
                             );
                         })}
+                        {workspaceMode === 'standard' ? (
+                            <View style={[styles.desktopTabsRow, { marginLeft: 12 }]}>
+                                {STANDARD_SHELL_TABS.map((tab) => {
+                                    const isActive = activeTab === tab.id;
+                                    return (
+                                        <Pressable
+                                            key={tab.id}
+                                            onPress={() => {
+                                                selectTab(tab.id);
+                                                setShowMenu(false);
+                                            }}
+                                            style={[
+                                                styles.desktopTab,
+                                                isActive && styles.desktopTabActive,
+                                            ]}
+                                        >
+                                            {isActive ? (
+                                                <LinearGradient
+                                                    colors={['#FFFFFF', '#EDF3F7']}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 0, y: 1 }}
+                                                    style={{
+                                                        ...StyleSheet.absoluteFillObject as object,
+                                                        borderRadius: 999,
+                                                    }}
+                                                />
+                                            ) : null}
+                                            <Text
+                                                style={[
+                                                    styles.desktopTabText,
+                                                    {
+                                                        color: isActive ? '#233648' : '#92A1AF',
+                                                        fontWeight: isActive ? '600' : 'normal',
+                                                    },
+                                                ]}
+                                            >
+                                                {tab.label}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        ) : null}
                     </View>
                     <View style={{ flex: 1 }} />
                     <Pressable
@@ -1969,6 +2262,8 @@ export default function TeamDashboardScreen() {
             <View style={styles.desktopPanelBody}>
                 {shouldShowBoardFallback ? (
                     boardFallbackPanel
+                ) : workspaceMode === 'matrix' ? (
+                    renderMatrix()
                 ) : (
                     <>
                         {activeTab === 'chat' && renderChat()}
@@ -2171,37 +2466,67 @@ export default function TeamDashboardScreen() {
                             </Pressable>
                         </View>
                         <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
-                            {(['chat', 'board', 'info', 'evolution'] as const).map((tab) => (
+                            {WORKSPACE_MODE_OPTIONS.map((option) => (
                                 <Pressable
-                                    key={tab}
-                                    onPress={() => selectTab(tab)}
+                                    key={option.id}
+                                    onPress={() => selectWorkspaceMode(option.id)}
                                     style={{
                                         flex: 1,
                                         paddingVertical: 8,
                                         alignItems: 'center',
                                         borderRadius: 8,
-                                        backgroundColor: activeTab === tab ? theme.colors.surface : 'transparent',
-                                        shadowColor: activeTab === tab ? '#000' : 'transparent',
+                                        backgroundColor: workspaceMode === option.id ? theme.colors.surface : 'transparent',
+                                        shadowColor: workspaceMode === option.id ? '#000' : 'transparent',
                                         shadowOffset: { width: 0, height: 1 },
-                                        shadowOpacity: activeTab === tab ? 0.1 : 0,
+                                        shadowOpacity: workspaceMode === option.id ? 0.1 : 0,
                                         shadowRadius: 2,
                                     }}
                                 >
                                     <Text style={{
                                         fontSize: 14,
                                         fontWeight: '600',
-                                        color: activeTab === tab ? theme.colors.text : theme.colors.textSecondary,
-                                        textTransform: 'capitalize',
+                                        color: workspaceMode === option.id ? theme.colors.text : theme.colors.textSecondary,
                                     }}>
-                                        {tab}
+                                        {option.label}
                                     </Text>
                                 </Pressable>
                             ))}
                         </View>
+                        {workspaceMode === 'standard' ? (
+                            <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4, marginTop: 8 }}>
+                                {STANDARD_SHELL_TABS.map((tab) => (
+                                    <Pressable
+                                        key={tab.id}
+                                        onPress={() => selectTab(tab.id)}
+                                        style={{
+                                            flex: 1,
+                                            paddingVertical: 8,
+                                            alignItems: 'center',
+                                            borderRadius: 8,
+                                            backgroundColor: activeTab === tab.id ? theme.colors.surface : 'transparent',
+                                            shadowColor: activeTab === tab.id ? '#000' : 'transparent',
+                                            shadowOffset: { width: 0, height: 1 },
+                                            shadowOpacity: activeTab === tab.id ? 0.1 : 0,
+                                            shadowRadius: 2,
+                                        }}
+                                    >
+                                        <Text style={{
+                                            fontSize: 14,
+                                            fontWeight: '600',
+                                            color: activeTab === tab.id ? theme.colors.text : theme.colors.textSecondary,
+                                        }}>
+                                            {tab.label}
+                                        </Text>
+                                    </Pressable>
+                                ))}
+                            </View>
+                        ) : null}
                     </View>
 
                     {shouldShowBoardFallback ? (
                         boardFallbackPanel
+                    ) : workspaceMode === 'matrix' ? (
+                        renderMatrix()
                     ) : (
                         <>
                             {activeTab === 'chat' && renderChat()}

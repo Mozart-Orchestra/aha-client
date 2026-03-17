@@ -1,4 +1,5 @@
 import * as z from 'zod';
+import { TEAM_STANDARD_TABS, TEAM_WORKSPACE_MODES } from '@/utils/teamMatrix';
 
 //
 // Schema
@@ -11,6 +12,18 @@ const ThemePreferenceSchema = z.preprocess(
 
 const AutomaticLanguageSchema = z.enum(['en', 'zh-Hans']);
 const AutomaticLanguageSourceSchema = z.enum(['ip', 'device']);
+const TeamWorkspaceModeSchema = z.enum(TEAM_WORKSPACE_MODES);
+const TeamStandardTabSchema = z.enum(TEAM_STANDARD_TABS);
+const TeamWorkspacePreferenceSchema = z.object({
+    mode: TeamWorkspaceModeSchema,
+    standardTab: TeamStandardTabSchema,
+    matrixGrid: z.object({
+        cols: z.number().int().positive(),
+        rows: z.number().int().positive(),
+    }).optional(),
+    matrixTasksVisible: z.boolean().optional(),
+    updatedAt: z.number(),
+});
 
 export const LocalSettingsSchema = z.object({
     // Developer settings (device-specific)
@@ -25,6 +38,7 @@ export const LocalSettingsSchema = z.object({
     markdownCopyV2: z.boolean().describe('Replace native paragraph selection with long-press modal for full markdown copy'),
     // CLI version acknowledgments - keyed by machineId
     acknowledgedCliVersions: z.record(z.string(), z.string()).describe('Acknowledged CLI versions per machine'),
+    teamWorkspacePreferences: z.record(z.string(), TeamWorkspacePreferenceSchema).describe('Per-team workspace display preferences'),
 });
 
 //
@@ -51,6 +65,7 @@ export const localSettingsDefaults: LocalSettings = {
     autoDetectedLanguageUpdatedAt: null,
     markdownCopyV2: false,
     acknowledgedCliVersions: {},
+    teamWorkspacePreferences: {},
 };
 Object.freeze(localSettingsDefaults);
 

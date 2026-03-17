@@ -119,6 +119,7 @@ export function isEmbeddedDesktopRoute(pathname: string): boolean {
     return (
         pathname === '/'
         || pathname === '/agents'
+        || /^\/agents\/[^/]+$/.test(pathname)
         || pathname === '/teams'
         || pathname === '/teams/new'
         || /^\/teams\/[^/]+$/.test(pathname)

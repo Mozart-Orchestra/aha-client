@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { getTeamMemberMapFromArtifact, getTeamSessionIdsFromArtifact, parseTeamMembersFromArtifact } from './teamRoster';
+import {
+    compareTeamRosterEntries,
+    getTeamMemberMapFromArtifact,
+    getTeamSessionIdsFromArtifact,
+    parseTeamMembersFromArtifact,
+} from './teamRoster';
 
 describe('teamRoster helpers', () => {
     it('parses members from team artifact body', () => {
@@ -52,5 +57,105 @@ describe('teamRoster helpers', () => {
 
         const map = getTeamMemberMapFromArtifact(artifact);
         expect(map.get('session-2')?.displayName).toBe('Codex Worker');
+    });
+});
+
+describe('compareTeamRosterEntries', () => {
+    it('keeps role priority ahead of runtime message churn', () => {
+        const master = {
+            member: {
+                sessionId: 'session-master',
+                roleId: 'master',
+            },
+            session: {
+                createdAt: 200,
+                active: true,
+                metadata: { role: 'master' },
+            } as any,
+            fallbackIndex: 1,
+        };
+
+        const implementer = {
+            member: {
+                sessionId: 'session-impl',
+                roleId: 'implementer',
+            },
+            session: {
+                createdAt: 100,
+                active: true,
+                metadata: { role: 'implementer' },
+            } as any,
+            fallbackIndex: 0,
+        };
+
+        expect(compareTeamRosterEntries(master, implementer)).toBeLessThan(0);
+    });
+
+    it('uses lifecycle spawn time instead of volatile array order', () => {
+        const earlier = {
+            member: {
+                memberId: 'member-a',
+                sessionId: 'session-a',
+                roleId: 'implementer',
+                lifecycle: {
+                    spawnRequestedAt: 10,
+                },
+            },
+            session: {
+                createdAt: 200,
+                active: true,
+                metadata: { role: 'implementer' },
+            } as any,
+            fallbackIndex: 5,
+        };
+
+        const later = {
+            member: {
+                memberId: 'member-b',
+                sessionId: 'session-b',
+                roleId: 'implementer',
+                lifecycle: {
+                    spawnRequestedAt: 20,
+                },
+            },
+            session: {
+                createdAt: 100,
+                active: true,
+                metadata: { role: 'implementer' },
+            } as any,
+            fallbackIndex: 0,
+        };
+
+        expect(compareTeamRosterEntries(earlier, later)).toBeLessThan(0);
+    });
+
+    it('pushes inactive agents below active ones', () => {
+        const active = {
+            member: {
+                sessionId: 'active',
+                roleId: 'implementer',
+            },
+            session: {
+                createdAt: 100,
+                active: true,
+                metadata: { role: 'implementer' },
+            } as any,
+            fallbackIndex: 0,
+        };
+
+        const inactive = {
+            member: {
+                sessionId: 'inactive',
+                roleId: 'implementer',
+            },
+            session: {
+                createdAt: 50,
+                active: false,
+                metadata: { role: 'implementer' },
+            } as any,
+            fallbackIndex: 1,
+        };
+
+        expect(compareTeamRosterEntries(active, inactive)).toBeLessThan(0);
     });
 });

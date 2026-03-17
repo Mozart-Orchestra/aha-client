@@ -1,5 +1,6 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 
 /**
@@ -21,6 +22,7 @@ export async function connectService(
             },
             body: JSON.stringify({ token: JSON.stringify(token) })
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(`Failed to connect ${service}: ${response.status}`);
@@ -46,6 +48,7 @@ export async function disconnectService(credentials: AuthCredentials, service: s
                 'Authorization': `Bearer ${credentials.token}`
             }
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {

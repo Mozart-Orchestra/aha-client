@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { TokenStorage } from '@/auth/tokenStorage';
 import { Encryption } from './encryption/encryption';
+import { getCurrentAuth } from '@/auth/AuthContext';
 
 //
 // Types
@@ -233,6 +234,16 @@ class ApiSocket {
         // Error events
         this.socket.on('connect_error', (error) => {
             console.error('🔌 SyncSocket: Connection error', error);
+            // Auth rejection from server — stop reconnecting and logout
+            if (error.message === 'Authentication failed' || error.message === 'Invalid token' || error.message === 'Account not found for token') {
+                console.error('🔌 SyncSocket: Auth rejected, logging out');
+                this.disconnect();
+                const auth = getCurrentAuth();
+                if (auth) {
+                    auth.logout();
+                }
+                return;
+            }
             this.updateStatus('error');
         });
 

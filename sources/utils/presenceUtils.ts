@@ -5,7 +5,8 @@
  * These can be safely imported in both component and test contexts.
  */
 
-const DEAD_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour without activity = "ended"
+const STALE_THRESHOLD_MS = 2 * 60 * 1000;  // 2 min without heartbeat = stale (active but no pings)
+const DEAD_THRESHOLD_MS = 60 * 60 * 1000;  // 1 hour without activity = "ended"
 
 export interface AgentPresenceVisual {
     /** Presence-driven dot color: green / grey / dark-grey */
@@ -19,14 +20,20 @@ export interface AgentPresenceVisual {
 /**
  * Returns presence-driven visual properties for an agent sidebar row.
  *
- * Three states:
- *   - online  (active=true):           green     #22C55E
- *   - offline (inactive, <1h):         grey      #8A7F74
- *   - dead    (inactive, ≥1h or no activeAt): dark-grey #4A4040
+ * Four states:
+ *   - online  (active=true, fresh heartbeat):  green     #22C55E
+ *   - stale   (active=true, heartbeat >2min):   grey      #8A7F74  (zombie fallback)
+ *   - offline (active=false, <1h):              grey      #8A7F74
+ *   - dead    (active=false, ≥1h or no activeAt): dark-grey #4A4040
  */
 export function getAgentPresenceVisual(session: { active: boolean; activeAt: number }): AgentPresenceVisual {
     if (session.active) {
-        return { dotColor: '#22C55E', inactive: false, dead: false };
+        // Zombie fallback: server says active but heartbeat stopped >2 min ago
+        const isStale = session.activeAt > 0 && (Date.now() - session.activeAt > STALE_THRESHOLD_MS);
+        if (!isStale) {
+            return { dotColor: '#22C55E', inactive: false, dead: false };
+        }
+        return { dotColor: '#8A7F74', inactive: true, dead: false };
     }
     const isDead = session.activeAt > 0 && (Date.now() - session.activeAt > DEAD_THRESHOLD_MS);
     return {

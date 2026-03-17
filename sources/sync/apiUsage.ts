@@ -1,5 +1,6 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 
 export interface UsageDataPoint {
@@ -38,6 +39,7 @@ export async function queryUsage(
             },
             body: JSON.stringify(params)
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404 && params.sessionId) {

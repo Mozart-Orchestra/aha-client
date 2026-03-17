@@ -16,7 +16,11 @@ import { useRouter } from 'expo-router';
 
 import { useArtifact, useArtifacts, useAllSessions } from '@/sync/storage';
 import { getSessionName, getAgentPresenceVisual } from '@/utils/sessionUtils';
-import { getTeamMemberMapFromArtifact, getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
+import {
+    compareTeamRosterEntries,
+    getTeamMemberMapFromArtifact,
+    getTeamSessionIdsFromArtifact,
+} from '@/utils/teamRoster';
 import { pushSessionRoute } from '@/utils/returnNavigation';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
 import type { KanbanTask } from '@/sync/kanbanTypes';
@@ -75,7 +79,7 @@ export const TeamSessionSidebarPanel = React.memo(({
         const sessionMap = new Map(allSessions.map((session) => [session.id, session]));
 
         return teamSessionIds
-            .map((sessionId) => {
+            .map((sessionId, index) => {
                 const session = sessionMap.get(sessionId);
                 const member = teamMemberMap.get(sessionId);
                 const presence = session
@@ -94,8 +98,13 @@ export const TeamSessionSidebarPanel = React.memo(({
                     role,
                     description,
                     activeTask: getActiveTaskForSession(teamTasks, sessionId),
+                    sortIndex: index,
                 };
-            });
+            })
+            .sort((left, right) => compareTeamRosterEntries(
+                { member: teamMemberMap.get(left.id), session: sessionMap.get(left.id), fallbackIndex: left.sortIndex },
+                { member: teamMemberMap.get(right.id), session: sessionMap.get(right.id), fallbackIndex: right.sortIndex }
+            ));
     }, [teamArtifact?.sessions, teamArtifact?.body, allSessions, teamTasks]);
 
     // Team list for conversation section

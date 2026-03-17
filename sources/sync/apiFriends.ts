@@ -1,5 +1,6 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 import {
     UserProfile,
@@ -30,6 +31,8 @@ export async function searchUsersByUsername(
                 }
             }
         );
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -68,6 +71,8 @@ export async function getUserProfile(
                 }
             }
         );
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -123,6 +128,8 @@ export async function sendFriendRequest(
             body: JSON.stringify({ uid: recipientId })
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             if (response.status === 404) {
                 return null;
@@ -163,6 +170,8 @@ export async function getFriendsList(
             }
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             throw new Error(`Failed to get friends list: ${response.status}`);
         }
@@ -196,6 +205,8 @@ export async function removeFriend(
             },
             body: JSON.stringify({ uid: friendId })
         });
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {

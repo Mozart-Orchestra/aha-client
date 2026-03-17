@@ -1,5 +1,6 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff, NonRetryableError } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 import { Artifact, ArtifactCreateRequest, ArtifactUpdateRequest, ArtifactUpdateResponse } from './artifactTypes';
 
@@ -16,6 +17,7 @@ export async function fetchArtifacts(credentials: AuthCredentials): Promise<Arti
                 'Content-Type': 'application/json'
             }
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(`Failed to fetch artifacts: ${response.status}`);
@@ -39,6 +41,7 @@ export async function fetchArtifact(credentials: AuthCredentials, artifactId: st
                 'Content-Type': 'application/json'
             }
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -70,6 +73,7 @@ export async function createArtifact(
             },
             body: JSON.stringify(request)
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 409) {
@@ -102,6 +106,7 @@ export async function updateArtifact(
             },
             body: JSON.stringify(request)
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -131,6 +136,7 @@ export async function deleteArtifact(
                 'Authorization': `Bearer ${credentials.token}`
             }
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {

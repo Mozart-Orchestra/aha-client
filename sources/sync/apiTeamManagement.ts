@@ -1,5 +1,6 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 
 // === Response Types ===
@@ -107,6 +108,8 @@ export async function addTeamMember(
             })
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             if (response.status === 404) {
                 throw new Error('Team not found');
@@ -135,6 +138,8 @@ export async function removeTeamMember(
                 'Authorization': `Bearer ${credentials.token}`
             }
         });
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -168,6 +173,8 @@ export async function archiveTeam(
             body: JSON.stringify({ sessionIds })
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             if (response.status === 404) {
                 throw new Error('Team not found');
@@ -200,6 +207,8 @@ export async function deleteTeam(
             body: JSON.stringify({ sessionIds })
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             if (response.status === 404) {
                 throw new Error('Team not found');
@@ -231,6 +240,8 @@ export async function renameTeam(
             body: JSON.stringify({ name: newName })
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             if (response.status === 404) {
                 throw new Error('Team not found');
@@ -261,6 +272,8 @@ export async function batchArchiveSessions(
             body: JSON.stringify({ sessionIds })
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             throw new Error(`Failed to batch archive sessions: ${response.status}`);
         }
@@ -287,6 +300,8 @@ export async function batchDeleteSessions(
             },
             body: JSON.stringify({ sessionIds })
         });
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(`Failed to batch delete sessions: ${response.status}`);
@@ -315,6 +330,8 @@ export async function renameSession(
             },
             body: JSON.stringify({ name: newName })
         });
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -346,6 +363,8 @@ export async function batchArchiveTeams(
             body: JSON.stringify({ teamIds })
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             throw new Error(`Failed to batch archive teams: ${response.status}`);
         }
@@ -372,6 +391,8 @@ export async function batchDeleteTeams(
             },
             body: JSON.stringify({ teamIds })
         });
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(`Failed to batch delete teams: ${response.status}`);

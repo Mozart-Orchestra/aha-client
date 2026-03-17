@@ -327,6 +327,7 @@ export function ThreeColumnShell({
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 0, y: 1 }}
                                 style={ABS_FILL}
+                                pointerEvents="none"
                             />
                             {mainPanel}
                         </View>

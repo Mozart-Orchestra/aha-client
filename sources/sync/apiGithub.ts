@@ -1,5 +1,6 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 
 export interface GitHubOAuthParams {
@@ -35,6 +36,8 @@ export async function getGitHubOAuthParams(credentials: AuthCredentials): Promis
             }
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             if (response.status === 400) {
                 const error = await response.json();
@@ -63,6 +66,8 @@ export async function getAccountProfile(credentials: AuthCredentials): Promise<A
             }
         });
 
+        checkAuth(response, credentials.token);
+
         if (!response.ok) {
             throw new Error(`Failed to get account profile: ${response.status}`);
         }
@@ -86,6 +91,8 @@ export async function disconnectGitHub(credentials: AuthCredentials): Promise<vo
                 'Content-Type': 'application/json'
             }
         });
+
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             if (response.status === 404) {

@@ -460,7 +460,34 @@ function formatElapsedCompact(elapsedSeconds: number): string {
     return `${elapsedSeconds}s`;
 }
 
-function AgentRow({
+function areAgentRowPropsEqual(
+    previous: {
+        item: FloatingIslandAgentItem;
+        tokens: ReturnType<typeof getThreeColumnShellTokens>;
+    },
+    next: {
+        item: FloatingIslandAgentItem;
+        tokens: ReturnType<typeof getThreeColumnShellTokens>;
+    }
+): boolean {
+    return (
+        previous.tokens.panelDivider === next.tokens.panelDivider
+        && previous.tokens.panelTitle === next.tokens.panelTitle
+        && previous.item.id === next.item.id
+        && previous.item.name === next.item.name
+        && previous.item.dotColor === next.item.dotColor
+        && previous.item.selected === next.item.selected
+        && previous.item.inactive === next.item.inactive
+        && previous.item.dead === next.item.dead
+        && previous.item.description === next.item.description
+        && previous.item.score === next.item.score
+        && previous.item.scoreCount === next.item.scoreCount
+        && previous.item.activeTaskTitle === next.item.activeTaskTitle
+        && previous.item.activeTaskStartedAt === next.item.activeTaskStartedAt
+    );
+}
+
+const AgentRow = React.memo(function AgentRow({
     item,
     tokens,
 }: {
@@ -551,9 +578,9 @@ function AgentRow({
                         </Text>
                         {item.score !== undefined && scoreColor ? (
                             <View style={[styles.agentScoreBadge, { backgroundColor: scoreColor + '16' }]}>
-                                <Ionicons name="star" size={11} color={scoreColor} />
+                                <Ionicons name="people" size={11} color={scoreColor} />
                                 <Text style={[styles.agentScoreText, { color: scoreColor }]}>
-                                    {Math.round(item.score)}
+                                    {t('agents.crowd')} {Math.round(item.score)}
                                     {item.scoreCount ? ` · ${item.scoreCount}` : ''}
                                 </Text>
                             </View>
@@ -651,7 +678,7 @@ function AgentRow({
             </Pressable>
         </View>
     );
-}
+}, areAgentRowPropsEqual);
 
 function StatusRow({
     item,
@@ -694,7 +721,32 @@ function StatusRow({
     );
 }
 
-function ConversationRow({
+function areConversationRowPropsEqual(
+    previous: {
+        item: FloatingIslandConversationItem;
+        tokens: ReturnType<typeof getThreeColumnShellTokens>;
+    },
+    next: {
+        item: FloatingIslandConversationItem;
+        tokens: ReturnType<typeof getThreeColumnShellTokens>;
+    }
+): boolean {
+    return (
+        previous.tokens.panelDivider === next.tokens.panelDivider
+        && previous.tokens.panelTitle === next.tokens.panelTitle
+        && previous.item.id === next.item.id
+        && previous.item.name === next.item.name
+        && previous.item.lastMessage === next.item.lastMessage
+        && previous.item.time === next.item.time
+        && previous.item.avatarColor === next.item.avatarColor
+        && previous.item.avatarIcon === next.item.avatarIcon
+        && previous.item.avatarLabel === next.item.avatarLabel
+        && previous.item.unreadCount === next.item.unreadCount
+        && previous.item.selected === next.item.selected
+    );
+}
+
+const ConversationRow = React.memo(function ConversationRow({
     item,
     tokens,
 }: {
@@ -762,7 +814,7 @@ function ConversationRow({
             ) : null}
         </Pressable>
     );
-}
+}, areConversationRowPropsEqual);
 
 export function FloatingIslandSidebar({
     variant = 'default',

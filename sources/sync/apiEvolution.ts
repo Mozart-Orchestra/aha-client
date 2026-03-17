@@ -18,6 +18,7 @@
 
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff } from '@/utils/time';
+import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
 
 // ============================================================================
@@ -120,6 +121,7 @@ export async function fetchBypassAgents(
             `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents`,
             { headers: authHeaders(credentials.token) }
         );
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -147,6 +149,7 @@ export async function retireBypassAgent(
                 headers: authHeaders(credentials.token),
             }
         );
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -185,6 +188,7 @@ export async function fetchGenomes(
         const response = await fetch(url, {
             headers: authHeaders(credentials.token),
         });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -244,6 +248,7 @@ export async function createBypassLease(
                 body: JSON.stringify(params),
             }
         );
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -269,6 +274,7 @@ export async function getBypassLease(
             `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents/leases/${leaseId}`,
             { headers: authHeaders(credentials.token) }
         );
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -364,6 +370,7 @@ export async function fetchRunsByTeam(
             `${API_ENDPOINT}/v1/runs?${params.toString()}`,
             { headers: authHeaders(credentials.token) }
         );
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -387,6 +394,7 @@ export async function fetchGenomeLineage(
             `${API_ENDPOINT}/v1/genomes/${genomeId}/lineage`,
             { headers: authHeaders(credentials.token) }
         );
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -411,6 +419,7 @@ export async function fetchGenomeScorecard(
             `${API_ENDPOINT}/v1/genomes/${genomeId}/scorecard`,
             { headers: authHeaders(credentials.token) }
         );
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));
@@ -439,6 +448,7 @@ export async function fetchRepairSignals(
 
     return await backoff(async () => {
         const response = await fetch(url, { headers: authHeaders(credentials.token) });
+        checkAuth(response, credentials.token);
 
         if (!response.ok) {
             throw new Error(await parseError(response));

@@ -9,7 +9,10 @@ import { Item } from '@/components/ui/Item';
 import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import {
+    addGenomeFavorite,
     fetchGenomeById,
+    fetchGenomeFavoriteStatus,
+    removeGenomeFavorite,
     parseSpec,
     parseFeedback,
     parseTags,
@@ -18,11 +21,14 @@ import {
     type GenomeSpec,
     type GenomeFeedback,
 } from '@/utils/genomeHub';
+import { fetchAccessibleGenomeById } from '@/utils/agentMarketplace';
 import {
     loadFavoriteGenomeIdsFromStorage,
     toggleFavoriteGenomeIdInStorage,
 } from '@/utils/favoriteGenomesStorage';
 import { isFavoriteGenomeId } from '@/utils/favoriteGenomes';
+import { sync } from '@/sync/sync';
+import { useProfile } from '@/sync/storage';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -44,6 +50,13 @@ function scoreColor(score: number): string {
     return '#ef4444';
 }
 
+function formatLatestAction(action: GenomeFeedback['latestAction']): string {
+    return action
+        .split('_')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
 function formatDate(iso: string): string {
     try {
         return new Date(iso).toLocaleDateString();
@@ -57,34 +70,105 @@ function formatDate(iso: string): string {
 export default React.memo(function AgentDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useUnistyles();
+    const profile = useProfile();
+    const actorId = profile.id || null;
 
     const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [favoriteIds, setFavoriteIds] = React.useState<string[]>(() => loadFavoriteGenomeIdsFromStorage());
+    const [serverFavorited, setServerFavorited] = React.useState(false);
+    const [favoriteLoading, setFavoriteLoading] = React.useState(false);
 
     React.useEffect(() => {
-        if (!id) return;
+        if (!id) {
+            setLoading(false);
+            setGenome(null);
+            return;
+        }
         let cancelled = false;
         setLoading(true);
-        fetchGenomeById(id).then((g) => {
+
+        fetchAccessibleGenomeById(id, {
+            credentials: sync.getCredentials(),
+            fetchPublicGenomeById: fetchGenomeById,
+        }).then((g) => {
             if (!cancelled) {
                 setGenome(g);
                 setLoading(false);
             }
+        }).catch(() => {
+            if (!cancelled) {
+                setGenome(null);
+                setLoading(false);
+            }
         });
+
         return () => { cancelled = true; };
     }, [id]);
+
+    React.useEffect(() => {
+        if (!genome) return;
+        let cancelled = false;
+
+        if (genome.isPublic && actorId) {
+            fetchGenomeFavoriteStatus(genome.id, actorId).then((result) => {
+                if (!cancelled) {
+                    setServerFavorited(result?.isFavorited ?? false);
+                }
+            });
+            return () => { cancelled = true; };
+        }
+
+        setServerFavorited(false);
+        return () => { cancelled = true; };
+    }, [actorId, genome]);
 
     const spec = React.useMemo(() => genome ? parseSpec(genome.spec) : null, [genome]);
     const feedback = React.useMemo(() => genome ? parseFeedback(genome.feedbackData) : null, [genome]);
     const tags = React.useMemo(() => genome ? parseTags(genome.tags) : [], [genome]);
     const corpsSpec = React.useMemo(() => (genome?.category === 'corps') ? parseCorpsSpec(genome.spec) : null, [genome]);
-    const isFav = genome ? isFavoriteGenomeId(genome.id, favoriteIds) : false;
+    const storefrontRating = React.useMemo(() => {
+        if (typeof feedback?.avgScore === 'number') {
+            return feedback.avgScore;
+        }
+        if (typeof spec?.resume?.performanceRating === 'number') {
+            return spec.resume.performanceRating;
+        }
+        return null;
+    }, [feedback?.avgScore, spec?.resume?.performanceRating]);
+    const isFav = genome
+        ? (genome.isPublic && actorId ? serverFavorited : isFavoriteGenomeId(genome.id, favoriteIds))
+        : false;
+    const modelScores = React.useMemo(
+        () => Object.entries(spec?.modelScores ?? {}).sort((left, right) => right[1] - left[1]),
+        [spec?.modelScores]
+    );
+    const crowdReviewCount = feedback?.evaluationCount ?? spec?.resume?.totalSessions ?? null;
 
-    const toggleFavorite = React.useCallback(() => {
+    const toggleFavorite = React.useCallback(async () => {
         if (!genome) return;
-        setFavoriteIds(toggleFavoriteGenomeIdInStorage(genome.id));
-    }, [genome]);
+        if (favoriteLoading) return;
+
+        if (!genome.isPublic || !actorId) {
+            setFavoriteIds(toggleFavoriteGenomeIdInStorage(genome.id));
+            return;
+        }
+
+        setFavoriteLoading(true);
+        try {
+            if (serverFavorited) {
+                const result = await removeGenomeFavorite(genome.id, actorId);
+                setGenome(result.genome);
+                setServerFavorited(false);
+            } else {
+                const result = await addGenomeFavorite(genome.id, actorId);
+                setGenome(result.genome);
+                setServerFavorited(true);
+            }
+        } finally {
+            setFavoriteLoading(false);
+        }
+    }, [actorId, favoriteLoading, genome, serverFavorited]);
 
     if (loading) {
         return (
@@ -134,11 +218,18 @@ export default React.memo(function AgentDetailScreen() {
                                     <Text style={[styles.badgeText, { color: '#FF9500' }]}>Corps</Text>
                                 </View>
                             ) : null}
+                            {spec?.runtimeType ? (
+                                <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                    <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>
+                                        {spec.runtimeType}
+                                    </Text>
+                                </View>
+                            ) : null}
                             <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
                                 {t('agents.versionLabel', { version: genome.version })}
                             </Text>
                         </View>
-                        <Pressable onPress={toggleFavorite} hitSlop={12}>
+                        <Pressable onPress={toggleFavorite} hitSlop={12} disabled={favoriteLoading}>
                             <Ionicons
                                 name={isFav ? 'star' : 'star-outline'}
                                 size={22}
@@ -157,12 +248,21 @@ export default React.memo(function AgentDetailScreen() {
                         <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
                             {t('agents.spawnCount', { count: genome.spawnCount })}
                         </Text>
-                        {feedback ? (
+                        <Ionicons name="star-outline" size={14} color={theme.colors.textSecondary} style={styles.statIconSpacer} />
+                        <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
+                            {genome.starCount}
+                        </Text>
+                        <Ionicons name="download-outline" size={14} color={theme.colors.textSecondary} style={styles.statIconSpacer} />
+                        <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
+                            {genome.downloadCount}
+                        </Text>
+                        {storefrontRating != null ? (
                             <>
                                 <View style={{ width: 12 }} />
-                                <Ionicons name="star" size={14} color={scoreColor(feedback.avgScore)} />
-                                <Text style={[styles.statText, { color: scoreColor(feedback.avgScore), fontWeight: '600' }]}>
-                                    {feedback.avgScore} ({feedback.evaluationCount})
+                                <Ionicons name="people-outline" size={14} color={scoreColor(storefrontRating)} />
+                                <Text style={[styles.statText, { color: scoreColor(storefrontRating), fontWeight: '600' }]}>
+                                    {t('agents.crowd')} {Math.round(storefrontRating)}
+                                    {crowdReviewCount ? ` · ${crowdReviewCount}` : ''}
                                 </Text>
                             </>
                         ) : null}
@@ -170,8 +270,27 @@ export default React.memo(function AgentDetailScreen() {
                 </View>
 
                 <ItemList>
+                    {/* ── Storefront / Resume ── */}
+                    {(spec?.resume?.specialties?.length || storefrontRating != null || spec?.preferredModel || modelScores.length > 0) ? (
+                        <ItemGroup title="Storefront">
+                            {spec?.resume?.specialties?.length ? (
+                                <Item title="Specialties" subtitle={spec.resume.specialties.join(', ')} subtitleLines={0} />
+                            ) : null}
+                            {storefrontRating != null ? (
+                                <Item title="Performance Rating" detail={String(Math.round(storefrontRating))} detailStyle={{ color: scoreColor(storefrontRating), fontWeight: '700', fontSize: 17 }} />
+                            ) : null}
+                            {spec?.preferredModel ? (
+                                <Item title="Preferred Model" detail={spec.preferredModel} />
+                            ) : null}
+                            {modelScores.slice(0, 5).map(([model, score]) => (
+                                <Item key={model} title={model} detail={String(score)} />
+                            ))}
+                        </ItemGroup>
+                    ) : null}
+
                     {/* ── Configuration ── */}
                     <ItemGroup title={t('agents.configuration')}>
+                        {spec?.runtimeType ? <Item title="Runtime" detail={spec.runtimeType} /> : null}
                         <Item title={t('agents.model')} detail={spec?.modelId ?? 'Default'} />
                         <Item title={t('agents.executionPlane')} detail={spec?.executionPlane ?? 'mainline'} />
                         <Item title={t('agents.permissionMode')} detail={spec?.permissionMode ?? 'default'} />
@@ -197,6 +316,40 @@ export default React.memo(function AgentDetailScreen() {
                             {spec.protocol.map((p, i) => (
                                 <Item key={`p-${i}`} title={p} subtitle="" />
                             ))}
+                        </ItemGroup>
+                    ) : null}
+
+                    {(spec?.operations?.commonPatterns?.length || spec?.handoffProtocol?.length || spec?.operations?.recentChanges?.length) ? (
+                        <ItemGroup title="Operational Patterns">
+                            {spec?.operations?.commonPatterns?.map((pattern, index) => (
+                                <Item key={`pattern-${index}`} title={pattern} subtitle="" />
+                            ))}
+                            {spec?.handoffProtocol?.map((rule, index) => (
+                                <Item key={`handoff-${index}`} title={rule} subtitle="" />
+                            ))}
+                            {spec?.operations?.recentChanges?.map((change, index) => (
+                                <Item key={`change-${index}`} title={change} subtitle="" />
+                            ))}
+                        </ItemGroup>
+                    ) : null}
+
+                    {(spec?.memory?.learnings?.length || spec?.memory?.iterationGuide || spec?.memory?.knowledgeBase?.length) ? (
+                        <ItemGroup title="Memory & Learning">
+                            {spec?.memory?.learnings?.map((learning, index) => (
+                                <Item key={`learning-${index}`} title={learning} subtitle="" />
+                            ))}
+                            {spec?.memory?.iterationGuide?.recentChanges?.length ? (
+                                <Item title="Recent Changes" subtitle={spec.memory.iterationGuide.recentChanges.join('\n')} subtitleLines={0} />
+                            ) : null}
+                            {spec?.memory?.iterationGuide?.discoveries?.length ? (
+                                <Item title="Discoveries" subtitle={spec.memory.iterationGuide.discoveries.join('\n')} subtitleLines={0} />
+                            ) : null}
+                            {spec?.memory?.iterationGuide?.improvements?.length ? (
+                                <Item title="Improvements" subtitle={spec.memory.iterationGuide.improvements.join('\n')} subtitleLines={0} />
+                            ) : null}
+                            {spec?.memory?.knowledgeBase?.length ? (
+                                <Item title="Knowledge Base" subtitle={spec.memory.knowledgeBase.join('\n')} subtitleLines={0} />
+                            ) : null}
                         </ItemGroup>
                     ) : null}
 
@@ -298,7 +451,15 @@ export default React.memo(function AgentDetailScreen() {
                     {feedback ? (
                         <ItemGroup title={t('agents.feedbackSection')}>
                             <Item title={t('agents.overallScore')} detail={String(feedback.avgScore)} detailStyle={{ color: scoreColor(feedback.avgScore), fontWeight: '700', fontSize: 17 }} />
-                            <Item title={t('agents.evaluations', { count: feedback.evaluationCount })} detail={feedback.latestAction} />
+                            <Item title={t('agents.evaluations', { count: feedback.evaluationCount })} />
+                            <Item title={t('agents.latestVerdict')} detail={formatLatestAction(feedback.latestAction)} />
+                            {feedback.sessionScore ? (
+                                <>
+                                    <Item title={t('agents.taskCompletion')} detail={`${feedback.sessionScore.taskCompletion}`} />
+                                    <Item title={t('agents.codeQuality')} detail={`${feedback.sessionScore.codeQuality}`} />
+                                    <Item title={t('agents.collaborationScore')} detail={`${feedback.sessionScore.collaboration}`} />
+                                </>
+                            ) : null}
                             <Item title="Delivery" detail={`${feedback.dimensions.delivery}`} />
                             <Item title="Integrity" detail={`${feedback.dimensions.integrity}`} />
                             <Item title="Efficiency" detail={`${feedback.dimensions.efficiency}`} />
@@ -329,6 +490,7 @@ export default React.memo(function AgentDetailScreen() {
                     <ItemGroup title={t('agents.metadata')}>
                         <Item title={t('agents.createdAt')} detail={formatDate(genome.createdAt)} />
                         {genome.publisherId ? <Item title={t('agents.publisher')} detail={genome.publisherId} /> : null}
+                        {genome.parentId ? <Item title="Parent Genome" detail={genome.parentId} /> : null}
                     </ItemGroup>
                 </ItemList>
             </ScrollView>
@@ -403,6 +565,9 @@ const styles = StyleSheet.create((theme) => ({
     },
     statText: {
         fontSize: 13,
+    },
+    statIconSpacer: {
+        marginLeft: 8,
     },
     tagsSection: {
         flexDirection: 'row',

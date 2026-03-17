@@ -13,26 +13,57 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { t } from '@/text';
-import { searchGenomes, parseTags, parseCorpsSpec, parseFeedback, type GenomeRecord } from '@/utils/genomeHub';
+import {
+    addGenomeFavorite,
+    fetchFavoriteGenomes,
+    parseCorpsSpec,
+    parseFeedback,
+    parseSpec,
+    parseTags,
+    removeGenomeFavorite,
+    searchGenomes,
+    type GenomeRecord,
+} from '@/utils/genomeHub';
+import {
+    AGENT_MARKETPLACE_CATEGORIES,
+    mapOwnedPrivateGenomesToRecords,
+    selectMarketplaceGenomes,
+    sortGenomesForDisplay,
+    type AgentMarketplaceCategory,
+    type MarketplacePageTab,
+    type MarketplaceSourceTab,
+} from '@/utils/agentMarketplace';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { trackAgentsPageViewed } from '@/track';
 import { isFavoriteGenomeId } from '@/utils/favoriteGenomes';
 import { loadFavoriteGenomeIdsFromStorage, toggleFavoriteGenomeIdInStorage } from '@/utils/favoriteGenomesStorage';
-import { fetchGenomes, type Genome as PrivateGenome } from '@/sync/apiEvolution';
+import { fetchGenomes } from '@/sync/apiEvolution';
 import { sync } from '@/sync/sync';
 import { useProfile } from '@/sync/storage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type PageTab = 'agents' | 'corps';
-type SourceTab = 'market' | 'favorites' | 'mine';
-const AGENT_CATEGORIES = ['all', 'coordination', 'support', 'execution'] as const;
-type AgentCategory = typeof AGENT_CATEGORIES[number];
-const STATUS_PRIORITY: Record<GenomeRecord['status'], number> = {
-    official: 0,
-    verified: 1,
-    draft: 2,
-};
+type PageTab = MarketplacePageTab;
+type SourceTab = MarketplaceSourceTab;
+type AgentCategory = AgentMarketplaceCategory;
+
+function upsertGenomeRecord(records: GenomeRecord[], genome: GenomeRecord): GenomeRecord[] {
+    const next = records.filter((record) => record.id !== genome.id);
+    return [...next, genome];
+}
+
+function getStorefrontRating(genome: GenomeRecord): number | null {
+    const feedback = parseFeedback(genome.feedbackData);
+    if (typeof feedback?.avgScore === 'number') {
+        return feedback.avgScore;
+    }
+
+    const spec = parseSpec(genome.spec);
+    if (typeof spec?.resume?.performanceRating === 'number') {
+        return spec.resume.performanceRating;
+    }
+    return null;
+}
 
 function getCategoryLabel(cat: AgentCategory): string {
     const map: Record<AgentCategory, string> = {
@@ -56,52 +87,6 @@ function getGenomeStatusColor(status: GenomeRecord['status']) {
     return { text: '#8A7F74', background: '#8A7F7418' };
 }
 
-function sortGenomesForDisplay(genomes: GenomeRecord[], favoriteGenomeIds: string[]): GenomeRecord[] {
-    return [...genomes].sort((left, right) => {
-        const favoriteDelta = Number(isFavoriteGenomeId(right.id, favoriteGenomeIds)) - Number(isFavoriteGenomeId(left.id, favoriteGenomeIds));
-        if (favoriteDelta !== 0) {
-            return favoriteDelta;
-        }
-
-        const statusDelta = STATUS_PRIORITY[left.status] - STATUS_PRIORITY[right.status];
-        if (statusDelta !== 0) {
-            return statusDelta;
-        }
-
-        return right.updatedAt.localeCompare(left.updatedAt);
-    });
-}
-
-function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRecord {
-    return {
-        id: genome.id,
-        namespace: genome.namespace ?? '@private',
-        name: genome.name,
-        version: genome.version ?? 1,
-        status: genome.namespace === '@official' ? 'official' : 'draft',
-        description: genome.description,
-        spec: genome.spec,
-        tags: genome.tags ?? null,
-        category: genome.category ?? null,
-        isPublic: genome.isPublic,
-        spawnCount: genome.spawnCount,
-        feedbackData: genome.feedbackData ?? null,
-        publisherId: genome.accountId,
-        createdAt: genome.createdAt,
-        updatedAt: genome.updatedAt,
-    };
-}
-
-function mergeGenomeRecords(genomes: GenomeRecord[]): GenomeRecord[] {
-    const byId = new Map<string, GenomeRecord>();
-
-    genomes.forEach((genome) => {
-        byId.set(genome.id, genome);
-    });
-
-    return Array.from(byId.values());
-}
-
 // ─── Genome Card ─────────────────────────────────────────────────────────────
 
 function GenomeCard({
@@ -117,8 +102,14 @@ function GenomeCard({
 }) {
     const { theme } = useUnistyles();
     const tags = parseTags(genome.tags);
+    const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
+    const feedback = React.useMemo(() => parseFeedback(genome.feedbackData), [genome.feedbackData]);
+    const specialties = spec?.resume?.specialties ?? [];
+    const runtimeType = spec?.runtimeType ?? null;
     const namespace = genome.namespace ?? '@public';
     const status = getGenomeStatusColor(genome.status);
+    const storefrontRating = getStorefrontRating(genome);
+    const crowdReviewCount = feedback?.evaluationCount ?? spec?.resume?.totalSessions ?? null;
 
     return (
         <Pressable onPress={onPress} style={[stylesheet.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
@@ -138,6 +129,13 @@ function GenomeCard({
                         <View style={[stylesheet.categoryBadge, { backgroundColor: theme.colors.surfaceHighest }]}>
                             <Text style={[stylesheet.categoryText, { color: theme.colors.textSecondary }]}>
                                 {genome.category}
+                            </Text>
+                        </View>
+                    ) : null}
+                    {runtimeType ? (
+                        <View style={[stylesheet.categoryBadge, { backgroundColor: theme.colors.surfaceHighest }]}>
+                            <Text style={[stylesheet.categoryText, { color: theme.colors.textSecondary }]}>
+                                {runtimeType}
                             </Text>
                         </View>
                     ) : null}
@@ -176,25 +174,52 @@ function GenomeCard({
                 </View>
             ) : null}
 
+            {specialties.length > 0 ? (
+                <View style={stylesheet.tagRow}>
+                    {specialties.slice(0, 2).map((specialty) => (
+                        <View key={specialty} style={[stylesheet.specialtyTag, { backgroundColor: theme.colors.surfaceHighest }]}>
+                            <Text style={[stylesheet.tagText, { color: theme.colors.textSecondary }]}>{specialty}</Text>
+                        </View>
+                    ))}
+                </View>
+            ) : null}
+
             <View style={[stylesheet.cardFooter, { borderTopColor: theme.colors.divider }]}>
                 <Ionicons name="flash-outline" size={13} color={theme.colors.textSecondary} />
                 <Text style={[stylesheet.spawnText, { color: theme.colors.textSecondary }]}>
                     {t('agents.spawnCount', { count: genome.spawnCount })}
                 </Text>
-                {(() => {
-                    const fb = parseFeedback(genome.feedbackData);
-                    if (!fb || fb.evaluationCount < 1) return null;
-                    const score = fb.avgScore;
-                    const color = score >= 85 ? '#22c55e' : score >= 70 ? '#f59e0b' : '#ef4444';
-                    return (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 8 }}>
-                            <Ionicons name="star" size={11} color={color} />
-                            <Text style={{ fontSize: 11, color, fontWeight: '600' }}>
-                                {score} ({fb.evaluationCount})
-                            </Text>
-                        </View>
-                    );
-                })()}
+                <View style={stylesheet.metricGroup}>
+                    <Ionicons name="star-outline" size={12} color={theme.colors.textSecondary} />
+                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
+                        {genome.starCount}
+                    </Text>
+                </View>
+                <View style={stylesheet.metricGroup}>
+                    <Ionicons name="download-outline" size={12} color={theme.colors.textSecondary} />
+                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
+                        {genome.downloadCount}
+                    </Text>
+                </View>
+                {storefrontRating != null ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 8 }}>
+                        <Ionicons
+                            name="people-outline"
+                            size={11}
+                            color={storefrontRating >= 85 ? '#22c55e' : storefrontRating >= 70 ? '#f59e0b' : '#ef4444'}
+                        />
+                        <Text
+                            style={{
+                                fontSize: 11,
+                                color: storefrontRating >= 85 ? '#22c55e' : storefrontRating >= 70 ? '#f59e0b' : '#ef4444',
+                                fontWeight: '600'
+                            }}
+                        >
+                            {t('agents.crowd')} {Math.round(storefrontRating)}
+                            {crowdReviewCount ? ` · ${crowdReviewCount}` : ''}
+                        </Text>
+                    </View>
+                ) : null}
             </View>
         </Pressable>
     );
@@ -216,6 +241,8 @@ function CorpsCard({
     const { theme } = useUnistyles();
     const namespace = genome.namespace ?? '@public';
     const corps = parseCorpsSpec(genome.spec);
+    const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
+    const runtimeType = spec?.runtimeType ?? null;
     const memberCount = corps?.members?.length ?? 0;
     const tags = parseTags(genome.tags);
     const status = getGenomeStatusColor(genome.status);
@@ -239,6 +266,13 @@ function CorpsCard({
                             {t('agents.corpsTab')}
                         </Text>
                     </View>
+                    {runtimeType ? (
+                        <View style={[stylesheet.categoryBadge, { backgroundColor: theme.colors.surfaceHighest }]}>
+                            <Text style={[stylesheet.categoryText, { color: theme.colors.textSecondary }]}>
+                                {runtimeType}
+                            </Text>
+                        </View>
+                    ) : null}
                 </View>
                 <View style={stylesheet.headerRight}>
                     <Text style={[stylesheet.versionText, { color: theme.colors.textSecondary }]}>
@@ -295,6 +329,18 @@ function CorpsCard({
                 <Text style={[stylesheet.spawnText, { color: theme.colors.textSecondary }]}>
                     {t('agents.spawnCount', { count: genome.spawnCount })}
                 </Text>
+                <View style={stylesheet.metricGroup}>
+                    <Ionicons name="star-outline" size={12} color={theme.colors.textSecondary} />
+                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
+                        {genome.starCount}
+                    </Text>
+                </View>
+                <View style={stylesheet.metricGroup}>
+                    <Ionicons name="download-outline" size={12} color={theme.colors.textSecondary} />
+                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
+                        {genome.downloadCount}
+                    </Text>
+                </View>
             </View>
         </Pressable>
     );
@@ -309,13 +355,15 @@ export default React.memo(function AgentsScreen() {
     const { theme } = useUnistyles();
     const router = useRouter();
     const profile = useProfile();
+    const actorId = profile.id || null;
     const [tab, setTab] = React.useState<PageTab>('agents');
     const [sourceTab, setSourceTab] = React.useState<SourceTab>('market');
     const [query, setQuery] = React.useState('');
     const [category, setCategory] = React.useState<AgentCategory>('all');
-    const [genomes, setGenomes] = React.useState<GenomeRecord[]>([]);
-    const [favoriteGenomeIds, setFavoriteGenomeIds] = React.useState<string[]>(() => loadFavoriteGenomeIdsFromStorage());
-    const [total, setTotal] = React.useState(0);
+    const [publicGenomes, setPublicGenomes] = React.useState<GenomeRecord[]>([]);
+    const [privateGenomes, setPrivateGenomes] = React.useState<GenomeRecord[]>([]);
+    const [serverFavoriteGenomes, setServerFavoriteGenomes] = React.useState<GenomeRecord[]>([]);
+    const [localFavoriteGenomeIds, setLocalFavoriteGenomeIds] = React.useState<string[]>(() => loadFavoriteGenomeIdsFromStorage());
     const [loaded, setLoaded] = React.useState(false);
     const debouncedQuery = useDebounce(query, 300);
 
@@ -327,52 +375,64 @@ export default React.memo(function AgentsScreen() {
         const credentials = sync.getCredentials();
         const isCorps = tab === 'corps';
 
-        const publicPromise = searchGenomes({
-            q: debouncedQuery || undefined,
-            category: isCorps ? 'corps' : (category === 'all' ? undefined : category),
-            limit: 50,
-        }).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }));
+        const publicPromise = sourceTab === 'market' || (!actorId && sourceTab === 'favorites')
+            ? searchGenomes({
+                q: debouncedQuery || undefined,
+                category: isCorps ? 'corps' : (category === 'all' ? undefined : category),
+                limit: 50,
+            }).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }))
+            : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
 
-        const privatePromise = credentials
-            ? fetchGenomes(credentials, { limit: 100 }).catch(() => ({ genomes: [] as PrivateGenome[], total: 0 }))
-            : Promise.resolve({ genomes: [] as PrivateGenome[], total: 0 });
+        const favoritePublicPromise = actorId
+            ? fetchFavoriteGenomes(actorId).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }))
+            : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
 
-        const [publicResult, privateResult] = await Promise.all([publicPromise, privatePromise]);
+        const privatePromise = credentials && sourceTab !== 'market'
+            ? fetchGenomes(credentials, { limit: 100 }).catch(() => ({ genomes: [], total: 0 }))
+            : Promise.resolve({ genomes: [], total: 0 });
 
-        const filteredPublic = isCorps
-            ? publicResult.genomes
-            : publicResult.genomes.filter((g) => g.category !== 'corps');
+        const [publicResult, favoritePublicResult, privateResult] = await Promise.all([
+            publicPromise,
+            favoritePublicPromise,
+            privatePromise,
+        ]);
 
-        const privateGenomes = privateResult.genomes
-            .filter((genome) => {
-                const mine = profile.id ? genome.accountId === profile.id : true;
-                const isCorpsGenome = (genome.category ?? '') === 'corps';
-                return mine && (isCorps ? isCorpsGenome : !isCorpsGenome);
-            })
-            .map(toGenomeRecordFromPrivateGenome);
-
-        let nextGenomes: GenomeRecord[];
-        if (sourceTab === 'mine') {
-            nextGenomes = privateGenomes;
-        } else if (sourceTab === 'favorites') {
-            nextGenomes = mergeGenomeRecords([...filteredPublic, ...privateGenomes])
-                .filter((genome) => isFavoriteGenomeId(genome.id, favoriteGenomeIds));
-        } else {
-            nextGenomes = filteredPublic;
-        }
-
-        setGenomes(nextGenomes);
-        setTotal(nextGenomes.length);
+        setServerFavoriteGenomes(favoritePublicResult.genomes);
+        setPublicGenomes(sourceTab === 'favorites' && actorId ? favoritePublicResult.genomes : publicResult.genomes);
+        setPrivateGenomes(mapOwnedPrivateGenomesToRecords(privateResult.genomes, profile.id));
         setLoaded(true);
-    }, [category, debouncedQuery, favoriteGenomeIds, profile.id, sourceTab, tab]);
+    }, [actorId, category, debouncedQuery, profile.id, sourceTab, tab]);
 
     const [loading, load] = useHappyAction(doLoad);
 
     React.useEffect(() => {
         setLoaded(false);
-        setGenomes([]);
+        setPublicGenomes([]);
+        setPrivateGenomes([]);
+        if (!actorId) {
+            setServerFavoriteGenomes([]);
+        }
         load();
-    }, [load]);
+    }, [actorId, load]);
+
+    const privateGenomeIdSet = React.useMemo(
+        () => new Set(privateGenomes.map((genome) => genome.id)),
+        [privateGenomes]
+    );
+    const favoriteGenomeIds = React.useMemo(() => {
+        const localIds = actorId
+            ? localFavoriteGenomeIds.filter((id) => privateGenomeIdSet.has(id))
+            : localFavoriteGenomeIds;
+
+        return Array.from(new Set([
+            ...serverFavoriteGenomes.map((genome) => genome.id),
+            ...localIds,
+        ]));
+    }, [actorId, localFavoriteGenomeIds, privateGenomeIdSet, serverFavoriteGenomes]);
+    const genomeById = React.useMemo(
+        () => new Map([...publicGenomes, ...privateGenomes, ...serverFavoriteGenomes].map((genome) => [genome.id, genome])),
+        [privateGenomes, publicGenomes, serverFavoriteGenomes]
+    );
 
     // Reset category when switching tabs
     const handleTabChange = React.useCallback((newTab: PageTab) => {
@@ -386,14 +446,58 @@ export default React.memo(function AgentsScreen() {
         setQuery('');
     }, []);
 
-    const handleToggleFavorite = React.useCallback((genomeId: string) => {
-        setFavoriteGenomeIds(toggleFavoriteGenomeIdInStorage(genomeId));
-    }, []);
+    const handleToggleFavorite = React.useCallback(async (genomeId: string) => {
+        const genome = genomeById.get(genomeId);
+        if (!genome) {
+            setLocalFavoriteGenomeIds(toggleFavoriteGenomeIdInStorage(genomeId));
+            return;
+        }
+
+        if (!genome.isPublic || !actorId) {
+            setLocalFavoriteGenomeIds(toggleFavoriteGenomeIdInStorage(genomeId));
+            return;
+        }
+
+        const isFavorited = serverFavoriteGenomes.some((item) => item.id === genomeId);
+
+        try {
+            const response = isFavorited
+                ? await removeGenomeFavorite(genomeId, actorId)
+                : await addGenomeFavorite(genomeId, actorId);
+
+            setServerFavoriteGenomes((current) => {
+                if (isFavorited) {
+                    return current.filter((item) => item.id !== genomeId);
+                }
+
+                return upsertGenomeRecord(current, response.genome);
+            });
+
+            setPublicGenomes((current) => {
+                const next = current.map((item) => item.id === genomeId ? response.genome : item);
+                if (sourceTab === 'favorites' && isFavorited) {
+                    return next.filter((item) => item.id !== genomeId);
+                }
+                return next;
+            });
+        } catch {
+            setLocalFavoriteGenomeIds(toggleFavoriteGenomeIdInStorage(genomeId));
+        }
+    }, [actorId, genomeById, serverFavoriteGenomes, sourceTab]);
 
     const isCorpsTab = tab === 'corps';
+    const selectedGenomes = React.useMemo(() => selectMarketplaceGenomes({
+        sourceTab,
+        publicGenomes,
+        privateGenomes,
+        favoriteGenomeIds,
+        tab,
+        category,
+        query: debouncedQuery,
+    }), [category, debouncedQuery, favoriteGenomeIds, privateGenomes, publicGenomes, sourceTab, tab]);
     const displayedGenomes = React.useMemo(
-        () => sortGenomesForDisplay(genomes, favoriteGenomeIds),
-        [favoriteGenomeIds, genomes]
+        () => sortGenomesForDisplay(selectedGenomes, favoriteGenomeIds),
+        [favoriteGenomeIds, selectedGenomes]
     );
     const favoriteGenomes = React.useMemo(
         () => displayedGenomes.filter((genome) => isFavoriteGenomeId(genome.id, favoriteGenomeIds)).slice(0, 8),
@@ -496,7 +600,7 @@ export default React.memo(function AgentsScreen() {
                         style={stylesheet.filterScroll}
                         contentContainerStyle={stylesheet.filterContent}
                     >
-                        {AGENT_CATEGORIES.map(cat => {
+                        {AGENT_MARKETPLACE_CATEGORIES.map(cat => {
                             const active = cat === category;
                             return (
                                 <Pressable
@@ -574,7 +678,7 @@ export default React.memo(function AgentsScreen() {
                                 genome={g}
                                 isFavorited={isFavoriteGenomeId(g.id, favoriteGenomeIds)}
                                 onToggleFavorite={handleToggleFavorite}
-                                onPress={() => router.push(`/agents/${g.id}`)}
+                                onPress={() => router.push({ pathname: '/agents/[id]', params: { id: g.id } } as any)}
                             />
                         ))
                         : displayedGenomes.map(g => (
@@ -583,7 +687,7 @@ export default React.memo(function AgentsScreen() {
                                 genome={g}
                                 isFavorited={isFavoriteGenomeId(g.id, favoriteGenomeIds)}
                                 onToggleFavorite={handleToggleFavorite}
-                                onPress={() => router.push(`/agents/${g.id}`)}
+                                onPress={() => router.push({ pathname: '/agents/[id]', params: { id: g.id } } as any)}
                             />
                         ))
                     }
@@ -793,6 +897,11 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 7,
         paddingVertical: 2,
     },
+    specialtyTag: {
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
     tagText: { fontSize: 11 },
     cardFooter: {
         flexDirection: 'row',
@@ -803,6 +912,15 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderTopWidth: StyleSheet.hairlineWidth,
     },
     spawnText: { fontSize: 12 },
+    metricGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        marginLeft: 6,
+    },
+    metricText: {
+        fontSize: 11,
+    },
     // Corps-specific
     membersRow: {
         flexDirection: 'row',
