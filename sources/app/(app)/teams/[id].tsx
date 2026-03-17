@@ -888,6 +888,22 @@ export default function TeamDashboardScreen() {
         return ensureColumns(parsedArtifactBoard.board);
     }, [artifact?.body, desktopBoard, desktopBridge, parsedArtifactBoard.board, parsedArtifactBoard.parseError]);
 
+    const sessionLookup = React.useMemo(() => {
+        const map = new Map<string, (typeof allSessions)[number]>();
+        for (const session of allSessions) {
+            map.set(session.id, session);
+        }
+        return map;
+    }, [allSessions]);
+
+    const machineLookup = React.useMemo(() => {
+        const map = new Map<string, (typeof allMachines)[number]>();
+        for (const machine of allMachines) {
+            map.set(machine.id, machine);
+        }
+        return map;
+    }, [allMachines]);
+
     const handleRecoverTeam = React.useCallback(async () => {
         setShowMenu(false);
 
@@ -925,8 +941,22 @@ export default function TeamDashboardScreen() {
             for (const member of recoverCandidates) {
                 const label = member.displayName || member.roleId || member.sessionId.slice(0, 8);
                 const session = sessionLookup.get(member.sessionId);
+                const memberId = member.memberId || randomUUID();
+                const sessionTag = member.sessionTag || buildTeamMemberSessionTag(teamId, memberId);
+                const runtimeType = member.runtimeType === 'codex' ? 'codex' : 'claude';
+                const sessionName = member.displayName || session?.metadata?.name || label;
 
                 if (session?.active) {
+                    if (!member.memberId || !member.sessionTag) {
+                        await sync.addTeamMember(teamId, member.sessionId, member.roleId, sessionName, {
+                            memberId,
+                            sessionTag,
+                            specId: member.specId,
+                            parentSessionId: member.parentSessionId,
+                            executionPlane: member.executionPlane,
+                            runtimeType,
+                        });
+                    }
                     skipped += 1;
                     continue;
                 }
@@ -948,42 +978,42 @@ export default function TeamDashboardScreen() {
                     continue;
                 }
 
-                const memberId = member.memberId || randomUUID();
-                const sessionTag = member.sessionTag || buildTeamMemberSessionTag(teamId, memberId);
-                const runtimeType = member.runtimeType === 'codex' ? 'codex' : 'claude';
-                const sessionName = member.displayName || session?.metadata?.name || label;
+                try {
+                    const recoveredSessionId = await sync.spawnSessionOnMachine(machineId, {
+                        sessionId: member.sessionId,
+                        sessionTag,
+                        directory,
+                        agent: runtimeType,
+                        teamId,
+                        role: member.roleId,
+                        sessionName,
+                        sessionPath: directory,
+                        ...(member.specId ? { specId: member.specId } : {}),
+                        ...(member.parentSessionId ? { parentSessionId: member.parentSessionId } : {}),
+                        ...(member.executionPlane ? { executionPlane: member.executionPlane as 'mainline' | 'bypass' } : {}),
+                        env: {
+                            AHA_TEAM_MEMBER_ID: memberId,
+                        },
+                    });
 
-                const recoveredSessionId = await sync.spawnSessionOnMachine(machineId, {
-                    sessionId: member.sessionId,
-                    sessionTag,
-                    directory,
-                    agent: runtimeType,
-                    teamId,
-                    role: member.roleId,
-                    sessionName,
-                    sessionPath: directory,
-                    ...(member.specId ? { specId: member.specId } : {}),
-                    ...(member.parentSessionId ? { parentSessionId: member.parentSessionId } : {}),
-                    ...(member.executionPlane ? { executionPlane: member.executionPlane as 'mainline' | 'bypass' } : {}),
-                    env: {
-                        AHA_TEAM_MEMBER_ID: memberId,
-                    },
-                });
+                    if (!recoveredSessionId) {
+                        issues.push(`${label}: spawn failed`);
+                        continue;
+                    }
 
-                if (!recoveredSessionId) {
-                    issues.push(`${label}: spawn failed`);
-                    continue;
+                    await sync.addTeamMember(teamId, recoveredSessionId, member.roleId, sessionName, {
+                        memberId,
+                        sessionTag,
+                        specId: member.specId,
+                        parentSessionId: member.parentSessionId,
+                        executionPlane: member.executionPlane,
+                        runtimeType,
+                    });
+                    recovered += 1;
+                } catch (error) {
+                    console.error(`Failed to recover team member ${label}:`, error);
+                    issues.push(`${label}: ${error instanceof Error ? error.message : 'recover failed'}`);
                 }
-
-                await sync.addTeamMember(teamId, recoveredSessionId, member.roleId, sessionName, {
-                    memberId,
-                    sessionTag,
-                    specId: member.specId,
-                    parentSessionId: member.parentSessionId,
-                    executionPlane: member.executionPlane,
-                    runtimeType,
-                });
-                recovered += 1;
             }
 
             const lines = [
@@ -1274,22 +1304,6 @@ export default function TeamDashboardScreen() {
             // 即使同步失败，任务状态更新仍然会进行（在 updateTaskWithSync 中）
         }
     };
-
-    const sessionLookup = React.useMemo(() => {
-        const map = new Map<string, (typeof allSessions)[number]>();
-        for (const session of allSessions) {
-            map.set(session.id, session);
-        }
-        return map;
-    }, [allSessions]);
-
-    const machineLookup = React.useMemo(() => {
-        const map = new Map<string, (typeof allMachines)[number]>();
-        for (const machine of allMachines) {
-            map.set(machine.id, machine);
-        }
-        return map;
-    }, [allMachines]);
 
     const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
     const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
