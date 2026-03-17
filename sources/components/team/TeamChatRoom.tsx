@@ -4,7 +4,13 @@ import { Text } from '@/components/ui/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TeamMessage, SendTeamMessageRequest } from '@/sync/teamMessageTypes';
+import {
+    TeamMessage,
+    SendTeamMessageRequest,
+    canonicalizeTeamMentions,
+    extractMentionTokens,
+    type TeamMentionCandidate,
+} from '@/sync/teamMessageTypes';
 import { sync } from '@/sync/sync';
 import { MarkdownView } from '../markdown/MarkdownView';
 import { useRouter } from 'expo-router';
@@ -27,6 +33,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Modal } from '@/modal';
 import { pushSessionRoute } from '@/utils/returnNavigation';
+import { buildMentionChipAccessibilityLabel, buildMentionChipLabel } from '@/utils/teamMentionSummary';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
@@ -220,6 +227,22 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 11,
         color: theme.colors.textSecondary,
         marginTop: 1,
+    },
+    mentionChip: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        marginBottom: 8,
+        maxWidth: '88%',
+    },
+    mentionChipText: {
+        fontSize: 11,
+        fontWeight: '700',
     },
     systemMessage: {
         alignSelf: 'center',
@@ -604,6 +627,7 @@ interface TeamChatMember {
         metadata?: {
             role?: string;
             name?: string;
+            machineId?: string;
         } | null;
     };
     role?: { title: string };
@@ -766,6 +790,12 @@ const MessageBubble = ({
         const uniqueSessionIds = [...new Set(message.mentions ?? [])];
         return uniqueSessionIds.map((sessionId) => resolveAgentIdentity(sessionId));
     }, [message.mentions, resolveAgentIdentity]);
+    const mentionChipLabel = React.useMemo(() => {
+        return buildMentionChipLabel(mentionedAgents);
+    }, [mentionedAgents]);
+    const mentionChipAccessibilityLabel = React.useMemo(() => {
+        return buildMentionChipAccessibilityLabel(mentionedAgents);
+    }, [mentionedAgents]);
     const originAgent = React.useMemo(() => {
         if (!message.fromSessionId) {
             return null;
@@ -1014,6 +1044,40 @@ const MessageBubble = ({
         );
     };
 
+    const renderMentionChip = () => {
+        if (!mentionChipLabel) {
+            return null;
+        }
+
+        const chipBackground = isMyMessage ? 'rgba(255,255,255,0.16)' : '#EEF4F7';
+        const chipBorder = isMyMessage ? 'rgba(255,255,255,0.18)' : '#D9E4EA';
+        const chipTextColor = isMyMessage ? '#FFFFFF' : '#486276';
+
+        return (
+            <View
+                style={[
+                    styles.mentionChip,
+                    {
+                        backgroundColor: chipBackground,
+                        borderColor: chipBorder,
+                    },
+                ]}
+                accessibilityLabel={mentionChipAccessibilityLabel || undefined}
+            >
+                <Ionicons name="at-outline" size={12} color={chipTextColor} />
+                <Text
+                    style={[
+                        styles.mentionChipText,
+                        { color: chipTextColor },
+                    ]}
+                    numberOfLines={1}
+                >
+                    {mentionChipLabel}
+                </Text>
+            </View>
+        );
+    };
+
     return (
         <View style={{ marginBottom: 2 }}>
             {!isMyMessage && !isEdzlf && (
@@ -1049,6 +1113,7 @@ const MessageBubble = ({
                     {renderDesktopHeader()}
                     {isEdzlf && !showCardBody && !isMyMessage ? (
                         <View>
+                            {renderMentionChip()}
                             <Pressable
                                 onPress={handleBubblePress}
                                 onLongPress={handleCopyMessage}
@@ -1121,6 +1186,7 @@ const MessageBubble = ({
                                 />
                             ) : null}
                             <View style={isEdzlf && !isMyMessage ? { paddingHorizontal: 16, paddingVertical: 14, gap: 6 } : undefined}>
+                                {renderMentionChip()}
                                 {renderContent()}
 
                                 {shouldShowExpand && (
@@ -1545,6 +1611,23 @@ export default function TeamChatRoom({
         }, {});
     }, [members]);
 
+    const mentionCandidates = React.useMemo<TeamMentionCandidate[]>(() => {
+        return members.map((entry) => {
+            const roleId = entry.member.roleId || entry.session?.metadata?.role;
+            const displayName = entry.member.displayName || entry.session?.metadata?.name;
+
+            return {
+                sessionId: entry.member.sessionId,
+                displayName,
+                roleId,
+                aliases: [
+                    displayName,
+                    entry.role?.title,
+                ].filter((value): value is string => !!value),
+            };
+        });
+    }, [members]);
+
     const resolveAgentIdentity = React.useCallback((
         sessionId: string,
         fallbackRole?: string,
@@ -1867,7 +1950,9 @@ export default function TeamChatRoom({
                             return prev;
                         }
                         messageIdsRef.current.add(message.id);
-                        return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
+                        const next = [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
+                        // Cap React state at 500 to prevent unbounded heap growth
+                        return next.length > 500 ? next.slice(-500) : next;
                     });
                     scrollToEnd(true);
                 });
@@ -2084,15 +2169,42 @@ export default function TeamChatRoom({
             }
 
             // 4. 普通聊天消息
-            const mentions = extractMentions(content);
+            const rawMentionTokens = extractMentionTokens(content);
+            const mentions = canonicalizeTeamMentions(rawMentionTokens, mentionCandidates);
+            const requestedHelp = rawMentionTokens.some((token) => token.trim().toLowerCase() === 'help');
+            const helpTargetSessionId = mentions[0];
+            if (requestedHelp) {
+                const helpMachine = selectHelpMachine(helpTargetSessionId);
+                if (helpMachine) {
+                    sync.requestHelpOnMachine(helpMachine.machineId, {
+                        teamId,
+                        sessionId: helpMachine.targetSessionId,
+                        type: 'user_mention',
+                        description: content.trim(),
+                        severity: 'medium',
+                    }).catch((error) => {
+                        console.warn('Failed to trigger @help request:', error);
+                    });
+                } else {
+                    console.warn('Ignoring @help request because no active machine could be resolved for the team');
+                }
+            }
             const taskIds = taskChatSync ? extractTaskIds(content) : [];
             const messageId = randomUUID();
-            const messageMetadata: TeamMessage['metadata'] = taskIds.length > 0
-                ? {
-                    taskId: taskIds[0],
-                    action: 'task_referenced'
-                }
-                : undefined;
+            const messageMetadata: TeamMessage['metadata'] = {
+                ...(taskIds.length > 0
+                    ? {
+                        taskId: taskIds[0],
+                        action: 'task_referenced'
+                    }
+                    : {}),
+                ...(requestedHelp
+                    ? {
+                        helpRequested: true,
+                        helpTrigger: '@help',
+                    }
+                    : {}),
+            };
 
             if (taskIds.length > 0 && taskChatSync) {
                 const messageTimestamp = Date.now();
@@ -2199,17 +2311,41 @@ export default function TeamChatRoom({
     };
 
     const extractMentions = (text: string): string[] => {
-        const mentionRegex = /@([a-zA-Z0-9-]+)/g;
-        const matches = [...text.matchAll(mentionRegex)];
-        return matches.map(m => {
-            const name = m[1].toLowerCase();
-            const member = members.find(mem =>
-                (mem.member.displayName && mem.member.displayName.toLowerCase() === name) ||
-                (mem.member.roleId && mem.member.roleId.toLowerCase() === name)
-            );
-            return member ? member.member.sessionId : null;
-        }).filter(id => id !== null) as string[];
+        return canonicalizeTeamMentions(extractMentionTokens(text), mentionCandidates);
     };
+
+    const selectHelpMachine = React.useCallback((targetSessionId?: string): { machineId: string; targetSessionId?: string } | null => {
+        const targetMember = targetSessionId
+            ? members.find((entry) => entry.member.sessionId === targetSessionId)
+            : null;
+        const targetMachineId = targetMember?.session?.metadata?.machineId;
+        if (targetMachineId) {
+            return { machineId: targetMachineId, targetSessionId };
+        }
+
+        const activeMainlineMember = members.find((entry) => {
+            const machineId = entry.session?.metadata?.machineId;
+            const roleId = entry.member.roleId || entry.session?.metadata?.role;
+            return !!machineId && !!entry.session?.active && roleId !== 'supervisor' && roleId !== 'help-agent';
+        });
+
+        if (activeMainlineMember?.session?.metadata?.machineId) {
+            return {
+                machineId: activeMainlineMember.session.metadata.machineId,
+                targetSessionId: targetSessionId || activeMainlineMember.member.sessionId,
+            };
+        }
+
+        const fallbackMember = members.find((entry) => !!entry.session?.metadata?.machineId);
+        if (fallbackMember?.session?.metadata?.machineId) {
+            return {
+                machineId: fallbackMember.session.metadata.machineId,
+                targetSessionId: targetSessionId || fallbackMember.member.sessionId,
+            };
+        }
+
+        return null;
+    }, [members]);
 
     if (isLoading) {
         return (

@@ -22,7 +22,7 @@ import { loadPendingSettings, savePendingSettings } from './persistence';
 import { initializeTracking, tracking } from '@/track';
 import { parseToken } from '@/utils/parseToken';
 import { RevenueCat, LogLevel, PaywallResult } from './revenueCat';
-import { trackPaywallPresented, trackPaywallPurchased, trackPaywallCancelled, trackPaywallRestored, trackPaywallError, trackSessionTokenUsage } from '@/track';
+import { trackPaywallButtonClicked, trackPaywallPresented, trackPaywallPurchased, trackPaywallCancelled, trackPaywallRestored, trackPaywallError, trackSessionTokenUsage } from '@/track';
 import { getServerUrl } from './serverConfig';
 import { config } from '@/config';
 import { log } from '@/log';
@@ -44,6 +44,7 @@ import { DEFAULT_KANBAN_BOARD } from '@/sync/kanbanTypes';
 import type { KanbanBoard, KanbanTeamMember } from '@/sync/kanbanTypes';
 import { canonicalizeTeamMentions, type TeamMentionCandidate } from './teamMessageTypes';
 import { getNextPersistedMessageCount } from './persistedMessageCount';
+import { logCommerceEvent } from '@/observability/commerceEvents';
 
 const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
     if (!body) {
@@ -453,35 +454,93 @@ class Sync {
         await this.profileSync.invalidateAndAwait();
     }
 
-    purchaseProduct = async (productId: string): Promise<{ success: boolean; error?: string }> => {
+    purchaseProduct = async (productId: string, surface: string = 'developer-purchases'): Promise<{ success: boolean; error?: string }> => {
+        const logPurchaseEvent = (event: Parameters<typeof logCommerceEvent>[0]) => {
+            logCommerceEvent(event, { token: this.credentials?.token });
+        };
+
         try {
             // Check if RevenueCat is initialized
             if (!this.revenueCatInitialized) {
+                logPurchaseEvent({
+                    name: 'purchase_failed',
+                    flow: 'direct-purchase',
+                    surface,
+                    properties: {
+                        product_id: productId,
+                        reason: 'revenuecat_not_initialized',
+                    },
+                });
                 return { success: false, error: 'RevenueCat not initialized' };
             }
 
             // Fetch the product
             const products = await RevenueCat.getProducts([productId]);
             if (products.length === 0) {
+                logPurchaseEvent({
+                    name: 'purchase_failed',
+                    flow: 'direct-purchase',
+                    surface,
+                    properties: {
+                        product_id: productId,
+                        reason: 'product_not_found',
+                    },
+                });
                 return { success: false, error: `Product '${productId}' not found` };
             }
 
             // Purchase the product
             const product = products[0];
+            logPurchaseEvent({
+                name: 'purchase_attempted',
+                flow: 'direct-purchase',
+                surface,
+                properties: {
+                    product_id: product.identifier,
+                },
+            });
             const { customerInfo } = await RevenueCat.purchaseStoreProduct(product);
 
             // Update local purchases data
             storage.getState().applyPurchases(customerInfo);
+            logPurchaseEvent({
+                name: 'purchase_completed',
+                flow: 'direct-purchase',
+                surface,
+                properties: {
+                    product_id: product.identifier,
+                    entitlement_count: Object.keys(customerInfo.entitlements?.all || {}).length,
+                },
+            });
 
             return { success: true };
         } catch (error: any) {
             // Check if user cancelled
             if (error.userCancelled) {
+                logPurchaseEvent({
+                    name: 'purchase_failed',
+                    flow: 'direct-purchase',
+                    surface,
+                    properties: {
+                        product_id: productId,
+                        reason: 'purchase_cancelled',
+                    },
+                });
                 return { success: false, error: 'Purchase cancelled' };
             }
 
             // Return the error message
-            return { success: false, error: error.message || 'Purchase failed' };
+            const errorMessage = error.message || 'Purchase failed';
+            logPurchaseEvent({
+                name: 'purchase_failed',
+                flow: 'direct-purchase',
+                surface,
+                properties: {
+                    product_id: productId,
+                    reason: errorMessage,
+                },
+            });
+            return { success: false, error: errorMessage };
         }
     }
 
@@ -508,17 +567,41 @@ class Sync {
         }
     }
 
-    presentPaywall = async (): Promise<{ success: boolean; purchased?: boolean; error?: string }> => {
+    presentPaywall = async (surface: string = 'unknown'): Promise<{ success: boolean; purchased?: boolean; error?: string }> => {
+        const logPaywallEvent = (event: Parameters<typeof logCommerceEvent>[0]) => {
+            logCommerceEvent(event, { token: this.credentials?.token });
+        };
+
         try {
+            trackPaywallButtonClicked();
+            logPaywallEvent({
+                name: 'paywall_entry_clicked',
+                flow: 'paywall',
+                surface,
+            });
+
             // Check if RevenueCat is initialized
             if (!this.revenueCatInitialized) {
                 const error = 'RevenueCat not initialized';
                 trackPaywallError(error);
+                logPaywallEvent({
+                    name: 'paywall_error',
+                    flow: 'paywall',
+                    surface,
+                    properties: {
+                        reason: 'revenuecat_not_initialized',
+                    },
+                });
                 return { success: false, error };
             }
 
             // Track paywall presentation
             trackPaywallPresented();
+            logPaywallEvent({
+                name: 'paywall_presented',
+                flow: 'paywall',
+                surface,
+            });
 
             // Present the paywall
             const result = await RevenueCat.presentPaywall();
@@ -527,29 +610,77 @@ class Sync {
             switch (result) {
                 case PaywallResult.PURCHASED:
                     trackPaywallPurchased();
+                    logPaywallEvent({
+                        name: 'paywall_result',
+                        flow: 'paywall',
+                        surface,
+                        properties: {
+                            result: 'purchased',
+                        },
+                    });
                     // Refresh customer info after purchase
                     await this.syncPurchases();
                     return { success: true, purchased: true };
                 case PaywallResult.RESTORED:
                     trackPaywallRestored();
+                    logPaywallEvent({
+                        name: 'paywall_result',
+                        flow: 'paywall',
+                        surface,
+                        properties: {
+                            result: 'restored',
+                        },
+                    });
                     // Refresh customer info after restore
                     await this.syncPurchases();
                     return { success: true, purchased: true };
                 case PaywallResult.CANCELLED:
                     trackPaywallCancelled();
+                    logPaywallEvent({
+                        name: 'paywall_result',
+                        flow: 'paywall',
+                        surface,
+                        properties: {
+                            result: 'cancelled',
+                        },
+                    });
                     return { success: true, purchased: false };
                 case PaywallResult.NOT_PRESENTED:
                     // Don't track error for NOT_PRESENTED as it's a platform limitation
+                    logPaywallEvent({
+                        name: 'paywall_result',
+                        flow: 'paywall',
+                        surface,
+                        properties: {
+                            result: 'not_presented',
+                        },
+                    });
                     return { success: false, error: 'Paywall not available on this platform' };
                 case PaywallResult.ERROR:
                 default:
                     const errorMsg = 'Failed to present paywall';
                     trackPaywallError(errorMsg);
+                    logPaywallEvent({
+                        name: 'paywall_error',
+                        flow: 'paywall',
+                        surface,
+                        properties: {
+                            reason: errorMsg,
+                        },
+                    });
                     return { success: false, error: errorMsg };
             }
         } catch (error: any) {
             const errorMessage = error.message || 'Failed to present paywall';
             trackPaywallError(errorMessage);
+            logPaywallEvent({
+                name: 'paywall_error',
+                flow: 'paywall',
+                surface,
+                properties: {
+                    reason: errorMessage,
+                },
+            });
             return { success: false, error: errorMessage };
         }
     }
@@ -2130,6 +2261,7 @@ class Sync {
         agent: 'claude' | 'codex';
         token?: string;
         sessionTag?: string;
+        specId?: string;
         teamId?: string;
         role?: string;
         sessionName?: string;
@@ -2188,6 +2320,28 @@ class Sync {
         } catch (error) {
             console.error(`Failed to spawn session on machine ${machineId}:`, error);
             throw error;
+        }
+    }
+
+    public async requestHelpOnMachine(machineId: string, params: {
+        teamId: string;
+        sessionId?: string;
+        type: string;
+        description: string;
+        severity: 'low' | 'medium' | 'high' | 'critical';
+    }): Promise<{ success: boolean; helpAgentSessionId?: string; error?: string }> {
+        try {
+            return await apiSocket.machineRPC<{ success: boolean; helpAgentSessionId?: string; error?: string }, typeof params>(
+                machineId,
+                'request-help',
+                params
+            );
+        } catch (error) {
+            console.error(`Failed to request help on machine ${machineId}:`, error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to request help',
+            };
         }
     }
 
@@ -2316,12 +2470,13 @@ class Sync {
             const isDuplicate = currentMessages.find(m => m.id === message.id);
 
             if (!isDuplicate) {
-                const updated = [...currentMessages, message as any];
+                // Cap in-memory cache at 500 (same bound as sessionStorage)
+                const updated = [...currentMessages, message as any].slice(-500);
                 this.teamMessagesCache.set(teamId, updated);
                 // Persist to sessionStorage so messages survive reconnects (not localStorage — too large)
                 try {
                     if (typeof sessionStorage !== 'undefined') {
-                        sessionStorage.setItem(`team_msgs_${teamId}`, JSON.stringify(updated.slice(-500)));
+                        sessionStorage.setItem(`team_msgs_${teamId}`, JSON.stringify(updated));
                     }
                 } catch { /* storage full — skip */ }
 
@@ -2989,9 +3144,9 @@ class Sync {
                 throw new Error(`Failed to send team message: ${response.status} - ${text}`);
             }
 
-            // 立即更新本地缓存
+            // 立即更新本地缓存（cap at 500）
             const cached = this.teamMessagesCache.get(request.teamId) || [];
-            this.teamMessagesCache.set(request.teamId, [...cached, message]);
+            this.teamMessagesCache.set(request.teamId, [...cached, message].slice(-500));
 
             // 触发本地订阅者
             const subscribers = this.teamMessageSubscriptions.get(request.teamId);
@@ -3066,12 +3221,25 @@ class Sync {
     /**
      * Add a member to a team
      */
-    public async addTeamMember(teamId: string, sessionId: string, roleId?: string, displayName?: string): Promise<import('./apiTeamManagement').TeamMemberResponse> {
+    public async addTeamMember(
+        teamId: string,
+        sessionId: string,
+        roleId?: string,
+        displayName?: string,
+        opts?: {
+            memberId?: string;
+            sessionTag?: string;
+            specId?: string;
+            parentSessionId?: string;
+            executionPlane?: string;
+            runtimeType?: string;
+        }
+    ): Promise<import('./apiTeamManagement').TeamMemberResponse> {
         if (!this.credentials) {
             throw new Error('Not authenticated');
         }
         const { addTeamMember } = await import('./apiTeamManagement');
-        return this.withTeamRecovery(teamId, () => addTeamMember(this.credentials, teamId, sessionId, roleId, displayName));
+        return this.withTeamRecovery(teamId, () => addTeamMember(this.credentials, teamId, sessionId, roleId, displayName, opts));
     }
 
     /**
