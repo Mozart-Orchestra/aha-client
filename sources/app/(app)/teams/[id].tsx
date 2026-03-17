@@ -37,6 +37,7 @@ import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
 import Color from 'color';
 import { syncKanbanStatusToTodo } from '@/-zen/model/ops';
 import { getCurrentAuth } from '@/auth/AuthContext';
+import { useAuth } from '@/auth/AuthContext';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
 import { EvolutionSection } from '@/components/settings/EvolutionSection';
 import { FloatingIslandSidebar } from '@/components/layout/FloatingIslandSidebar';
@@ -533,6 +534,7 @@ export default function TeamDashboardScreen() {
     const allSessions = useAllSessions();
     const allMachines = useAllMachines();
     const profile = useProfile();
+    const { isAuthenticated } = useAuth();
     const isDataReady = useIsDataReady();
     const isDesktopShell = Platform.OS === 'web' && width >= 1180;
     const shellVariant = 'default' as const;
@@ -558,6 +560,7 @@ export default function TeamDashboardScreen() {
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
+    const lifecyclePersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const parsedArtifactBoard = React.useMemo<{
@@ -645,45 +648,53 @@ export default function TeamDashboardScreen() {
     const [autoInitAttempted, setAutoInitAttempted] = React.useState(false);
     React.useEffect(() => {
         // Wait for data to be ready before auto-initializing
-        if (desktopBridge || isLoading || autoInitAttempted || !isDataReady) {
+        if (desktopBridge || isLoading || autoInitAttempted || !isDataReady || !isAuthenticated) {
             return;
         }
         // If artifact is null (data loaded but artifact doesn't exist), auto-initialize
         if (artifact === null) {
             setAutoInitAttempted(true);
             setIsLoading(true);
-            console.log(`🔧 Auto-initializing Board for team ${teamId}...`);
+            console.log(`🔍 Checking server for existing Board for team ${teamId}...`);
 
-            const initialBoard: KanbanBoard = {
-                ...DEFAULT_KANBAN_BOARD,
-                tasks: [],
-                team: {
-                    roles: DEFAULT_TEAM_ROLES,
-                    agreements: DEFAULT_TEAM_AGREEMENTS,
-                    members: []
-                }
-            };
+            sync.fetchArtifactWithBody(teamId)
+                .then((existingArtifact) => {
+                    if (existingArtifact) {
+                        console.log(`✅ Found existing Board for team ${teamId} on server`);
+                        return;
+                    }
 
-            sync.createArtifact(
-                'Team',
-                JSON.stringify(initialBoard, null, 2),
-                [],
-                false,
-                'team',
-                teamId
-            )
-            .then(() => {
-                console.log(`✅ Board auto-initialized for team ${teamId}`);
-                return sync.fetchArtifactWithBody(teamId);
-            })
-            .catch((error) => {
-                console.error('Failed to auto-initialize Board:', error);
-            })
-            .finally(() => {
-                setIsLoading(false);
-            });
+                    console.log(`🔧 Auto-initializing Board for team ${teamId}...`);
+                    const initialBoard: KanbanBoard = {
+                        ...DEFAULT_KANBAN_BOARD,
+                        tasks: [],
+                        team: {
+                            roles: DEFAULT_TEAM_ROLES,
+                            agreements: DEFAULT_TEAM_AGREEMENTS,
+                            members: []
+                        }
+                    };
+
+                    return sync.createArtifact(
+                        'Team',
+                        JSON.stringify(initialBoard, null, 2),
+                        [],
+                        false,
+                        'team',
+                        teamId
+                    ).then(() => {
+                        console.log(`✅ Board auto-initialized for team ${teamId}`);
+                        return sync.fetchArtifactWithBody(teamId);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Failed to ensure Board exists:', error);
+                })
+                .finally(() => {
+                    setIsLoading(false);
+                });
         }
-    }, [artifact, teamId, desktopBridge, isLoading, autoInitAttempted, isDataReady]);
+    }, [artifact, teamId, desktopBridge, isLoading, autoInitAttempted, isAuthenticated, isDataReady]);
 
     // Subscribe to task events for real-time Board updates (Server-Driven Task Orchestration)
     React.useEffect(() => {
@@ -1170,16 +1181,31 @@ export default function TeamDashboardScreen() {
             },
         };
 
-        sync.updateArtifact(
-            artifact.id,
-            artifact.title,
-            JSON.stringify(nextBoard, null, 2),
-            artifact.sessions,
-            artifact.draft,
-            artifact.type,
-        ).catch((error) => {
-            console.error('Failed to persist derived team lifecycle timestamps:', error);
-        });
+        if (lifecyclePersistTimerRef.current) {
+            clearTimeout(lifecyclePersistTimerRef.current);
+        }
+
+        lifecyclePersistTimerRef.current = setTimeout(() => {
+            sync.updateArtifact(
+                artifact.id,
+                artifact.title,
+                JSON.stringify(nextBoard, null, 2),
+                artifact.sessions,
+                artifact.draft,
+                artifact.type,
+            ).catch((error) => {
+                console.error('Failed to persist derived team lifecycle timestamps:', error);
+            }).finally(() => {
+                lifecyclePersistTimerRef.current = null;
+            });
+        }, 250);
+
+        return () => {
+            if (lifecyclePersistTimerRef.current) {
+                clearTimeout(lifecyclePersistTimerRef.current);
+                lifecyclePersistTimerRef.current = null;
+            }
+        };
     }, [
         artifact,
         allSessions,
@@ -1519,13 +1545,18 @@ export default function TeamDashboardScreen() {
     const isMissingDesktopBoard = !!desktopBridge && !!desktopRoom && !desktopBoard;
     const isMissingArtifact = !desktopBridge && !artifact;
     const isArtifactParseError = !desktopBridge && !!artifact?.body && !!parsedArtifactBoard.parseError;
-    const shouldShowBoardFallback = isMissingDesktopRoom || isMissingDesktopBoard || isMissingArtifact || isArtifactParseError;
-    const fallbackTitle = isArtifactParseError
+    const isAuthMissing = !desktopBridge && !isAuthenticated;
+    const shouldShowBoardFallback = isAuthMissing || isMissingDesktopRoom || isMissingDesktopBoard || isMissingArtifact || isArtifactParseError;
+    const fallbackTitle = isAuthMissing
+        ? 'Authentication Required'
+        : isArtifactParseError
         ? 'Team Board Failed to Load'
         : isMissingDesktopRoom
             ? 'Team Room Not Found'
             : 'Team Board Not Found';
-    const fallbackDescription = isArtifactParseError
+    const fallbackDescription = isAuthMissing
+        ? 'This browser session does not currently have valid credentials. Sign in or restore your account before opening team boards.'
+        : isArtifactParseError
         ? 'This team exists, but its board data could not be parsed. Fix the stored board payload before continuing.'
         : isMissingDesktopRoom
             ? 'This team route opened without a valid collaboration room. Re-open the team from the teams list or recreate its desktop room binding.'
@@ -1731,16 +1762,19 @@ export default function TeamDashboardScreen() {
                 iconGradientColors: ['#314658', '#1E2D3C'],
                 trailingIcon: 'chevron-down',
             }}
-            agentItems={roster.slice(0, 6).map((entry) => {
+            agentItems={roster.map((entry) => {
                 const presence = entry.session
                     ? getAgentPresenceVisual(entry.session)
                     : { dotColor: '#8A7F74', inactive: true, dead: false };
+                const runtimeLabel = entry.member.runtimeType ? entry.member.runtimeType : undefined;
+                const roleLabel = entry.role?.title || entry.member.roleId || entry.session?.metadata?.role || '';
                 return {
                     id: entry.member.sessionId,
                     name: entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId,
                     dotColor: presence.dotColor,
                     inactive: presence.inactive,
                     dead: presence.dead,
+                    description: [roleLabel, runtimeLabel].filter(Boolean).join(' · '),
                     selected: selectedAgentId === entry.member.sessionId,
                     activeTaskTitle: entry.activeTask?.title,
                     activeTaskStartedAt: entry.activeTask?.startedAt,
@@ -1820,7 +1854,7 @@ export default function TeamDashboardScreen() {
                     <Text style={[styles.subtitle, { marginTop: 8, textAlign: 'center', maxWidth: 300 }]}>
                         {fallbackDescription}
                     </Text>
-                    {!desktopBridge && !isArtifactParseError ? (
+                    {!desktopBridge && !isArtifactParseError && !isAuthMissing ? (
                         <Pressable
                             style={{
                                 marginTop: 20,

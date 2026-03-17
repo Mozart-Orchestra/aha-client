@@ -99,6 +99,7 @@ interface StorageState {
     applyMessages: (sessionId: string, messages: NormalizedMessage[]) => { changed: string[], hasReadyEvent: boolean };
     applyMessagesLoaded: (sessionId: string) => void;
     setSessionRawMessageCount: (sessionId: string, count: number) => void;
+    setSessionPersistedMessageCount: (sessionId: string, count: number) => void;
     applySettings: (settings: Settings, version: number) => void;
     applySettingsLocal: (settings: Partial<Settings>) => void;
     applyLocalSettings: (settings: Partial<LocalSettings>) => void;
@@ -498,8 +499,7 @@ export const storage = create<StorageState>()((set, get) => {
                     messages: [],
                     messagesMap: {},
                     reducerState: createReducer(),
-                    isLoaded: false,
-                    rawCount: 0
+                    isLoaded: false
                 };
 
                 // Get the session's agentState if available
@@ -603,8 +603,7 @@ export const storage = create<StorageState>()((set, get) => {
                             messages: messagesArray,
                             messagesMap: mergedMessagesMap,
                             reducerState: existingSession.reducerState, // Explicitly include the mutated reducer state
-                            isLoaded: true,
-                            rawCount: existingSession.rawCount ?? messagesArray.length
+                            isLoaded: true
                         }
                     }
                 };
@@ -662,8 +661,7 @@ export const storage = create<StorageState>()((set, get) => {
                             reducerState,
                             messages,
                             messagesMap,
-                            isLoaded: true,
-                            rawCount: messages.length
+                            isLoaded: true
                         } satisfies SessionMessages
                     }
                 };
@@ -687,8 +685,7 @@ export const storage = create<StorageState>()((set, get) => {
                 messages: [],
                 messagesMap: {},
                 reducerState: createReducer(),
-                isLoaded: false,
-                rawCount: 0
+                isLoaded: false
             };
 
             if (existingSession.rawCount === count) {
@@ -704,6 +701,27 @@ export const storage = create<StorageState>()((set, get) => {
                         rawCount: count
                     }
                 }
+            };
+        }),
+        setSessionPersistedMessageCount: (sessionId: string, count: number) => set((state) => {
+            const existingSession = state.sessions[sessionId];
+            if (!existingSession || existingSession.persistedMessageCount === count) {
+                return state;
+            }
+
+            const updatedSession = {
+                ...existingSession,
+                persistedMessageCount: count,
+            };
+            const nextSessions = {
+                ...state.sessions,
+                [sessionId]: updatedSession,
+            };
+
+            return {
+                ...state,
+                sessions: nextSessions,
+                sessionListViewData: buildSessionListViewData(nextSessions),
             };
         }),
         applySettingsLocal: (settings: Partial<Settings>) => set((state) => {
@@ -1191,10 +1209,11 @@ export function useSessionMessages(sessionId: string): { messages: Message[], is
 
 export function useSessionMessageCount(sessionId: string): { count: number, isLoaded: boolean } {
     return storage(useShallow((state) => {
-        const session = state.sessionMessages[sessionId];
+        const sessionMessages = state.sessionMessages[sessionId];
+        const session = state.sessions[sessionId];
         return {
-            count: session?.rawCount ?? session?.messages.length ?? 0,
-            isLoaded: session?.isLoaded ?? false
+            count: session?.persistedMessageCount ?? sessionMessages?.rawCount ?? 0,
+            isLoaded: session?.persistedMessageCount !== undefined || sessionMessages?.rawCount !== undefined
         };
     }));
 }

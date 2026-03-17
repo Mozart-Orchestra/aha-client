@@ -8,12 +8,15 @@ import { t } from '@/text';
 import {
     useSession,
     useSessionGitStatus,
+    useSessionMessages,
     useSessionMessageCount,
     useSessionProjectGitStatus,
     useSessionUsage,
 } from '@/sync/storage';
 
 import { Text } from '@/components/ui/StyledText';
+import { useElapsedTime } from '@/hooks/useElapsedTime';
+import { getModifiedFileCount } from '@/utils/sessionModifiedFiles';
 
 import {
     getThreeColumnShellTokens,
@@ -39,9 +42,12 @@ interface FloatingIslandAgentItem {
     dotColor: string;
     selected?: boolean;
     inactive?: boolean;
+    dead?: boolean;
     description?: string;
     score?: number;
     scoreCount?: number;
+    activeTaskTitle?: string;
+    activeTaskStartedAt?: number;
     onPress?: () => void;
     onDoublePress?: () => void;
     onLongPress?: () => void;
@@ -266,6 +272,20 @@ const styles = StyleSheet.create(() => ({
         fontSize: 11,
         fontWeight: '700',
     },
+    subsectionLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 8,
+        paddingTop: 10,
+        paddingBottom: 4,
+    },
+    subsectionDivider: {
+        height: 1,
+        marginHorizontal: 8,
+        marginTop: 8,
+        marginBottom: 2,
+    },
     emptyText: {
         fontSize: 13,
         padding: 8,
@@ -289,6 +309,12 @@ const styles = StyleSheet.create(() => ({
     agentRow: {
         alignItems: 'flex-start',
         paddingVertical: 10,
+    },
+    agentRowInactive: {
+        opacity: 0.5,
+    },
+    agentRowDead: {
+        opacity: 0.28,
     },
     agentBody: {
         flex: 1,
@@ -321,6 +347,42 @@ const styles = StyleSheet.create(() => ({
     agentMetaText: {
         fontSize: 11,
         fontWeight: '500',
+    },
+    agentTaskChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 10,
+    },
+    agentTaskText: {
+        flex: 1,
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    agentTaskElapsed: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    agentContextChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    agentContextTrack: {
+        width: 34,
+        height: 5,
+        borderRadius: 999,
+        overflow: 'hidden',
+    },
+    agentContextFill: {
+        height: '100%',
+        borderRadius: 999,
+        minWidth: 5,
     },
     agentScoreBadge: {
         flexDirection: 'row',
@@ -364,6 +426,40 @@ function getBarPercent(count: number, maxCount: number, minPercent: number = 18)
     return `${Math.min(100, Math.max(minPercent, Math.round((count / maxCount) * 100)))}%`;
 }
 
+const MAX_CONTEXT_WINDOW_TOKENS = 200000;
+
+function getContextUtilization(inputTokens: number | undefined | null): { percent: number; width: string; color: string } | null {
+    if (!inputTokens || inputTokens <= 0 || !Number.isFinite(inputTokens)) {
+        return null;
+    }
+
+    const ratio = Math.max(0, Math.min(1, inputTokens / MAX_CONTEXT_WINDOW_TOKENS));
+    const percent = Math.round(ratio * 100);
+    const color = percent >= 85 ? '#EF4444' : percent >= 70 ? '#F59E0B' : '#22C55E';
+
+    return {
+        percent,
+        width: `${Math.max(2, Math.round(ratio * 100))}%`,
+        color,
+    };
+}
+
+function formatElapsedCompact(elapsedSeconds: number): string {
+    if (elapsedSeconds >= 3600) {
+        const hours = Math.floor(elapsedSeconds / 3600);
+        const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+        return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+
+    if (elapsedSeconds >= 60) {
+        const minutes = Math.floor(elapsedSeconds / 60);
+        const seconds = elapsedSeconds % 60;
+        return seconds > 0 && minutes < 10 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+    }
+
+    return `${elapsedSeconds}s`;
+}
+
 function AgentRow({
     item,
     tokens,
@@ -374,6 +470,7 @@ function AgentRow({
     const { theme } = useUnistyles();
     const session = useSession(item.id);
     const latestUsage = useSessionUsage(item.id) ?? session?.latestUsage ?? null;
+    const { messages: sessionMessages, isLoaded: sessionMessagesLoaded } = useSessionMessages(item.id);
     const { count: messageCount, isLoaded: messagesLoaded } = useSessionMessageCount(item.id);
     const projectGitStatus = useSessionProjectGitStatus(item.id);
     const sessionGitStatus = useSessionGitStatus(item.id);
@@ -381,9 +478,14 @@ function AgentRow({
     const lastPressMsRef = React.useRef(0);
 
     const contextSize = latestUsage?.contextSize ?? 0;
+    const totalTokens = latestUsage ? latestUsage.inputTokens + latestUsage.outputTokens : 0;
+    const hasValidTotalTokens = Number.isFinite(totalTokens) && totalTokens > 0;
+    const modifiedFileCount = React.useMemo(() => getModifiedFileCount(sessionMessages), [sessionMessages]);
+    const contextUtilization = getContextUtilization(latestUsage?.contextSize ?? latestUsage?.inputTokens);
     const hasGitStats = !!gitStatus && gitStatus.lastUpdatedAt > 0;
     const lineChangeText = hasGitStats ? `${formatCompactNumber(gitStatus.linesChanged)} Δ` : null;
     const scoreColor = item.score !== undefined ? getScoreColor(item.score) : null;
+    const activeTaskElapsed = useElapsedTime(item.activeTaskStartedAt);
 
     const handlePress = React.useCallback(() => {
         const now = Date.now();
@@ -407,6 +509,8 @@ function AgentRow({
                 style={[
                     styles.row,
                     styles.agentRow,
+                    item.inactive ? styles.agentRowInactive : null,
+                    item.dead ? styles.agentRowDead : null,
                     item.selected && [
                         styles.rowSelected,
                         { borderColor: tokens.panelDivider },
@@ -455,6 +559,17 @@ function AgentRow({
                             </View>
                         ) : null}
                     </View>
+                    {item.activeTaskTitle ? (
+                        <View style={[styles.agentTaskChip, { backgroundColor: '#FFF4E5' }]}>
+                            <Ionicons name="play-circle-outline" size={12} color="#C26A00" />
+                            <Text numberOfLines={1} style={[styles.agentTaskText, { color: '#7A4A10' }]}>
+                                {item.activeTaskTitle}
+                            </Text>
+                            <Text style={[styles.agentTaskElapsed, { color: '#C26A00' }]}>
+                                {formatElapsedCompact(activeTaskElapsed)}
+                            </Text>
+                        </View>
+                    ) : null}
                     <View style={styles.agentMetaWrap}>
                         {item.description ? (
                             <View style={[styles.agentMetaChip, { backgroundColor: '#EAF1F5' }]}>
@@ -468,7 +583,7 @@ function AgentRow({
                             <View style={[styles.agentMetaChip, { backgroundColor: '#F2F4F6' }]}>
                                 <Ionicons name="pause-circle-outline" size={11} color="#8A9BAA" />
                                 <Text style={[styles.agentMetaText, { color: '#8A9BAA' }]}>
-                                    offline
+                                    {t('status.offline')}
                                 </Text>
                             </View>
                         ) : null}
@@ -480,11 +595,46 @@ function AgentRow({
                                 </Text>
                             </View>
                         ) : null}
+                        {hasValidTotalTokens ? (
+                            <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                <Ionicons name="flash-outline" size={11} color={theme.colors.textSecondary} />
+                                <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
+                                    {formatCompactNumber(totalTokens)} tok
+                                </Text>
+                            </View>
+                        ) : null}
+                        {sessionMessagesLoaded && modifiedFileCount > 0 ? (
+                            <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                <Ionicons name="document-text-outline" size={11} color={theme.colors.textSecondary} />
+                                <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
+                                    {formatCompactNumber(modifiedFileCount)} {t('common.files').toLowerCase()}
+                                </Text>
+                            </View>
+                        ) : null}
                         {latestUsage ? (
                             <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
                                 <Ionicons name="flash-outline" size={11} color={theme.colors.textSecondary} />
                                 <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
                                     {formatCompactNumber(contextSize)} ctx
+                                </Text>
+                            </View>
+                        ) : null}
+                        {contextUtilization ? (
+                            <View style={[styles.agentContextChip, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                <Ionicons name="speedometer-outline" size={11} color={contextUtilization.color} />
+                                <View style={[styles.agentContextTrack, { backgroundColor: contextUtilization.color + '20' }]}>
+                                    <View
+                                        style={[
+                                            styles.agentContextFill,
+                                            {
+                                                width: contextUtilization.width,
+                                                backgroundColor: contextUtilization.color,
+                                            },
+                                        ]}
+                                    />
+                                </View>
+                                <Text style={[styles.agentMetaText, { color: contextUtilization.color }]}>
+                                    {contextUtilization.percent}%
                                 </Text>
                             </View>
                         ) : null}
@@ -631,6 +781,27 @@ export function FloatingIslandSidebar({
         () => statusItems.reduce((max, item) => Math.max(max, item.count ?? 0), 0),
         [statusItems]
     );
+    const { activeAgentItems, offlineAgentItems, deadAgentItems } = React.useMemo(() => {
+        const active: FloatingIslandAgentItem[] = [];
+        const offline: FloatingIslandAgentItem[] = [];
+        const dead: FloatingIslandAgentItem[] = [];
+
+        agentItems.forEach((item) => {
+            if (item.dead) {
+                dead.push(item);
+            } else if (item.inactive) {
+                offline.push(item);
+            } else {
+                active.push(item);
+            }
+        });
+
+        return {
+            activeAgentItems: active,
+            offlineAgentItems: offline,
+            deadAgentItems: dead,
+        };
+    }, [agentItems]);
 
     return (
         <View style={styles.container}>
@@ -722,9 +893,55 @@ export function FloatingIslandSidebar({
                     </View>
                     <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
                         {agentItems.length > 0 ? (
-                            agentItems.map((item) => (
-                                <AgentRow key={item.id} item={item} tokens={tokens} />
-                            ))
+                            <>
+                                {activeAgentItems.map((item) => (
+                                    <AgentRow key={item.id} item={item} tokens={tokens} />
+                                ))}
+                                {(offlineAgentItems.length > 0 || deadAgentItems.length > 0) ? (
+                                    <>
+                                        {activeAgentItems.length > 0 ? (
+                                            <View style={[styles.subsectionDivider, { backgroundColor: tokens.panelDivider }]} />
+                                        ) : null}
+                                        {offlineAgentItems.length > 0 ? (
+                                            <>
+                                                <View style={styles.subsectionLabelRow}>
+                                                    <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>
+                                                        {t('status.offline')}
+                                                    </Text>
+                                                    <View style={[styles.sectionCountBadge, { backgroundColor: '#F2F4F6' }]}>
+                                                        <Text style={[styles.sectionCountText, { color: '#8A9BAA' }]}>
+                                                            {offlineAgentItems.length}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                {offlineAgentItems.map((item) => (
+                                                    <AgentRow key={item.id} item={item} tokens={tokens} />
+                                                ))}
+                                            </>
+                                        ) : null}
+                                        {deadAgentItems.length > 0 ? (
+                                            <>
+                                                {offlineAgentItems.length > 0 ? (
+                                                    <View style={[styles.subsectionDivider, { backgroundColor: tokens.panelDivider }]} />
+                                                ) : null}
+                                                <View style={styles.subsectionLabelRow}>
+                                                    <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>
+                                                        {t('status.ended')}
+                                                    </Text>
+                                                    <View style={[styles.sectionCountBadge, { backgroundColor: '#F2F4F6' }]}>
+                                                        <Text style={[styles.sectionCountText, { color: '#8A9BAA' }]}>
+                                                            {deadAgentItems.length}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                {deadAgentItems.map((item) => (
+                                                    <AgentRow key={item.id} item={item} tokens={tokens} />
+                                                ))}
+                                            </>
+                                        ) : null}
+                                    </>
+                                ) : null}
+                            </>
                         ) : (
                             <Text style={[styles.emptyText, { color: '#93A4B1' }]}>{agentEmptyText}</Text>
                         )}

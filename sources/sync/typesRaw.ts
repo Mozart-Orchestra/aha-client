@@ -303,7 +303,6 @@ export function normalizeRawMessage(id: string, localId: string | null, createdA
         console.error('   Created At:', createdAt);
         console.error('   Raw role:', (raw as any).role);
         console.error('   Zod issues:', JSON.stringify(parsed.error.issues, null, 2));
-        console.error('   Raw data:', JSON.stringify(raw, null, 2));
         return null;
     }
     raw = parsed.data;

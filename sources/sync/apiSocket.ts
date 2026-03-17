@@ -125,7 +125,7 @@ class ApiSocket {
         if (result.ok) {
             return await sessionEncryption.decryptRaw(result.result) as R;
         }
-        throw new Error('RPC call failed');
+        throw new Error(result.error || 'RPC call failed');
     }
 
     /**
@@ -145,7 +145,7 @@ class ApiSocket {
         if (result.ok) {
             return await machineEncryption.decryptRaw(result.result) as R;
         }
-        throw new Error('RPC call failed');
+        throw new Error(result.error || 'RPC call failed');
     }
 
     send(event: string, data: any) {
@@ -243,13 +243,11 @@ class ApiSocket {
 
         // Message handling
         this.socket.onAny((event, data) => {
-            console.log(`📥 SyncSocket: Received event '${event}':`, JSON.stringify(data).substring(0, 200));
             const handler = this.messageHandlers.get(event);
             if (handler) {
-                console.log(`📥 SyncSocket: Calling handler for '${event}'`);
                 handler(data);
-            } else {
-                console.log(`📥 SyncSocket: No handler registered for '${event}'`);
+            } else if (event !== 'heartbeat') {
+                console.warn(`📥 SyncSocket: No handler registered for '${event}'`);
             }
         });
     }

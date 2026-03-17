@@ -2,6 +2,9 @@ import * as React from 'react';
 import { Session } from '@/sync/storageTypes';
 import { t } from '@/text';
 
+export type { AgentPresenceVisual } from './presenceUtils';
+export { getAgentPresenceVisual } from './presenceUtils';
+
 export type SessionState = 'disconnected' | 'thinking' | 'waiting' | 'permission_required';
 
 export interface SessionStatus {

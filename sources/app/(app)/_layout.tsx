@@ -314,6 +314,14 @@ export default function RootLayout() {
                 }}
             />
             <Stack.Screen
+                name="agents/[id]"
+                options={{
+                    headerShown: true,
+                    headerTitle: t('agents.title'),
+                    headerBackTitle: t('common.back'),
+                }}
+            />
+            <Stack.Screen
                 name="teams/index"
                 options={{
                     headerShown: true,

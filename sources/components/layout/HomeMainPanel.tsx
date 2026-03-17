@@ -12,9 +12,13 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Image } from 'expo-image';
 
 import { useArtifacts, useAllSessions, useIsDataReady } from '@/sync/storage';
+import { sync } from '@/sync/sync';
+import type { KanbanTask } from '@/sync/kanbanTypes';
 import type { Session } from '@/sync/storageTypes';
+import { UsageBar } from '@/components/usage/UsageBar';
 import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
+import { getSessionName } from '@/utils/sessionUtils';
 
 function useIsExperiencedUser(): boolean {
     const artifacts = useArtifacts();
@@ -164,8 +168,77 @@ function formatCompactTokens(tokens: number): string {
     return tokens.toLocaleString();
 }
 
-function formatApproxCost(cost: number): string {
-    return `~$${cost.toFixed(4)}`;
+function getSessionTokenTotal(session: Session): number {
+    if (!session.latestUsage) {
+        return 0;
+    }
+
+    return session.latestUsage.inputTokens +
+        session.latestUsage.outputTokens +
+        session.latestUsage.cacheCreation +
+        session.latestUsage.cacheRead;
+}
+
+function parseTeamTasks(body?: string | null): KanbanTask[] {
+    if (!body) {
+        return [];
+    }
+
+    try {
+        const parsed = JSON.parse(body);
+        return Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+    } catch {
+        return [];
+    }
+}
+
+interface StatsBarSectionProps {
+    title: string;
+    items: Array<{
+        id: string;
+        label: string;
+        value: number;
+    }>;
+    color: string;
+    formatValue?: (value: number) => string;
+    loading?: boolean;
+}
+
+function StatsBarSection({
+    title,
+    items,
+    color,
+    formatValue,
+    loading = false,
+}: StatsBarSectionProps) {
+    const styles = stylesheet;
+
+    if (items.length === 0 && !loading) {
+        return null;
+    }
+
+    const maxValue = Math.max(...items.map((item) => item.value), 1);
+
+    return (
+        <View style={styles.statsSection}>
+            <Text style={styles.statsSectionTitle}>{title}</Text>
+            {loading && items.length === 0 ? (
+                <Text style={styles.statsSectionLoading}>{t('common.loading')}</Text>
+            ) : (
+                items.map((item) => (
+                    <UsageBar
+                        key={item.id}
+                        label={item.label}
+                        value={item.value}
+                        maxValue={maxValue}
+                        color={color}
+                        height={10}
+                        formatValue={formatValue}
+                    />
+                ))
+            )}
+        </View>
+    );
 }
 
 function WorkspaceStatsCard() {
@@ -173,39 +246,95 @@ function WorkspaceStatsCard() {
     const { theme } = useUnistyles();
     const artifacts = useArtifacts();
     const sessions = useAllSessions();
+    const requestedTeamBodiesRef = React.useRef<Set<string>>(new Set());
+
+    const teamArtifacts = React.useMemo(() => {
+        return artifacts
+            .filter((artifact) => artifact.type === 'team' && !artifact.draft)
+            .sort((a, b) => b.updatedAt - a.updatedAt);
+    }, [artifacts]);
+
+    React.useEffect(() => {
+        const missingTeamBodies = teamArtifacts
+            .filter((artifact) => artifact.body === undefined)
+            .filter((artifact) => !requestedTeamBodiesRef.current.has(artifact.id));
+
+        if (missingTeamBodies.length === 0) {
+            return;
+        }
+
+        missingTeamBodies.forEach((artifact) => {
+            requestedTeamBodiesRef.current.add(artifact.id);
+            sync.fetchArtifactWithBody(artifact.id).catch((error) => {
+                console.error(`Failed to load team body for home stats (${artifact.id})`, error);
+            });
+        });
+    }, [teamArtifacts]);
 
     const stats = React.useMemo(() => {
-        const teamCount = artifacts.filter((artifact) => artifact.type === 'team').length;
         const agentSessions = sessions.filter(isTeamAgentSession);
-        const activeAgentCount = agentSessions.filter((session) => session.active).length;
+        const sessionMap = new Map(sessions.map((session) => [session.id, session]));
 
-        const usageTotals = agentSessions.reduce((acc, session) => {
-            const usage = session.latestUsage;
-            if (!usage) {
-                return acc;
-            }
+        const teamUsageItems = teamArtifacts.map((artifact) => {
+            const linkedSessionIds = new Set<string>(artifact.sessions ?? []);
+            sessions.forEach((session) => {
+                if (session.metadata?.teamId === artifact.id) {
+                    linkedSessionIds.add(session.id);
+                }
+            });
 
-            acc.inputTokens += usage.inputTokens;
-            acc.outputTokens += usage.outputTokens;
-            return acc;
-        }, {
-            inputTokens: 0,
-            outputTokens: 0,
+            const linkedSessions = Array.from(linkedSessionIds)
+                .map((sessionId) => sessionMap.get(sessionId))
+                .filter((session): session is Session => !!session);
+
+            const tokens = linkedSessions.reduce((total, session) => {
+                return total + getSessionTokenTotal(session);
+            }, 0);
+
+            const tasks = parseTeamTasks(artifact.body);
+            const visibleTasks = tasks.filter((task) => !task.isDeleted);
+            const completedTasks = visibleTasks.filter((task) => task.status === 'done').length;
+
+            return {
+                id: artifact.id,
+                label: artifact.title || t('teams.untitledTeam'),
+                tokens,
+                completedTasks,
+            };
         });
 
-        const totalTokens = usageTotals.inputTokens + usageTotals.outputTokens;
-        const totalCost = ((usageTotals.inputTokens * 3) + (usageTotals.outputTokens * 15)) / 1_000_000;
+        const agentUsageItems = agentSessions
+            .map((session) => {
+                const role = session.metadata?.role ?? session.metadata?.flavor;
+                return {
+                    id: session.id,
+                    label: role ? `${getSessionName(session)} · ${role}` : getSessionName(session),
+                    tokens: getSessionTokenTotal(session),
+                };
+            })
+            .sort((a, b) => b.tokens - a.tokens);
 
         return {
-            teamCount,
-            totalAgents: agentSessions.length,
-            activeAgentCount,
-            totalTokens,
-            totalCost,
+            teamCount: teamArtifacts.length,
+            teamTotalTokens: teamUsageItems.reduce((total, item) => total + item.tokens, 0),
+            agentTotalTokens: agentUsageItems.reduce((total, item) => total + item.tokens, 0),
+            completedTasksTotal: teamUsageItems.reduce((total, item) => total + item.completedTasks, 0),
+            teamUsageItems: teamUsageItems
+                .filter((item) => item.tokens > 0)
+                .sort((a, b) => b.tokens - a.tokens)
+                .slice(0, 4),
+            agentUsageItems: agentUsageItems
+                .filter((item) => item.tokens > 0)
+                .slice(0, 4),
+            completedTaskItems: teamUsageItems
+                .filter((item) => item.completedTasks > 0)
+                .sort((a, b) => b.completedTasks - a.completedTasks)
+                .slice(0, 4),
+            isLoadingTaskBodies: teamArtifacts.some((artifact) => artifact.body === undefined),
         };
-    }, [artifacts, sessions]);
+    }, [sessions, teamArtifacts]);
 
-    if (stats.teamCount === 0 && stats.totalAgents === 0 && stats.totalTokens === 0) {
+    if (stats.teamCount === 0 && stats.agentTotalTokens === 0) {
         return null;
     }
 
@@ -223,24 +352,52 @@ function WorkspaceStatsCard() {
 
             <View style={styles.statsGrid}>
                 <View style={styles.statsMetricCard}>
-                    <Text style={styles.statsMetricLabel}>{t('usage.totalTokens')}</Text>
-                    <Text style={styles.statsMetricValue}>{formatCompactTokens(stats.totalTokens)} tok</Text>
+                    <Text style={styles.statsMetricLabel}>{t('teams.title')}</Text>
+                    <Text style={styles.statsMetricValue}>{stats.teamCount}</Text>
                 </View>
 
                 <View style={styles.statsMetricCard}>
-                    <Text style={styles.statsMetricLabel}>{t('usage.totalCost')}</Text>
-                    <Text style={styles.statsMetricValue}>{formatApproxCost(stats.totalCost)}</Text>
+                    <Text style={styles.statsMetricLabel}>
+                        {t('teams.title')} · {t('usage.totalTokens')}
+                    </Text>
+                    <Text style={styles.statsMetricValue}>{formatCompactTokens(stats.teamTotalTokens)} tok</Text>
                 </View>
 
-                <View style={[styles.statsMetricCard, styles.statsMetricCardWide]}>
-                    <Text style={styles.statsMetricLabel}>
-                        {t('sidebar.online')} {t('sidebar.agents')}
-                    </Text>
-                    <Text style={styles.statsMetricValue}>
-                        {stats.activeAgentCount} / {stats.totalAgents}
-                    </Text>
+                <View style={styles.statsMetricCard}>
+                    <Text style={styles.statsMetricLabel}>{t('sidebar.agents')} · {t('usage.totalTokens')}</Text>
+                    <Text style={styles.statsMetricValue}>{formatCompactTokens(stats.agentTotalTokens)} tok</Text>
+                </View>
+
+                <View style={styles.statsMetricCard}>
+                    <Text style={styles.statsMetricLabel}>{t('home.completedTasks')}</Text>
+                    <Text style={[styles.statsMetricValue, { color: '#34C759' }]}>{stats.completedTasksTotal}</Text>
                 </View>
             </View>
+
+            <StatsBarSection
+                title={`${t('teams.title')} · ${t('usage.totalTokens')}`}
+                items={stats.teamUsageItems}
+                color="#007AFF"
+                formatValue={(value) => `${formatCompactTokens(value)} tok`}
+            />
+
+            <StatsBarSection
+                title={`${t('sidebar.agents')} · ${t('usage.totalTokens')}`}
+                items={stats.agentUsageItems}
+                color="#7C3AED"
+                formatValue={(value) => `${formatCompactTokens(value)} tok`}
+            />
+
+            <StatsBarSection
+                title={t('home.completedTasks')}
+                items={stats.completedTaskItems.map((item) => ({
+                    id: item.id,
+                    label: item.label,
+                    value: item.completedTasks,
+                }))}
+                color="#34C759"
+                loading={stats.isLoadingTaskBodies}
+            />
         </View>
     );
 }
@@ -539,9 +696,6 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 14,
         paddingVertical: 12,
     },
-    statsMetricCardWide: {
-        flexBasis: '100%',
-    },
     statsMetricLabel: {
         fontSize: 12,
         color: theme.colors.textSecondary,
@@ -552,6 +706,20 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 22,
         color: theme.colors.text,
         ...Typography.default('semiBold'),
+    },
+    statsSection: {
+        marginTop: 18,
+    },
+    statsSectionTitle: {
+        marginBottom: 6,
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        ...Typography.default('semiBold'),
+    },
+    statsSectionLoading: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
     },
     helpHeader: {
         flexDirection: 'row',

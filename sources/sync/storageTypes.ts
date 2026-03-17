@@ -20,10 +20,15 @@ export const MetadataSchema = z.object({
     slashCommands: z.array(z.string()).optional(),
     homeDir: z.string().optional(), // User's home directory on the machine
     happyHomeDir: z.string().optional(), // Happy configuration directory 
+    processStartedAt: z.number().optional(), // Authoritative timestamp when the agent process actually started running
     hostPid: z.number().optional(), // Process ID of the session
     flavor: z.string().nullish(), // Session flavor/variant identifier
     role: z.string().optional(), // Agent role in team
-    teamId: z.string().optional() // Team/artifact ID this session belongs to
+    memberId: z.string().optional(),
+    sessionTag: z.string().optional(),
+    teamId: z.string().optional(), // Team/artifact ID this session belongs to
+    roomId: z.string().optional(),
+    roomName: z.string().optional(),
 });
 
 export type Metadata = z.infer<typeof MetadataSchema>;
@@ -84,6 +89,7 @@ export interface Session {
         contextSize: number;
         timestamp: number;
     } | null;
+    persistedMessageCount?: number;
 }
 
 export interface DecryptedMessage {

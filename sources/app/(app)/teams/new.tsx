@@ -18,6 +18,7 @@ import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { goBackOrReturn } from '@/utils/returnNavigation';
 import { fetchGenomeByName } from '@/utils/genomeHub';
+import { randomUUID } from '@/utils/uuid';
 
 // Use localized team roles instead of hardcoded ones
 const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
@@ -52,6 +53,10 @@ const PROMPT_AGENT_PREFERENCE_LABELS: Record<PromptAgentPreference, string> = {
     codex: 'Codex',
     mixed: 'Mixed',
 };
+
+function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
+    return `team:${teamId}:member:${memberId}`;
+}
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -696,6 +701,7 @@ export default function NewTeamScreen() {
             const isPromptMode = creationMode === 'prompt';
             const machineIdForSpawn = isPromptMode ? promptPrimaryMachineId : selectedMachineId;
             const hasRequestedSpawns = isPromptMode ? (taskPrompt.trim().length > 0) : Object.values(roleCounts).some(c => c > 0);
+            let seedSpawnFailureReason: string | null = null;
             let roomIdForNavigation: string | null = null;
 
             if (isPromptMode && !taskPrompt.trim()) {
@@ -738,7 +744,7 @@ export default function NewTeamScreen() {
                     };
                 });
 
-            const spawnedMembers: (KanbanTeamMember & { tag?: string })[] = [];
+            const spawnedMembers: KanbanTeamMember[] = [];
             const promptRuntimePreference = PROMPT_AGENT_PREFERENCE_LABELS[promptAgentPreference];
             const promptTaskRequest = isPromptMode ? [
                 taskPrompt.trim(),
@@ -806,13 +812,18 @@ export default function NewTeamScreen() {
                         const agentTitle = 'Org-manager 1';
                         try {
                             const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
+                            const spawnRequestedAt = Date.now();
+                            const memberId = randomUUID();
+                            const sessionTag = buildTeamMemberSessionTag(room.id, memberId);
                             const sessionId = await desktopBridge.startAgentSession({
                                 roomId: room.id,
                                 title: agentTitle,
+                                args: ['--session-tag', sessionTag],
                                 env: {
                                     AHA_AGENT_ROLE: roleId,
                                     AHA_ROOM_ID: room.id,
                                     AHA_ROOM_NAME: title.trim(),
+                                    AHA_TEAM_MEMBER_ID: memberId,
                                     AHA_AGENT_TYPE: promptAgentPreference === 'codex' ? 'codex' : 'claude',
                                     AHA_TASK_PROMPT: promptTaskRequest,
                                     ...(orgManagerGenome ? { AHA_SPEC_ID: orgManagerGenome.id } : {}),
@@ -821,9 +832,14 @@ export default function NewTeamScreen() {
                             });
                             if (sessionId) {
                                 spawnedMembers.push({
+                                    memberId,
                                     sessionId,
+                                    sessionTag,
                                     roleId,
-                                    displayName: agentTitle
+                                    displayName: agentTitle,
+                                    lifecycle: {
+                                        spawnRequestedAt,
+                                    },
                                 });
                             }
                         } catch (error) {
@@ -834,13 +850,18 @@ export default function NewTeamScreen() {
                             for (let i = 0; i < count; i++) {
                                 try {
                                     const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
+                                    const spawnRequestedAt = Date.now();
+                                    const memberId = randomUUID();
+                                    const sessionTag = buildTeamMemberSessionTag(room.id, memberId);
                                     const sessionId = await desktopBridge.startAgentSession({
                                         roomId: room.id,
                                         title: agentTitle,
+                                        args: ['--session-tag', sessionTag],
                                         env: {
                                             AHA_AGENT_ROLE: roleId,
                                             AHA_ROOM_ID: room.id,
                                             AHA_ROOM_NAME: title.trim(),
+                                            AHA_TEAM_MEMBER_ID: memberId,
                                             AHA_AGENT_TYPE: getRoleAgentType(roleId)
                                         },
                                         cwd: resolvedCwd || undefined,
@@ -848,9 +869,14 @@ export default function NewTeamScreen() {
                                     });
                                     if (sessionId) {
                                         spawnedMembers.push({
+                                            memberId,
                                             sessionId,
+                                            sessionTag,
                                             roleId,
-                                            displayName: agentTitle
+                                            displayName: agentTitle,
+                                            lifecycle: {
+                                                spawnRequestedAt,
+                                            },
                                         });
                                     }
                                 } catch (error) {
@@ -904,65 +930,84 @@ export default function NewTeamScreen() {
                     if (isPromptMode) {
                         const roleId = 'org-manager';
                         const agentTitle = 'Org-manager 1';
-                        const tag = `team-${Date.now()}-${roleId}-0`;
+                        const memberId = randomUUID();
+                        const sessionTag = buildTeamMemberSessionTag(artifactId, memberId);
 
                         if (targetMachine?.active && resolvedCwd) {
                             try {
                                 // Resolve org-manager genome from hub so the agent loads its DNA
                                 const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
+                                const spawnRequestedAt = Date.now();
                                 const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
                                     directory: resolvedCwd,
                                     agent: promptAgentPreference === 'codex' ? 'codex' : 'claude',
-                                    sessionTag: tag,
+                                    sessionTag,
                                     teamId: artifactId,
                                     role: roleId,
                                     sessionName: agentTitle,
                                     sessionPath: resolvedCwd,
                                     ...(orgManagerGenome ? { specId: orgManagerGenome.id } : {}),
                                     env: {
+                                        AHA_TEAM_MEMBER_ID: memberId,
                                         AHA_TASK_PROMPT: promptTaskRequest
                                     }
                                 });
                                 if (spawnedSessionId) {
                                     spawnedMembers.push({
+                                        memberId,
                                         sessionId: spawnedSessionId,
+                                        sessionTag,
                                         roleId,
                                         displayName: agentTitle,
-                                        tag
+                                        lifecycle: {
+                                            spawnRequestedAt,
+                                        },
                                     });
                                 } else {
                                     console.warn('Spawned org-manager but no sessionId was returned');
+                                    seedSpawnFailureReason = 'Spawned org-manager but no sessionId was returned.';
                                 }
                             } catch (spawnError) {
                                 console.error('Failed to auto-spawn org-manager:', spawnError);
+                                seedSpawnFailureReason = spawnError instanceof Error ? spawnError.message : 'Failed to auto-spawn org-manager.';
                             }
                         } else if (!targetMachine?.active) {
                             console.warn('Selected machine is offline; skipping auto-spawn.');
+                            seedSpawnFailureReason = 'Selected machine is offline; skipping auto-spawn.';
                         }
                     } else {
                         for (const [roleId, count] of Object.entries(roleCounts)) {
                             for (let i = 0; i < count; i++) {
                                 try {
                                     const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
-                                    const tag = `team-${Date.now()}-${roleId}-${i}`;
+                                    const memberId = randomUUID();
+                                    const sessionTag = buildTeamMemberSessionTag(artifactId, memberId);
 
                                     if (targetMachine?.active && resolvedCwd) {
                                         try {
+                                            const spawnRequestedAt = Date.now();
                                             const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
                                                 directory: resolvedCwd,
                                                 agent: getRoleAgentType(roleId),
-                                                sessionTag: tag,
+                                                sessionTag,
                                                 teamId: artifactId,
                                                 role: roleId,
                                                 sessionName: agentTitle,
                                                 sessionPath: resolvedCwd,
+                                                env: {
+                                                    AHA_TEAM_MEMBER_ID: memberId,
+                                                },
                                             });
                                             if (spawnedSessionId) {
                                                 spawnedMembers.push({
+                                                    memberId,
                                                     sessionId: spawnedSessionId,
+                                                    sessionTag,
                                                     roleId,
                                                     displayName: agentTitle,
-                                                    tag
+                                                    lifecycle: {
+                                                        spawnRequestedAt,
+                                                    },
                                                 });
                                             } else {
                                                 console.warn(`Spawned agent ${roleId} but no sessionId was returned`);
@@ -987,6 +1032,11 @@ export default function NewTeamScreen() {
                     ...manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0),
                     ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
                 ];
+
+                if (isPromptMode && hasRequestedSpawns && spawnedMembers.length === 0) {
+                    await sync.deleteArtifact(artifactId);
+                    throw new Error(seedSpawnFailureReason || 'Failed to auto-spawn org-manager.');
+                }
 
                 await sync.updateArtifact(artifactId, title.trim(), updatedBody, allMemberIds, false, 'team');
 
@@ -1038,6 +1088,10 @@ export default function NewTeamScreen() {
                     ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
                 ];
 
+                if (isPromptMode && hasRequestedSpawns && spawnedMembers.length === 0) {
+                    throw new Error(seedSpawnFailureReason || 'Failed to auto-spawn org-manager.');
+                }
+
                 artifactId = await sync.createArtifact(
                     title.trim(),
                     initialBody,
@@ -1086,7 +1140,7 @@ export default function NewTeamScreen() {
             console.error('Failed to create team:', err);
             await Modal.alert(
                 t('common.error'),
-                'Failed to create team'
+                err instanceof Error ? err.message : 'Failed to create team'
             );
         } finally {
             setIsSaving(false);

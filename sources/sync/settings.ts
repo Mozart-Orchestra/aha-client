@@ -11,7 +11,7 @@ export const SettingsSchema = z.object({
     showLineNumbers: z.boolean().describe('Whether to show line numbers in diffs'),
     showLineNumbersInToolViews: z.boolean().describe('Whether to show line numbers in tool view diffs'),
     wrapLinesInDiffs: z.boolean().describe('Whether to wrap long lines in diff views'),
-    analyticsOptOut: z.boolean().describe('Whether to opt out of anonymous analytics'),
+    analyticsOptOut: z.boolean().describe('Whether to opt out of anonymous product analytics'),
     experiments: z.boolean().describe('Whether to enable experimental features'),
     alwaysShowContextSize: z.boolean().describe('Always show context size in agent input'),
     avatarStyle: z.string().describe('Avatar display style'),

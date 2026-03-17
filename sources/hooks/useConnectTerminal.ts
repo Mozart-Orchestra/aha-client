@@ -39,7 +39,7 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
         }
 
         const secretBytes = await getRandomBytesAsync(32);
-        const token = await authGetToken(secretBytes);
+        const token = await authGetToken(secretBytes, 'create');
         const secret = encodeBase64(secretBytes, 'base64url');
 
         await auth.login(token, secret);

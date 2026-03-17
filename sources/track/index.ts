@@ -3,6 +3,10 @@ import { tracking } from './tracking';
 // Re-export tracking for direct access
 export { tracking } from './tracking';
 
+// NOTE: This module is for anonymous user-facing product analytics only (PostHog).
+// Backend operational observability, such as structured commerce event logs,
+// lives under sources/observability/* to keep the two channels intentionally separate.
+
 /**
  * Initialize tracking with an anonymous user ID.
  * Should be called once during auth initialization.

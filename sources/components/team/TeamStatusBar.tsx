@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { View, Pressable } from 'react-native';
+import type { DimensionValue } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,15 @@ import type { KanbanTask } from '@/sync/kanbanTypes';
  */
 
 export type StatusSignal = 'running' | 'deciding' | 'blocked';
+
+type SignalItem = {
+    key: StatusSignal;
+    count: number;
+    icon: keyof typeof Ionicons.glyphMap;
+    color: string;
+    bg: string;
+    label: string;
+};
 
 interface TeamStatusBarProps {
     tasks: KanbanTask[];
@@ -54,46 +64,54 @@ function countSignals(tasks: KanbanTask[]) {
     return { running, deciding, blocked };
 }
 
+function getBarPercent(count: number, maxCount: number, minPercent: number = 18): DimensionValue {
+    if (count <= 0 || maxCount <= 0) {
+        return '0%';
+    }
+
+    return `${Math.min(100, Math.max(minPercent, Math.round((count / maxCount) * 100)))}%` as `${number}%`;
+}
+
 export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPress, compact = false }) => {
     const { theme } = useUnistyles();
     const counts = React.useMemo(() => countSignals(tasks), [tasks]);
-    const hasActivity = counts.running > 0 || counts.deciding > 0 || counts.blocked > 0;
+    const signals = React.useMemo(() => {
+        const allSignals: SignalItem[] = [
+            {
+                key: 'running',
+                count: counts.running,
+                icon: 'pulse-outline',
+                color: '#16A34A',
+                bg: '#DCFCE7',
+                label: 'Running',
+            },
+            {
+                key: 'deciding',
+                count: counts.deciding,
+                icon: 'hand-left-outline',
+                color: '#D97706',
+                bg: '#FEF3C7',
+                label: 'Needs you',
+            },
+            {
+                key: 'blocked',
+                count: counts.blocked,
+                icon: 'warning-outline',
+                color: '#DC2626',
+                bg: '#FEE2E2',
+                label: 'Blocked',
+            },
+        ];
+
+        return allSignals.filter(signal => signal.count > 0);
+    }, [counts]);
+    const maxSignalCount = React.useMemo(
+        () => signals.reduce((max, signal) => Math.max(max, signal.count), 0),
+        [signals]
+    );
+    const hasActivity = signals.length > 0;
 
     if (!hasActivity) return null;
-
-    const signals: Array<{
-        key: StatusSignal;
-        count: number;
-        icon: string;
-        color: string;
-        bg: string;
-        label: string;
-    }> = [
-        {
-            key: 'running',
-            count: counts.running,
-            icon: 'pulse-outline',
-            color: '#16A34A',
-            bg: '#DCFCE7',
-            label: 'Running',
-        },
-        {
-            key: 'deciding',
-            count: counts.deciding,
-            icon: 'hand-left-outline',
-            color: '#D97706',
-            bg: '#FEF3C7',
-            label: 'Needs you',
-        },
-        {
-            key: 'blocked',
-            count: counts.blocked,
-            icon: 'warning-outline',
-            color: '#DC2626',
-            bg: '#FEE2E2',
-            label: 'Blocked',
-        },
-    ].filter(s => s.count > 0);
 
     if (compact) {
         return (
@@ -107,9 +125,22 @@ export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPre
                         accessibilityLabel={`${s.count} ${s.label}`}
                     >
                         <Ionicons name={s.icon as any} size={13} color={s.color} />
-                        <Text style={[styles.compactChipCount, { color: s.color }]}>
-                            {s.count}
-                        </Text>
+                        <View style={styles.compactValueWrap}>
+                            <Text style={[styles.compactChipCount, { color: s.color }]}>
+                                {s.count}
+                            </Text>
+                            <View style={[styles.compactBarTrack, { backgroundColor: s.color + '20' }]}>
+                                <View
+                                    style={[
+                                        styles.compactBarFill,
+                                        {
+                                            backgroundColor: s.color,
+                                            width: getBarPercent(s.count, maxSignalCount),
+                                        },
+                                    ]}
+                                />
+                            </View>
+                        </View>
                         <Text style={[styles.compactChipLabel, { color: s.color }]}>
                             {s.label}
                         </Text>
@@ -133,9 +164,22 @@ export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPre
                         <View style={[styles.signalIconWrap, { backgroundColor: s.bg }]}>
                             <Ionicons name={s.icon as any} size={18} color={s.color} />
                         </View>
-                        <Text style={[styles.signalCount, { color: s.color }]}>
-                            {s.count}
-                        </Text>
+                        <View style={styles.signalValueRow}>
+                            <Text style={[styles.signalCount, { color: s.color }]}>
+                                {s.count}
+                            </Text>
+                            <View style={[styles.signalBarTrack, { backgroundColor: s.color + '20' }]}>
+                                <View
+                                    style={[
+                                        styles.signalBarFill,
+                                        {
+                                            backgroundColor: s.color,
+                                            width: getBarPercent(s.count, maxSignalCount),
+                                        },
+                                    ]}
+                                />
+                            </View>
+                        </View>
                         <Text style={[styles.signalLabel, { color: theme.colors.textSecondary }]}>
                             {s.label}
                         </Text>
@@ -174,6 +218,22 @@ const styles = StyleSheet.create((_theme) => ({
         fontWeight: '700',
         lineHeight: 26,
     },
+    signalValueRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    signalBarTrack: {
+        width: 40,
+        height: 6,
+        borderRadius: 999,
+        overflow: 'hidden',
+    },
+    signalBarFill: {
+        height: '100%',
+        borderRadius: 999,
+        minWidth: 6,
+    },
     signalLabel: {
         fontSize: 11,
         fontWeight: '500',
@@ -199,6 +259,22 @@ const styles = StyleSheet.create((_theme) => ({
     compactChipCount: {
         fontSize: 13,
         fontWeight: '700',
+    },
+    compactValueWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    compactBarTrack: {
+        width: 28,
+        height: 4,
+        borderRadius: 999,
+        overflow: 'hidden',
+    },
+    compactBarFill: {
+        height: '100%',
+        borderRadius: 999,
+        minWidth: 4,
     },
     compactChipLabel: {
         fontSize: 12,

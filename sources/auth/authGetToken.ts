@@ -3,10 +3,17 @@ import axios from 'axios';
 import { encodeBase64 } from "../encryption/base64";
 import { getServerUrl } from "@/sync/serverConfig";
 
-export async function authGetToken(secret: Uint8Array) {
+type AuthMode = 'create' | 'reconnect';
+
+export async function authGetToken(secret: Uint8Array, mode: AuthMode = 'reconnect') {
     const API_ENDPOINT = getServerUrl();
     const { challenge, signature, publicKey } = authChallenge(secret);
-    const response = await axios.post(`${API_ENDPOINT}/v1/auth`, { challenge: encodeBase64(challenge), signature: encodeBase64(signature), publicKey: encodeBase64(publicKey) });
+    const endpoint = mode === 'create' ? '/v1/auth' : '/v1/auth/reconnect';
+    const response = await axios.post(`${API_ENDPOINT}${endpoint}`, {
+        challenge: encodeBase64(challenge),
+        signature: encodeBase64(signature),
+        publicKey: encodeBase64(publicKey)
+    });
     const data = response.data;
     return data.token;
 }

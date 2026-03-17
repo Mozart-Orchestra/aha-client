@@ -59,14 +59,19 @@ export interface GenomeSpec {
 export interface Genome {
     id: string;
     accountId: string;
+    namespace?: string | null;
     name: string;
+    version?: number;
     description: string | null;
     spec: string;   // JSON string of GenomeSpec
     parentSessionId: string;
     teamId: string | null;
+    tags?: string | null;
+    category?: string | null;
     spawnCount: number;
     lastSpawnedAt: string | null;
     isPublic: boolean;
+    feedbackData?: string | null;
     createdAt: string;
     updatedAt: string;
 }

@@ -7,7 +7,9 @@ import { getServerUrl } from './serverConfig';
 export interface TeamMemberResponse {
     success: boolean;
     member: {
+        memberId?: string;
         sessionId: string;
+        sessionTag?: string;
         role?: string;
         joinedAt: number;
     };
@@ -73,7 +75,15 @@ export async function addTeamMember(
     teamId: string,
     sessionId: string,
     roleId?: string,
-    displayName?: string
+    displayName?: string,
+    opts?: {
+        memberId?: string;
+        sessionTag?: string;
+        specId?: string;
+        parentSessionId?: string;
+        executionPlane?: string;
+        runtimeType?: string;
+    }
 ): Promise<TeamMemberResponse> {
     const API_ENDPOINT = getServerUrl();
 
@@ -84,7 +94,17 @@ export async function addTeamMember(
                 'Authorization': `Bearer ${credentials.token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ sessionId, roleId: roleId || 'member', displayName })
+            body: JSON.stringify({
+                sessionId,
+                roleId: roleId || 'member',
+                displayName,
+                ...(opts?.memberId !== undefined ? { memberId: opts.memberId } : {}),
+                ...(opts?.sessionTag !== undefined ? { sessionTag: opts.sessionTag } : {}),
+                ...(opts?.specId !== undefined ? { specId: opts.specId } : {}),
+                ...(opts?.parentSessionId !== undefined ? { parentSessionId: opts.parentSessionId } : {}),
+                ...(opts?.executionPlane !== undefined ? { executionPlane: opts.executionPlane } : {}),
+                ...(opts?.runtimeType !== undefined ? { runtimeType: opts.runtimeType } : {}),
+            })
         });
 
         if (!response.ok) {

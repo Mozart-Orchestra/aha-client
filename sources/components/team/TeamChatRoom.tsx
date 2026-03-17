@@ -265,83 +265,84 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontStyle: 'italic',
     },
     inputContainer: {
-        backgroundColor: '#EDF3F6CC',
+        backgroundColor: theme.colors.surface,
         borderTopWidth: 1,
-        borderTopColor: '#DEE8EE',
-        paddingHorizontal: Platform.select({ web: 22, default: 18 }),
-        paddingVertical: Platform.select({ web: 14, default: 12 }),
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        gap: Platform.select({ web: 8, default: 10 }),
+        borderTopColor: theme.colors.divider,
+        paddingHorizontal: Platform.select({ web: 12, default: 10 }),
+        paddingTop: 8,
+        paddingBottom: Platform.select({ web: 10, default: 8 }),
     },
-    inputWrapper: {
-        flex: 1,
-        minHeight: Platform.select({ web: 44, default: 48 }),
-        maxHeight: Platform.select({ web: 132, default: 138 }),
-        borderRadius: Platform.select({ web: 22, default: 24 }),
-        paddingHorizontal: Platform.select({ web: 16, default: 15 }),
-        paddingVertical: Platform.select({ web: 10, default: 11 }),
-        borderWidth: 1,
-        borderColor: '#D9E4EA',
+    unifiedInputPanel: {
+        backgroundColor: theme.colors.input.background,
+        borderRadius: Platform.select({ web: 16, default: 20 }),
         overflow: 'hidden',
-        justifyContent: 'center',
-        shadowColor: '#7A8C9B',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 1,
+        paddingTop: 2,
+        paddingBottom: 8,
+        paddingHorizontal: 8,
     },
-    // 🆕 Focused input state
-    inputWrapperFocused: {
-        borderColor: '#7C95A9',
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 2,
+    inputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingLeft: 8,
+        paddingRight: 4,
+        paddingVertical: 4,
+        minHeight: 40,
     },
     input: {
-        fontSize: Platform.select({ web: 13, default: 14 }),
-        lineHeight: Platform.select({ web: 18, default: 20 }),
-        color: '#233648',
-        minHeight: Platform.select({ web: 22, default: 24 }),
+        flex: 1,
+        fontSize: Platform.select({ web: 14, default: 15 }),
+        lineHeight: Platform.select({ web: 20, default: 22 }),
+        color: theme.colors.input.text,
+        minHeight: Platform.select({ web: 24, default: 26 }),
         maxHeight: Platform.select({ web: 112, default: 116 }),
         paddingTop: 0,
         paddingBottom: 0,
     } as any,
-    sendButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 999,
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-    },
-    sendButtonDisabled: {
-        opacity: 0.4,
-    },
-    attachButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 2,
-        backgroundColor: theme.colors.groupped.background,
-    },
-    // 🆕 Horizontal container for image and history buttons
-    verticalButtonContainer: {
+    actionRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: Platform.select({ web: 4, default: 6 }),
+        paddingHorizontal: 4,
+        gap: 2,
     },
-    // 🆕 Smaller buttons for vertical layout
-    attachButtonSmall: {
+    actionButton: {
         width: 32,
         height: 32,
         borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.colors.groupped.background,
+    },
+    actionButtonPressed: {
+        opacity: 0.6,
+    },
+    helpPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 28,
+        paddingHorizontal: 10,
+        borderRadius: 14,
+        backgroundColor: theme.colors.button.primary.background + '0D',
+        gap: 4,
+    },
+    helpPillText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.colors.button.primary.background,
+    },
+    actionSpacer: {
+        flex: 1,
+    },
+    sendButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sendButtonActive: {
+        backgroundColor: theme.colors.button.primary.background,
+    },
+    sendButtonInactive: {
+        backgroundColor: theme.colors.button.primary.disabled,
     },
     emptyState: {
         flex: 1,
@@ -1371,7 +1372,7 @@ export default function TeamChatRoom({
     const [isSending, setIsSending] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(true);
     const [showStatus, setShowStatus] = React.useState(false);
-    const [isInputFocused, setIsInputFocused] = React.useState(false);
+    const [isInputFocused, setIsInputFocused] = React.useState(false); // tracked for clipboard check timing
     const [showHistory, setShowHistory] = React.useState(false);
     // 🆕 Image selection state
     const [selectedImage, setSelectedImage] = React.useState<{
@@ -2250,17 +2251,61 @@ export default function TeamChatRoom({
             if (requestedHelp) {
                 const helpMachine = selectHelpMachine(helpTargetSessionId);
                 if (helpMachine) {
-                    sync.requestHelpOnMachine(helpMachine.machineId, {
-                        teamId,
-                        sessionId: helpMachine.targetSessionId,
-                        type: 'user_mention',
-                        description: content.trim(),
-                        severity: 'medium',
-                    }).catch((error) => {
+                    try {
+                        const helpResult = await sync.requestHelpOnMachine(helpMachine.machineId, {
+                            teamId,
+                            sessionId: helpMachine.targetSessionId,
+                            type: 'user_mention',
+                            description: content.trim(),
+                            severity: 'medium',
+                        });
+                        if (!helpResult.success) {
+                            console.warn('@help RPC returned failure:', helpResult.error);
+                            // Show error to user as system message
+                            setMessages(prev => [...prev, {
+                                id: `help-error-${Date.now()}`,
+                                teamId,
+                                content: `Failed to trigger help agent: ${helpResult.error || 'Unknown error'}`,
+                                type: 'system' as const,
+                                timestamp: Date.now(),
+                                fromRole: 'system',
+                                fromDisplayName: 'System',
+                            }]);
+                        } else {
+                            // Show confirmation to user
+                            setMessages(prev => [...prev, {
+                                id: `help-ack-${Date.now()}`,
+                                teamId,
+                                content: `Help agent is being dispatched...`,
+                                type: 'system' as const,
+                                timestamp: Date.now(),
+                                fromRole: 'system',
+                                fromDisplayName: 'System',
+                            }]);
+                        }
+                    } catch (error) {
                         console.warn('Failed to trigger @help request:', error);
-                    });
+                        setMessages(prev => [...prev, {
+                            id: `help-error-${Date.now()}`,
+                            teamId,
+                            content: `Failed to reach help agent: ${error instanceof Error ? error.message : 'Connection error'}`,
+                            type: 'system' as const,
+                            timestamp: Date.now(),
+                            fromRole: 'system',
+                            fromDisplayName: 'System',
+                        }]);
+                    }
                 } else {
                     console.warn('Ignoring @help request because no active machine could be resolved for the team');
+                    setMessages(prev => [...prev, {
+                        id: `help-no-machine-${Date.now()}`,
+                        teamId,
+                        content: `No online machine available to handle @help. Make sure your daemon is running.`,
+                        type: 'system' as const,
+                        timestamp: Date.now(),
+                        fromRole: 'system',
+                        fromDisplayName: 'System',
+                    }]);
                 }
             }
             const taskIds = taskChatSync ? extractTaskIds(content) : [];
@@ -2626,43 +2671,6 @@ export default function TeamChatRoom({
             )}
 
             <View style={styles.inputContainer}>
-                {/* 🆕 Vertical button container for image and history buttons */}
-                <View style={styles.verticalButtonContainer}>
-                    {/* Image picker button */}
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.attachButtonSmall,
-                            pressed && { opacity: 0.6 }
-                        ]}
-                        onPress={handlePickImage}
-                        disabled={isSending || isCompressing}
-                        hitSlop={8}
-                    >
-                        <Ionicons
-                            name="image-outline"
-                            size={20}
-                            color={(isSending || isCompressing) ? '#8FA1B050' : '#8FA1B0'}
-                        />
-                    </Pressable>
-
-                    {/* 历史消息按钮 */}
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.attachButtonSmall,
-                            pressed && { opacity: 0.6 }
-                        ]}
-                        onPress={() => setShowHistory(!showHistory)}
-                        disabled={myMessageHistory.length === 0}
-                        hitSlop={8}
-                    >
-                        <Ionicons
-                            name={showHistory ? "time" : "time-outline"}
-                            size={20}
-                            color={myMessageHistory.length === 0 ? '#8FA1B050' : '#8FA1B0'}
-                        />
-                    </Pressable>
-                </View>
-
                 {mentionSuggestions.length > 0 && (
                     <AgentInputAutocomplete
                         suggestions={mentionSuggestions.map((s) => React.createElement(s.component))}
@@ -2672,78 +2680,124 @@ export default function TeamChatRoom({
                     />
                 )}
 
-                <LinearGradient
-                    colors={['#FFFFFF', '#EEF4F7']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={[styles.inputWrapper, isInputFocused && styles.inputWrapperFocused]}
-                >
-                    <TextInput
-                        ref={inputRef}
-                        style={styles.input}
-                        value={inputText}
-                        onChangeText={setInputText}
-                        onSelectionChange={(e) => setInputSelection(e.nativeEvent.selection)}
-                        placeholder={selectedImage ? "Add a caption (optional)..." : "Type a message, @help for assistance..."}
-                        placeholderTextColor="#92A1AF"
-                        multiline
-                        maxLength={2000}
-                        editable={!isSending}
-                        onFocus={() => {
-                            setIsInputFocused(true);
-                            checkClipboardForImage();
-                        }}
-                        onBlur={() => {
-                            setIsInputFocused(false);
-                            setTimeout(() => setClipboardHasImage(false), 200);
-                        }}
-                        onKeyPress={(e) => {
-                            if (mentionSuggestions.length > 0) {
-                                if (e.nativeEvent.key === 'ArrowUp') {
-                                    e.preventDefault?.();
-                                    mentionMoveUp();
-                                    return;
+                <View style={styles.unifiedInputPanel}>
+                    {/* Input row */}
+                    <View style={styles.inputRow}>
+                        <TextInput
+                            ref={inputRef}
+                            style={styles.input}
+                            value={inputText}
+                            onChangeText={setInputText}
+                            onSelectionChange={(e) => setInputSelection(e.nativeEvent.selection)}
+                            placeholder={selectedImage ? "Add a caption (optional)..." : "Message your team..."}
+                            placeholderTextColor={theme.colors.input.placeholder}
+                            multiline
+                            maxLength={2000}
+                            editable={!isSending}
+                            onFocus={() => {
+                                setIsInputFocused(true);
+                                checkClipboardForImage();
+                            }}
+                            onBlur={() => {
+                                setIsInputFocused(false);
+                                setTimeout(() => setClipboardHasImage(false), 200);
+                            }}
+                            onKeyPress={(e) => {
+                                if (mentionSuggestions.length > 0) {
+                                    if (e.nativeEvent.key === 'ArrowUp') {
+                                        e.preventDefault?.();
+                                        mentionMoveUp();
+                                        return;
+                                    }
+                                    if (e.nativeEvent.key === 'ArrowDown') {
+                                        e.preventDefault?.();
+                                        mentionMoveDown();
+                                        return;
+                                    }
+                                    if (e.nativeEvent.key === 'Enter' && mentionSelectedIndex >= 0) {
+                                        e.preventDefault?.();
+                                        handleMentionSelect(mentionSelectedIndex);
+                                        return;
+                                    }
                                 }
-                                if (e.nativeEvent.key === 'ArrowDown') {
-                                    e.preventDefault?.();
-                                    mentionMoveDown();
-                                    return;
-                                }
-                                if (e.nativeEvent.key === 'Enter' && mentionSelectedIndex >= 0) {
-                                    e.preventDefault?.();
-                                    handleMentionSelect(mentionSelectedIndex);
-                                    return;
-                                }
-                            }
-                        }}
-                    />
-                </LinearGradient>
+                            }}
+                        />
+                    </View>
 
-                <Pressable
-                    style={[
-                        styles.sendButton,
-                        ((!inputText.trim() && !selectedImage) || isSending) && styles.sendButtonDisabled
-                    ]}
-                    onPress={handleSend}
-                    disabled={(!inputText.trim() && !selectedImage) || isSending}
-                >
-                    <LinearGradient
-                        colors={['#30465D', '#1C2938']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                        style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 999,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 1,
-                            borderColor: '#3B5368',
-                        }}
-                    >
-                        <Ionicons name="arrow-up" size={16} color="#FFFFFF" />
-                    </LinearGradient>
-                </Pressable>
+                    {/* Action row: buttons left, send right */}
+                    <View style={styles.actionRow}>
+                        {/* @help pill button */}
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.helpPill,
+                                pressed && styles.actionButtonPressed,
+                            ]}
+                            onPress={() => {
+                                const prefix = inputText.length > 0 && !inputText.endsWith(' ') ? ' ' : '';
+                                setInputText(inputText + prefix + '@help ');
+                                inputRef.current?.focus();
+                            }}
+                            hitSlop={4}
+                        >
+                            <Ionicons name="medkit" size={13} color={theme.colors.button.primary.background} />
+                            <Text style={styles.helpPillText}>Help</Text>
+                        </Pressable>
+
+                        {/* Image picker */}
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.actionButton,
+                                pressed && styles.actionButtonPressed,
+                            ]}
+                            onPress={handlePickImage}
+                            disabled={isSending || isCompressing}
+                            hitSlop={4}
+                        >
+                            <Ionicons
+                                name="image-outline"
+                                size={20}
+                                color={(isSending || isCompressing) ? theme.colors.button.primary.disabled : theme.colors.textSecondary}
+                            />
+                        </Pressable>
+
+                        {/* History */}
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.actionButton,
+                                pressed && styles.actionButtonPressed,
+                            ]}
+                            onPress={() => setShowHistory(!showHistory)}
+                            disabled={myMessageHistory.length === 0}
+                            hitSlop={4}
+                        >
+                            <Ionicons
+                                name={showHistory ? "time" : "time-outline"}
+                                size={20}
+                                color={myMessageHistory.length === 0 ? theme.colors.button.primary.disabled : theme.colors.textSecondary}
+                            />
+                        </Pressable>
+
+                        <View style={styles.actionSpacer} />
+
+                        {/* Send button */}
+                        <Pressable
+                            style={[
+                                styles.sendButton,
+                                (inputText.trim() || selectedImage) && !isSending
+                                    ? styles.sendButtonActive
+                                    : styles.sendButtonInactive,
+                            ]}
+                            onPress={handleSend}
+                            disabled={(!inputText.trim() && !selectedImage) || isSending}
+                        >
+                            <Ionicons
+                                name="arrow-up"
+                                size={16}
+                                color={theme.colors.button.primary.tint}
+                            />
+                        </Pressable>
+                    </View>
+                </View>
             </View>
         </KeyboardAvoidingView>
     );

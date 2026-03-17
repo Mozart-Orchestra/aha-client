@@ -115,6 +115,95 @@ export interface TeamChannelSubscription {
     joinedAt: number;
 }
 
+export interface TeamMentionCandidate {
+    sessionId: string;
+    displayName?: string;
+    roleId?: string;
+    aliases?: string[];
+}
+
+function normalizeMentionLookupKey(value: string): string {
+    return value
+        .trim()
+        .replace(/^@+/, '')
+        .toLowerCase()
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-');
+}
+
+function isLikelyFullSessionId(value: string): boolean {
+    return /^[a-z0-9]{16,}$/i.test(value.trim());
+}
+
+export function extractMentionTokens(text: string): string[] {
+    const mentionRegex = /@([a-zA-Z0-9-_]+)/g;
+    return [...text.matchAll(mentionRegex)].map((match) => match[1]);
+}
+
+export function canonicalizeTeamMentions(
+    rawMentions: string[] | undefined,
+    candidates: TeamMentionCandidate[]
+): string[] {
+    if (!rawMentions?.length) {
+        return [];
+    }
+
+    const aliasMap = new Map<string, Set<string>>();
+    const registerAlias = (alias: string | undefined, sessionId: string) => {
+        if (!alias) {
+            return;
+        }
+
+        const normalized = normalizeMentionLookupKey(alias);
+        if (!normalized) {
+            return;
+        }
+
+        const existing = aliasMap.get(normalized) ?? new Set<string>();
+        existing.add(sessionId);
+        aliasMap.set(normalized, existing);
+    };
+
+    candidates.forEach((candidate) => {
+        registerAlias(candidate.sessionId, candidate.sessionId);
+        registerAlias(candidate.displayName, candidate.sessionId);
+        registerAlias(candidate.roleId, candidate.sessionId);
+        candidate.aliases?.forEach((alias) => registerAlias(alias, candidate.sessionId));
+    });
+
+    const canonicalMentions: string[] = [];
+
+    rawMentions.forEach((rawMention) => {
+        const normalized = normalizeMentionLookupKey(rawMention);
+        if (!normalized) {
+            return;
+        }
+
+        let resolvedSessionId: string | null = null;
+
+        const aliasMatches = aliasMap.get(normalized);
+        if (aliasMatches?.size === 1) {
+            resolvedSessionId = [...aliasMatches][0];
+        } else if (!aliasMatches || aliasMatches.size === 0) {
+            const prefixMatches = candidates.filter((candidate) =>
+                normalizeMentionLookupKey(candidate.sessionId).startsWith(normalized)
+            );
+
+            if (prefixMatches.length === 1) {
+                resolvedSessionId = prefixMatches[0].sessionId;
+            } else if (isLikelyFullSessionId(normalized)) {
+                resolvedSessionId = rawMention.trim().replace(/^@+/, '');
+            }
+        }
+
+        if (resolvedSessionId && !canonicalMentions.includes(resolvedSessionId)) {
+            canonicalMentions.push(resolvedSessionId);
+        }
+    });
+
+    return canonicalMentions;
+}
+
 /**
  * WebSocket 消息：团队消息更新
  */

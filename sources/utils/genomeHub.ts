@@ -25,6 +25,7 @@ export interface GenomeRecord {
     namespace: string | null;
     name: string;
     version: number;
+    status: 'draft' | 'verified' | 'official';
     description: string | null;
     spec: string;
     tags: string | null;
@@ -118,6 +119,80 @@ export interface CorpsSpec {
 export function parseCorpsSpec(specJson: string): CorpsSpec | null {
     try {
         return JSON.parse(specJson) as CorpsSpec;
+    } catch {
+        return null;
+    }
+}
+
+// ─── GenomeSpec (display-only subset of the canonical spec) ─────────────────
+
+export interface GenomeSpec {
+    // Tier 0 — Identity
+    displayName?: string;
+    baseRoleId?: string;
+
+    // Tier 1 — Prompt (capabilities only, NOT raw systemPrompt)
+    responsibilities?: string[];
+    protocol?: string[];
+    capabilities?: string[];
+
+    // Tier 2 — Model
+    modelId?: string;
+    fallbackModelId?: string;
+    modelProvider?: string;
+
+    // Tier 3 — Tool access
+    allowedTools?: string[];
+    disallowedTools?: string[];
+    mcpServers?: string[];
+
+    // Tier 4 — Permissions & execution
+    permissionMode?: string;
+    accessLevel?: string;
+    executionPlane?: string;
+    maxTurns?: number;
+
+    // Tier 7 — Messaging & behavior
+    messaging?: {
+        listenFrom?: string[] | '*';
+        receiveUserMessages?: boolean;
+        replyMode?: 'proactive' | 'responsive' | 'passive';
+    };
+    behavior?: {
+        onIdle?: 'wait' | 'self-assign' | 'ask';
+        onBlocked?: 'report' | 'escalate' | 'retry';
+        canSpawnAgents?: boolean;
+        requireExplicitAssignment?: boolean;
+    };
+
+    // Tier 8 — Hooks
+    hooks?: {
+        preToolUse?: Array<{ matcher: string; command: string; description?: string }>;
+        postToolUse?: Array<{ matcher: string; command: string; description?: string }>;
+        stop?: Array<{ command: string; description?: string }>;
+    };
+
+    // Tier 9 — Skills
+    skills?: string[];
+
+    meta?: Record<string, unknown>;
+}
+
+export function parseSpec(specJson: string): GenomeSpec | null {
+    try {
+        return JSON.parse(specJson) as GenomeSpec;
+    } catch {
+        return null;
+    }
+}
+
+/** Fetch a genome by its immutable UUID. Returns null if not found. */
+export async function fetchGenomeById(id: string): Promise<GenomeRecord | null> {
+    try {
+        const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}`);
+        if (!res.ok) return null;
+        const data = await res.json() as { genome?: GenomeRecord };
+        return data.genome ?? null;
     } catch {
         return null;
     }

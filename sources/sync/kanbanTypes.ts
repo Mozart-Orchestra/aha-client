@@ -174,7 +174,17 @@ export interface KanbanBoard {
 }
 
 export interface KanbanTeamMember {
+    /**
+     * Stable team-member identity used for recovery.
+     * Unlike sessionId, this survives runtime restarts and session recreation.
+     */
+    memberId?: string;
     sessionId: string;
+    /**
+     * Stable Aha session tag used with getOrCreateSession(tag, ...).
+     * Recover flows should reuse this instead of generating a fresh random tag.
+     */
+    sessionTag?: string;
     roleId: string;
     displayName?: string;
     focusAreas?: string[];
@@ -182,6 +192,21 @@ export interface KanbanTeamMember {
     parentSessionId?: string;
     executionPlane?: string;
     runtimeType?: string;
+    /**
+     * Truth-layer lifecycle timestamps for spawned agents.
+     *
+     * - spawnRequestedAt: when the system asked for this agent/session to be created
+     * - processStartedAt: when the agent process itself started running
+     * - handshakeReadyAt: first authoritative "online and ready" handshake observed in team messages
+     * - taskAckedAt: first execution-started/task-ack observed for this session
+     */
+    lifecycle?: {
+        spawnRequestedAt?: number;
+        processStartedAt?: number;
+        handshakeReadyAt?: number;
+        taskAckedAt?: number;
+        taskAckedTaskId?: string;
+    };
 }
 
 export interface KanbanTeamRole {

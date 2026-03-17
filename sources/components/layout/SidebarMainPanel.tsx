@@ -5,6 +5,7 @@ import { getDisplayName } from '@/sync/profile';
 import { useAllSessions, useArtifacts, useProfile } from '@/sync/storage';
 import type { Session } from '@/sync/storageTypes';
 import { getSessionName } from '@/utils/sessionUtils';
+import { getTeamMemberMapFromArtifact, getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { fetchGenomeByName, parseFeedback } from '@/utils/genomeHub';
 
@@ -39,7 +40,6 @@ function buildRoleCandidates(value: string): string[] {
         value.trim(),
         normalized,
         normalized.replace(/[\s_]+/g, '-'),
-        normalized.replace(/[\s-]+/g, '_'),
     ].filter(Boolean)));
 }
 
@@ -74,30 +74,43 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
     }, [allArtifacts, selectedTeamId]);
 
     const agents = React.useMemo(() => {
-        const teamSessionIds = new Set(selectedTeamArtifact?.sessions ?? []);
+        const teamSessionIds = new Set(getTeamSessionIdsFromArtifact(selectedTeamArtifact));
+        const teamMemberMap = getTeamMemberMapFromArtifact(selectedTeamArtifact);
         const sourceSessions = selectedTeamId
             ? allSessions.filter((session) =>
                 session.metadata?.teamId === selectedTeamId || teamSessionIds.has(session.id)
             )
             : allSessions.filter((session) => session.active || session.presence === 'online' || session.thinking);
 
-        const result: { id: string; name: string; dotColor: string; description: string; inactive: boolean; session: Session }[] = [];
+        const result: { id: string; name: string; dotColor: string; description: string; inactive: boolean; dead: boolean; session: Session }[] = [];
+
+        const DEAD_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour without activity = "ended"
 
         sourceSessions.forEach((session) => {
-            const flavor = session.metadata?.flavor ?? session.metadata?.role ?? '';
+            const member = teamMemberMap.get(session.id);
+            const flavor = member?.roleId ?? session.metadata?.flavor ?? session.metadata?.role ?? '';
+            const runtimeLabel = member?.runtimeType ? member.runtimeType : undefined;
+            const inactive = !session.active;
+            const dead = inactive && session.activeAt > 0 && (Date.now() - session.activeAt > DEAD_THRESHOLD_MS);
             result.push({
                 id: session.id,
-                name: getSessionName(session),
+                name: member?.displayName || getSessionName(session),
                 dotColor: AGENT_DOT_COLORS[flavor.toLowerCase()] ?? '#007AFF',
-                description: flavor,
-                inactive: !session.active,
+                description: [flavor, runtimeLabel].filter(Boolean).join(' · '),
+                inactive,
+                dead,
                 session,
             });
         });
 
         result.sort((a, b) => {
+            // Active before inactive
             if (a.inactive !== b.inactive) {
                 return a.inactive ? 1 : -1;
+            }
+            // Within inactive: dead at the very bottom
+            if (a.inactive && b.inactive && a.dead !== b.dead) {
+                return a.dead ? 1 : -1;
             }
 
             const updatedAtDelta = b.session.updatedAt - a.session.updatedAt;
@@ -190,8 +203,8 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
     }, [agents, selectedAgentId]);
 
     React.useEffect(() => {
-        if (teams.length > 0 && (!selectedTeamId || !teams.some((team) => team.id === selectedTeamId))) {
-            setSelectedTeamId(teams[0].id);
+        if (selectedTeamId && !teams.some((team) => team.id === selectedTeamId)) {
+            setSelectedTeamId(null);
         }
     }, [teams, selectedTeamId]);
 
@@ -234,6 +247,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 name: agent.name,
                 dotColor: agent.dotColor,
                 inactive: agent.inactive,
+                dead: agent.dead,
                 description: agent.description || undefined,
                 score: roleScores[normalizeRoleKey(agent.description || '')]?.score,
                 scoreCount: roleScores[normalizeRoleKey(agent.description || '')]?.evaluationCount,
@@ -279,8 +293,11 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 avatarIcon: 'grid-outline',
                 selected: selectedTeamId === team.id,
                 onPress: () => {
-                    setSelectedTeamId(team.id);
-                    router.push(`/teams/${team.id}` as never);
+                    if (selectedTeamId === team.id) {
+                        router.push(`/teams/${team.id}` as never);
+                    } else {
+                        setSelectedTeamId(team.id);
+                    }
                 },
             }))}
             conversationHeaderAction={() => router.push('/teams/new' as never)}

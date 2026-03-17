@@ -28,7 +28,6 @@ import { config } from '@/config';
 import { log } from '@/log';
 import { gitStatusSync } from './gitStatusSync';
 import { projectManager } from './projectManager';
-import { voiceHooks } from '@/realtime/hooks/voiceHooks';
 import { Message } from './typesMessage';
 import { EncryptionCache } from './encryption/encryptionCache';
 import { systemPrompt } from './prompt/systemPrompt';
@@ -314,11 +313,6 @@ class Sync {
         // Also invalidate git status sync for this session
         gitStatusSync.getSync(sessionId).invalidate();
 
-        // Notify voice assistant about session visibility
-        const session = storage.getState().sessions[sessionId];
-        if (session) {
-            voiceHooks.onSessionFocus(sessionId, session.metadata || undefined);
-        }
     }
 
 
@@ -2318,7 +2312,13 @@ class Sync {
             log.log(`Spawn request completed on machine ${machineId} (no sessionId returned)`);
             return null;
         } catch (error) {
+            await this.machinesSync.invalidateAndAwait().catch(() => {
+                // Best effort refresh so the UI can reflect daemon disconnects after an RPC failure.
+            });
             console.error(`Failed to spawn session on machine ${machineId}:`, error);
+            if (error instanceof Error && error.message.includes('RPC method not available')) {
+                throw new Error(`Machine ${machineId} daemon is not reachable right now. Refresh machine status and retry.`);
+            }
             throw error;
         }
     }
@@ -2632,13 +2632,6 @@ class Sync {
                 if (updateData.body.agentState) {
                     gitStatusSync.invalidate(updateData.body.id);
 
-                    // Check for new permission requests and notify voice assistant
-                    if (agentState?.requests && Object.keys(agentState.requests).length > 0) {
-                        const requestIds = Object.keys(agentState.requests);
-                        const firstRequest = agentState.requests[requestIds[0]];
-                        const toolName = firstRequest?.tool;
-                        voiceHooks.onPermissionRequested(updateData.body.id, requestIds[0], toolName, firstRequest?.arguments);
-                    }
                 }
 
                 // Auto-sync session metadata to team artifact if session has team information
@@ -2997,12 +2990,6 @@ class Sync {
                 m.push(message);
             }
         }
-        if (m.length > 0) {
-            voiceHooks.onMessages(sessionId, m);
-        }
-        if (result.hasReadyEvent) {
-            voiceHooks.onReady(sessionId);
-        }
     }
 
     private applySessions = (sessions: (Omit<Session, "presence"> & {
@@ -3017,16 +3004,6 @@ class Sync {
     private applySessionDiff = (active: Session[], newActive: Session[]) => {
         let wasActive = new Set(active.map(s => s.id));
         let isActive = new Set(newActive.map(s => s.id));
-        for (let s of active) {
-            if (!isActive.has(s.id)) {
-                voiceHooks.onSessionOffline(s.id, s.metadata ?? undefined);
-            }
-        }
-        for (let s of newActive) {
-            if (!wasActive.has(s.id)) {
-                voiceHooks.onSessionOnline(s.id, s.metadata ?? undefined);
-            }
-        }
     }
 
     //

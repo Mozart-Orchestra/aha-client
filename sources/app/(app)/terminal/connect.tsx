@@ -7,8 +7,15 @@ import { useConnectTerminal } from '@/hooks/useConnectTerminal';
 import { ItemList } from '@/components/ui/ItemList';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { t } from '@/text';
+import {
+    clearPendingTerminalConnectRequestStorage,
+    persistPendingTerminalConnectRequestStorage,
+    readPendingTerminalConnectRequestStorage
+} from '@/auth/pendingTerminalConnect';
 import { getServerUrl, setServerUrl, validateServerUrl } from '@/sync/serverConfig';
 import { useAuth } from '@/auth/AuthContext';
+
+type AuthMode = 'auto' | 'create' | 'reconnect';
 
 interface PendingTerminalConnectRequest {
     publicKey: string;
@@ -16,9 +23,8 @@ interface PendingTerminalConnectRequest {
     machineId: string | null;
     serverUrl: string | null;
     autoApprove: boolean;
+    authMode: AuthMode;
 }
-
-const PENDING_TERMINAL_CONNECT_REQUEST_KEY = 'pending-terminal-connect-request';
 
 export default function TerminalConnectScreen() {
     const router = useRouter();
@@ -30,6 +36,7 @@ export default function TerminalConnectScreen() {
     const [targetMachineId, setTargetMachineId] = useState<string | null>(null);
     const [requestedServerUrl, setRequestedServerUrl] = useState<string | null>(null);
     const [autoConnectTriggered, setAutoConnectTriggered] = useState(false);
+    const [authMode, setAuthMode] = useState<AuthMode>('auto');
     const nextHref = React.useMemo(() => {
         if (!nextPath) {
             return null;
@@ -43,6 +50,41 @@ export default function TerminalConnectScreen() {
         url.searchParams.set('machineId', targetMachineId);
         return `${url.pathname}${url.search}`;
     }, [nextPath, targetMachineId]);
+
+    const persistCurrentPendingRequest = React.useCallback(() => {
+        if (!publicKey) {
+            return;
+        }
+
+        persistPendingTerminalConnectRequest({
+            publicKey,
+            nextPath,
+            machineId: targetMachineId,
+            serverUrl: requestedServerUrl,
+            autoApprove: true,
+            authMode
+        });
+    }, [authMode, nextPath, publicKey, requestedServerUrl, targetMachineId]);
+
+    const applyRequestedServerUrlIfNeeded = React.useCallback(() => {
+        const currentServerUrl = normalizeComparableServerUrl(getServerUrl());
+        const nextServerUrl = normalizeComparableServerUrl(requestedServerUrl);
+        const nextServerUrlRewritten = nextServerUrl
+            ? normalizeComparableServerUrl(rewriteUrlToPageHost(nextServerUrl))
+            : null;
+
+        const serverUrlChanged =
+            nextServerUrl &&
+            nextServerUrl !== currentServerUrl &&
+            nextServerUrlRewritten !== currentServerUrl;
+
+        if (serverUrlChanged) {
+            setServerUrl(nextServerUrl);
+        }
+
+        return { nextServerUrl, serverUrlChanged };
+    }, [requestedServerUrl]);
+
     const { processAuthUrl, isLoading } = useConnectTerminal({
         onSuccess: () => {
             if (!nextHref) {
@@ -77,6 +119,7 @@ export default function TerminalConnectScreen() {
                 setNextPath(normalizeNextPath(params?.get('next') ?? undefined));
                 setTargetMachineId(normalizeSingleValue(params?.get('machineId') ?? undefined));
                 setRequestedServerUrl(normalizeServerUrl(params?.get('serverUrl') ?? undefined));
+                setAuthMode(normalizeAuthMode(params?.get('mode') ?? undefined));
                 
                 // Clear the hash from URL to prevent exposure in browser history
                 window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -87,6 +130,7 @@ export default function TerminalConnectScreen() {
                 setNextPath(pendingRequest.nextPath);
                 setTargetMachineId(pendingRequest.machineId);
                 setRequestedServerUrl(pendingRequest.serverUrl);
+                setAuthMode(pendingRequest.authMode);
                 setHashProcessed(true);
             } else {
                 setHashProcessed(true);
@@ -96,40 +140,36 @@ export default function TerminalConnectScreen() {
 
     const handleConnect = React.useCallback(async () => {
         if (publicKey) {
-            // Normalize both URLs for comparison, treating localhost and LAN IP as equivalent
-            const currentServerUrl = normalizeComparableServerUrl(getServerUrl());
-            const nextServerUrl = normalizeComparableServerUrl(requestedServerUrl);
-            // Rewrite localhost in requested URL to current page host for comparison
-            const nextServerUrlRewritten = nextServerUrl
-                ? normalizeComparableServerUrl(rewriteUrlToPageHost(nextServerUrl))
-                : null;
+            const { nextServerUrl, serverUrlChanged } = applyRequestedServerUrlIfNeeded();
 
-            const serverUrlChanged =
-                nextServerUrl &&
-                nextServerUrl !== currentServerUrl &&
-                nextServerUrlRewritten !== currentServerUrl;
+            if (auth.credentials && (serverUrlChanged || authMode === 'create')) {
+                persistPendingTerminalConnectRequest({
+                    publicKey,
+                    nextPath,
+                    machineId: targetMachineId,
+                    serverUrl: nextServerUrl ?? requestedServerUrl,
+                    autoApprove: true,
+                    authMode
+                });
+                await auth.logout();
+                return;
+            }
 
             if (serverUrlChanged) {
-                setServerUrl(nextServerUrl);
+                // The auth.credentials branch above has already handled logout/reload.
+            }
 
-                if (auth.credentials) {
-                    persistPendingTerminalConnectRequest({
-                        publicKey,
-                        nextPath,
-                        machineId: targetMachineId,
-                        serverUrl: nextServerUrl,
-                        autoApprove: true
-                    });
-                    await auth.logout();
-                    return;
-                }
+            if (!auth.credentials && authMode === 'reconnect') {
+                persistCurrentPendingRequest();
+                router.replace('/restore' as Href);
+                return;
             }
 
             // Convert the hash key format to the expected happy:// URL format
             const authUrl = `happy://terminal?${publicKey}`;
             await processAuthUrl(authUrl);
         }
-    }, [auth, nextPath, processAuthUrl, publicKey, requestedServerUrl, targetMachineId]);
+    }, [applyRequestedServerUrlIfNeeded, auth, authMode, nextPath, persistCurrentPendingRequest, processAuthUrl, publicKey, router, targetMachineId]);
 
     // Auto-connect as soon as publicKey is available after hash processing
     useEffect(() => {
@@ -278,6 +318,15 @@ function normalizeServerUrl(value: string | string[] | undefined): string | null
     return serverUrl.trim();
 }
 
+function normalizeAuthMode(value: string | string[] | undefined): AuthMode {
+    const authMode = normalizeSingleValue(value);
+    if (authMode === 'create' || authMode === 'reconnect') {
+        return authMode;
+    }
+
+    return 'auto';
+}
+
 function normalizeComparableServerUrl(serverUrl: string | null): string | null {
     if (!serverUrl) {
         return null;
@@ -322,11 +371,7 @@ function rewriteUrlToPageHost(url: string): string {
 }
 
 function readPendingTerminalConnectRequest(): PendingTerminalConnectRequest | null {
-    if (typeof window === 'undefined') {
-        return null;
-    }
-
-    const raw = window.sessionStorage.getItem(PENDING_TERMINAL_CONNECT_REQUEST_KEY);
+    const raw = readPendingTerminalConnectRequestStorage();
     if (!raw) {
         return null;
     }
@@ -342,7 +387,8 @@ function readPendingTerminalConnectRequest(): PendingTerminalConnectRequest | nu
             nextPath: normalizeNextPath(parsed.nextPath ?? undefined),
             machineId: normalizeSingleValue(parsed.machineId ?? undefined),
             serverUrl: normalizeServerUrl(parsed.serverUrl ?? undefined),
-            autoApprove: parsed.autoApprove === true
+            autoApprove: parsed.autoApprove === true,
+            authMode: normalizeAuthMode(parsed.authMode ?? undefined)
         };
     } catch {
         return null;
@@ -350,17 +396,9 @@ function readPendingTerminalConnectRequest(): PendingTerminalConnectRequest | nu
 }
 
 function persistPendingTerminalConnectRequest(request: PendingTerminalConnectRequest): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    window.sessionStorage.setItem(PENDING_TERMINAL_CONNECT_REQUEST_KEY, JSON.stringify(request));
+    persistPendingTerminalConnectRequestStorage(JSON.stringify(request));
 }
 
 function clearPendingTerminalConnectRequest(): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    window.sessionStorage.removeItem(PENDING_TERMINAL_CONNECT_REQUEST_KEY);
+    clearPendingTerminalConnectRequestStorage();
 }

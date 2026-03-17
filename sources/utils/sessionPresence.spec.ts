@@ -1,0 +1,37 @@
+import { describe, expect, it } from 'vitest';
+
+import { getAgentPresenceVisual } from './presenceUtils';
+
+const DEAD_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+
+describe('getAgentPresenceVisual', () => {
+    it('online state: active=true returns green dot, inactive=false, dead=false', () => {
+        const result = getAgentPresenceVisual({ active: true, activeAt: Date.now() });
+        expect(result.dotColor).toBe('#22C55E');
+        expect(result.inactive).toBe(false);
+        expect(result.dead).toBe(false);
+    });
+
+    it('offline state: active=false, within 1h returns grey dot, inactive=true, dead=false', () => {
+        const recentlyActiveAt = Date.now() - (30 * 60 * 1000); // 30 min ago
+        const result = getAgentPresenceVisual({ active: false, activeAt: recentlyActiveAt });
+        expect(result.dotColor).toBe('#8A7F74');
+        expect(result.inactive).toBe(true);
+        expect(result.dead).toBe(false);
+    });
+
+    it('dead state: active=false, over 1h returns dark-grey dot, inactive=true, dead=true', () => {
+        const longInactiveAt = Date.now() - (DEAD_THRESHOLD_MS + 1000); // just over 1 hour ago
+        const result = getAgentPresenceVisual({ active: false, activeAt: longInactiveAt });
+        expect(result.dotColor).toBe('#4A4040');
+        expect(result.inactive).toBe(true);
+        expect(result.dead).toBe(true);
+    });
+
+    it('inactive with no activeAt (0): not dead, offline grey dot', () => {
+        const result = getAgentPresenceVisual({ active: false, activeAt: 0 });
+        expect(result.dotColor).toBe('#8A7F74');
+        expect(result.inactive).toBe(true);
+        expect(result.dead).toBe(false);
+    });
+});

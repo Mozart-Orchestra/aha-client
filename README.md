@@ -61,7 +61,7 @@ On your computer, run `happy` instead of `claude` or `happy codex` instead of `c
 - 🔔 **Push notifications** - Get alerted when Claude Code and Codex needs permission or encounters errors  
 - ⚡ **Switch devices instantly** - Take control from phone or desktop with one keypress
 - 🔐 **End-to-end encrypted** - Your code never leaves your devices unencrypted
-- 🛠️ **Open source** - Audit the code yourself. No telemetry, no tracking
+- 🛠️ **Open source** - Audit the code yourself. Optional anonymous product analytics only; your content stays encrypted
 
 ## 📦 Project Components
 

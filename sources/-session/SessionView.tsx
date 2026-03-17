@@ -9,7 +9,6 @@ import { EmptyMessages } from '@/components/session/EmptyMessages';
 import { VoiceAssistantStatusBar } from '@/components/web/VoiceAssistantStatusBar';
 import { useDraft } from '@/hooks/useDraft';
 import { Modal } from '@/modal';
-import { voiceHooks } from '@/realtime/hooks/voiceHooks';
 import { startRealtimeSession, stopRealtimeSession, updateCurrentSessionId } from '@/realtime/RealtimeSession';
 import { gitStatusSync } from '@/sync/gitStatusSync';
 import { sessionAbort } from '@/sync/ops';
@@ -246,8 +245,7 @@ function SessionViewLoaded({ sessionId, session, returnTo }: { sessionId: string
         }
         if (realtimeStatus === 'disconnected' || realtimeStatus === 'error') {
             try {
-                const initialPrompt = voiceHooks.onVoiceStarted(sessionId);
-                await startRealtimeSession(sessionId, initialPrompt);
+                await startRealtimeSession(sessionId);
                 tracking?.capture('voice_session_started', { sessionId });
             } catch (error) {
                 console.error('Failed to start realtime session:', error);
@@ -257,9 +255,6 @@ function SessionViewLoaded({ sessionId, session, returnTo }: { sessionId: string
         } else if (realtimeStatus === 'connected') {
             await stopRealtimeSession();
             tracking?.capture('voice_session_stopped');
-
-            // Notify voice assistant about voice session stop
-            voiceHooks.onVoiceStopped();
         }
     }, [realtimeStatus, sessionId]);
 

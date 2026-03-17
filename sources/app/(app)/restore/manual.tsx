@@ -7,6 +7,7 @@ import { ItemList } from '@/components/ui/ItemList';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { RoundButton } from '@/components/ui/RoundButton';
 import { Typography } from '@/constants/Typography';
+import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
 import { authGetToken } from '@/auth/authGetToken';
 import { decodeBase64 } from '@/encryption/base64';
@@ -124,12 +125,16 @@ export default function Restore() {
                 throw new Error('Invalid secret key length');
             }
 
-            const token = await authGetToken(secretBytes);
+            const token = await authGetToken(secretBytes, 'reconnect');
             if (!token) {
                 throw new Error('Failed to authenticate with provided key');
             }
 
             await auth.login(token, normalizedKey);
+            if (hasPendingTerminalConnectRequest()) {
+                router.replace('/terminal/connect');
+                return;
+            }
             router.back();
         } catch (error) {
             console.error('Restore error:', error);

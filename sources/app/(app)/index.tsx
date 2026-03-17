@@ -15,11 +15,13 @@ import { StyleSheet } from 'react-native-unistyles';
 
 import { useAuth } from '@/auth/AuthContext';
 import { authGetToken } from '@/auth/authGetToken';
+import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
 import { PreviewSessionCard } from '@/components/session/PreviewSessionCard';
 import { encodeBase64 } from '@/encryption/base64';
+import { useAllSessions } from '@/sync/storage';
 import { getCurrentLanguage, t } from '@/text';
 import { trackAccountCreated, trackAccountRestored } from '@/track';
 
@@ -415,21 +417,25 @@ function NotAuthenticated() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
+    const previewSessions = useAllSessions();
     const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
     const copy = getCurrentLanguage() === 'zh-Hans' ? CHINESE_LANDING_COPY : ENGLISH_LANDING_COPY;
 
     const handleCreateAccount = React.useCallback(async () => {
         try {
             const secret = await getRandomBytesAsync(32);
-            const token = await authGetToken(secret);
+            const token = await authGetToken(secret, 'create');
             if (token && secret) {
                 await auth.login(token, encodeBase64(secret, 'base64url'));
                 trackAccountCreated();
+                if (hasPendingTerminalConnectRequest()) {
+                    router.replace('/terminal/connect');
+                }
             }
         } catch (error) {
             console.error('Error creating account', error);
         }
-    }, [auth]);
+    }, [auth, router]);
 
     const handleRestore = React.useCallback(() => {
         trackAccountRestored();
@@ -455,6 +461,7 @@ function NotAuthenticated() {
                 title={copy.primarySessionTitle}
                 subtitle={copy.primarySessionSubtitle}
                 meta={copy.primarySessionMeta}
+                sessionId={previewSessions[0]?.id}
             />
             <PreviewSessionCard
                 accentColor="#EF6A61"
@@ -463,6 +470,7 @@ function NotAuthenticated() {
                 title={copy.secondarySessionTitle}
                 subtitle={copy.secondarySessionSubtitle}
                 meta={copy.secondarySessionMeta}
+                sessionId={previewSessions[1]?.id}
             >
                 <View style={styles.landingPreviewActions}>
                     <LandingButton title={copy.deny} onPress={() => {}} tone="danger" />

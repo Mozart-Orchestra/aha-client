@@ -5,7 +5,7 @@
  */
 
 import type { KanbanTask } from '@/sync/kanbanTypes';
-import type { TeamMessage, TeamMessageMetadata } from '@/sync/teamMessageTypes';
+import type { TeamMessage, TeamMessageMetadata, TeamMessagePriority } from '@/sync/teamMessageTypes';
 import { randomUUID } from '@/utils/uuid';
 
 const MAX_TEAM_MESSAGE_CONTENT_LENGTH = 2000;
@@ -54,13 +54,33 @@ export function createTaskMetadata(
     action: 'created' | 'updated' | 'assigned' | 'completed' | 'blocked',
     details?: Record<string, any>
 ): TeamMessageMetadata {
+    const normalizedPriority = normalizeTaskPriorityForTeamMessage(details?.priority);
+
     return {
         taskId,
-        priority: details?.priority,
         ...details,
+        ...(normalizedPriority ? { priority: normalizedPriority } : {}),
         _action: action,
         _timestamp: Date.now(),
     };
+}
+
+export function normalizeTaskPriorityForTeamMessage(priority?: string): TeamMessagePriority | undefined {
+    if (!priority) {
+        return undefined;
+    }
+
+    switch (priority) {
+        case 'medium':
+            return 'normal';
+        case 'low':
+        case 'normal':
+        case 'high':
+        case 'urgent':
+            return priority;
+        default:
+            return undefined;
+    }
 }
 
 /**

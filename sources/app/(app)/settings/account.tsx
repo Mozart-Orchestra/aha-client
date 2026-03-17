@@ -302,6 +302,11 @@ export default React.memo(() => {
                         }
                         showChevron={false}
                     />
+                    <Item
+                        title={t('settingsAccount.operationalLogs')}
+                        subtitle={t('settingsAccount.operationalLogsDescription')}
+                        showChevron={false}
+                    />
                 </ItemGroup>
 
                 {/* Danger Zone */}
