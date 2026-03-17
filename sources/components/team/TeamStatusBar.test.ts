@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { countSignals } from './teamStatusSignals';
+import { countSignals, selectSignalsForDisplay } from './teamStatusSignals';
 
 describe('TeamStatusBar countSignals', () => {
     it('treats in-progress tasks as running even when execution links are transiently missing', () => {
@@ -37,5 +37,16 @@ describe('TeamStatusBar countSignals', () => {
         ]);
 
         expect(counts.running).toBe(1);
+    });
+
+    it('keeps the status row mounted by returning all signals when counts are transiently zero', () => {
+        const result = selectSignalsForDisplay([
+            { key: 'running', count: 0 },
+            { key: 'deciding', count: 0 },
+            { key: 'blocked', count: 0 },
+        ]);
+
+        expect(result.hasActivity).toBe(false);
+        expect(result.signals).toHaveLength(3);
     });
 });

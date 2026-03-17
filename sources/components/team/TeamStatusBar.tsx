@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import type { KanbanTask } from '@/sync/kanbanTypes';
-import { countSignals } from './teamStatusSignals';
+import { countSignals, selectSignalsForDisplay } from './teamStatusSignals';
 
 /**
  * TeamStatusBar — 移动端三信号状态面板
@@ -78,16 +78,15 @@ export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPre
 
         return items;
     }, [counts]);
-    const signals = React.useMemo(() => allSignals.filter(signal => signal.count > 0), [allSignals]);
-    const maxSignalCount = React.useMemo(
-        () => signals.reduce((max, signal) => Math.max(max, signal.count), 0),
-        [signals]
+    const { signals: renderSignals, hasActivity } = React.useMemo(
+        () => selectSignalsForDisplay(allSignals),
+        [allSignals]
     );
-    const hasActivity = signals.length > 0;
-    const renderSignals = hasActivity ? signals : allSignals;
-    const effectiveMaxSignalCount = hasActivity
-        ? maxSignalCount
-        : allSignals.reduce((max, signal) => Math.max(max, signal.count), 0);
+    const maxSignalCount = React.useMemo(
+        () => renderSignals.reduce((max, signal) => Math.max(max, signal.count), 0),
+        [renderSignals]
+    );
+    const effectiveMaxSignalCount = hasActivity ? maxSignalCount : 0;
 
     if (compact) {
         return (
