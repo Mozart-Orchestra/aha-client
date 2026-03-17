@@ -25,9 +25,11 @@ import { sync } from '@/sync/sync';
 import {
     fetchBypassAgents,
     fetchGenomes,
+    fetchRepairSignals,
     retireBypassAgent,
     type BypassAgent,
     type Genome,
+    type RepairSignal,
 } from '@/sync/apiEvolution';
 import { Modal } from '@/modal';
 import { searchGenomes, parseFeedback } from '@/utils/genomeHub';
@@ -53,6 +55,19 @@ function formatSpawnedAt(spawnedAt: number): string {
         hour: '2-digit',
         minute: '2-digit',
     });
+}
+
+function formatSignalCreatedAt(createdAt: string): string {
+    try {
+        return new Date(createdAt).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch {
+        return createdAt;
+    }
 }
 
 const PROFILE_ICONS: Record<string, string> = {
@@ -83,7 +98,7 @@ const BypassAgentCard = React.memo(({ agent, onRetire }: BypassAgentCardProps) =
                 </View>
                 <View style={agentCardStyles.info}>
                     <Text style={[agentCardStyles.roleId, { color: theme.colors.text }]}>
-                        {agent.roleId}
+                        {agent.roleId === 'supervisor' ? 'Supervisor' : agent.roleId === 'help-agent' ? 'Help Agent' : agent.roleId}
                     </Text>
                     <Text style={[agentCardStyles.meta, { color: theme.colors.textSecondary }]}>
                         {agent.profile} · spawned {formatSpawnedAt(agent.spawnedAt)}
@@ -128,6 +143,14 @@ const BypassAgentCard = React.memo(({ agent, onRetire }: BypassAgentCardProps) =
         </View>
     );
 });
+
+const REPAIR_SIGNAL_COLORS: Record<RepairSignal['type'], string> = {
+    stuck: '#f59e0b',
+    context_overflow: '#8b5cf6',
+    need_collaborator: '#0ea5e9',
+    error: '#ef4444',
+    custom: '#8A7F74',
+};
 
 interface GenomeCardProps {
     genome: Genome;
@@ -203,6 +226,7 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
 
     const [agents, setAgents] = React.useState<BypassAgent[]>([]);
     const [genomes, setGenomes] = React.useState<Genome[]>([]);
+    const [repairSignals, setRepairSignals] = React.useState<RepairSignal[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [retireLoadingId, setRetireLoadingId] = React.useState<string | null>(null);
 
@@ -212,12 +236,20 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
 
         setIsLoading(true);
         try {
-            const [agentsRes, genomesRes] = await Promise.all([
+            const [agentsRes, genomesRes, repairSignalsRes] = await Promise.all([
                 fetchBypassAgents(credentials, teamId),
                 fetchGenomes(credentials, { teamId, limit: 20 }),
+                fetchRepairSignals(credentials, teamId, { resolved: false, limit: 20 }),
             ]);
-            setAgents(agentsRes.agents);
+            const sortedAgents = [...agentsRes.agents].sort((left, right) => {
+                const rank = (roleId: string) => roleId === 'supervisor' ? 0 : roleId === 'help-agent' ? 1 : 2;
+                const roleDelta = rank(left.roleId) - rank(right.roleId);
+                if (roleDelta !== 0) return roleDelta;
+                return right.spawnedAt - left.spawnedAt;
+            });
+            setAgents(sortedAgents);
             setGenomes(genomesRes.genomes);
+            setRepairSignals(repairSignalsRes.signals);
         } catch {
             // Silent — show whatever we have
         } finally {
@@ -267,13 +299,13 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
     return (
         <ScrollView contentContainerStyle={styles.scrollContent}>
 
-            {/* ── Active Bypass Agents ─────────────────────────────────────── */}
+            {/* ── System Agents ────────────────────────────────────────────── */}
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <View style={styles.sectionTitleRow}>
                         <Ionicons name="hardware-chip-outline" size={18} color={theme.colors.textLink} style={styles.sectionIcon} />
                         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                            Active Bypass Agents
+                            System Agents
                         </Text>
                         <View style={[styles.countBadge, { backgroundColor: theme.colors.groupped.background }]}>
                             <Text style={[styles.countText, { color: theme.colors.textSecondary }]}>
@@ -290,10 +322,10 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
                     <View style={[styles.emptyCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
                         <Ionicons name="radio-button-off-outline" size={28} color={theme.colors.textSecondary} />
                         <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                            No active bypass agents
+                            No registered system agents
                         </Text>
                         <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>
-                            Agents will appear here when spawned via the CLI or another agent.
+                            Supervisor and help-agent will appear here after the daemon spawns them and registers their bypass execution plane.
                         </Text>
                     </View>
                 ) : (
@@ -304,6 +336,67 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
                             onRetire={retireLoadingId ? () => {} : handleRetire}
                         />
                     ))
+                )}
+            </View>
+
+            <View style={[styles.section, { marginTop: 8 }]}>
+                <View style={styles.sectionHeader}>
+                    <View style={styles.sectionTitleRow}>
+                        <Ionicons name="pulse-outline" size={18} color={theme.colors.textLink} style={styles.sectionIcon} />
+                        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                            Health Signals
+                        </Text>
+                        <View style={[styles.countBadge, { backgroundColor: theme.colors.groupped.background }]}>
+                            <Text style={[styles.countText, { color: theme.colors.textSecondary }]}>
+                                {repairSignals.length}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {repairSignals.length === 0 ? (
+                    <View style={[styles.emptyCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                        <Ionicons name="checkmark-circle-outline" size={28} color={theme.colors.textSecondary} />
+                        <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                            No open repair signals
+                        </Text>
+                        <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>
+                            When supervisor detects a stuck agent or runtime issue, it will raise a repair signal here.
+                        </Text>
+                    </View>
+                ) : (
+                    repairSignals.map((signal) => {
+                        const accent = REPAIR_SIGNAL_COLORS[signal.type] || theme.colors.textLink;
+                        return (
+                            <View
+                                key={signal.id}
+                                style={{
+                                    borderRadius: 14,
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.divider,
+                                    backgroundColor: theme.colors.surface,
+                                    padding: 14,
+                                    marginBottom: 10,
+                                    gap: 6,
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                    <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: '600' }}>
+                                        {signal.type.replace(/_/g, ' ')}
+                                    </Text>
+                                    <Text style={{ color: accent, fontSize: 12, fontWeight: '700' }}>
+                                        {formatSignalCreatedAt(signal.createdAt)}
+                                    </Text>
+                                </View>
+                                <Text style={{ color: theme.colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                                    {signal.description}
+                                </Text>
+                                <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>
+                                    session {signal.sessionId.slice(0, 8)} · supervisor {signal.supervisorSessionId.slice(0, 8)}
+                                </Text>
+                            </View>
+                        );
+                    })
                 )}
             </View>
 
