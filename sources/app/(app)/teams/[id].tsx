@@ -10,7 +10,7 @@ import {
 import { Text } from '@/components/ui/StyledText';
 import { trackTeamViewed, trackTaskCreated, trackTaskApproval, trackTeamChatSent, trackTaskCompleted, trackTaskMoved } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useArtifact, useAllSessions, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
+import { useArtifact, useAllSessions, useAllMachines, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,11 +42,17 @@ import { EvolutionSection } from '@/components/settings/EvolutionSection';
 import { FloatingIslandSidebar } from '@/components/layout/FloatingIslandSidebar';
 import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell';
 import { SidebarView } from '@/components/layout/SidebarView';
-import { getSessionName } from '@/utils/sessionUtils';
+import { getSessionName, getAgentPresenceVisual } from '@/utils/sessionUtils';
 import { buildTeamReturnPath, getSingleRouteParam, pushSessionRoute } from '@/utils/returnNavigation';
 import { randomUUID } from '@/utils/uuid';
 import { t } from '@/text';
 import { formatTaskReference } from '@/utils/taskChatSync';
+import { applyDerivedLifecycleTimestamps } from '@/utils/teamLifecycle';
+import { getActiveTaskForSession } from '@/utils/teamActiveTask';
+
+function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
+    return `team:${teamId}:member:${memberId}`;
+}
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -525,6 +531,7 @@ export default function TeamDashboardScreen() {
     const artifact = useArtifact(teamId);
     const allTeams = useArtifacts().filter(a => a.type === 'team');
     const allSessions = useAllSessions();
+    const allMachines = useAllMachines();
     const profile = useProfile();
     const isDataReady = useIsDataReady();
     const isDesktopShell = Platform.OS === 'web' && width >= 1180;
@@ -550,6 +557,7 @@ export default function TeamDashboardScreen() {
     const [showWorkspaceDrawer, setShowWorkspaceDrawer] = React.useState(false);
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
+    const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const parsedArtifactBoard = React.useMemo<{
@@ -880,6 +888,125 @@ export default function TeamDashboardScreen() {
         return ensureColumns(parsedArtifactBoard.board);
     }, [artifact?.body, desktopBoard, desktopBridge, parsedArtifactBoard.board, parsedArtifactBoard.parseError]);
 
+    const handleRecoverTeam = React.useCallback(async () => {
+        setShowMenu(false);
+
+        const teamMembers = kanbanData.team?.members ?? [];
+        const recoverCandidates = teamMembers.filter((member) => {
+            if (member.executionPlane === 'bypass') {
+                return false;
+            }
+            return member.roleId !== 'supervisor' && member.roleId !== 'help-agent';
+        });
+
+        if (recoverCandidates.length === 0) {
+            Modal.alert('Nothing to Recover', 'No recoverable team agents were found in this team.');
+            return;
+        }
+
+        const confirmed = await Modal.confirm(
+            'Recover Team',
+            'This will relaunch inactive team agents using their saved identity, machine, and working directory. Active agents are skipped.',
+            {
+                confirmText: 'Recover',
+                cancelText: 'Cancel',
+                destructive: false,
+            }
+        );
+
+        if (!confirmed) return;
+
+        setIsRecoveringTeam(true);
+        try {
+            let recovered = 0;
+            let skipped = 0;
+            const issues: string[] = [];
+
+            for (const member of recoverCandidates) {
+                const label = member.displayName || member.roleId || member.sessionId.slice(0, 8);
+                const session = sessionLookup.get(member.sessionId);
+
+                if (session?.active) {
+                    skipped += 1;
+                    continue;
+                }
+
+                const machineId = session?.metadata?.machineId;
+                const directory = session?.metadata?.path;
+                if (!machineId) {
+                    issues.push(`${label}: missing machine binding`);
+                    continue;
+                }
+                if (!directory) {
+                    issues.push(`${label}: missing working directory`);
+                    continue;
+                }
+
+                const machine = machineLookup.get(machineId);
+                if (!machine?.active) {
+                    issues.push(`${label}: machine offline`);
+                    continue;
+                }
+
+                const memberId = member.memberId || randomUUID();
+                const sessionTag = member.sessionTag || buildTeamMemberSessionTag(teamId, memberId);
+                const runtimeType = member.runtimeType === 'codex' ? 'codex' : 'claude';
+                const sessionName = member.displayName || session?.metadata?.name || label;
+
+                const recoveredSessionId = await sync.spawnSessionOnMachine(machineId, {
+                    sessionId: member.sessionId,
+                    sessionTag,
+                    directory,
+                    agent: runtimeType,
+                    teamId,
+                    role: member.roleId,
+                    sessionName,
+                    sessionPath: directory,
+                    ...(member.specId ? { specId: member.specId } : {}),
+                    ...(member.parentSessionId ? { parentSessionId: member.parentSessionId } : {}),
+                    ...(member.executionPlane ? { executionPlane: member.executionPlane as 'mainline' | 'bypass' } : {}),
+                    env: {
+                        AHA_TEAM_MEMBER_ID: memberId,
+                    },
+                });
+
+                if (!recoveredSessionId) {
+                    issues.push(`${label}: spawn failed`);
+                    continue;
+                }
+
+                await sync.addTeamMember(teamId, recoveredSessionId, member.roleId, sessionName, {
+                    memberId,
+                    sessionTag,
+                    specId: member.specId,
+                    parentSessionId: member.parentSessionId,
+                    executionPlane: member.executionPlane,
+                    runtimeType,
+                });
+                recovered += 1;
+            }
+
+            const lines = [
+                recovered > 0
+                    ? `Recovered ${recovered} team agent${recovered === 1 ? '' : 's'}.`
+                    : 'No team agents were recovered.',
+                skipped > 0
+                    ? `Skipped ${skipped} already-active agent${skipped === 1 ? '' : 's'}.`
+                    : null,
+                issues.length > 0
+                    ? `Issues: ${issues.slice(0, 4).join(' | ')}${issues.length > 4 ? ` | +${issues.length - 4} more` : ''}`
+                    : null,
+            ].filter(Boolean);
+
+            Modal.alert(recovered > 0 ? 'Recovery Started' : 'Recovery Incomplete', lines.join('\n'));
+        } catch (error) {
+            console.error('Failed to recover team:', error);
+            Modal.alert('Error', 'Failed to recover team. Please try again.');
+        } finally {
+            setIsRecoveringTeam(false);
+        }
+    }, [kanbanData.team?.members, machineLookup, sessionLookup, teamId]);
+
     // 🆕 Chat-Board 双向同步 Hook
     const taskChatSync = useTaskChatSync({
         teamId,
@@ -989,6 +1116,54 @@ export default function TeamDashboardScreen() {
             return newTask;
         },
     });
+
+    React.useEffect(() => {
+        if (!artifact?.body || !parsedArtifactBoard.board?.team?.members?.length) {
+            return;
+        }
+
+        const processStartedBySessionId = new Map<string, number>();
+        for (const session of allSessions) {
+            const processStartedAt = session.metadata?.processStartedAt;
+            if (typeof processStartedAt === 'number') {
+                processStartedBySessionId.set(session.id, processStartedAt);
+            }
+        }
+
+        const { members: nextMembers, changed } = applyDerivedLifecycleTimestamps(
+            parsedArtifactBoard.board.team.members,
+            teamMessages,
+            processStartedBySessionId,
+        );
+
+        if (!changed) {
+            return;
+        }
+
+        const nextBoard: KanbanBoard = {
+            ...parsedArtifactBoard.board,
+            team: {
+                ...parsedArtifactBoard.board.team,
+                members: nextMembers,
+            },
+        };
+
+        sync.updateArtifact(
+            artifact.id,
+            artifact.title,
+            JSON.stringify(nextBoard, null, 2),
+            artifact.sessions,
+            artifact.draft,
+            artifact.type,
+        ).catch((error) => {
+            console.error('Failed to persist derived team lifecycle timestamps:', error);
+        });
+    }, [
+        artifact,
+        allSessions,
+        parsedArtifactBoard.board,
+        teamMessages,
+    ]);
 
     const normalizeStatus = React.useCallback((status: string): string => {
         const statusMap: Record<string, string> = {
@@ -1108,6 +1283,14 @@ export default function TeamDashboardScreen() {
         return map;
     }, [allSessions]);
 
+    const machineLookup = React.useMemo(() => {
+        const map = new Map<string, (typeof allMachines)[number]>();
+        for (const machine of allMachines) {
+            map.set(machine.id, machine);
+        }
+        return map;
+    }, [allMachines]);
+
     const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
     const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
 
@@ -1148,8 +1331,9 @@ export default function TeamDashboardScreen() {
 
             // Find tasks assigned to this member
             const tasks = kanbanData.tasks.filter(t => t.assigneeId === sessionId);
+            const activeTask = getActiveTaskForSession(kanbanData.tasks, sessionId);
 
-            return { member, session, role, index, tasks };
+            return { member, session, role, index, tasks, activeTask };
         });
 
         // Stable sort: role priority first (master/orchestrator → coordinator → worker → bypass),
@@ -1540,14 +1724,22 @@ export default function TeamDashboardScreen() {
                 iconGradientColors: ['#314658', '#1E2D3C'],
                 trailingIcon: 'chevron-down',
             }}
-            agentItems={roster.slice(0, 6).map((entry) => ({
-                id: entry.member.sessionId,
-                name: entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId,
-                dotColor: getRoleAccent(entry.role?.id || entry.member.roleId || entry.session?.metadata?.role),
-                selected: selectedAgentId === entry.member.sessionId,
-                count: selectedAgentId === entry.member.sessionId
-                    ? entry.tasks.length
-                    : entry.tasks.length > 0 ? entry.tasks.length : undefined,
+            agentItems={roster.slice(0, 6).map((entry) => {
+                const presence = entry.session
+                    ? getAgentPresenceVisual(entry.session)
+                    : { dotColor: '#8A7F74', inactive: true, dead: false };
+                return {
+                    id: entry.member.sessionId,
+                    name: entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId,
+                    dotColor: presence.dotColor,
+                    inactive: presence.inactive,
+                    dead: presence.dead,
+                    selected: selectedAgentId === entry.member.sessionId,
+                    activeTaskTitle: entry.activeTask?.title,
+                    activeTaskStartedAt: entry.activeTask?.startedAt,
+                    count: selectedAgentId === entry.member.sessionId
+                        ? entry.tasks.length
+                        : entry.tasks.length > 0 ? entry.tasks.length : undefined,
                 onPress: () => {
                     setShowWorkspaceDrawer(false);
                     setSelectedAgentId(entry.member.sessionId);
@@ -1559,7 +1751,8 @@ export default function TeamDashboardScreen() {
                         returnTo: teamReturnTo,
                     });
                 },
-            }))}
+                };
+            })}
             statusItems={[
                 {
                     id: 'decision',
@@ -1713,6 +1906,13 @@ export default function TeamDashboardScreen() {
                             <Text style={{ color: shellTheme.panelTitle, fontSize: 14 }}>Rename</Text>
                         </Pressable>
                         <View style={[styles.desktopMenuDivider, { backgroundColor: shellTheme.panelDivider }]} />
+                        <Pressable onPress={handleRecoverTeam} style={styles.desktopMenuItem} disabled={isRecoveringTeam}>
+                            <Ionicons name="refresh-outline" size={17} color={shellTheme.panelTitle} />
+                            <Text style={{ color: shellTheme.panelTitle, fontSize: 14 }}>
+                                {isRecoveringTeam ? 'Recovering…' : 'Recover'}
+                            </Text>
+                        </Pressable>
+                        <View style={[styles.desktopMenuDivider, { backgroundColor: shellTheme.panelDivider }]} />
                         <Pressable onPress={handleArchiveTeam} style={styles.desktopMenuItem}>
                             <Ionicons name="archive-outline" size={17} color={shellTheme.panelTitle} />
                             <Text style={{ color: shellTheme.panelTitle, fontSize: 14 }}>Archive</Text>
@@ -1846,6 +2046,23 @@ export default function TeamDashboardScreen() {
                         >
                             <Ionicons name="pencil-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
                             <Text style={{ fontSize: 15, color: theme.colors.text }}>Rename</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={handleRecoverTeam}
+                            disabled={isRecoveringTeam}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                padding: 14,
+                                borderBottomWidth: 1,
+                                borderBottomColor: theme.colors.divider,
+                                opacity: isRecoveringTeam ? 0.6 : 1,
+                            }}
+                        >
+                            <Ionicons name="refresh-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
+                            <Text style={{ fontSize: 15, color: theme.colors.text }}>
+                                {isRecoveringTeam ? 'Recovering…' : 'Recover'}
+                            </Text>
                         </Pressable>
                         <Pressable
                             onPress={handleArchiveTeam}
