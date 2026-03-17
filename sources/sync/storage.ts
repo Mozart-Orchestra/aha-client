@@ -97,6 +97,13 @@ interface StorageState {
     applyLoaded: () => void;
     applyReady: () => void;
     applyMessages: (sessionId: string, messages: NormalizedMessage[]) => { changed: string[], hasReadyEvent: boolean };
+    applyNewMessageAtomic: (params: {
+        sessionId: string;
+        messages: NormalizedMessage[];
+        rawCount: number;
+        persistedMessageCount?: number | null;
+        sessionPatch?: Partial<Session>;
+    }) => { changed: string[], hasReadyEvent: boolean };
     applyMessagesLoaded: (sessionId: string) => void;
     setSessionRawMessageCount: (sessionId: string, count: number) => void;
     setSessionPersistedMessageCount: (sessionId: string, count: number) => void;
@@ -606,6 +613,142 @@ export const storage = create<StorageState>()((set, get) => {
                             isLoaded: true
                         }
                     }
+                };
+            });
+
+            return { changed: Array.from(changed), hasReadyEvent };
+        },
+        applyNewMessageAtomic: ({ sessionId, messages, rawCount, persistedMessageCount, sessionPatch }) => {
+            let changed = new Set<string>();
+            let hasReadyEvent = false;
+
+            set((state) => {
+                const existingSessionMessages = state.sessionMessages[sessionId] || {
+                    messages: [],
+                    messagesMap: {},
+                    reducerState: createReducer(),
+                    isLoaded: false,
+                };
+
+                const currentSession = state.sessions[sessionId];
+                if (!currentSession) {
+                    return state;
+                }
+
+                let nextSession: Session = currentSession;
+
+                if (typeof persistedMessageCount === 'number') {
+                    const currentPersisted = currentSession.persistedMessageCount ?? 0;
+                    if (persistedMessageCount > currentPersisted) {
+                        nextSession = {
+                            ...nextSession,
+                            persistedMessageCount,
+                        };
+                    }
+                }
+
+                if (sessionPatch) {
+                    nextSession = {
+                        ...nextSession,
+                        ...sessionPatch,
+                    };
+                }
+
+                const reducerResult = reducer(existingSessionMessages.reducerState, messages, nextSession.agentState);
+                const processedMessages = reducerResult.messages;
+                for (const message of processedMessages) {
+                    changed.add(message.id);
+                }
+                if (reducerResult.hasReadyEvent) {
+                    hasReadyEvent = true;
+                }
+
+                const mergedMessagesMap = { ...existingSessionMessages.messagesMap };
+                processedMessages.forEach((message) => {
+                    mergedMessagesMap[message.id] = message;
+                });
+
+                const messagesArray = Object.values(mergedMessagesMap)
+                    .sort((a, b) => b.createdAt - a.createdAt);
+
+                const nextSessionMessages: SessionMessages = {
+                    ...existingSessionMessages,
+                    messages: messagesArray,
+                    messagesMap: mergedMessagesMap,
+                    reducerState: existingSessionMessages.reducerState,
+                    isLoaded: true,
+                    rawCount,
+                };
+
+                let updatedSessions = state.sessions;
+                if (nextSession !== currentSession) {
+                    updatedSessions = {
+                        ...updatedSessions,
+                        [sessionId]: nextSession,
+                    };
+                }
+
+                const needsReducerSessionUpdate = reducerResult.todos !== undefined || !!existingSessionMessages.reducerState.latestUsage;
+                if (needsReducerSessionUpdate) {
+                    const sessionForUpdate = updatedSessions[sessionId] ?? nextSession;
+                    updatedSessions = {
+                        ...updatedSessions,
+                        [sessionId]: {
+                            ...sessionForUpdate,
+                            ...(reducerResult.todos !== undefined && { todos: reducerResult.todos }),
+                            latestUsage: existingSessionMessages.reducerState.latestUsage
+                                ? { ...existingSessionMessages.reducerState.latestUsage }
+                                : sessionForUpdate.latestUsage,
+                        },
+                    };
+                }
+
+                let newSessionsData = state.sessionsData;
+                let newSessionListViewData = state.sessionListViewData;
+
+                if (updatedSessions !== state.sessions) {
+                    const activeSet = new Set<string>();
+                    Object.values(updatedSessions).forEach((session) => {
+                        if (isSessionActive(session)) {
+                            activeSet.add(session.id);
+                        }
+                    });
+
+                    const activeSessions: Session[] = [];
+                    const inactiveSessions: Session[] = [];
+                    Object.values(updatedSessions).forEach((session) => {
+                        if (activeSet.has(session.id)) {
+                            activeSessions.push(session);
+                        } else {
+                            inactiveSessions.push(session);
+                        }
+                    });
+
+                    activeSessions.sort((a, b) => b.createdAt - a.createdAt);
+                    inactiveSessions.sort((a, b) => b.createdAt - a.createdAt);
+
+                    const listData: SessionListItem[] = [];
+                    if (activeSessions.length > 0) {
+                        listData.push('online');
+                        listData.push(...activeSessions);
+                    }
+                    if (inactiveSessions.length > 0) {
+                        listData.push('offline');
+                        listData.push(...inactiveSessions);
+                    }
+                    newSessionsData = listData;
+                    newSessionListViewData = buildSessionListViewData(updatedSessions);
+                }
+
+                return {
+                    ...state,
+                    sessions: updatedSessions,
+                    sessionsData: newSessionsData,
+                    sessionListViewData: newSessionListViewData,
+                    sessionMessages: {
+                        ...state.sessionMessages,
+                        [sessionId]: nextSessionMessages,
+                    },
                 };
             });
 
@@ -1265,15 +1408,16 @@ export function useMachine(machineId: string): Machine | null {
 }
 
 export function useSessionListViewData(): SessionListViewItem[] | null {
-    return storage((state) => state.isDataReady ? state.sessionListViewData : null);
+    return storage(useShallow((state) => state.isDataReady ? state.sessionListViewData : null));
 }
 
 export function useAllSessions(): Session[] {
     return storage(useShallow((state) => {
         if (!state.isDataReady) return [];
-        return Object.values(state.sessions).sort((a, b) => b.updatedAt - a.updatedAt);
+        return Object.values(state.sessions).sort((a, b) => a.createdAt - b.createdAt);
     }));
 }
+
 
 export function useLocalSettingMutable<K extends keyof LocalSettings>(name: K): [LocalSettings[K], (value: LocalSettings[K]) => void] {
     const setValue = React.useCallback((value: LocalSettings[K]) => {

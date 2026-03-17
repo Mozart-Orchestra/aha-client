@@ -5,11 +5,12 @@ import { Encryption } from '@/sync/encryption/encryption';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { storage } from './storage';
 import { ApiEphemeralUpdateSchema, ApiMessage, ApiUpdateContainerSchema } from './apiTypes';
-import type { ApiEphemeralActivityUpdate } from './apiTypes';
+import type { ApiEphemeralActivityUpdate, ApiEphemeralUpdate } from './apiTypes';
 import { Session, Machine } from './storageTypes';
 import { InvalidateSync } from '@/utils/sync';
 import { SessionEncryption } from './encryption/sessionEncryption';
 import { ActivityUpdateAccumulator } from './reducer/activityUpdateAccumulator';
+import { MachineActivityAccumulator } from './reducer/machineActivityAccumulator';
 import { randomUUID } from '@/utils/uuid';
 import * as Notifications from 'expo-notifications';
 import { registerPushToken } from './apiPush';
@@ -175,6 +176,7 @@ class Sync {
     private feedSync: InvalidateSync;
     private todosSync: InvalidateSync;
     private activityAccumulator: ActivityUpdateAccumulator;
+    private machineActivityAccumulator: MachineActivityAccumulator;
     private pendingSettings: Partial<Settings> = loadPendingSettings();
     revenueCatInitialized = false;
 
@@ -210,6 +212,7 @@ class Sync {
         }
         this.pushTokenSync = new InvalidateSync(registerPushToken);
         this.activityAccumulator = new ActivityUpdateAccumulator(this.flushActivityUpdates.bind(this), 2000);
+        this.machineActivityAccumulator = new MachineActivityAccumulator(this.flushMachineActivityUpdates.bind(this), 2000);
 
         // Listen for app state changes to refresh purchases
         AppState.addEventListener('change', (nextAppState) => {
@@ -2415,7 +2418,8 @@ class Sync {
                 if (nextPersistedCount !== null) {
                     const currentSession = storage.getState().sessions[updateData.body.sid];
                     if (currentSession && nextPersistedCount > (currentSession.persistedMessageCount ?? 0)) {
-                        storage.getState().setSessionPersistedMessageCount(updateData.body.sid, nextPersistedCount);
+                        // Persisted count is now applied in the same atomic store update as the
+                        // session patch + message append to avoid triple-render cascades.
                     }
                 }
 
@@ -2425,18 +2429,23 @@ class Sync {
                         log.log(`💬 Skipping duplicate realtime message ${decrypted.id} for session ${updateData.body.sid}`);
                     } else {
                         existingMessages.add(decrypted.id);
-                        storage.getState().setSessionRawMessageCount(updateData.body.sid, existingMessages.size);
-
                         lastMessage = normalizeRawMessage(decrypted.id, decrypted.localId, decrypted.createdAt, decrypted.content);
 
                         // Update session
                         const session = storage.getState().sessions[updateData.body.sid];
                         if (session) {
-                            this.applySessions([{
-                                ...session,
-                                updatedAt: updateData.createdAt,
-                                seq: updateData.seq
-                            }])
+                            if (lastMessage) {
+                                storage.getState().applyNewMessageAtomic({
+                                    sessionId: updateData.body.sid,
+                                    messages: [lastMessage],
+                                    rawCount: existingMessages.size,
+                                    persistedMessageCount: nextPersistedCount,
+                                    sessionPatch: {
+                                        updatedAt: updateData.createdAt,
+                                        seq: updateData.seq,
+                                    },
+                                });
+                            }
                         } else {
                             // Fetch sessions again if we don't have this session
                             this.fetchSessions();
@@ -2444,7 +2453,6 @@ class Sync {
 
                         // Update messages
                         if (lastMessage) {
-                            this.applyMessages(updateData.body.sid, [lastMessage]);
                             let hasMutableTool = false;
                             if (lastMessage.role === 'agent' && lastMessage.content[0] && lastMessage.content[0].type === 'tool-result') {
                                 hasMutableTool = storage.getState().isMutableToolCall(updateData.body.sid, lastMessage.content[0].tool_use_id);
@@ -2934,6 +2942,25 @@ class Sync {
         }
     }
 
+    private flushMachineActivityUpdates = (updates: Map<string, Extract<ApiEphemeralUpdate, { type: 'machine-activity' }>>) => {
+        const machines: Machine[] = [];
+
+        for (const [machineId, update] of updates) {
+            const machine = storage.getState().machines[machineId];
+            if (machine) {
+                machines.push({
+                    ...machine,
+                    active: update.active,
+                    activeAt: update.activeAt,
+                });
+            }
+        }
+
+        if (machines.length > 0) {
+            storage.getState().applyMachines(machines);
+        }
+    }
+
     private handleEphemeralUpdate = (update: unknown) => {
         const validatedUpdate = ApiEphemeralUpdateSchema.safeParse(update);
         if (!validatedUpdate.success) {
@@ -2953,16 +2980,7 @@ class Sync {
 
         // Handle machine activity updates
         if (updateData.type === 'machine-activity') {
-            // Update machine's active status and lastActiveAt
-            const machine = storage.getState().machines[updateData.id];
-            if (machine) {
-                const updatedMachine: Machine = {
-                    ...machine,
-                    active: updateData.active,
-                    activeAt: updateData.activeAt
-                };
-                storage.getState().applyMachines([updatedMachine]);
-            }
+            this.machineActivityAccumulator.addUpdate(updateData);
         }
 
         // daemon-status ephemeral updates are deprecated, machine status is handled via machine-activity
