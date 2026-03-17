@@ -15,6 +15,10 @@ import { sync } from '@/sync/sync';
 import { MarkdownView } from '../markdown/MarkdownView';
 import { useRouter } from 'expo-router';
 import { randomUUID } from '@/utils/uuid';
+import { useActiveWord } from '@/components/autocomplete/useActiveWord';
+import { useActiveSuggestions } from '@/components/autocomplete/useActiveSuggestions';
+import { applySuggestion } from '@/components/autocomplete/applySuggestion';
+import { AgentInputAutocomplete } from '@/components/session/AgentInputAutocomplete';
 import {
   parseCommand,
   executeCreateTask,
@@ -1363,6 +1367,7 @@ export default function TeamChatRoom({
     }, [messages]);
 
     const [inputText, setInputText] = React.useState('');
+    const [inputSelection, setInputSelection] = React.useState<{ start: number; end: number }>({ start: 0, end: 0 });
     const [isSending, setIsSending] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(true);
     const [showStatus, setShowStatus] = React.useState(false);
@@ -1629,6 +1634,73 @@ export default function TeamChatRoom({
             };
         });
     }, [members]);
+
+    // @ mention autocomplete
+    const mentionPrefixes = React.useMemo(() => ['@'], []);
+    const activeWord = useActiveWord(inputText, inputSelection, mentionPrefixes);
+
+    const mentionSuggestionHandler = React.useCallback(async (query: string) => {
+        const q = query.replace(/^@/, '').toLowerCase();
+        const items: { key: string; text: string; component: React.ElementType }[] = [];
+
+        // Always include "help" as first option
+        if (!q || 'help'.includes(q)) {
+            items.push({
+                key: '__help__',
+                text: '@help',
+                component: () => (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, height: 44 }}>
+                        <Ionicons name="medkit-outline" size={16} color="#FF9500" style={{ marginRight: 8 }} />
+                        <Text style={{ fontSize: 14, fontWeight: '600' }}>help</Text>
+                        <Text style={{ fontSize: 12, color: '#8FA1B0', marginLeft: 8 }}>Summon Help Agent</Text>
+                    </View>
+                ),
+            });
+        }
+
+        // Add team members
+        for (const entry of members) {
+            const roleId = entry.member.roleId || entry.session?.metadata?.role || '';
+            const displayName = entry.member.displayName || entry.session?.metadata?.name || roleId;
+            const label = entry.role?.title || roleId;
+            const isOnline = !!entry.session?.active;
+
+            if (q && !displayName.toLowerCase().includes(q) && !roleId.toLowerCase().includes(q) && !label.toLowerCase().includes(q)) {
+                continue;
+            }
+
+            const memberDisplayName = displayName;
+            const memberLabel = label;
+            const memberOnline = isOnline;
+
+            items.push({
+                key: entry.member.sessionId,
+                text: `@${displayName}`,
+                component: () => (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, height: 44 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: memberOnline ? '#34C759' : '#999', marginRight: 8 }} />
+                        <Text style={{ fontSize: 14, fontWeight: '500' }}>{memberDisplayName}</Text>
+                        {memberLabel ? <Text style={{ fontSize: 12, color: '#8FA1B0', marginLeft: 8 }}>{memberLabel}</Text> : null}
+                    </View>
+                ),
+            });
+        }
+
+        return items;
+    }, [members]);
+
+    const [mentionSuggestions, mentionSelectedIndex, mentionMoveUp, mentionMoveDown] = useActiveSuggestions(
+        activeWord,
+        mentionSuggestionHandler,
+    );
+
+    const handleMentionSelect = React.useCallback((index: number) => {
+        const suggestion = mentionSuggestions[index];
+        if (!suggestion) return;
+        const result = applySuggestion(inputText, inputSelection, suggestion.text, ['@']);
+        setInputText(result.text);
+        setInputSelection({ start: result.cursorPosition, end: result.cursorPosition });
+    }, [mentionSuggestions, inputText, inputSelection]);
 
     const resolveAgentIdentity = React.useCallback((
         sessionId: string,
@@ -2591,6 +2663,15 @@ export default function TeamChatRoom({
                     </Pressable>
                 </View>
 
+                {mentionSuggestions.length > 0 && (
+                    <AgentInputAutocomplete
+                        suggestions={mentionSuggestions.map((s) => React.createElement(s.component))}
+                        selectedIndex={mentionSelectedIndex}
+                        onSelect={handleMentionSelect}
+                        itemHeight={44}
+                    />
+                )}
+
                 <LinearGradient
                     colors={['#FFFFFF', '#EEF4F7']}
                     start={{ x: 0, y: 0 }}
@@ -2602,20 +2683,38 @@ export default function TeamChatRoom({
                         style={styles.input}
                         value={inputText}
                         onChangeText={setInputText}
-                        placeholder={selectedImage ? "Add a caption (optional)..." : "Type a message, /task to create tasks, or /help..."}
+                        onSelectionChange={(e) => setInputSelection(e.nativeEvent.selection)}
+                        placeholder={selectedImage ? "Add a caption (optional)..." : "Type a message, @help for assistance..."}
                         placeholderTextColor="#92A1AF"
                         multiline
                         maxLength={2000}
                         editable={!isSending}
                         onFocus={() => {
                             setIsInputFocused(true);
-                            // 🆕 Check clipboard for images on focus
                             checkClipboardForImage();
                         }}
                         onBlur={() => {
                             setIsInputFocused(false);
-                            // 🆕 Hide clipboard prompt on blur (with delay to allow tap)
                             setTimeout(() => setClipboardHasImage(false), 200);
+                        }}
+                        onKeyPress={(e) => {
+                            if (mentionSuggestions.length > 0) {
+                                if (e.nativeEvent.key === 'ArrowUp') {
+                                    e.preventDefault?.();
+                                    mentionMoveUp();
+                                    return;
+                                }
+                                if (e.nativeEvent.key === 'ArrowDown') {
+                                    e.preventDefault?.();
+                                    mentionMoveDown();
+                                    return;
+                                }
+                                if (e.nativeEvent.key === 'Enter' && mentionSelectedIndex >= 0) {
+                                    e.preventDefault?.();
+                                    handleMentionSelect(mentionSelectedIndex);
+                                    return;
+                                }
+                            }
                         }}
                     />
                 </LinearGradient>
