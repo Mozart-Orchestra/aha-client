@@ -555,13 +555,14 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
     taskSessionLinks: Map<string, { sessionId: string; title: string; linkedAt: number }[]>;
     sessionLookup: Map<string, any>;
     matchesColumn: (task: KanbanTask, columnId: string) => boolean;
+    onSignalPress?: (signal: 'running' | 'deciding' | 'blocked') => void;
     onOpenTask: (task: KanbanTask) => void;
     onMoveTask: (task: KanbanTask) => void;
     onAddTask: (columnId: string) => void;
 }) {
     return (
         <>
-            <TeamStatusBar tasks={tasks} />
+            <TeamStatusBar tasks={tasks} onSignalPress={onSignalPress} />
 
             <View style={styles.boardContainer}>
                 {columns.map((column) => (
@@ -1240,114 +1241,124 @@ export default function TeamDashboardScreen() {
         }
     }, [allMachines, kanbanData.team?.members, sessionLookup, teamId]);
 
+    const handleTaskUpdate = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
+        if (desktopBridge && roomId) {
+            await desktopBridge.updateTask(taskId, updates);
+            return;
+        }
+        if (!artifact) {
+            return;
+        }
+
+        const updatedTasks = kanbanData.tasks.map((task) =>
+            task.id === taskId ? { ...task, ...updates, updatedAt: Date.now() } : task
+        );
+
+        const newData: KanbanBoard = {
+            ...kanbanData,
+            tasks: updatedTasks,
+        };
+
+        await sync.updateArtifact(
+            artifact.id,
+            artifact.title,
+            JSON.stringify(newData, null, 2),
+            artifact.sessions,
+            artifact.draft,
+            artifact.type
+        );
+    }, [artifact, desktopBridge, kanbanData, roomId]);
+
+    const handleTeamMessageSend = React.useCallback(async (message: TeamMessage) => {
+        await sync.sendTeamMessage({
+            teamId,
+            id: message.id,
+            content: message.content,
+            type: message.type,
+            mentions: message.mentions,
+            metadata: message.metadata,
+            fromSessionId: message.fromSessionId,
+            fromRole: message.fromRole,
+            fromDisplayName: message.fromDisplayName,
+        });
+
+        setTeamMessages((previous) => {
+            if (previous.some((entry) => entry.id === message.id)) {
+                return previous;
+            }
+            return [...previous, message];
+        });
+    }, [teamId]);
+
+    const handleTaskCreate = React.useCallback(async (taskData: Partial<KanbanTask>) => {
+        if (desktopBridge && roomId) {
+            const createdTask = await desktopBridge.createTask({
+                roomId,
+                title: taskData.title || 'Untitled Task',
+                description: taskData.description,
+                status: taskData.status || 'todo',
+                assigneeId: taskData.assigneeId,
+                metadata: {
+                    priority: taskData.priority,
+                    dueDate: taskData.dueDate,
+                    tags: taskData.tags,
+                    source: taskData.source || 'user',
+                    approvalStatus: taskData.approvalStatus || 'approved',
+                }
+            });
+
+            return {
+                id: createdTask.id,
+                title: createdTask.title,
+                description: createdTask.description,
+                status: createdTask.status,
+                assigneeId: createdTask.assigneeId,
+                createdAt: createdTask.createdAt,
+                updatedAt: createdTask.updatedAt,
+                priority: (createdTask.metadata?.priority as KanbanTask['priority']) || taskData.priority,
+                dueDate: (createdTask.metadata?.dueDate as number | undefined) || taskData.dueDate,
+                tags: (createdTask.metadata?.tags as string[] | undefined) || taskData.tags,
+                source: (createdTask.metadata?.source as KanbanTask['source']) || (taskData.source as KanbanTask['source']) || 'user',
+                approvalStatus: (createdTask.metadata?.approvalStatus as KanbanTask['approvalStatus']) || taskData.approvalStatus || 'approved',
+            } as KanbanTask;
+        }
+
+        if (!artifact) {
+            throw new Error('No artifact available for task creation.');
+        }
+
+        const newTask: KanbanTask = {
+            id: Math.random().toString(36).substring(2, 11),
+            ...taskData,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        } as KanbanTask;
+
+        const newData: KanbanBoard = {
+            ...kanbanData,
+            tasks: [...kanbanData.tasks, newTask],
+        };
+
+        await sync.updateArtifact(
+            artifact.id,
+            artifact.title,
+            JSON.stringify(newData, null, 2),
+            artifact.sessions,
+            artifact.draft,
+            artifact.type
+        );
+
+        return newTask;
+    }, [artifact, desktopBridge, kanbanData, roomId]);
+
     // 🆕 Chat-Board 双向同步 Hook
     const taskChatSync = useTaskChatSync({
         teamId,
         tasks: kanbanData.tasks,
         messages: teamMessages,
-        onTaskUpdate: async (taskId, updates) => {
-            if (desktopBridge && roomId) {
-                await desktopBridge.updateTask(taskId, updates);
-                return;
-            }
-            if (!artifact) {
-                return;
-            }
-
-            // 更新本地任务数据
-            const updatedTasks = kanbanData.tasks.map(t =>
-                t.id === taskId ? { ...t, ...updates, updatedAt: Date.now() } : t
-            );
-
-            const newData: KanbanBoard = {
-                ...kanbanData,
-                tasks: updatedTasks
-            };
-
-            await sync.updateArtifact(
-                artifact.id,
-                artifact.title,
-                JSON.stringify(newData, null, 2),
-                artifact.sessions,
-                artifact.draft,
-                artifact.type
-            );
-        },
-        onMessageSend: async (message) => {
-            await sync.sendTeamMessage({
-                teamId,
-                id: message.id,
-                content: message.content,
-                type: message.type,
-                mentions: message.mentions,
-                metadata: message.metadata,
-                fromSessionId: message.fromSessionId,
-                fromRole: message.fromRole,
-                fromDisplayName: message.fromDisplayName,
-            });
-
-            // 更新本地消息列表
-            setTeamMessages(prev => [...prev, message]);
-        },
-        onTaskCreate: async (taskData) => {
-            if (desktopBridge && roomId) {
-                const createdTask = await desktopBridge.createTask({
-                    roomId,
-                    title: taskData.title || 'Untitled Task',
-                    description: taskData.description,
-                    status: taskData.status || 'todo',
-                    assigneeId: taskData.assigneeId,
-                    metadata: {
-                        priority: taskData.priority,
-                        dueDate: taskData.dueDate,
-                        tags: taskData.tags,
-                        source: taskData.source || 'user',
-                        approvalStatus: taskData.approvalStatus || 'approved',
-                    }
-                });
-
-                return {
-                    id: createdTask.id,
-                    title: createdTask.title,
-                    description: createdTask.description,
-                    status: createdTask.status,
-                    assigneeId: createdTask.assigneeId,
-                    createdAt: createdTask.createdAt,
-                    updatedAt: createdTask.updatedAt,
-                    priority: (createdTask.metadata?.priority as KanbanTask['priority']) || taskData.priority,
-                    dueDate: (createdTask.metadata?.dueDate as number | undefined) || taskData.dueDate,
-                    tags: (createdTask.metadata?.tags as string[] | undefined) || taskData.tags,
-                    source: (createdTask.metadata?.source as KanbanTask['source']) || (taskData.source as KanbanTask['source']) || 'user',
-                    approvalStatus: (createdTask.metadata?.approvalStatus as KanbanTask['approvalStatus']) || taskData.approvalStatus || 'approved',
-                } as KanbanTask;
-            }
-
-            if (!artifact) {
-                throw new Error('No artifact available for task creation.');
-            }
-            const newTask: KanbanTask = {
-                id: Math.random().toString(36).substring(2, 11),
-                ...taskData,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            } as KanbanTask;
-
-            const newData: KanbanBoard = {
-                ...kanbanData,
-                tasks: [...kanbanData.tasks, newTask]
-            };
-
-            await sync.updateArtifact(
-                artifact.id,
-                artifact.title,
-                JSON.stringify(newData, null, 2),
-                artifact.sessions,
-                artifact.draft,
-                artifact.type
-            );
-
-            return newTask;
-        },
+        onTaskUpdate: handleTaskUpdate,
+        onMessageSend: handleTeamMessageSend,
+        onTaskCreate: handleTaskCreate,
     });
 
     React.useEffect(() => {
@@ -1484,7 +1495,7 @@ export default function TeamDashboardScreen() {
         setShowTaskDetail(false);
     }, [artifact, desktopBridge, kanbanData, myDisplayName, teamId]);
 
-    const handleMoveTask = async (task: KanbanTask) => {
+    const handleMoveTask = React.useCallback(async (task: KanbanTask) => {
         const normalized = normalizeStatus(task.status);
         const nextStatus = {
             'todo': 'in-progress',
@@ -1520,7 +1531,7 @@ export default function TeamDashboardScreen() {
             console.error('Failed to sync task update:', error);
             // 即使同步失败，任务状态更新仍然会进行（在 updateTaskWithSync 中）
         }
-    };
+    }, [myDisplayName, normalizeStatus, taskChatSync, teamId]);
 
     const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
     const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
@@ -1572,6 +1583,13 @@ export default function TeamDashboardScreen() {
             { member: b.member, session: b.session, fallbackIndex: b.index }
         ));
     }, [kanbanData.team?.members, artifact?.sessions, sessionLookup, roleDefinitions, kanbanData.tasks]);
+
+    const systemRoster = React.useMemo(() => {
+        return roster.filter((entry) => {
+            const roleId = entry.member.roleId || entry.session?.metadata?.role || '';
+            return roleId === 'supervisor' || roleId === 'help-agent';
+        });
+    }, [roster]);
 
     // 🆕 Discuss 按钮处理函数：切换到 Chat 并预填 @mention 草稿
     const handleDiscussTask = React.useCallback((task: KanbanTask) => {
@@ -1712,6 +1730,17 @@ export default function TeamDashboardScreen() {
         return normalizeStatus(task.status) === columnId;
     }, [normalizeStatus]);
 
+    const handleOpenTaskDetail = React.useCallback((task: KanbanTask) => {
+        setSelectedTask(task);
+        setShowTaskDetail(true);
+    }, []);
+
+    const handleBoardSignalPress = React.useCallback((signal: 'running' | 'deciding' | 'blocked') => {
+        if (signal === 'deciding') {
+            setShowApprovalModal(true);
+        }
+    }, []);
+
     // 🆕 计算每个任务的linked sessions
     const taskSessionLinks = React.useMemo(() => {
         const links = new Map<string, { sessionId: string; title: string; linkedAt: number }[]>();
@@ -1748,123 +1777,20 @@ export default function TeamDashboardScreen() {
                 : 'This team doesn\'t have a Kanban board yet. Initialize one to start tracking tasks.';
 
     const renderKanban = () => (
-        <>
-            {/* 三信号状态面板 — 运行中 / 等待介入 / 异常告警 */}
-            <TeamStatusBar
-                tasks={kanbanData.tasks}
-                onSignalPress={(signal) => {
-                    if (signal === 'deciding') {
-                        setShowApprovalModal(true);
-                    }
-                }}
-            />
-
-            <View style={styles.boardContainer}>
-                    {kanbanData.columns.map(column => (
-                        <View key={column.id} style={styles.column}>
-                            <View style={styles.columnHeader}>
-                                <Text style={styles.columnTitle}>{column.title}</Text>
-                                <Text style={styles.taskCount}>
-                                    {approvedTasks.filter(t => matchesColumn(t, column.id)).length}
-                                </Text>
-                            </View>
-
-                            <ScrollView contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-                                {approvedTasks
-                                    .filter(t => matchesColumn(t, column.id))
-                                .map(task => {
-                                    const linkedSessions = taskSessionLinks.get(task.id) || [];
-                                    const sessionCount = linkedSessions.length;
-                                    const activeLink = task.executionLinks?.find(l => l.status === 'active');
-                                    const activeAgentSession = activeLink ? sessionLookup.get(activeLink.sessionId) : null;
-                                    const activeAgentName = activeAgentSession
-                                        ? getSessionName(activeAgentSession)
-                                        : activeLink?.sessionId?.slice(0, 8) ?? null;
-
-                                    return (
-                                    <Pressable
-                                        key={task.id}
-                                        style={styles.taskCard}
-                                        onPress={() => {
-                                            setSelectedTask(task);
-                                            setShowTaskDetail(true);
-                                        }}
-                                        onLongPress={() => handleMoveTask(task)}
-                                    >
-                                        <Text style={styles.taskTitle}>{task.title}</Text>
-                                        {task.assigneeId && (() => {
-                                            const session = sessionLookup.get(task.assigneeId);
-                                            const name = session ? getSessionName(session) : task.assigneeId.slice(0, 8);
-                                            return (
-                                                <Text style={styles.taskAssignee}>@{name}</Text>
-                                            );
-                                        })()}
-
-                                        {/* 🆕 Linked sessions 显示 */}
-                                        {(sessionCount > 0 || task.priority || activeAgentName) && (
-                                            <View style={styles.taskMeta}>
-                                                {activeAgentName && (
-                                                    <View style={styles.taskActiveExecution}>
-                                                        <Ionicons name="flash" size={11} color="#FF9500" />
-                                                        <Text style={styles.taskActiveExecutionText}>{activeAgentName}</Text>
-                                                    </View>
-                                                )}
-                                                {sessionCount > 0 && (
-                                                    <View style={styles.taskSessionsLink}>
-                                                        <Ionicons
-                                                            name="chatbubble-outline"
-                                                            size={14}
-                                                            color={theme.colors.textSecondary}
-                                                            style={styles.taskSessionsIcon}
-                                                        />
-                                                        <Text style={styles.taskSessionsText}>
-                                                            {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
-                                                        </Text>
-                                                    </View>
-                                                )}
-                                                {task.priority && (
-                                                    <View style={[
-                                                        styles.taskPriority,
-                                                        {
-                                                            backgroundColor: task.priority === 'high' || task.priority === 'urgent'
-                                                                ? withAlpha(theme.colors.textDestructive, 0.125)
-                                                                : task.priority === 'medium'
-                                                                ? withAlpha(theme.colors.warning, 0.125)
-                                                                : withAlpha(theme.colors.success, 0.125)
-                                                        }
-                                                    ]}>
-                                                        <Text style={[
-                                                            styles.taskSessionsText,
-                                                            {
-                                                                color: task.priority === 'high' || task.priority === 'urgent'
-                                                                    ? theme.colors.textDestructive
-                                                                    : task.priority === 'medium'
-                                                                    ? theme.colors.warning
-                                                                    : theme.colors.success
-                                                            }
-                                                        ]}>
-                                                            {task.priority}
-                                                        </Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                        )}
-                                    </Pressable>
-                                );
-                                })}
-
-                            <Pressable
-                                style={styles.addTaskButton}
-                                onPress={() => handleAddTask(column.id)}
-                            >
-                                <Ionicons name="add" size={16} color={theme.colors.textSecondary} />
-                                <Text style={styles.addTaskText}>Add Task</Text>
-                            </Pressable>
-                        </ScrollView>
-                    </View>
-                ))}
-            </View>
-        </>
+        <KanbanBoardPanel
+            styles={styles}
+            theme={theme}
+            tasks={kanbanData.tasks}
+            approvedTasks={approvedTasks}
+            columns={kanbanData.columns}
+            taskSessionLinks={taskSessionLinks}
+            sessionLookup={sessionLookup}
+            matchesColumn={matchesColumn}
+            onSignalPress={handleBoardSignalPress}
+            onOpenTask={handleOpenTaskDetail}
+            onMoveTask={handleMoveTask}
+            onAddTask={handleAddTask}
+        />
     );
 
     const renderInfo = () => (
@@ -1877,6 +1803,34 @@ export default function TeamDashboardScreen() {
                         {(kanbanData.team as any)?.goal || (kanbanData.team as any)?.mission || 'No goal set'}
                     </Text>
                 </View>
+
+                <Text style={[styles.sectionTitle, { marginTop: 24 }]}>System Agents</Text>
+                {systemRoster.length === 0 ? (
+                    <View style={styles.roleCard}>
+                        <Text style={styles.roleTitle}>Supervisor</Text>
+                        <Text style={styles.roleSummary}>
+                            No supervisor has registered to this team yet. Once the daemon spawns a bypass supervisor,
+                            it will appear here and in Evolution for health monitoring.
+                        </Text>
+                    </View>
+                ) : (
+                    systemRoster.map((entry) => {
+                        const roleId = entry.member.roleId || entry.session?.metadata?.role || 'system-agent';
+                        const displayName = entry.member.displayName || entry.session?.metadata?.name || roleId;
+                        const executionPlane = entry.member.executionPlane || entry.session?.metadata?.executionPlane || 'bypass';
+                        const runtime = entry.member.runtimeType || entry.session?.metadata?.flavor || 'claude';
+                        const statusLabel = entry.session?.active ? 'Monitoring now' : 'Standby';
+
+                        return (
+                            <View key={entry.member.sessionId} style={styles.roleCard}>
+                                <Text style={styles.roleTitle}>{displayName}</Text>
+                                <Text style={styles.roleSummary}>
+                                    {roleId} · {executionPlane} · {runtime} · {statusLabel}
+                                </Text>
+                            </View>
+                        );
+                    })
+                )}
 
                 <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Agreements</Text>
                 <View style={styles.roleCard}>

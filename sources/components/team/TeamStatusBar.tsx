@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import type { KanbanTask } from '@/sync/kanbanTypes';
+import { countSignals } from './teamStatusSignals';
 
 /**
  * TeamStatusBar — 移动端三信号状态面板
@@ -36,34 +37,6 @@ interface TeamStatusBarProps {
     compact?: boolean;
 }
 
-function countSignals(tasks: KanbanTask[]) {
-    let running = 0;
-    let deciding = 0;
-    let blocked = 0;
-
-    for (const task of tasks) {
-        if (task.isDeleted) continue;
-
-        // Running: has at least one active execution link
-        if (task.executionLinks?.some(l => l.status === 'active')) {
-            running++;
-        }
-
-        // Deciding: awaiting human approval
-        if (task.approvalStatus === 'pending') {
-            deciding++;
-        }
-
-        // Blocked: has unresolved blockers
-        const unresolvedBlockers = task.blockers?.filter(b => !b.resolvedAt) ?? [];
-        if (unresolvedBlockers.length > 0) {
-            blocked++;
-        }
-    }
-
-    return { running, deciding, blocked };
-}
-
 function getBarPercent(count: number, maxCount: number, minPercent: number = 18): DimensionValue {
     if (count <= 0 || maxCount <= 0) {
         return '0%';
@@ -75,8 +48,8 @@ function getBarPercent(count: number, maxCount: number, minPercent: number = 18)
 export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPress, compact = false }) => {
     const { theme } = useUnistyles();
     const counts = React.useMemo(() => countSignals(tasks), [tasks]);
-    const signals = React.useMemo(() => {
-        const allSignals: SignalItem[] = [
+    const allSignals = React.useMemo(() => {
+        const items: SignalItem[] = [
             {
                 key: 'running',
                 count: counts.running,
@@ -103,23 +76,30 @@ export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPre
             },
         ];
 
-        return allSignals.filter(signal => signal.count > 0);
+        return items;
     }, [counts]);
+    const signals = React.useMemo(() => allSignals.filter(signal => signal.count > 0), [allSignals]);
     const maxSignalCount = React.useMemo(
         () => signals.reduce((max, signal) => Math.max(max, signal.count), 0),
         [signals]
     );
     const hasActivity = signals.length > 0;
-
-    if (!hasActivity) return null;
+    const renderSignals = hasActivity ? signals : allSignals;
+    const effectiveMaxSignalCount = hasActivity
+        ? maxSignalCount
+        : allSignals.reduce((max, signal) => Math.max(max, signal.count), 0);
 
     if (compact) {
         return (
             <View style={styles.compactRow}>
-                {signals.map(s => (
+                {renderSignals.map(s => (
                     <Pressable
                         key={s.key}
-                        style={[styles.compactChip, { backgroundColor: s.bg }]}
+                        style={[
+                            styles.compactChip,
+                            { backgroundColor: s.bg },
+                            !hasActivity && styles.inactiveChip,
+                        ]}
                         onPress={() => onSignalPress?.(s.key)}
                         accessibilityRole="button"
                         accessibilityLabel={`${s.count} ${s.label}`}
@@ -135,7 +115,7 @@ export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPre
                                         styles.compactBarFill,
                                         {
                                             backgroundColor: s.color,
-                                            width: getBarPercent(s.count, maxSignalCount),
+                                            width: getBarPercent(s.count, effectiveMaxSignalCount),
                                         },
                                     ]}
                                 />
@@ -152,11 +132,11 @@ export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPre
 
     return (
         <View style={[styles.panel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
-            {signals.map((s, idx) => (
+            {renderSignals.map((s, idx) => (
                 <React.Fragment key={s.key}>
                     {idx > 0 && <View style={[styles.divider, { backgroundColor: theme.colors.divider }]} />}
                     <Pressable
-                        style={styles.signalCell}
+                        style={[styles.signalCell, !hasActivity && styles.inactiveCell]}
                         onPress={() => onSignalPress?.(s.key)}
                         accessibilityRole="button"
                         accessibilityLabel={`${s.count} tasks ${s.label}`}
@@ -174,7 +154,7 @@ export const TeamStatusBar: React.FC<TeamStatusBarProps> = ({ tasks, onSignalPre
                                         styles.signalBarFill,
                                         {
                                             backgroundColor: s.color,
-                                            width: getBarPercent(s.count, maxSignalCount),
+                                            width: getBarPercent(s.count, effectiveMaxSignalCount),
                                         },
                                     ]}
                                 />
@@ -205,6 +185,9 @@ const styles = StyleSheet.create((_theme) => ({
         paddingVertical: 14,
         paddingHorizontal: 8,
         gap: 6,
+    },
+    inactiveCell: {
+        opacity: 0.55,
     },
     signalIconWrap: {
         width: 36,
@@ -255,6 +238,9 @@ const styles = StyleSheet.create((_theme) => ({
         paddingVertical: 5,
         borderRadius: 999,
         gap: 5,
+    },
+    inactiveChip: {
+        opacity: 0.55,
     },
     compactChipCount: {
         fontSize: 13,

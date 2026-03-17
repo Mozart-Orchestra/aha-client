@@ -10,6 +10,7 @@ import { MessageView } from '@/components/session/MessageView';
 import type { KanbanTask, KanbanTeamMember, KanbanTeamRole } from '@/sync/kanbanTypes';
 import type { ActiveTaskSummary } from '@/utils/teamActiveTask';
 import { getAgentPresenceVisual } from '@/utils/presenceUtils';
+import { resolveMatrixStreamState, resolveStickySession } from './matrixPersistence';
 import {
     GRID_PRESETS,
     getRecommendedGrid,
@@ -140,11 +141,11 @@ const GridSizeSelector = React.memo(function GridSizeSelector({
                 style={selectorStyles.trigger}
                 onPress={() => setOpen((previous) => !previous)}
             >
-                <Ionicons name="grid-outline" size={14} color="#8f7a61" />
+                <Ionicons name="grid-outline" size={14} color={MATRIX_THEME.muted} />
                 <Text style={selectorStyles.triggerText}>
                     {current.cols}x{current.rows}
                 </Text>
-                <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color="#8f7a61" />
+                <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color={MATRIX_THEME.muted} />
             </Pressable>
             {open && (
                 <View style={selectorStyles.dropdown}>
@@ -191,7 +192,7 @@ const TaskSidebarItem = React.memo(function TaskSidebarItem({
     onDragEnd,
 }: TaskSidebarItemProps) {
     const status = normalizeTaskStatus(task.status);
-    const statusColor = TASK_STATUS_COLORS[status] ?? '#8f7a61';
+    const statusColor = TASK_STATUS_COLORS[status] ?? MATRIX_THEME.muted;
 
     const webDragProps = Platform.OS === 'web' ? {
         draggable: true,
@@ -213,7 +214,7 @@ const TaskSidebarItem = React.memo(function TaskSidebarItem({
                 <Text style={taskStyles.itemTitle} numberOfLines={2}>{task.title}</Text>
                 <Text style={taskStyles.itemStatus}>{status}</Text>
             </View>
-            <Ionicons name="reorder-three" size={14} color="#6e5d4a" />
+            <Ionicons name="reorder-three" size={14} color={MATRIX_THEME.mutedSoft} />
         </Pressable>
     );
 });
@@ -227,10 +228,26 @@ const MatrixSessionStream = React.memo(function MatrixSessionStream({
 }) {
     const { messages, isLoaded } = useSessionMessages(session.id);
     const scrollRef = React.useRef<ScrollView>(null);
+    const lastGoodMessagesRef = React.useRef(messages);
+    const hasEverLoadedRef = React.useRef(false);
 
     const toolCallCount = React.useMemo(() => {
         return messages.reduce((count, message) => count + (message.kind === 'tool-call' ? 1 : 0), 0);
     }, [messages]);
+
+    if (isLoaded && messages.length > 0) {
+        hasEverLoadedRef.current = true;
+        lastGoodMessagesRef.current = messages;
+    }
+
+    const streamState = React.useMemo(() => {
+        return resolveMatrixStreamState({
+            isLoaded,
+            messages,
+            lastGoodMessages: lastGoodMessagesRef.current,
+            hasEverLoaded: hasEverLoadedRef.current,
+        });
+    }, [isLoaded, messages]);
 
     const scrollToBottom = React.useCallback(() => {
         requestAnimationFrame(() => {
@@ -246,23 +263,23 @@ const MatrixSessionStream = React.memo(function MatrixSessionStream({
         <View style={streamStyles.container}>
             <View style={streamStyles.summaryRow}>
                 <View style={streamStyles.summaryChip}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={11} color="#8f7a61" />
-                    <Text style={streamStyles.summaryText}>{messages.length} msgs</Text>
+                    <Ionicons name="chatbubble-ellipses-outline" size={11} color={MATRIX_THEME.muted} />
+                    <Text style={streamStyles.summaryText}>{streamState.displayMessages.length} msgs</Text>
                 </View>
                 {toolCallCount > 0 && (
                     <View style={streamStyles.summaryChip}>
-                        <Ionicons name="hammer-outline" size={11} color="#d48a08" />
-                        <Text style={[streamStyles.summaryText, { color: '#d48a08' }]}>{toolCallCount} tools</Text>
+                        <Ionicons name="hammer-outline" size={11} color={MATRIX_THEME.accentStrong} />
+                        <Text style={[streamStyles.summaryText, { color: MATRIX_THEME.accentStrong }]}>{toolCallCount} tools</Text>
                     </View>
                 )}
             </View>
-            {!isLoaded ? (
+            {streamState.showInitialLoading ? (
                 <View style={streamStyles.loadingState}>
-                    <ActivityIndicator size="small" color="#8f7a61" />
+                    <ActivityIndicator size="small" color={MATRIX_THEME.muted} />
                 </View>
-            ) : messages.length === 0 ? (
+            ) : streamState.showEmptyState ? (
                 <View style={streamStyles.emptyState}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={18} color="#6e5d4a" />
+                    <Ionicons name="chatbubble-ellipses-outline" size={18} color={MATRIX_THEME.mutedSoft} />
                     <Text style={streamStyles.emptyText}>No session output yet</Text>
                 </View>
             ) : (
@@ -275,7 +292,7 @@ const MatrixSessionStream = React.memo(function MatrixSessionStream({
                     showsVerticalScrollIndicator={Platform.OS === 'web'}
                 >
                     <View style={Platform.OS === 'web' ? ({ zoom: zoomLevel } as any) : undefined}>
-                        {messages.map((message) => (
+                        {streamState.displayMessages.map((message) => (
                             <MessageView
                                 key={message.id}
                                 message={message}
@@ -309,12 +326,19 @@ const AgentTile = React.memo(function AgentTile({
 }: AgentTileProps) {
     const { member, session, role, tasks, activeTask } = entry;
     const roleId = member.roleId || session?.metadata?.role || '';
-    const badgeColor = ROLE_BADGE_COLORS[roleId] ?? '#8f7a61';
+    const badgeColor = ROLE_BADGE_COLORS[roleId] ?? MATRIX_THEME.muted;
     const presence = session
         ? getAgentPresenceVisual(session)
-        : { dotColor: '#6e5d4a', inactive: true, dead: false };
+        : { dotColor: MATRIX_THEME.mutedSoft, inactive: true, dead: false };
     const status = getStatusLabel(session);
     const [isHovering, setIsHovering] = React.useState(false);
+    const lastKnownSessionRef = React.useRef<Session | undefined>(session);
+
+    if (session) {
+        lastKnownSessionRef.current = session;
+    }
+
+    const displaySession = resolveStickySession(session, lastKnownSessionRef.current);
 
     const webDropProps = Platform.OS === 'web' ? {
         onDragOver: (event: any) => {
@@ -345,7 +369,7 @@ const AgentTile = React.memo(function AgentTile({
         >
             {activeTask && (
                 <View style={cardStyles.floatingTask}>
-                    <Ionicons name="flash" size={10} color="#d48a08" />
+                    <Ionicons name="flash" size={10} color={MATRIX_THEME.accentStrong} />
                     <Text style={cardStyles.floatingTaskText} numberOfLines={1}>{activeTask.title}</Text>
                 </View>
             )}
@@ -378,20 +402,20 @@ const AgentTile = React.memo(function AgentTile({
                     <Text style={cardStyles.runtimeText}>{formatRuntimeLabel(member.runtimeType)}</Text>
                     <View style={cardStyles.agentStatsRow}>
                         <View style={cardStyles.agentStatChip}>
-                            <Ionicons name="albums-outline" size={11} color="#8f7a61" />
+                            <Ionicons name="albums-outline" size={11} color={MATRIX_THEME.muted} />
                             <Text style={cardStyles.agentStatText}>{tasks.length}</Text>
                         </View>
-                        <Ionicons name="open-outline" size={14} color="#8f7a61" />
+                        <Ionicons name="open-outline" size={14} color={MATRIX_THEME.muted} />
                     </View>
                 </View>
             </Pressable>
 
             <View style={cardStyles.streamFrame}>
-                {session ? (
-                    <MatrixSessionStream session={session} zoomLevel={zoomLevel} />
+                {displaySession ? (
+                    <MatrixSessionStream session={displaySession} zoomLevel={zoomLevel} />
                 ) : (
                     <View style={cardStyles.missingSessionState}>
-                        <Ionicons name="warning-outline" size={18} color="#8f7a61" />
+                        <Ionicons name="warning-outline" size={18} color={MATRIX_THEME.muted} />
                         <Text style={cardStyles.missingSessionText}>Session unavailable</Text>
                     </View>
                 )}
@@ -402,7 +426,7 @@ const AgentTile = React.memo(function AgentTile({
                     style={cardStyles.dropOverlay}
                     onPress={() => onDropTask?.(draggingTaskId, member.sessionId)}
                 >
-                    <Ionicons name="add-circle" size={22} color="#d48a08" />
+                    <Ionicons name="add-circle" size={22} color={MATRIX_THEME.accentStrong} />
                     <Text style={cardStyles.dropText}>Assign task to this agent</Text>
                 </Pressable>
             ) : null}
@@ -503,10 +527,10 @@ export const MatrixView = React.memo(function MatrixView({
                         <Ionicons
                             name={sidebarCollapsed ? 'chevron-forward' : 'chevron-back'}
                             size={14}
-                            color="#8f7a61"
+                            color={MATRIX_THEME.muted}
                         />
                     </Pressable>
-                    <Ionicons name="apps" size={16} color="#b26a00" />
+                    <Ionicons name="apps" size={16} color={MATRIX_THEME.accent} />
                     <Text style={matrixStyles.headerTitle}>Matrix</Text>
                     <Text style={matrixStyles.agentCount}>{sortedRoster.length} agents</Text>
                 </View>
@@ -517,7 +541,7 @@ export const MatrixView = React.memo(function MatrixView({
                             onPress={() => adjustZoom(-ZOOM_STEP)}
                             disabled={zoomLevel <= MIN_ZOOM}
                         >
-                            <Ionicons name="remove" size={12} color="#f0e2cb" />
+                            <Ionicons name="remove" size={12} color={MATRIX_THEME.text} />
                         </Pressable>
                         <Text style={matrixStyles.zoomText}>{Math.round(zoomLevel * 100)}%</Text>
                         <Pressable
@@ -525,7 +549,7 @@ export const MatrixView = React.memo(function MatrixView({
                             onPress={() => adjustZoom(ZOOM_STEP)}
                             disabled={zoomLevel >= MAX_ZOOM}
                         >
-                            <Ionicons name="add" size={12} color="#f0e2cb" />
+                            <Ionicons name="add" size={12} color={MATRIX_THEME.text} />
                         </Pressable>
                     </View>
                     <GridSizeSelector current={gridConfig} recommended={recommended} onSelect={handleGridSelect} />
@@ -536,7 +560,7 @@ export const MatrixView = React.memo(function MatrixView({
                 {!sidebarCollapsed && (
                     <View style={taskStyles.sidebar}>
                         <View style={taskStyles.sidebarHeader}>
-                            <Ionicons name="list" size={14} color="#b26a00" />
+                            <Ionicons name="list" size={14} color={MATRIX_THEME.accent} />
                             <Text style={taskStyles.sidebarTitle}>Tasks</Text>
                             <Text style={taskStyles.sidebarCount}>{sidebarTasks.length}</Text>
                         </View>
@@ -586,7 +610,7 @@ export const MatrixView = React.memo(function MatrixView({
                                         />
                                     ) : (
                                         <View style={[cardStyles.emptyContainer, { height: viewportHeight }]}>
-                                            <Ionicons name="add-circle-outline" size={24} color="#6e5d4a" />
+                                            <Ionicons name="add-circle-outline" size={24} color={MATRIX_THEME.mutedSoft} />
                                         </View>
                                     )}
                                 </View>
@@ -602,7 +626,7 @@ export const MatrixView = React.memo(function MatrixView({
 const matrixStyles = StyleSheet.create(() => ({
     root: {
         flex: 1,
-        backgroundColor: '#060301',
+        backgroundColor: MATRIX_THEME.bg,
     },
     headerBar: {
         flexDirection: 'row',
@@ -611,8 +635,8 @@ const matrixStyles = StyleSheet.create(() => ({
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#332112',
-        backgroundColor: 'rgba(13,7,2,0.95)',
+        borderBottomColor: MATRIX_THEME.border,
+        backgroundColor: withAlpha(MATRIX_THEME.bgSoft, 0.95),
     },
     headerLeft: {
         flexDirection: 'row',
@@ -623,18 +647,18 @@ const matrixStyles = StyleSheet.create(() => ({
         width: 24,
         height: 24,
         borderRadius: 6,
-        backgroundColor: 'rgba(178,106,0,0.1)',
+        backgroundColor: withAlpha(MATRIX_THEME.accent, 0.1),
         alignItems: 'center',
         justifyContent: 'center',
     },
     headerTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
     },
     agentCount: {
         fontSize: 12,
-        color: '#8f7a61',
+        color: MATRIX_THEME.muted,
         marginLeft: 4,
     },
     headerControls: {
@@ -649,15 +673,15 @@ const matrixStyles = StyleSheet.create(() => ({
         paddingHorizontal: 8,
         paddingVertical: 5,
         borderRadius: 8,
-        backgroundColor: 'rgba(20,13,8,0.7)',
+        backgroundColor: withAlpha(MATRIX_THEME.panelStrong, 0.7),
         borderWidth: 1,
-        borderColor: '#3a2716',
+        borderColor: MATRIX_THEME.borderStrong,
     },
     zoomButton: {
         width: 20,
         height: 20,
         borderRadius: 6,
-        backgroundColor: 'rgba(178,106,0,0.12)',
+        backgroundColor: withAlpha(MATRIX_THEME.accent, 0.12),
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -667,7 +691,7 @@ const matrixStyles = StyleSheet.create(() => ({
     zoomText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
         minWidth: 42,
         textAlign: 'center',
     },
@@ -695,16 +719,16 @@ const matrixStyles = StyleSheet.create(() => ({
 
 const cardStyles = StyleSheet.create(() => ({
     container: {
-        backgroundColor: 'rgba(20,11,4,0.88)',
+        backgroundColor: withAlpha(MATRIX_THEME.panel, 0.88),
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#3f2a15',
+        borderColor: MATRIX_THEME.borderAccent,
         overflow: 'hidden',
         ...(Platform.OS === 'web' ? { transition: 'all 0.18s ease' as any } : {}),
     },
     containerDropTarget: {
-        borderColor: '#d48a08',
-        shadowColor: '#d48a08',
+        borderColor: MATRIX_THEME.accentStrong,
+        shadowColor: MATRIX_THEME.accentStrong,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.16,
         shadowRadius: 14,
@@ -719,8 +743,8 @@ const cardStyles = StyleSheet.create(() => ({
         paddingTop: 12,
         paddingBottom: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#2b1b0f',
-        backgroundColor: 'rgba(25,17,9,0.92)',
+        borderBottomColor: MATRIX_THEME.borderSoft,
+        backgroundColor: withAlpha(MATRIX_THEME.panelSoft, 0.92),
     },
     headerMain: {
         flex: 1,
@@ -755,19 +779,19 @@ const cardStyles = StyleSheet.create(() => ({
         paddingVertical: 3,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: '#3a2716',
-        backgroundColor: 'rgba(178,106,0,0.08)',
+        borderColor: MATRIX_THEME.borderStrong,
+        backgroundColor: withAlpha(MATRIX_THEME.accent, 0.08),
     },
     agentStatText: {
         fontSize: 10,
         fontWeight: '600',
-        color: '#8f7a61',
+        color: MATRIX_THEME.muted,
     },
     emptyContainer: {
-        backgroundColor: 'rgba(20,11,4,0.5)',
+        backgroundColor: withAlpha(MATRIX_THEME.panel, 0.5),
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#2b1b0f',
+        borderColor: MATRIX_THEME.borderSoft,
         borderStyle: 'dashed',
         alignItems: 'center',
         justifyContent: 'center',
@@ -776,9 +800,9 @@ const cardStyles = StyleSheet.create(() => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: 'rgba(212,138,8,0.16)',
+        backgroundColor: withAlpha(MATRIX_THEME.accentStrong, 0.16),
         borderWidth: 1,
-        borderColor: 'rgba(212,138,8,0.25)',
+        borderColor: withAlpha(MATRIX_THEME.accentStrong, 0.25),
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
@@ -789,7 +813,7 @@ const cardStyles = StyleSheet.create(() => ({
     floatingTaskText: {
         fontSize: 11,
         fontWeight: '500',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
         flex: 1,
     },
     statusDot: {
@@ -802,7 +826,7 @@ const cardStyles = StyleSheet.create(() => ({
         minWidth: 0,
         fontSize: 13,
         fontWeight: '700',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
     },
     roleBadge: {
         alignSelf: 'flex-start',
@@ -835,13 +859,13 @@ const cardStyles = StyleSheet.create(() => ({
     },
     runtimeText: {
         fontSize: 10,
-        color: '#8f7a61',
+        color: MATRIX_THEME.muted,
         textTransform: 'capitalize',
     },
     streamFrame: {
         flex: 1,
         minHeight: 0,
-        backgroundColor: 'rgba(9,5,2,0.85)',
+        backgroundColor: withAlpha(MATRIX_THEME.bg, 0.85),
     },
     missingSessionState: {
         flex: 1,
@@ -851,7 +875,7 @@ const cardStyles = StyleSheet.create(() => ({
     },
     missingSessionText: {
         fontSize: 11,
-        color: '#8f7a61',
+        color: MATRIX_THEME.muted,
     },
     dropOverlay: {
         position: 'absolute',
@@ -860,7 +884,7 @@ const cardStyles = StyleSheet.create(() => ({
         right: 0,
         bottom: 0,
         zIndex: 4,
-        backgroundColor: 'rgba(6,3,1,0.64)',
+        backgroundColor: withAlpha(MATRIX_THEME.bg, 0.64),
         borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
@@ -870,7 +894,7 @@ const cardStyles = StyleSheet.create(() => ({
     dropText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
         textAlign: 'center',
     },
 }));
@@ -887,8 +911,8 @@ const streamStyles = StyleSheet.create(() => ({
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderBottomColor: '#20150d',
-        backgroundColor: 'rgba(13,7,2,0.85)',
+        borderBottomColor: MATRIX_THEME.panelMuted,
+        backgroundColor: withAlpha(MATRIX_THEME.bgSoft, 0.85),
     },
     summaryChip: {
         flexDirection: 'row',
@@ -897,14 +921,14 @@ const streamStyles = StyleSheet.create(() => ({
         paddingHorizontal: 7,
         paddingVertical: 3,
         borderRadius: 999,
-        backgroundColor: 'rgba(178,106,0,0.08)',
+        backgroundColor: withAlpha(MATRIX_THEME.accent, 0.08),
         borderWidth: 1,
-        borderColor: '#2b1b0f',
+        borderColor: MATRIX_THEME.borderSoft,
     },
     summaryText: {
         fontSize: 10,
         fontWeight: '600',
-        color: '#8f7a61',
+        color: MATRIX_THEME.muted,
     },
     loadingState: {
         flex: 1,
@@ -920,7 +944,7 @@ const streamStyles = StyleSheet.create(() => ({
     },
     emptyText: {
         fontSize: 11,
-        color: '#6e5d4a',
+        color: MATRIX_THEME.mutedSoft,
     },
     scroll: {
         flex: 1,
@@ -935,8 +959,8 @@ const taskStyles = StyleSheet.create(() => ({
     sidebar: {
         width: 220,
         borderRightWidth: 1,
-        borderRightColor: '#332112',
-        backgroundColor: 'rgba(13,7,2,0.92)',
+        borderRightColor: MATRIX_THEME.border,
+        backgroundColor: withAlpha(MATRIX_THEME.bgSoft, 0.92),
     },
     sidebarHeader: {
         flexDirection: 'row',
@@ -945,18 +969,18 @@ const taskStyles = StyleSheet.create(() => ({
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#2b1b0f',
+        borderBottomColor: MATRIX_THEME.borderSoft,
     },
     sidebarTitle: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
         flex: 1,
     },
     sidebarCount: {
         fontSize: 11,
-        color: '#8f7a61',
-        backgroundColor: 'rgba(178,106,0,0.1)',
+        color: MATRIX_THEME.muted,
+        backgroundColor: withAlpha(MATRIX_THEME.accent, 0.1),
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 8,
@@ -976,7 +1000,7 @@ const taskStyles = StyleSheet.create(() => ({
         paddingVertical: 8,
         borderRadius: 8,
         marginBottom: 4,
-        backgroundColor: 'rgba(255,255,255,0.01)',
+        backgroundColor: withAlpha(MATRIX_THEME.text, 0.01),
         borderWidth: 1,
         borderColor: 'transparent',
         ...(Platform.OS === 'web'
@@ -988,8 +1012,8 @@ const taskStyles = StyleSheet.create(() => ({
     },
     itemDragging: {
         opacity: 0.5,
-        backgroundColor: 'rgba(212,138,8,0.08)',
-        borderColor: '#3f2a15',
+        backgroundColor: withAlpha(MATRIX_THEME.accentStrong, 0.08),
+        borderColor: MATRIX_THEME.borderAccent,
     },
     statusDot: {
         width: 6,
@@ -1004,12 +1028,12 @@ const taskStyles = StyleSheet.create(() => ({
     itemTitle: {
         fontSize: 11,
         fontWeight: '500',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
         lineHeight: 15,
     },
     itemStatus: {
         fontSize: 9,
-        color: '#6e5d4a',
+        color: MATRIX_THEME.mutedSoft,
         textTransform: 'uppercase',
         fontWeight: '600',
         letterSpacing: 0.3,
@@ -1020,7 +1044,7 @@ const taskStyles = StyleSheet.create(() => ({
     },
     emptyText: {
         fontSize: 11,
-        color: '#6e5d4a',
+        color: MATRIX_THEME.mutedSoft,
     },
 }));
 
@@ -1036,24 +1060,24 @@ const selectorStyles = StyleSheet.create(() => ({
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 8,
-        backgroundColor: 'rgba(20,13,8,0.7)',
+        backgroundColor: withAlpha(MATRIX_THEME.panelStrong, 0.7),
         borderWidth: 1,
-        borderColor: '#3a2716',
+        borderColor: MATRIX_THEME.borderStrong,
     },
     triggerText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
     },
     dropdown: {
         position: 'absolute',
         top: 36,
         right: 0,
-        backgroundColor: '#140b04',
+        backgroundColor: MATRIX_THEME.panel,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#3f2a15',
-        shadowColor: '#000',
+        borderColor: MATRIX_THEME.borderAccent,
+        shadowColor: MATRIX_THEME.bg,
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.3,
         shadowRadius: 24,
@@ -1071,18 +1095,18 @@ const selectorStyles = StyleSheet.create(() => ({
         borderRadius: 8,
     },
     optionActive: {
-        backgroundColor: 'rgba(178,106,0,0.15)',
+        backgroundColor: withAlpha(MATRIX_THEME.accent, 0.15),
     },
     optionText: {
         fontSize: 13,
-        color: '#f0e2cb',
+        color: MATRIX_THEME.text,
     },
     optionTextActive: {
         fontWeight: '600',
-        color: '#d48a08',
+        color: MATRIX_THEME.accentStrong,
     },
     recommendedBadge: {
-        backgroundColor: 'rgba(178,106,0,0.15)',
+        backgroundColor: withAlpha(MATRIX_THEME.accent, 0.15),
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 4,
@@ -1090,7 +1114,7 @@ const selectorStyles = StyleSheet.create(() => ({
     recommendedText: {
         fontSize: 9,
         fontWeight: '600',
-        color: '#b26a00',
+        color: MATRIX_THEME.accent,
         textTransform: 'uppercase',
     },
 }));
