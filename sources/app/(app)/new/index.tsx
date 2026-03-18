@@ -20,7 +20,7 @@ import { SessionTypeSelector } from '@/components/session/SessionTypeSelector';
 import { createWorktree } from '@/utils/createWorktree';
 import { getTempData, type NewSessionData } from '@/utils/tempDataStore';
 import { linkTaskToSession } from '@/-zen/model/taskSessionLink';
-import { PermissionMode, ModelMode } from '@/components/settings/PermissionModeSelector';
+import type { PermissionMode, ModelMode } from '@/types/agentModes';
 import { getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { trackSessionCreated } from '@/track';
 

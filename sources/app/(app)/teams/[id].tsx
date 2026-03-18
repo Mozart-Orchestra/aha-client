@@ -8,7 +8,14 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
-import { trackTeamViewed, trackTaskCreated, trackTaskApproval, trackTeamChatSent, trackTaskCompleted, trackTaskMoved } from '@/track';
+import {
+    trackAgentDeployed,
+    trackTaskApproval,
+    trackTaskCompleted,
+    trackTaskCreated,
+    trackTaskMoved,
+    trackTeamViewed,
+} from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
 import { useShallow } from 'zustand/react/shallow';
@@ -343,6 +350,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         height: 54,
         borderBottomWidth: 1,
         borderBottomColor: '#DEE8EE',
+        zIndex: 10,
     },
     desktopHeaderTopRow: {
         flex: 1,
@@ -390,7 +398,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         shadowOpacity: 0.12,
         shadowRadius: 24,
         elevation: 6,
-        zIndex: 20,
+        zIndex: 1000,
     },
     desktopMenuItem: {
         flexDirection: 'row',
@@ -859,11 +867,11 @@ export default function TeamDashboardScreen() {
     const handleArchiveTeam = React.useCallback(async () => {
         setShowMenu(false);
         const confirmed = await Modal.confirm(
-            'Archive Team',
-            'This will archive the team and all its associated sessions. You can restore it later from the archive. Are you sure?',
+            t('teams.archiveTeam'),
+            t('teams.archiveTeamConfirm'),
             {
-                confirmText: 'Archive',
-                cancelText: 'Cancel',
+                confirmText: t('teams.archiveAction'),
+                cancelText: t('common.cancel'),
                 destructive: false
             }
         );
@@ -874,12 +882,12 @@ export default function TeamDashboardScreen() {
             const sessionIds = getSessionIds();
             const result = await sync.archiveTeam(teamId, sessionIds);
             if (result.success) {
-                Modal.alert('Success', `Team archived with ${result.archivedSessions} sessions.`);
+                Modal.alert(t('common.success'), t('teams.archiveTeamSuccess', { archivedSessions: result.archivedSessions }));
                 router.replace('/teams');
             }
         } catch (error) {
             console.error('Failed to archive team:', error);
-            Modal.alert('Error', 'Failed to archive team. Please try again.');
+            Modal.alert(t('common.error'), t('teams.archiveTeamFailed'));
         }
     }, [teamId, router, getSessionIds]);
 
@@ -902,12 +910,12 @@ export default function TeamDashboardScreen() {
             const sessionIds = getSessionIds();
             const result = await sync.deleteTeam(teamId, sessionIds);
             if (result.success) {
-                Modal.alert('Success', `Team deleted with ${result.deletedSessions} sessions.`);
+                Modal.alert(t('common.success'), t('teams.deleteTeamSuccess', { deletedSessions: result.deletedSessions }));
                 router.replace('/teams');
             }
         } catch (error) {
             console.error('Failed to delete team:', error);
-            Modal.alert('Error', 'Failed to delete team. Please try again.');
+            Modal.alert(t('common.error'), t('teams.deleteTeamFailed'));
         }
     }, [teamId, router, getSessionIds]);
 
@@ -915,13 +923,13 @@ export default function TeamDashboardScreen() {
     const handleRenameTeam = React.useCallback(async () => {
         setShowMenu(false);
         const newName = await Modal.prompt(
-            'Rename Team',
-            'Enter a new name for this team:',
+            t('teams.renameTeam'),
+            t('teams.renameTeamPrompt'),
             {
                 defaultValue: artifact?.title || '',
                 placeholder: 'Team name',
-                confirmText: 'Rename',
-                cancelText: 'Cancel'
+                confirmText: t('teams.renameAction'),
+                cancelText: t('common.cancel')
             }
         );
 
@@ -944,7 +952,7 @@ export default function TeamDashboardScreen() {
             }
         } catch (error) {
             console.error('Failed to rename team:', error);
-            Modal.alert('Error', 'Failed to rename team. Please try again.');
+            Modal.alert(t('common.error'), t('teams.renameTeamFailed'));
         }
     }, [teamId, artifact]);
 
@@ -1032,16 +1040,16 @@ export default function TeamDashboardScreen() {
         });
 
         if (recoverCandidates.length === 0) {
-            Modal.alert('Nothing to Recover', 'No recoverable team agents were found in this team.');
+            Modal.alert(t('teams.nothingToRecover'), t('teams.nothingToRecoverBody'));
             return;
         }
 
         const confirmed = await Modal.confirm(
-            'Recover Team',
-            'This will relaunch inactive team agents using their saved identity, machine, and working directory. Active agents are skipped.',
+            t('teams.recoverTeam'),
+            t('teams.recoverTeamConfirm'),
             {
-                confirmText: 'Recover',
-                cancelText: 'Cancel',
+                confirmText: t('teams.recoverAction'),
+                cancelText: t('common.cancel'),
                 destructive: false,
             }
         );
@@ -1125,6 +1133,13 @@ export default function TeamDashboardScreen() {
                         executionPlane: member.executionPlane,
                         runtimeType,
                     });
+                    trackAgentDeployed(recoveredSessionId, {
+                        source: 'team_recovery',
+                        team_id: teamId,
+                        role_id: member.roleId,
+                        runtime_type: runtimeType,
+                        execution_plane: member.executionPlane ?? null,
+                    });
                     recovered += 1;
                 } catch (error) {
                     console.error(`Failed to recover team member ${label}:`, error);
@@ -1134,20 +1149,22 @@ export default function TeamDashboardScreen() {
 
             const lines = [
                 recovered > 0
-                    ? `Recovered ${recovered} team agent${recovered === 1 ? '' : 's'}.`
-                    : 'No team agents were recovered.',
+                    ? t('teams.recoveryResult', { count: recovered })
+                    : t('teams.recoveryNoAgents'),
                 skipped > 0
-                    ? `Skipped ${skipped} already-active agent${skipped === 1 ? '' : 's'}.`
+                    ? t('teams.recoverySkipped', { count: skipped })
                     : null,
                 issues.length > 0
-                    ? `Issues: ${issues.slice(0, 4).join(' | ')}${issues.length > 4 ? ` | +${issues.length - 4} more` : ''}`
+                    ? t('teams.recoveryIssues', {
+                        issues: `${issues.slice(0, 4).join(' | ')}${issues.length > 4 ? ` | +${issues.length - 4} more` : ''}`,
+                    })
                     : null,
             ].filter(Boolean);
 
-            Modal.alert(recovered > 0 ? 'Recovery Started' : 'Recovery Incomplete', lines.join('\n'));
+            Modal.alert(recovered > 0 ? t('teams.recoveryStarted') : t('teams.recoveryIncomplete'), lines.join('\n'));
         } catch (error) {
             console.error('Failed to recover team:', error);
-            Modal.alert('Error', 'Failed to recover team. Please try again.');
+            Modal.alert(t('common.error'), t('teams.recoveryFailed'));
         } finally {
             setIsRecoveringTeam(false);
         }
@@ -1277,7 +1294,7 @@ export default function TeamDashboardScreen() {
                 }
             });
 
-            return {
+            const nextTask = {
                 id: createdTask.id,
                 title: createdTask.title,
                 description: createdTask.description,
@@ -1291,6 +1308,18 @@ export default function TeamDashboardScreen() {
                 source: (createdTask.metadata?.source as KanbanTask['source']) || (taskData.source as KanbanTask['source']) || 'user',
                 approvalStatus: (createdTask.metadata?.approvalStatus as KanbanTask['approvalStatus']) || taskData.approvalStatus || 'approved',
             } as KanbanTask;
+
+            trackTaskCreated(teamId, {
+                task_id: nextTask.id,
+                source: nextTask.source ?? null,
+                status: nextTask.status,
+                priority: nextTask.priority ?? null,
+                assignee_id: nextTask.assigneeId ?? null,
+                approval_status: nextTask.approvalStatus ?? null,
+                created_via: 'desktop_bridge',
+            });
+
+            return nextTask;
         }
 
         if (!artifact) {
@@ -1318,8 +1347,18 @@ export default function TeamDashboardScreen() {
             artifact.type
         );
 
+        trackTaskCreated(teamId, {
+            task_id: newTask.id,
+            source: newTask.source ?? null,
+            status: newTask.status,
+            priority: newTask.priority ?? null,
+            assignee_id: newTask.assigneeId ?? null,
+            approval_status: newTask.approvalStatus ?? null,
+            created_via: 'artifact_update',
+        });
+
         return newTask;
-    }, [artifact, desktopBridge, kanbanData, roomId]);
+    }, [artifact, desktopBridge, kanbanData, roomId, teamId]);
 
     // 🆕 Chat-Board 双向同步 Hook
     const taskChatSync = useTaskChatSync({
@@ -1487,9 +1526,13 @@ export default function TeamDashboardScreen() {
                 myDisplayName || '用户'
             );
 
-            trackTaskMoved(task.id, teamId, normalized, nextStatus);
+            trackTaskMoved(task.id, teamId, normalized, nextStatus, {
+                source: 'board_quick_move',
+            });
             if (nextStatus === 'done') {
-                trackTaskCompleted(task.id, teamId);
+                trackTaskCompleted(task.id, teamId, {
+                    source: 'board_quick_move',
+                });
             }
 
             // 🆕 Phase 2: 同步状态到 Todo（如果有链接）
@@ -1840,9 +1883,36 @@ export default function TeamDashboardScreen() {
     );
 
     const handleTaskDetailSave = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
+        const existingTask = kanbanData.tasks.find((entry) => entry.id === taskId);
         await updateTaskWithSync(taskId, updates, myDisplayName || '用户');
+
+        if (existingTask && typeof updates.status === 'string') {
+            const previousStatus = normalizeStatus(existingTask.status);
+            const nextStatus = normalizeStatus(updates.status);
+            if (previousStatus !== nextStatus) {
+                trackTaskMoved(taskId, teamId, previousStatus, nextStatus, {
+                    source: 'task_detail_modal',
+                });
+                if (nextStatus === 'done' && previousStatus !== 'done') {
+                    trackTaskCompleted(taskId, teamId, {
+                        source: 'task_detail_modal',
+                    });
+                }
+            }
+        }
+
+        if (existingTask && typeof updates.approvalStatus === 'string' && updates.approvalStatus !== existingTask.approvalStatus) {
+            if (updates.approvalStatus === 'approved' || updates.approvalStatus === 'rejected') {
+                trackTaskApproval(taskId, updates.approvalStatus === 'approved', {
+                    team_id: teamId,
+                    source: 'task_detail_modal',
+                    task_source: existingTask.source ?? null,
+                });
+            }
+        }
+
         setShowTaskDetail(false);
-    }, [myDisplayName, updateTaskWithSync]);
+    }, [kanbanData.tasks, myDisplayName, normalizeStatus, teamId, updateTaskWithSync]);
 
     const handleNewTaskCreate = React.useCallback(async (taskInput: Partial<KanbanTask>) => {
         await createTaskWithSync(taskInput, myDisplayName || '用户');
@@ -2068,7 +2138,13 @@ export default function TeamDashboardScreen() {
                         <Ionicons name="ellipsis-horizontal" size={20} color="#98A8B5" />
                     </Pressable>
                 </View>
-                {showMenu ? (
+            </View>
+            {showMenu ? (
+                <>
+                    <Pressable
+                        onPress={() => setShowMenu(false)}
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+                    />
                     <View
                         style={[
                             styles.desktopMenu,
@@ -2100,8 +2176,8 @@ export default function TeamDashboardScreen() {
                             <Text style={{ color: theme.colors.textDestructive, fontSize: 14 }}>Delete</Text>
                         </Pressable>
                     </View>
-                ) : null}
-            </View>
+                </>
+            ) : null}
             <View style={styles.desktopPanelBody}>
                 {shouldShowBoardFallback ? (
                     boardFallbackPanel
@@ -2375,10 +2451,19 @@ export default function TeamDashboardScreen() {
                 pendingTasks={pendingTasks}
                 teamId={teamId}
                 onTaskApproved={(task) => {
-                    console.log('Task approved:', task.title);
+                    trackTaskApproval(task.id, true, {
+                        team_id: teamId,
+                        source: 'task_approval_modal',
+                        task_source: task.source ?? null,
+                    });
                 }}
                 onTaskRejected={(task, reason) => {
-                    console.log('Task rejected:', task.title, 'Reason:', reason);
+                    trackTaskApproval(task.id, false, {
+                        team_id: teamId,
+                        source: 'task_approval_modal',
+                        task_source: task.source ?? null,
+                        reason_provided: Boolean(reason.trim()),
+                    });
                 }}
             />
         </>

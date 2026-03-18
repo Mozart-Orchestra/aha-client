@@ -6,7 +6,7 @@ import { Pressable } from 'react-native-gesture-handler';
 import { layout } from '@/utils/layout';
 import { MultiTextInput, KeyPressEvent } from '../input/MultiTextInput';
 import { Typography } from '@/constants/Typography';
-import { PermissionMode, ModelMode } from '../settings/PermissionModeSelector';
+import type { PermissionMode, ModelMode } from '@/types/agentModes';
 import { hapticsLight, hapticsError } from '@/utils/haptics';
 import { Shaker, ShakeInstance } from '../ui/Shaker';
 import { StatusDot } from '../ui/StatusDot';

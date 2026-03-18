@@ -3,7 +3,7 @@ import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Platform, us
 import { Text } from '@/components/ui/StyledText';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { trackTeamCreated } from '@/track';
+import { trackAgentDeployed, trackTeamCreated } from '@/track';
 import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { Modal } from '@/modal';
@@ -445,7 +445,7 @@ export default function NewTeamScreen() {
 
     const [title, setTitle] = React.useState('');
     const [target, setTarget] = React.useState('');
-    const [creationMode, setCreationMode] = React.useState<'manual' | 'prompt'>('prompt');
+    const [creationMode, setCreationMode] = React.useState<'manual' | 'prompt'>('manual');
     const [taskPrompt, setTaskPrompt] = React.useState('');    const [promptAgentPreference, setPromptAgentPreference] = React.useState<PromptAgentPreference>(() => {
         if (lastUsedAgent === 'codex') {
             return 'codex';
@@ -877,6 +877,12 @@ export default function NewTeamScreen() {
                                         spawnRequestedAt,
                                     },
                                 });
+                                trackAgentDeployed(sessionId, {
+                                    source: 'team_create_desktop_bridge_prompt',
+                                    team_id: room.id,
+                                    role_id: roleId,
+                                    runtime_type: promptAgentPreference === 'codex' ? 'codex' : 'claude',
+                                });
                             }
                         } catch (error) {
                             console.error('Failed to auto-spawn org-manager:', error);
@@ -913,6 +919,12 @@ export default function NewTeamScreen() {
                                             lifecycle: {
                                                 spawnRequestedAt,
                                             },
+                                        });
+                                        trackAgentDeployed(sessionId, {
+                                            source: 'team_create_desktop_bridge',
+                                            team_id: room.id,
+                                            role_id: roleId,
+                                            runtime_type: getRoleAgentType(roleId),
                                         });
                                     }
                                 } catch (error) {
@@ -1006,6 +1018,13 @@ export default function NewTeamScreen() {
                                             spawnRequestedAt,
                                         },
                                     });
+                                    trackAgentDeployed(spawnedSessionId, {
+                                        source: 'team_create_remote_prompt',
+                                        team_id: artifactId,
+                                        role_id: roleId,
+                                        runtime_type: promptAgentPreference === 'codex' ? 'codex' : 'claude',
+                                        machine_id: targetMachine.id,
+                                    });
                                 } else {
                                     console.warn('Spawned org-manager but no sessionId was returned');
                                     seedSpawnFailureReason = 'Spawned org-manager but no sessionId was returned.';
@@ -1051,6 +1070,13 @@ export default function NewTeamScreen() {
                                                     lifecycle: {
                                                         spawnRequestedAt,
                                                     },
+                                                });
+                                                trackAgentDeployed(spawnedSessionId, {
+                                                    source: 'team_create_remote',
+                                                    team_id: artifactId,
+                                                    role_id: roleId,
+                                                    runtime_type: getRoleAgentType(roleId),
+                                                    machine_id: targetMachine.id,
                                                 });
                                             } else {
                                                 console.warn(`Spawned agent ${roleId} but no sessionId was returned`);
@@ -1182,7 +1208,14 @@ export default function NewTeamScreen() {
             }
 
             const totalAgents = Object.values(roleCounts).reduce((sum, count) => sum + count, 0);
-            trackTeamCreated(creationMode, totalAgents);
+            trackTeamCreated(creationMode, totalAgents, {
+                team_id: artifactId,
+                prompt_mode: isPromptMode,
+                requested_spawns: hasRequestedSpawns,
+                spawned_agent_count: spawnedMembers.length,
+                manual_member_count: manualMembers.length,
+                environment: desktopBridge ? 'desktop_bridge' : 'remote_sync',
+            });
 
             if (resolvedCwd && machineIdForSpawn) {
                 const updatedPaths = updateRecentMachinePaths(recentMachinePaths, machineIdForSpawn, resolvedCwd);
@@ -1224,41 +1257,6 @@ export default function NewTeamScreen() {
     const formContent = (
         <>
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>{t('newTeam.quickStartLabel')}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
-                    <View style={{ flexDirection: 'row', gap: 10, paddingRight: 16 }}>
-                        {QUICK_TEMPLATES.map(tpl => {
-                            const localizedTitle = t(`newTeam.templates.${tpl.id}.title` as any) || tpl.title;
-                            const localizedSubtitle = t(`newTeam.templates.${tpl.id}.subtitle` as any) || tpl.subtitle;
-                            return (
-                                <Pressable
-                                    key={tpl.id}
-                                    onPress={() => {
-                                        setTitle(tpl.teamName);
-                                        setTaskPrompt(tpl.prompt);
-                                        setCreationMode('prompt');
-                                    }}
-                                    style={{
-                                        backgroundColor: theme.colors.surface,
-                                        borderRadius: 12,
-                                        borderWidth: 1,
-                                        borderColor: theme.colors.divider,
-                                        padding: 12,
-                                        minWidth: 130,
-                                        maxWidth: 150,
-                                    }}
-                                >
-                                    <Text style={{ fontSize: 22, marginBottom: 6 }}>{tpl.emoji}</Text>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text }}>{localizedTitle}</Text>
-                                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 3 }}>{localizedSubtitle}</Text>
-                                </Pressable>
-                            );
-                        })}
-                    </View>
-                </ScrollView>
-            </View>
-
-            <View style={styles.inputGroup}>
                 <Text style={styles.label}>{t('newTeam.teamNameLabel')}</Text>
                 <TextInput
                     style={[
@@ -1286,21 +1284,6 @@ export default function NewTeamScreen() {
                 <Text style={styles.label}>{t('newTeam.creationModeLabel')}</Text>
                 <View style={{ flexDirection: 'row', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.divider }}>
                     <Pressable
-                        onPress={() => setCreationMode('prompt')}
-                        style={{
-                            flex: 1,
-                            paddingVertical: 12,
-                            alignItems: 'center',
-                            backgroundColor: creationMode === 'prompt' ? theme.colors.button.primary.background : theme.colors.surface,
-                        }}
-                    >
-                        <Text style={{
-                            fontSize: 14,
-                            fontWeight: '600',
-                            color: creationMode === 'prompt' ? '#FFF' : theme.colors.text,
-                        }}>{t('newTeam.modePrompt')}</Text>
-                    </Pressable>
-                    <Pressable
                         onPress={() => setCreationMode('manual')}
                         style={{
                             flex: 1,
@@ -1317,8 +1300,62 @@ export default function NewTeamScreen() {
                             color: creationMode === 'manual' ? '#FFF' : theme.colors.text,
                         }}>{t('newTeam.modeManual')}</Text>
                     </Pressable>
+                    <Pressable
+                        onPress={() => setCreationMode('prompt')}
+                        style={{
+                            flex: 1,
+                            paddingVertical: 12,
+                            alignItems: 'center',
+                            backgroundColor: creationMode === 'prompt' ? theme.colors.button.primary.background : theme.colors.surface,
+                            borderLeftWidth: 1,
+                            borderLeftColor: theme.colors.divider,
+                        }}
+                    >
+                        <Text style={{
+                            fontSize: 14,
+                            fontWeight: '600',
+                            color: creationMode === 'prompt' ? '#FFF' : theme.colors.text,
+                        }}>{t('newTeam.modePrompt')}</Text>
+                    </Pressable>
                 </View>
             </View>
+
+            {creationMode === 'prompt' && (
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>{t('newTeam.quickStartLabel')}</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
+                        <View style={{ flexDirection: 'row', gap: 10, paddingRight: 16 }}>
+                            {QUICK_TEMPLATES.map(tpl => {
+                                const localizedTitle = t(`newTeam.templates.${tpl.id}.title` as any, {} as any) || tpl.title;
+                                const localizedSubtitle = t(`newTeam.templates.${tpl.id}.subtitle` as any, {} as any) || tpl.subtitle;
+                                return (
+                                    <Pressable
+                                        key={tpl.id}
+                                        onPress={() => {
+                                            setTitle(tpl.teamName);
+                                            setTaskPrompt(tpl.prompt);
+                                            setCreationMode('prompt');
+                                        }}
+                                        style={{
+                                            backgroundColor: theme.colors.surface,
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: theme.colors.divider,
+                                            padding: 12,
+                                            minWidth: 130,
+                                            maxWidth: 150,
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 22, marginBottom: 6 }}>{tpl.emoji}</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text }}>{localizedTitle}</Text>
+                                        <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 3 }}>{localizedSubtitle}</Text>
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                    </ScrollView>
+                </View>
+            )}
 
             {creationMode === 'manual' && (
                 <View style={styles.inputGroup}>

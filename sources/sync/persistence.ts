@@ -3,7 +3,7 @@ import { Settings, settingsDefaults, settingsParse, SettingsSchema } from './set
 import { LocalSettings, localSettingsDefaults, localSettingsParse } from './localSettings';
 import { Purchases, purchasesDefaults, purchasesParse } from './purchases';
 import { Profile, profileDefaults, profileParse } from './profile';
-import type { PermissionMode } from '@/components/settings/PermissionModeSelector';
+import type { PermissionMode } from '@/types/agentModes';
 import type { DecryptedArtifact } from './artifactTypes';
 
 const mmkv = new MMKV();

@@ -38,6 +38,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Modal } from '@/modal';
 import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel } from '@/utils/teamMentionSummary';
+import { trackTeamChatSent } from '@/track';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
@@ -2093,6 +2094,12 @@ export default function TeamChatRoom({
                 };
 
                 await sync.sendTeamMessage(request);
+                trackTeamChatSent(teamId, {
+                    mode: 'image',
+                    has_image: true,
+                    has_text: Boolean(content),
+                    message_length: imageContent.length,
+                });
 
                 clearInterval(progressInterval);
                 setUploadProgress(100);
@@ -2119,6 +2126,11 @@ export default function TeamChatRoom({
                 );
 
                 if (createdTask) {
+                    trackTeamChatSent(teamId, {
+                        mode: 'task_from_message',
+                        task_created: true,
+                        message_length: content.length,
+                    });
                     // 创建成功，Hook 已经自动发送了通知消息
                     setInputText('');
                     return;
@@ -2185,6 +2197,12 @@ export default function TeamChatRoom({
                         });
                     }
 
+                    trackTeamChatSent(teamId, {
+                        mode: 'task_command',
+                        task_created: true,
+                        assignee_present: Boolean(newTask.assigneeId),
+                        message_length: content.length,
+                    });
                     setInputText('');
                     return;
                 } catch (error) {
@@ -2239,6 +2257,11 @@ export default function TeamChatRoom({
                     return;
                 }
 
+                trackTeamChatSent(teamId, {
+                    mode: 'command',
+                    command_type: command.type,
+                    message_length: content.length,
+                });
                 setInputText('');
                 return;
             }
@@ -2381,6 +2404,14 @@ export default function TeamChatRoom({
             setInputText('');
 
             await sync.sendTeamMessage(request);
+            trackTeamChatSent(teamId, {
+                mode: requestedHelp ? 'help_request' : 'chat',
+                has_image: false,
+                mention_count: mentions.length,
+                requested_help: requestedHelp,
+                task_reference_count: taskIds.length,
+                message_length: content.length,
+            });
         } catch (error) {
             console.error('Failed to send message:', error);
         } finally {

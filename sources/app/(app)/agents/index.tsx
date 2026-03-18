@@ -442,7 +442,7 @@ export default React.memo(function AgentsScreen() {
             : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
 
         const privatePromise = credentials && sourceTab !== 'market'
-            ? fetchGenomes(credentials, { limit: 100 }).catch(() => ({ genomes: [], total: 0 }))
+            ? fetchGenomes(credentials, { ownedOnly: sourceTab === 'mine', limit: 100 }).catch(() => ({ genomes: [], total: 0 }))
             : Promise.resolve({ genomes: [], total: 0 });
 
         const [publicResult, favoritePublicResult, privateResult] = await Promise.all([
@@ -453,7 +453,7 @@ export default React.memo(function AgentsScreen() {
 
         setServerFavoriteGenomes(favoritePublicResult.genomes);
         setPublicGenomes(sourceTab === 'favorites' && actorId ? favoritePublicResult.genomes : publicResult.genomes);
-        setPrivateGenomes(mapOwnedPrivateGenomesToRecords(privateResult.genomes, profile.id));
+        setPrivateGenomes(mapOwnedPrivateGenomesToRecords(privateResult.genomes));
         setLoaded(true);
     }, [actorId, category, debouncedQuery, profile.id, sourceTab, tab]);
 

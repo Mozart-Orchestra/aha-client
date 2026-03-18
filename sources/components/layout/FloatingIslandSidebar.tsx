@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import type { DimensionValue } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -418,7 +419,7 @@ function getScoreColor(score: number): string {
     return '#ef4444';
 }
 
-function getBarPercent(count: number, maxCount: number, minPercent: number = 18): string {
+function getBarPercent(count: number, maxCount: number, minPercent: number = 18): DimensionValue {
     if (count <= 0 || maxCount <= 0) {
         return '0%';
     }
@@ -428,7 +429,7 @@ function getBarPercent(count: number, maxCount: number, minPercent: number = 18)
 
 const MAX_CONTEXT_WINDOW_TOKENS = 200000;
 
-function getContextUtilization(inputTokens: number | undefined | null): { percent: number; width: string; color: string } | null {
+function getContextUtilization(inputTokens: number | undefined | null): { percent: number; width: DimensionValue; color: string } | null {
     if (!inputTokens || inputTokens <= 0 || !Number.isFinite(inputTokens)) {
         return null;
     }

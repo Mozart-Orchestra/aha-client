@@ -1,6 +1,6 @@
 import { AgentContentView } from '@/components/session/AgentContentView';
 import { AgentInput } from '@/components/session/AgentInput';
-import { ModelMode } from '@/components/settings/PermissionModeSelector';
+import type { ModelMode } from '@/types/agentModes';
 import { getSuggestions } from '@/components/autocomplete/suggestions';
 import { ChatHeaderView } from '@/components/session/ChatHeaderView';
 import { ChatList } from '@/components/session/ChatList';
@@ -17,7 +17,14 @@ import { useSession } from '@/sync/storage';
 import { Session } from '@/sync/storageTypes';
 import { sync } from '@/sync/sync';
 import { t } from '@/text';
-import { tracking, trackMessageSent, trackSessionActivated } from '@/track';
+import {
+    trackMessageSent,
+    trackSessionActivated,
+    trackVoiceRecording,
+    trackVoiceSessionError,
+    trackVoiceSessionStarted,
+    trackVoiceSessionStopped,
+} from '@/track';
 import { isRunningOnMac } from '@/utils/platform';
 import { useDeviceType, useHeaderHeight, useIsLandscape, useIsTablet } from '@/utils/responsive';
 import { formatPathRelativeToHome, getSessionAvatarId, getSessionName, useSessionStatus } from '@/utils/sessionUtils';
@@ -246,15 +253,30 @@ function SessionViewLoaded({ sessionId, session, returnTo }: { sessionId: string
         if (realtimeStatus === 'disconnected' || realtimeStatus === 'error') {
             try {
                 await startRealtimeSession(sessionId);
-                tracking?.capture('voice_session_started', { sessionId });
+                trackVoiceRecording('start', {
+                    session_id: sessionId,
+                    source: 'session_mic_button',
+                });
+                trackVoiceSessionStarted(sessionId, {
+                    source: 'session_mic_button',
+                });
             } catch (error) {
                 console.error('Failed to start realtime session:', error);
                 Modal.alert(t('common.error'), t('errors.voiceSessionFailed'));
-                tracking?.capture('voice_session_error', { error: error instanceof Error ? error.message : 'Unknown error' });
+                trackVoiceSessionError(error instanceof Error ? error.message : 'Unknown error', {
+                    session_id: sessionId,
+                    source: 'session_mic_button',
+                });
             }
         } else if (realtimeStatus === 'connected') {
             await stopRealtimeSession();
-            tracking?.capture('voice_session_stopped');
+            trackVoiceRecording('stop', {
+                session_id: sessionId,
+                source: 'session_mic_button',
+            });
+            trackVoiceSessionStopped(sessionId, {
+                source: 'session_mic_button',
+            });
         }
     }, [realtimeStatus, sessionId]);
 

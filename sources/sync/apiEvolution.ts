@@ -219,6 +219,7 @@ export async function fetchGenomes(
     options?: {
         teamId?: string;
         parentSessionId?: string;
+        ownedOnly?: boolean;
         limit?: number;
         offset?: number;
     }
@@ -228,6 +229,7 @@ export async function fetchGenomes(
 
     if (options?.teamId) params.set('teamId', options.teamId);
     if (options?.parentSessionId) params.set('parentSessionId', options.parentSessionId);
+    if (options?.ownedOnly) params.set('ownedOnly', 'true');
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
 

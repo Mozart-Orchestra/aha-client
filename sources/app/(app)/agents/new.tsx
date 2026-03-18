@@ -8,6 +8,7 @@ import { t } from '@/text';
 import { Modal } from '@/modal';
 import { sync } from '@/sync/sync';
 import { createAgent } from '@/sync/apiAgents';
+import { trackAgentDeployed } from '@/track';
 import { ItemList } from '@/components/ui/ItemList';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { Item } from '@/components/ui/Item';
@@ -50,10 +51,16 @@ export default React.memo(function NewAgentScreen() {
 
         setSaving(true);
         try {
-            await createAgent(credentials, {
+            const agent = await createAgent(credentials, {
                 displayName: name.trim(),
                 runtimeType: runtime,
                 genomeSpec: { runtimeType: runtime },
+            });
+            trackAgentDeployed(agent.id, {
+                source: 'standalone_agent_create',
+                runtime_type: runtime,
+                session_id: agent.sessionId,
+                agent_type: agent.type,
             });
             goBackOrReturn(router, '/agents');
         } catch (error) {
@@ -226,7 +233,7 @@ const styles = StyleSheet.create((theme) => ({
         opacity: 0.4,
     },
     desktopCreateButtonText: {
-        color: theme.colors.button.primary.text,
+        color: theme.colors.button.primary.tint,
         fontSize: 15,
         fontWeight: '600',
     },

@@ -42,10 +42,8 @@ export function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRe
     };
 }
 
-export function mapOwnedPrivateGenomesToRecords(genomes: PrivateGenome[], profileId: string | null | undefined): GenomeRecord[] {
-    return genomes
-        .filter((genome) => profileId ? genome.accountId === profileId : true)
-        .map(toGenomeRecordFromPrivateGenome);
+export function mapOwnedPrivateGenomesToRecords(genomes: PrivateGenome[]): GenomeRecord[] {
+    return genomes.map(toGenomeRecordFromPrivateGenome);
 }
 
 export function sortGenomesForDisplay(genomes: GenomeRecord[], favoriteGenomeIds: string[]): GenomeRecord[] {

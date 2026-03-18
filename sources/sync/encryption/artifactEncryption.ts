@@ -1,13 +1,15 @@
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { ArtifactHeader, ArtifactBody } from '../artifactTypes';
-import { AES256Encryption } from './encryptor';
+import { AES256Encryption, SecretBoxEncryption, type Decryptor, type Encryptor } from './encryptor';
 import * as Random from 'expo-crypto';
 
 export class ArtifactEncryption {
-    private encryptor: AES256Encryption;
+    private encryptor: Encryptor & Decryptor;
 
-    constructor(dataEncryptionKey: Uint8Array) {
-        this.encryptor = new AES256Encryption(dataEncryptionKey);
+    constructor(dataEncryptionKey: Uint8Array, variant: 'legacy' | 'dataKey' = 'dataKey') {
+        this.encryptor = variant === 'legacy'
+            ? new SecretBoxEncryption(dataEncryptionKey)
+            : new AES256Encryption(dataEncryptionKey);
     }
 
     /**

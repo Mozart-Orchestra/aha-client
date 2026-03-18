@@ -14,7 +14,10 @@
     "prebuild": "rm -rf android ios && expo prebuild",
     "ota": "APP_ENV=preview NODE_ENV=preview tsx sources/scripts/parseChangelog.ts && yarn typecheck && eas update --branch preview",
     "ota:production": "npx eas-cli@latest workflow:run ota.yaml",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node --max-old-space-size=8192 node_modules/.bin/tsc --noEmit --skipLibCheck --pretty false",
+    "typecheck:vanilla": "tsc --noEmit",
+    "typecheck:full": "node --max-old-space-size=8192 node_modules/.bin/tsc --noEmit --skipLibCheck --pretty false",
+    "typecheck:diag": "node --max-old-space-size=8192 node_modules/.bin/tsc --noEmit --skipLibCheck --extendedDiagnostics --pretty false",
     "postinstall": "patch-package",
     "generate-theme": "tsx sources/theme.gen.ts",
     "prerecommit": "yarn typecheck"

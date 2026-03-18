@@ -4,7 +4,7 @@ export { LanguageSelector } from './LanguageSelector';
 export { OAuthView, OAuthViewRender, OAuthViewUnsupported } from './OAuthView';
 export type { OAuthViewConfig } from './OAuthView';
 export { PermissionModeSelector } from './PermissionModeSelector';
-export type { PermissionMode, ModelMode } from './PermissionModeSelector';
+export type { PermissionMode, ModelMode } from '@/types/agentModes';
 export { SettingsView } from './SettingsView';
 export { SettingsViewWrapper } from './SettingsViewWrapper';
 export { UpdateBanner } from './UpdateBanner';

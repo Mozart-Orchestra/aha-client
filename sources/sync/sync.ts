@@ -33,7 +33,7 @@ import { Message } from './typesMessage';
 import { EncryptionCache } from './encryption/encryptionCache';
 import { systemPrompt } from './prompt/systemPrompt';
 import { fetchArtifact, fetchArtifacts, createArtifact, updateArtifact, deleteArtifact } from './apiArtifacts';
-import { DecryptedArtifact, Artifact, ArtifactCreateRequest, ArtifactUpdateRequest } from './artifactTypes';
+import { DecryptedArtifact, Artifact, ArtifactBody, ArtifactCreateRequest, ArtifactHeader, ArtifactKind, ArtifactUpdateRequest } from './artifactTypes';
 import { ArtifactEncryption } from './encryption/artifactEncryption';
 import { getFriendsList, getUserProfile } from './apiFriends';
 import { fetchFeed } from './apiFeed';
@@ -61,6 +61,107 @@ const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | un
         return undefined;
     }
     return undefined;
+};
+
+const decodeArtifactBase64Text = (value: string): string | null => {
+    try {
+        return new TextDecoder().decode(decodeBase64(value));
+    } catch {
+        return null;
+    }
+};
+
+const resolvePlaintextArtifactKeyKind = (encodedKey: string | null | undefined): ArtifactKind | null => {
+    if (!encodedKey) {
+        return null;
+    }
+    const decoded = decodeArtifactBase64Text(encodedKey);
+    if (decoded === 'team' || decoded === 'standalone') {
+        return decoded;
+    }
+    return null;
+};
+
+const parsePlaintextArtifactHeader = (encodedHeader: string): ArtifactHeader | null => {
+    const decoded = decodeArtifactBase64Text(encodedHeader);
+    if (!decoded) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(decoded) as Record<string, any>;
+        if (!parsed || typeof parsed !== 'object') {
+            return null;
+        }
+        return {
+            title: typeof parsed.title === 'string'
+                ? parsed.title
+                : (typeof parsed.name === 'string' ? parsed.name : null),
+            type: parsed.type,
+            sessions: Array.isArray(parsed.sessions) ? parsed.sessions : undefined,
+            draft: typeof parsed.draft === 'boolean' ? parsed.draft : undefined,
+        };
+    } catch {
+        return null;
+    }
+};
+
+const parsePlaintextArtifactBody = (encodedBody: string): ArtifactBody | null => {
+    const decoded = decodeArtifactBase64Text(encodedBody);
+    if (!decoded) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(decoded) as any;
+        if (parsed && typeof parsed === 'object' && 'body' in parsed) {
+            const bodyValue = parsed.body;
+            if (bodyValue === null) {
+                return { body: null };
+            }
+            if (typeof bodyValue === 'string') {
+                return { body: bodyValue };
+            }
+            if (bodyValue && typeof bodyValue === 'object') {
+                return { body: JSON.stringify(bodyValue) };
+            }
+        }
+
+        if (typeof parsed === 'string') {
+            return { body: parsed };
+        }
+
+        if (parsed && typeof parsed === 'object') {
+            return { body: JSON.stringify(parsed) };
+        }
+
+        return null;
+    } catch {
+        return null;
+    }
+};
+
+const resolvePlaintextTeamArtifact = (
+    artifact: Pick<Artifact, 'id' | 'header' | 'dataEncryptionKey'> & Partial<Pick<Artifact, 'body'>>
+): { header: ArtifactHeader | null; body: ArtifactBody | null } | null => {
+    const plaintextKind = resolvePlaintextArtifactKeyKind(artifact.dataEncryptionKey);
+    if (!plaintextKind) {
+        return null;
+    }
+
+    const header = parsePlaintextArtifactHeader(artifact.header);
+    if (!header || header.type !== plaintextKind) {
+        return null;
+    }
+
+    const body = artifact.body ? parsePlaintextArtifactBody(artifact.body) : null;
+    return { header, body };
+};
+
+type ArtifactEncryptionContext = {
+    key: Uint8Array;
+    variant: 'legacy' | 'dataKey';
+    wrapper: 'boxed-v0' | 'legacy';
 };
 
 const extractTeamSessionIds = (body: string | null | undefined): string[] => {
@@ -163,7 +264,7 @@ class Sync {
     private sessionReceivedMessages = new Map<string, Set<string>>();
     private sessionDataKeys = new Map<string, Uint8Array>(); // Store session data encryption keys internally
     private machineDataKeys = new Map<string, Uint8Array>(); // Store machine data encryption keys internally
-    private artifactDataKeys = new Map<string, Uint8Array>(); // Store artifact data encryption keys internally
+    private artifactEncryptionContexts = new Map<string, ArtifactEncryptionContext>(); // Store artifact encryption contexts internally
     private settingsSync: InvalidateSync;
     private profileSync: InvalidateSync;
     private purchasesSync: InvalidateSync;
@@ -843,22 +944,56 @@ class Sync {
             const artifacts = await fetchArtifacts(this.credentials);
             log.log(`📦 fetchArtifactsList: Received ${artifacts.length} artifacts from server`);
             let decryptedArtifacts: DecryptedArtifact[] = [];
-            const invalidArtifactIds: string[] = [];
+            const inaccessibleArtifacts: Array<{ id: string; stage: string; reason: string }> = [];
 
             for (const artifact of artifacts) {
                 try {
+                    const plaintextTeamArtifact = resolvePlaintextTeamArtifact(artifact);
+                    if (plaintextTeamArtifact) {
+                        log.log(`📦 fetchArtifactsList: Artifact ${artifact.id} uses plaintext artifact compatibility path`);
+
+                        decryptedArtifacts.push({
+                            id: artifact.id,
+                            title: plaintextTeamArtifact.header?.title || null,
+                            type: plaintextTeamArtifact.header?.type,
+                            sessions: plaintextTeamArtifact.header?.sessions,
+                            draft: plaintextTeamArtifact.header?.draft,
+                            body: undefined,
+                            headerVersion: artifact.headerVersion,
+                            bodyVersion: artifact.bodyVersion,
+                            seq: artifact.seq,
+                            createdAt: artifact.createdAt,
+                            updatedAt: artifact.updatedAt,
+                            isDecrypted: true,
+                        });
+                        continue;
+                    }
+
                     // Decrypt the data encryption key
-                    const decryptedKey = await this.encryption.decryptEncryptionKey(artifact.dataEncryptionKey);
-                    if (!decryptedKey) {
-                        console.error(`Failed to decrypt key for artifact ${artifact.id}`);
+                    const encryptionContext = await this.encryption.decryptEncryptionKeyWithVariant(artifact.dataEncryptionKey);
+                    if (!encryptionContext) {
+                        console.error(`Failed to decrypt key for artifact ${artifact.id}`, {
+                            stage: 'dataEncryptionKey',
+                            compatibilityPathChecked: true,
+                            keyPreview: decodeArtifactBase64Text(artifact.dataEncryptionKey)?.slice(0, 32) ?? 'non-text',
+                            likelyCause: 'unsupported legacy wrapper, corrupt key envelope, or wrong account secret',
+                        });
+                        inaccessibleArtifacts.push({
+                            id: artifact.id,
+                            stage: 'dataEncryptionKey',
+                            reason: 'decryptEncryptionKeyWithVariant returned null',
+                        });
                         continue;
                     }
 
                     // Store the decrypted key in memory
-                    this.artifactDataKeys.set(artifact.id, decryptedKey);
+                    this.artifactEncryptionContexts.set(artifact.id, encryptionContext);
 
                     // Create artifact encryption instance
-                    const artifactEncryption = new ArtifactEncryption(decryptedKey);
+                    const artifactEncryption = new ArtifactEncryption(
+                        encryptionContext.key,
+                        encryptionContext.variant
+                    );
 
                     // Decrypt header
                     const header = await artifactEncryption.decryptHeader(artifact.header);
@@ -881,35 +1016,23 @@ class Sync {
                     decryptedArtifacts.push(decryptedArtifact);
                 } catch (err) {
                     console.error(`Failed to decrypt artifact ${artifact.id}:`, err);
-                    invalidArtifactIds.push(artifact.id);
+                    inaccessibleArtifacts.push({
+                        id: artifact.id,
+                        stage: 'artifact-body-or-header',
+                        reason: err instanceof Error ? err.message : String(err),
+                    });
                 }
             }
 
-            // Clean up invalid artifacts from server and local storage
-            if (invalidArtifactIds.length > 0) {
-                log.log(`Deleting ${invalidArtifactIds.length} invalid artifacts`);
-
-                // Remove from local storage first
-                for (const artifactId of invalidArtifactIds) {
-                    storage.getState().deleteArtifact(artifactId);
-                }
-
-                // Then delete from server
-                for (const artifactId of invalidArtifactIds) {
-                    try {
-                        await deleteArtifact(this.credentials, artifactId);
-                        console.log(`✅ Deleted invalid artifact ${artifactId} from server`);
-                    } catch (deleteErr) {
-                        console.error(`Failed to delete invalid artifact ${artifactId}:`, deleteErr);
-                    }
-                }
+            if (inaccessibleArtifacts.length > 0) {
+                log.log(`📦 fetchArtifactsList: Preserving ${inaccessibleArtifacts.length} inaccessible artifacts for investigation`);
             }
 
-            log.log(`📦 fetchArtifactsList: Successfully decrypted ${decryptedArtifacts.length} artifacts (deleted ${invalidArtifactIds.length} invalid)`);
+            log.log(`📦 fetchArtifactsList: Successfully decrypted ${decryptedArtifacts.length} artifacts (preserved ${inaccessibleArtifacts.length} inaccessible)`);
 
             // MIGRATION: Fix artifacts with undefined type by checking their body content
             // This is a one-time fix for artifacts created before the type field was properly saved
-            const artifactsNeedingTypeFix = decryptedArtifacts.filter(a => !a.type);
+            const artifactsNeedingTypeFix = decryptedArtifacts.filter(a => a.isDecrypted && !a.type);
             if (artifactsNeedingTypeFix.length > 0) {
                 log.log(`[Migration] Found ${artifactsNeedingTypeFix.length} artifacts without type, migrating...`);
 
@@ -986,18 +1109,50 @@ class Sync {
         try {
             const artifact = await fetchArtifact(this.credentials, artifactId);
 
+            const plaintextTeamArtifact = resolvePlaintextTeamArtifact(artifact);
+            if (plaintextTeamArtifact) {
+                log.log(`📦 fetchArtifactWithBody: Artifact ${artifactId} uses plaintext artifact compatibility path`);
+
+                const bodyText = plaintextTeamArtifact.body?.body || null;
+                const decryptedArtifact = {
+                    id: artifact.id,
+                    title: plaintextTeamArtifact.header?.title || null,
+                    type: plaintextTeamArtifact.header?.type,
+                    sessions: plaintextTeamArtifact.header?.sessions,
+                    draft: plaintextTeamArtifact.header?.draft,
+                    body: bodyText,
+                    headerVersion: artifact.headerVersion,
+                    bodyVersion: artifact.bodyVersion,
+                    seq: artifact.seq,
+                    createdAt: artifact.createdAt,
+                    updatedAt: artifact.updatedAt,
+                    isDecrypted: true,
+                };
+
+                storage.getState().applyArtifacts([decryptedArtifact]);
+                return decryptedArtifact;
+            }
+
             // Decrypt the data encryption key
-            const decryptedKey = await this.encryption.decryptEncryptionKey(artifact.dataEncryptionKey);
-            if (!decryptedKey) {
-                console.error(`Failed to decrypt key for artifact ${artifactId}`);
+            const encryptionContext = await this.encryption.decryptEncryptionKeyWithVariant(artifact.dataEncryptionKey);
+            if (!encryptionContext) {
+                console.error(`Failed to decrypt key for artifact ${artifactId}`, {
+                    stage: 'dataEncryptionKey',
+                    compatibilityPathChecked: true,
+                    keyPreview: decodeArtifactBase64Text(artifact.dataEncryptionKey)?.slice(0, 32) ?? 'non-text',
+                    likelyCause: 'unsupported legacy wrapper, corrupt key envelope, or wrong account secret',
+                });
                 return null;
             }
 
             // Store the decrypted key in memory
-            this.artifactDataKeys.set(artifact.id, decryptedKey);
+            this.artifactEncryptionContexts.set(artifact.id, encryptionContext);
 
             // Create artifact encryption instance
-            const artifactEncryption = new ArtifactEncryption(decryptedKey);
+            const artifactEncryption = new ArtifactEncryption(
+                encryptionContext.key,
+                encryptionContext.variant
+            );
 
             // Decrypt header and body
             const header = await artifactEncryption.decryptHeader(artifact.header);
@@ -1040,7 +1195,7 @@ class Sync {
         body: string | null,
         sessions?: string[],
         draft?: boolean,
-        type?: 'note' | 'team' | 'kanban',
+        type?: ArtifactKind,
         existingId?: string  // Optional: use existing ID instead of generating new one
     ): Promise<string> {
         if (!this.credentials) {
@@ -1055,13 +1210,17 @@ class Sync {
             const dataEncryptionKey = ArtifactEncryption.generateDataEncryptionKey();
 
             // Store the decrypted key in memory
-            this.artifactDataKeys.set(artifactId, dataEncryptionKey);
+            this.artifactEncryptionContexts.set(artifactId, {
+                key: dataEncryptionKey,
+                variant: 'dataKey',
+                wrapper: 'boxed-v0',
+            });
 
             // Encrypt the data encryption key with user's key
             const encryptedKey = await this.encryption.encryptEncryptionKey(dataEncryptionKey);
 
-            // Create artifact encryption instance
-            const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
+            // Create artifact encryption instance only when this artifact uses encrypted header/body
+            const artifactEncryption = dataEncryptionKey ? new ArtifactEncryption(dataEncryptionKey) : null;
 
             // Encrypt header
             const encryptedHeader = await artifactEncryption.encryptHeader({ title, sessions, draft, type });
@@ -1123,7 +1282,7 @@ class Sync {
         body: string | null,
         sessions?: string[],
         draft?: boolean,
-        type?: 'note' | 'team' | 'kanban',
+        type?: ArtifactKind,
         _retryCount: number = 0  // Internal: track retry attempts
     ): Promise<void> {
         if (!this.credentials) {
@@ -1138,30 +1297,41 @@ class Sync {
             }
 
             // Get the data encryption key from memory or fetch it
-            let dataEncryptionKey = this.artifactDataKeys.get(artifactId);
+            let artifactEncryptionContext = this.artifactEncryptionContexts.get(artifactId);
+            let usePlaintextTeamCompatibility = false;
 
             // Fetch full artifact if we don't have version info or encryption key
             let headerVersion = currentArtifact.headerVersion;
             let bodyVersion = currentArtifact.bodyVersion;
 
-            if (headerVersion === undefined || bodyVersion === undefined || !dataEncryptionKey) {
+            if (headerVersion === undefined || bodyVersion === undefined || !artifactEncryptionContext) {
                 const fullArtifact = await fetchArtifact(this.credentials, artifactId);
                 headerVersion = fullArtifact.headerVersion;
                 bodyVersion = fullArtifact.bodyVersion;
 
+                const plaintextTeamArtifact = resolvePlaintextTeamArtifact(fullArtifact);
+                if (plaintextTeamArtifact) {
+                    usePlaintextTeamCompatibility = true;
+                }
+
                 // Decrypt and store the data encryption key if we don't have it
-                if (!dataEncryptionKey) {
-                    const decryptedKey = await this.encryption.decryptEncryptionKey(fullArtifact.dataEncryptionKey);
-                    if (!decryptedKey) {
+                if (!artifactEncryptionContext && !usePlaintextTeamCompatibility) {
+                    const decryptedKeyContext = await this.encryption.decryptEncryptionKeyWithVariant(fullArtifact.dataEncryptionKey);
+                    if (!decryptedKeyContext) {
                         throw new Error('Failed to decrypt encryption key');
                     }
-                    this.artifactDataKeys.set(artifactId, decryptedKey);
-                    dataEncryptionKey = decryptedKey;
+                    this.artifactEncryptionContexts.set(artifactId, decryptedKeyContext);
+                    artifactEncryptionContext = decryptedKeyContext;
                 }
             }
 
             // Create artifact encryption instance
-            const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
+            const artifactEncryption = artifactEncryptionContext
+                ? new ArtifactEncryption(
+                    artifactEncryptionContext.key,
+                    artifactEncryptionContext.variant
+                )
+                : null;
 
             const inferredType = inferArtifactTypeFromBody(body);
             const resolvedType = type ?? currentArtifact.type ?? inferredType;
@@ -1176,13 +1346,26 @@ class Sync {
                 resolvedType !== currentArtifact.type;
 
             if (shouldUpdateHeader) {
-                const encryptedHeader = await artifactEncryption.encryptHeader({
-                    title,
-                    sessions,
-                    draft,
-                    type: resolvedType
-                });
-                updateRequest.header = encryptedHeader;
+                if (usePlaintextTeamCompatibility && resolvedType === 'team') {
+                    const plainHeader = JSON.stringify({
+                        title,
+                        sessions,
+                        draft,
+                        type: resolvedType
+                    });
+                    updateRequest.header = encodeBase64(new TextEncoder().encode(plainHeader));
+                } else {
+                    if (!artifactEncryption) {
+                        throw new Error(`Missing artifact encryption key for non-team artifact ${artifactId}`);
+                    }
+                    const encryptedHeader = await artifactEncryption.encryptHeader({
+                        title,
+                        sessions,
+                        draft,
+                        type: resolvedType
+                    });
+                    updateRequest.header = encryptedHeader;
+                }
                 updateRequest.expectedHeaderVersion = headerVersion;
             }
 
@@ -1197,6 +1380,9 @@ class Sync {
                     const plainBody = JSON.stringify({ body });
                     encryptedBody = encodeBase64(new TextEncoder().encode(plainBody), 'base64');
                 } else {
+                    if (!artifactEncryption) {
+                        throw new Error(`Missing artifact encryption key for non-team artifact ${artifactId}`);
+                    }
                     encryptedBody = await artifactEncryption.encryptBody({ body });
                 }
                 updateRequest.body = encryptedBody;
@@ -1217,7 +1403,13 @@ class Sync {
                 // Decrypt server version if provided
                 if (response.currentHeader || response.currentBody) {
                     try {
-                        const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
+                        if (!artifactEncryptionContext) {
+                            throw new Error(`Missing artifact encryption context for ${artifactId}`);
+                        }
+                        const artifactEncryption = new ArtifactEncryption(
+                            artifactEncryptionContext.key,
+                            artifactEncryptionContext.variant
+                        );
 
                         let serverHeader = undefined;
                         let serverBody = undefined;
@@ -2755,18 +2947,54 @@ class Sync {
             const artifactId = artifactUpdate.artifactId;
 
             try {
+                const plaintextTeamArtifact = resolvePlaintextTeamArtifact({
+                    id: artifactId,
+                    header: artifactUpdate.header,
+                    body: artifactUpdate.body,
+                    dataEncryptionKey: artifactUpdate.dataEncryptionKey,
+                });
+                if (plaintextTeamArtifact) {
+                    log.log(`📦 Received new-artifact plaintext team compatibility path for ${artifactId}`);
+
+                    const decryptedArtifact: DecryptedArtifact = {
+                        id: artifactId,
+                        title: plaintextTeamArtifact.header?.title || null,
+                        type: plaintextTeamArtifact.header?.type,
+                        sessions: plaintextTeamArtifact.header?.sessions,
+                        draft: plaintextTeamArtifact.header?.draft,
+                        body: plaintextTeamArtifact.body?.body,
+                        headerVersion: artifactUpdate.headerVersion,
+                        bodyVersion: artifactUpdate.bodyVersion,
+                        seq: artifactUpdate.seq,
+                        createdAt: artifactUpdate.createdAt,
+                        updatedAt: artifactUpdate.updatedAt,
+                        isDecrypted: true,
+                    };
+
+                    storage.getState().applyArtifacts([decryptedArtifact]);
+                    return;
+                }
+
                 // Decrypt the data encryption key
-                const decryptedKey = await this.encryption.decryptEncryptionKey(artifactUpdate.dataEncryptionKey);
-                if (!decryptedKey) {
-                    console.error(`Failed to decrypt key for new artifact ${artifactId}`);
+                const encryptionContext = await this.encryption.decryptEncryptionKeyWithVariant(artifactUpdate.dataEncryptionKey);
+                if (!encryptionContext) {
+                    console.error(`Failed to decrypt key for new artifact ${artifactId}`, {
+                        stage: 'dataEncryptionKey',
+                        compatibilityPathChecked: true,
+                        keyPreview: decodeArtifactBase64Text(artifactUpdate.dataEncryptionKey)?.slice(0, 32) ?? 'non-text',
+                        likelyCause: 'unsupported legacy wrapper, corrupt key envelope, or wrong account secret',
+                    });
                     return;
                 }
 
                 // Store the decrypted key in memory
-                this.artifactDataKeys.set(artifactId, decryptedKey);
+                this.artifactEncryptionContexts.set(artifactId, encryptionContext);
 
                 // Create artifact encryption instance
-                const artifactEncryption = new ArtifactEncryption(decryptedKey);
+                const artifactEncryption = new ArtifactEncryption(
+                    encryptionContext.key,
+                    encryptionContext.variant
+                );
 
                 // Decrypt header
                 const header = await artifactEncryption.decryptHeader(artifactUpdate.header);
@@ -2815,15 +3043,18 @@ class Sync {
 
             try {
                 // Get the data encryption key from memory
-                let dataEncryptionKey = this.artifactDataKeys.get(artifactId);
-                if (!dataEncryptionKey) {
+                let artifactEncryptionContext = this.artifactEncryptionContexts.get(artifactId);
+                if (!artifactEncryptionContext) {
                     console.error(`Encryption key not found for artifact ${artifactId}, fetching artifacts`);
                     this.artifactsSync.invalidate();
                     return;
                 }
 
                 // Create artifact encryption instance
-                const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
+                const artifactEncryption = new ArtifactEncryption(
+                    artifactEncryptionContext.key,
+                    artifactEncryptionContext.variant
+                );
 
                 // Update artifact with new data  
                 const updatedArtifact: DecryptedArtifact = {
@@ -2869,7 +3100,7 @@ class Sync {
             storage.getState().deleteArtifact(artifactId);
 
             // Remove encryption key from memory
-            this.artifactDataKeys.delete(artifactId);
+            this.artifactEncryptionContexts.delete(artifactId);
         } else if (updateData.body.t === 'new-feed-post') {
             log.log('📰 Received new-feed-post update');
             const feedUpdate = updateData.body;

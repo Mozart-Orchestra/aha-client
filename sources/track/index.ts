@@ -3,6 +3,9 @@ import { tracking } from './tracking';
 // Re-export tracking for direct access
 export { tracking } from './tracking';
 
+type TrackingValue = string | number | boolean | null;
+type TrackingProperties = Record<string, TrackingValue>;
+
 // NOTE: This module is for anonymous user-facing product analytics only (PostHog).
 // Backend operational observability, such as structured commerce event logs,
 // lives under sources/observability/* to keep the two channels intentionally separate.
@@ -42,19 +45,31 @@ export function trackConnectSuccess(method: 'qr' | 'url') {
 }
 
 export function trackConnectFailed(method: 'qr' | 'url', reason?: string) {
-    tracking?.capture('connect_failed', { method, reason });
+    tracking?.capture('connect_failed', { method, reason: reason ?? null });
 }
 
-export function trackMessageSent() {
-    tracking?.capture('message_sent');
+export function trackMessageSent(properties: TrackingProperties = {}) {
+    tracking?.capture('message_sent', properties);
 }
 
-export function trackVoiceRecording(action: 'start' | 'stop') {
-    tracking?.capture('voice_recording', { action });
+export function trackVoiceRecording(action: 'start' | 'stop', properties: TrackingProperties = {}) {
+    tracking?.capture('voice_recording', { action, ...properties });
 }
 
 export function trackPermissionResponse(allowed: boolean) {
     tracking?.capture('permission_response', { allowed });
+}
+
+export function trackVoiceSessionStarted(sessionId: string, properties: TrackingProperties = {}) {
+    tracking?.capture('voice_session_started', { session_id: sessionId, ...properties });
+}
+
+export function trackVoiceSessionStopped(sessionId: string, properties: TrackingProperties = {}) {
+    tracking?.capture('voice_session_stopped', { session_id: sessionId, ...properties });
+}
+
+export function trackVoiceSessionError(error: string, properties: TrackingProperties = {}) {
+    tracking?.capture('voice_session_error', { error, ...properties });
 }
 
 /**
@@ -106,24 +121,24 @@ export function trackReviewRetryScheduled(daysUntilRetry: number) {
 /**
  * Team events
  */
-export function trackTeamCreated(mode: string, agentCount: number) {
-    tracking?.capture('team_created', { mode, agent_count: agentCount });
+export function trackTeamCreated(mode: string, agentCount: number, properties: TrackingProperties = {}) {
+    tracking?.capture('team_created', { mode, agent_count: agentCount, ...properties });
 }
 
 export function trackTeamViewed(teamId: string) {
     tracking?.capture('team_viewed', { team_id: teamId });
 }
 
-export function trackTaskCreated(teamId: string) {
-    tracking?.capture('task_created', { team_id: teamId });
+export function trackTaskCreated(teamId: string, properties: TrackingProperties = {}) {
+    tracking?.capture('task_created', { team_id: teamId, ...properties });
 }
 
-export function trackTaskApproval(taskId: string, approved: boolean) {
-    tracking?.capture('task_approval', { task_id: taskId, approved });
+export function trackTaskApproval(taskId: string, approved: boolean, properties: TrackingProperties = {}) {
+    tracking?.capture('task_approval', { task_id: taskId, approved, ...properties });
 }
 
-export function trackTeamChatSent(teamId: string) {
-    tracking?.capture('team_chat_sent', { team_id: teamId });
+export function trackTeamChatSent(teamId: string, properties: TrackingProperties = {}) {
+    tracking?.capture('team_chat_sent', { team_id: teamId, ...properties });
 }
 
 /**
@@ -133,15 +148,15 @@ export function trackAgentsPageViewed() {
     tracking?.capture('agents_page_viewed');
 }
 
-export function trackAgentDeployed(agentId: string) {
-    tracking?.capture('agent_deployed', { agent_id: agentId });
+export function trackAgentDeployed(agentId: string, properties: TrackingProperties = {}) {
+    tracking?.capture('agent_deployed', { agent_id: agentId, ...properties });
 }
 
 /**
  * Session events
  */
-export function trackSessionCreated() {
-    tracking?.capture('session_created');
+export function trackSessionCreated(properties: TrackingProperties = {}) {
+    tracking?.capture('session_created', properties);
 }
 
 export function trackSessionTokenUsage(inputTokens: number, outputTokens: number, costUsd: number) {
@@ -159,16 +174,17 @@ export function trackTaskFeedback(taskId: string, score: 1 | -1) {
 /**
  * Task lifecycle events
  */
-export function trackTaskCompleted(taskId: string, teamId: string) {
-    tracking?.capture('task_completed', { task_id: taskId, team_id: teamId });
+export function trackTaskCompleted(taskId: string, teamId: string, properties: TrackingProperties = {}) {
+    tracking?.capture('task_completed', { task_id: taskId, team_id: teamId, ...properties });
 }
 
-export function trackTaskMoved(taskId: string, teamId: string, fromStatus: string, toStatus: string) {
+export function trackTaskMoved(taskId: string, teamId: string, fromStatus: string, toStatus: string, properties: TrackingProperties = {}) {
     tracking?.capture('task_status_changed', {
         task_id: taskId,
         team_id: teamId,
         from_status: fromStatus,
         to_status: toStatus,
+        ...properties,
     });
 }
 
@@ -177,28 +193,30 @@ export function trackTaskMoved(taskId: string, teamId: string, fromStatus: strin
  * Distinct from session_created: a session may be created without a message
  * (e.g. via CLI auto-launch); this event marks the moment the user actually engages.
  */
-export function trackSessionActivated(sessionId: string) {
-    tracking?.capture('session_activated', { session_id: sessionId });
+export function trackSessionActivated(sessionId: string, properties: TrackingProperties = {}) {
+    tracking?.capture('session_activated', { session_id: sessionId, ...properties });
 }
 
 /**
  * Concurrency conflict — fires when two agents attempt to modify the same resource simultaneously.
  */
-export function trackConflictDetected(taskId: string, teamId: string, conflictType: 'file_edit' | 'task_status' | 'artifact_write' | string) {
+export function trackConflictDetected(taskId: string, teamId: string, conflictType: 'file_edit' | 'task_status' | 'artifact_write' | string, properties: TrackingProperties = {}) {
     tracking?.capture('conflict_detected', {
         task_id: taskId,
         team_id: teamId,
         conflict_type: conflictType,
+        ...properties,
     });
 }
 
 /**
  * Agent scope violation — fires when an agent attempts an action outside its assigned scope.
  */
-export function trackAgentScopeViolation(agentId: string, teamId: string, violationType: 'file_access' | 'task_ownership' | 'role_escalation' | string) {
+export function trackAgentScopeViolation(agentId: string, teamId: string, violationType: 'file_access' | 'task_ownership' | 'role_escalation' | string, properties: TrackingProperties = {}) {
     tracking?.capture('agent_scope_violation', {
         agent_id: agentId,
         team_id: teamId,
         violation_type: violationType,
+        ...properties,
     });
 }

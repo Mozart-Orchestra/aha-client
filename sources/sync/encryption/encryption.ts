@@ -160,8 +160,60 @@ export class Encryption {
     //
 
     async decryptEncryptionKey(encrypted: string) {
+        const resolved = await this.decryptEncryptionKeyWithVariant(encrypted);
+        return resolved?.key ?? null;
+    }
+
+    async decryptEncryptionKeyWithVariant(encrypted: string): Promise<{
+        key: Uint8Array;
+        variant: 'legacy' | 'dataKey';
+        wrapper: 'boxed-v0' | 'legacy';
+    } | null> {
         const encryptedKey = decodeBase64(encrypted, 'base64');
+        if (encryptedKey.length === 0) {
+            return null;
+        }
+
         if (encryptedKey[0] !== 0) {
+            try {
+                const decrypted = await this.legacyEncryption.decrypt([encryptedKey]);
+                const key = decrypted[0];
+                if (!key) {
+                    return null;
+                }
+
+                if (key instanceof Uint8Array) {
+                    return { key, variant: 'legacy', wrapper: 'legacy' };
+                }
+                if (Array.isArray(key)) {
+                    return { key: new Uint8Array(key), variant: 'legacy', wrapper: 'legacy' };
+                }
+                if (typeof key === 'string') {
+                    return {
+                        key: decodeBase64(key, 'base64'),
+                        variant: 'legacy',
+                        wrapper: 'legacy',
+                    };
+                }
+
+                if (typeof key === 'object' && key !== null) {
+                    const numericEntries = Object.entries(key)
+                        .filter(([entryKey, value]) => /^\d+$/.test(entryKey) && typeof value === 'number')
+                        .sort(([left], [right]) => Number(left) - Number(right))
+                        .map(([, value]) => value);
+
+                    if (numericEntries.length > 0) {
+                        return {
+                            key: new Uint8Array(numericEntries),
+                            variant: 'legacy',
+                            wrapper: 'legacy',
+                        };
+                    }
+                }
+            } catch {
+                return null;
+            }
+
             return null;
         }
 
@@ -169,7 +221,11 @@ export class Encryption {
         if (!decrypted) {
             return null;
         }
-        return decrypted;
+        return {
+            key: decrypted,
+            variant: 'dataKey',
+            wrapper: 'boxed-v0',
+        };
     }
 
     async encryptEncryptionKey(key: Uint8Array): Promise<Uint8Array> {
