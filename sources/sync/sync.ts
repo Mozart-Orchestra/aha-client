@@ -191,6 +191,9 @@ class Sync {
     private recalculationLockCount = 0;
     private lastRecalculationTime = 0;
 
+    // Deduplication for syncSessionToTeam: prevents re-calling addTeamMember on every agentState update
+    private syncedSessionTeams = new Set<string>();
+
     constructor() {
         this.sessionsSync = new InvalidateSync(this.fetchSessions);
         this.settingsSync = new InvalidateSync(this.syncSettings);
@@ -968,6 +971,8 @@ class Sync {
 
             storage.getState().applyArtifacts(decryptedArtifacts);
             log.log('📦 fetchArtifactsList: Artifacts applied to storage');
+            // Clear deduplication cache so membership is revalidated after a full sync
+            this.syncedSessionTeams.clear();
         } catch (error) {
             log.log(`📦 fetchArtifactsList: Error fetching artifacts: ${error}`);
             console.error('Failed to fetch artifacts:', error);
@@ -1912,11 +1917,16 @@ class Sync {
             return;
         }
 
+        // Deduplicate: only call addTeamMember once per (sessionId, teamId) combination.
+        // Without this, every agentState update triggers addTeamMember → DB write + broadcast storm.
+        const dedupeKey = `${teamId}:${sessionId}`;
+        if (this.syncedSessionTeams.has(dedupeKey)) {
+            return;
+        }
+
         try {
-            // Use new Server API to add team member (server handles locking and artifact updates)
-            console.log(`[syncSessionToTeam] Adding member ${sessionId} to team ${teamId} via Server API`);
             await this.addTeamMember(teamId, sessionId, role);
-            console.log(`[syncSessionToTeam] Successfully added member ${sessionId} to team ${teamId}`);
+            this.syncedSessionTeams.add(dedupeKey);
         } catch (error) {
             // Log but don't throw - member may already exist
             const errorMsg = error instanceof Error ? error.message : String(error);
@@ -3056,19 +3066,20 @@ class Sync {
         } catch { /* ignore */ }
 
         try {
-            // 从服务器获取（临时实现：从 artifact body 中读取）
-            const serverUrl = getServerUrl();
-            const response = await apiSocket.request(`/v1/teams/${teamId}/messages`);
+            const fetchMessages = async () => {
+                const response = await apiSocket.request(`/v1/teams/${teamId}/messages`);
 
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`Failed to fetch team messages: ${response.status} - ${text}`);
-            }
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(`Failed to fetch team messages: ${response.status} - ${text}`);
+                }
 
-            const data = await response.json();
-            const messages = data.messages || [];
+                const data = await response.json();
+                return data.messages || [];
+            };
 
-            // 缓存消息
+            const messages = await this.withTeamRecovery(teamId, fetchMessages);
+
             this.teamMessagesCache.set(teamId, messages);
 
             return {
@@ -3077,7 +3088,6 @@ class Sync {
             };
         } catch (error) {
             console.error('Failed to fetch team messages:', error);
-            // 返回空列表而不是抛出错误
             return {
                 messages: [],
                 hasMore: false
@@ -3126,18 +3136,22 @@ class Sync {
                 ...(request.metadata ? { metadata: request.metadata } : {})
             };
 
-            const response = await apiSocket.request(`/v1/teams/${request.teamId}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(message)
-            });
+            const sendToServer = async () => {
+                const response = await apiSocket.request(`/v1/teams/${request.teamId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(message)
+                });
 
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`Failed to send team message: ${response.status} - ${text}`);
-            }
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(`Failed to send team message: ${response.status} - ${text}`);
+                }
+            };
+
+            await this.withTeamRecovery(request.teamId, sendToServer);
 
             // 立即更新本地缓存（cap at 500）
             const cached = this.teamMessagesCache.get(request.teamId) || [];
