@@ -26,10 +26,12 @@ import {
     fetchBypassAgents,
     fetchGenomes,
     fetchRepairSignals,
+    fetchSupervisorState,
     retireBypassAgent,
     type BypassAgent,
     type Genome,
     type RepairSignal,
+    type SupervisorStateSummary,
 } from '@/sync/apiEvolution';
 import { Modal } from '@/modal';
 import { searchGenomes, parseFeedback } from '@/utils/genomeHub';
@@ -67,6 +69,20 @@ function formatSignalCreatedAt(createdAt: string): string {
         });
     } catch {
         return createdAt;
+    }
+}
+
+function formatSupervisorRunAt(lastRunAt: number): string {
+    if (!lastRunAt) return 'Never';
+    try {
+        return new Date(lastRunAt).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch {
+        return String(lastRunAt);
     }
 }
 
@@ -227,6 +243,7 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
     const [agents, setAgents] = React.useState<BypassAgent[]>([]);
     const [genomes, setGenomes] = React.useState<Genome[]>([]);
     const [repairSignals, setRepairSignals] = React.useState<RepairSignal[]>([]);
+    const [supervisorState, setSupervisorState] = React.useState<SupervisorStateSummary | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
     const [retireLoadingId, setRetireLoadingId] = React.useState<string | null>(null);
 
@@ -236,10 +253,11 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
 
         setIsLoading(true);
         try {
-            const [agentsRes, genomesRes, repairSignalsRes] = await Promise.all([
+            const [agentsRes, genomesRes, repairSignalsRes, supervisorStateRes] = await Promise.all([
                 fetchBypassAgents(credentials, teamId),
                 fetchGenomes(credentials, { teamId, limit: 20 }),
                 fetchRepairSignals(credentials, teamId, { resolved: false, limit: 20 }),
+                fetchSupervisorState(credentials, teamId),
             ]);
             const sortedAgents = [...agentsRes.agents].sort((left, right) => {
                 const rank = (roleId: string) => roleId === 'supervisor' ? 0 : roleId === 'help-agent' ? 1 : 2;
@@ -250,6 +268,7 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
             setAgents(sortedAgents);
             setGenomes(genomesRes.genomes);
             setRepairSignals(repairSignalsRes.signals);
+            setSupervisorState(supervisorStateRes.state);
         } catch {
             // Silent — show whatever we have
         } finally {
@@ -336,6 +355,57 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
                             onRetire={retireLoadingId ? () => {} : handleRetire}
                         />
                     ))
+                )}
+            </View>
+
+            <View style={[styles.section, { marginTop: 8 }]}>
+                <View style={styles.sectionHeader}>
+                    <View style={styles.sectionTitleRow}>
+                        <Ionicons name="document-text-outline" size={18} color={theme.colors.textLink} style={styles.sectionIcon} />
+                        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                            Supervisor State
+                        </Text>
+                    </View>
+                </View>
+
+                {!supervisorState ? (
+                    <View style={[styles.emptyCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                        <Ionicons name="time-outline" size={28} color={theme.colors.textSecondary} />
+                        <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                            No persisted supervisor state yet
+                        </Text>
+                        <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>
+                            Once supervisor finishes a cycle and saves state, its last run facts will appear here.
+                        </Text>
+                    </View>
+                ) : (
+                    <View style={[styles.emptyCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider, alignItems: 'stretch' }]}>
+                        <View style={{ gap: 6 }}>
+                            <Text style={[styles.emptyText, { color: theme.colors.text, textAlign: 'left' }]}>
+                                Last run · {formatSupervisorRunAt(supervisorState.lastRunAt)}
+                            </Text>
+                            <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary, textAlign: 'left' }]}>
+                                session {supervisorState.lastSessionId ? supervisorState.lastSessionId.slice(0, 8) : 'none'} · idleRuns {supervisorState.idleRuns} · terminated {supervisorState.terminated ? 'yes' : 'no'}
+                            </Text>
+                            {typeof supervisorState.calibrationScore === 'number' ? (
+                                <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary, textAlign: 'left' }]}>
+                                    calibration {supervisorState.calibrationScore}
+                                </Text>
+                            ) : null}
+                        </View>
+                        <View style={{ marginTop: 12, gap: 6 }}>
+                            <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600' }}>Conclusion</Text>
+                            <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary, textAlign: 'left' }]}>
+                                {supervisorState.lastConclusion || 'No conclusion recorded.'}
+                            </Text>
+                        </View>
+                        <View style={{ marginTop: 12, gap: 6 }}>
+                            <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600' }}>Pending Action</Text>
+                            <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary, textAlign: 'left' }]}>
+                                {supervisorState.pendingAction ? JSON.stringify(supervisorState.pendingAction) : 'None'}
+                            </Text>
+                        </View>
+                    </View>
                 )}
             </View>
 

@@ -10,7 +10,7 @@ import {
 import { Text } from '@/components/ui/StyledText';
 import { trackTeamViewed, trackTaskCreated, trackTaskApproval, trackTeamChatSent, trackTaskCompleted, trackTaskMoved } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts, useLocalSetting } from '@/sync/storage';
+import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
 import { useShallow } from 'zustand/react/shallow';
 import { sync } from '@/sync/sync';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -41,8 +41,6 @@ import { getCurrentAuth } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/AuthContext';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
 import { EvolutionSection } from '@/components/settings/EvolutionSection';
-import { MatrixView } from '@/components/team/MatrixView';
-import type { MatrixRosterEntry } from '@/components/team/MatrixView';
 import { FloatingIslandSidebar } from '@/components/layout/FloatingIslandSidebar';
 import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell';
 import { SidebarView } from '@/components/layout/SidebarView';
@@ -53,13 +51,14 @@ import { t } from '@/text';
 import { formatTaskReference } from '@/utils/taskChatSync';
 import { applyDerivedLifecycleTimestamps } from '@/utils/teamLifecycle';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
-import {
-    resolveTeamWorkspaceState,
-    type TeamStandardTab,
-    type TeamWorkspaceMode,
-    type TeamWorkspacePreference,
-} from '@/utils/teamMatrix';
 import { compareTeamRosterEntries } from '@/utils/teamRoster';
+import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
+
+type TeamStandardTab = 'chat' | 'board' | 'info' | 'evolution';
+
+function isTeamStandardTab(value: string | undefined | null): value is TeamStandardTab {
+    return !!value && ['chat', 'board', 'info', 'evolution'].includes(value);
+}
 
 function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
     return `team:${teamId}:member:${memberId}`;
@@ -487,10 +486,6 @@ const STANDARD_SHELL_TABS = [
     { id: 'info', label: 'Info' },
     { id: 'evolution', label: 'Evolution' },
 ] as const;
-const WORKSPACE_MODE_OPTIONS = [
-    { id: 'standard', label: 'Standard' },
-    { id: 'matrix', label: 'Matrix' },
-] as const;
 
 const SHELL_ROLE_COLORS: Record<string, string> = {
     master: '#007AFF',
@@ -543,6 +538,7 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
     taskSessionLinks,
     sessionLookup,
     matchesColumn,
+    onBoardSignalPress,
     onOpenTask,
     onMoveTask,
     onAddTask,
@@ -555,14 +551,14 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
     taskSessionLinks: Map<string, { sessionId: string; title: string; linkedAt: number }[]>;
     sessionLookup: Map<string, any>;
     matchesColumn: (task: KanbanTask, columnId: string) => boolean;
-    onSignalPress?: (signal: 'running' | 'deciding' | 'blocked') => void;
+    onBoardSignalPress?: (signal: 'running' | 'deciding' | 'blocked') => void;
     onOpenTask: (task: KanbanTask) => void;
     onMoveTask: (task: KanbanTask) => void;
     onAddTask: (columnId: string) => void;
 }) {
     return (
         <>
-            <TeamStatusBar tasks={tasks} onSignalPress={onSignalPress} />
+            <TeamStatusBar tasks={tasks} onSignalPress={onBoardSignalPress} />
 
             <View style={styles.boardContainer}>
                 {columns.map((column) => (
@@ -674,7 +670,7 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
 });
 
 export default function TeamDashboardScreen() {
-    const { id, roomId: roomIdParam, tab, mode } = useLocalSearchParams();
+    const { id, roomId: roomIdParam, tab } = useLocalSearchParams();
     const teamId = id as string;
     const router = useRouter();
     const { theme } = useUnistyles();
@@ -700,21 +696,9 @@ export default function TeamDashboardScreen() {
     const isDesktopShell = Platform.OS === 'web' && width >= 1180;
     const shellVariant = 'default' as const;
     const shellTheme = getThreeColumnShellTokens(shellVariant);
-    const teamWorkspacePreferences = useLocalSetting('teamWorkspacePreferences');
-    const modeParam = getSingleRouteParam(mode);
     const tabParam = getSingleRouteParam(tab);
-    const storedWorkspacePreference = React.useMemo<TeamWorkspacePreference | null>(() => {
-        return teamWorkspacePreferences[teamId] ?? null;
-    }, [teamId, teamWorkspacePreferences]);
-    const resolvedWorkspaceState = React.useMemo(() => {
-        return resolveTeamWorkspaceState({
-            modeParam,
-            tabParam,
-            preference: storedWorkspacePreference,
-        });
-    }, [modeParam, storedWorkspacePreference, tabParam]);
-    const [workspaceMode, setWorkspaceMode] = React.useState<TeamWorkspaceMode>(resolvedWorkspaceState.mode);
-    const [activeTab, setActiveTab] = React.useState<TeamStandardTab>(resolvedWorkspaceState.standardTab);
+    const initialTab: TeamStandardTab = isTeamStandardTab(tabParam) ? tabParam : 'chat';
+    const [activeTab, setActiveTab] = React.useState<TeamStandardTab>(initialTab);
     const [isLoading, setIsLoading] = React.useState(false);
     const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
@@ -729,6 +713,7 @@ export default function TeamDashboardScreen() {
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
     const lifecyclePersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const parsedArtifactBoard = React.useMemo<{
@@ -758,11 +743,11 @@ export default function TeamDashboardScreen() {
     const teamReturnTo = React.useMemo(() => {
         return buildTeamReturnPath({
             teamId,
-            mode: workspaceMode,
-            tab: workspaceMode === 'standard' ? activeTab : undefined,
+            mode: 'standard',
+            tab: activeTab,
             roomId,
         });
-    }, [activeTab, roomId, teamId, workspaceMode]);
+    }, [activeTab, roomId, teamId]);
     const desktopRoom = React.useMemo(() => {
         if (!roomId || !collaborationState) return null;
         return collaborationState.rooms.find((room: any) => room.id === roomId) ?? null;
@@ -779,81 +764,22 @@ export default function TeamDashboardScreen() {
     }, [profile]);
 
     React.useEffect(() => {
-        if (resolvedWorkspaceState.mode !== workspaceMode) {
-            setWorkspaceMode(resolvedWorkspaceState.mode);
-        }
-        if (resolvedWorkspaceState.standardTab !== activeTab) {
-            setActiveTab(resolvedWorkspaceState.standardTab);
-        }
-    }, [activeTab, resolvedWorkspaceState, workspaceMode]);
-
-    React.useEffect(() => {
         if (teamId) {
             trackTeamViewed(teamId);
         }
     }, [teamId]);
 
-    const persistWorkspacePreference = React.useCallback((nextPreference: {
-        mode: TeamWorkspaceMode;
-        standardTab: TeamStandardTab;
-        matrixGrid?: TeamWorkspacePreference['matrixGrid'];
-        matrixTasksVisible?: TeamWorkspacePreference['matrixTasksVisible'];
-    }) => {
-        if (!teamId) {
-            return;
-        }
-
-        const currentPreferences = storage.getState().localSettings.teamWorkspacePreferences;
-        const currentPreference = currentPreferences[teamId];
-        if (
-            currentPreference?.mode === nextPreference.mode &&
-            currentPreference?.standardTab === nextPreference.standardTab
-        ) {
-            return;
-        }
-
-        storage.getState().applyLocalSettings({
-            teamWorkspacePreferences: {
-                ...currentPreferences,
-                [teamId]: {
-                    ...currentPreference,
-                    ...nextPreference,
-                    updatedAt: Date.now(),
-                },
-            },
-        });
-    }, [teamId]);
-
-    const replaceWorkspaceRoute = React.useCallback((nextMode: TeamWorkspaceMode, nextTab: TeamStandardTab) => {
+    const selectTab = React.useCallback((nextTab: TeamStandardTab) => {
+        setActiveTab(nextTab);
         router.replace({
             pathname: '/teams/[id]',
             params: {
                 id: teamId,
                 ...(roomId ? { roomId } : {}),
-                mode: nextMode,
-                ...(nextMode === 'standard' ? { tab: nextTab } : {}),
+                tab: nextTab,
             },
         } as any);
     }, [roomId, router, teamId]);
-
-    const selectWorkspaceMode = React.useCallback((nextMode: TeamWorkspaceMode) => {
-        setWorkspaceMode(nextMode);
-        persistWorkspacePreference({
-            mode: nextMode,
-            standardTab: activeTab,
-        });
-        replaceWorkspaceRoute(nextMode, activeTab);
-    }, [activeTab, persistWorkspacePreference, replaceWorkspaceRoute]);
-
-    const selectTab = React.useCallback((nextTab: TeamStandardTab) => {
-        setWorkspaceMode('standard');
-        setActiveTab(nextTab);
-        persistWorkspacePreference({
-            mode: 'standard',
-            standardTab: nextTab,
-        });
-        replaceWorkspaceRoute('standard', nextTab);
-    }, [persistWorkspacePreference, replaceWorkspaceRoute]);
 
     React.useEffect(() => {
         if (desktopBridge) {
@@ -1072,32 +998,18 @@ export default function TeamDashboardScreen() {
     }, [teamId]);
 
     const kanbanData: KanbanBoard = React.useMemo(() => {
-        const ensureColumns = (data: any): KanbanBoard => {
-            const baseColumns = Array.isArray(data?.columns) && data.columns.length > 0
-                ? data.columns
-                : DEFAULT_KANBAN_BOARD.columns;
+        const board = resolveStickyKanbanBoard({
+            desktopBridge: !!desktopBridge,
+            desktopBoard,
+            artifactBody: artifact?.body,
+            parsedBoard: parsedArtifactBoard.board,
+            parseError: parsedArtifactBoard.parseError,
+            lastKnownBoard: lastKnownKanbanBoardRef.current,
+            defaultBoard: DEFAULT_KANBAN_BOARD,
+        });
 
-            const mergedColumns = [...baseColumns];
-            DEFAULT_KANBAN_BOARD.columns.forEach((column) => {
-                if (!mergedColumns.some((c: KanbanColumn) => c.id === column.id)) {
-                    mergedColumns.push(column);
-                }
-            });
-
-            const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
-            return { ...data, tasks, columns: mergedColumns };
-        };
-
-        if (desktopBridge) {
-            return ensureColumns(desktopBoard || DEFAULT_KANBAN_BOARD);
-        }
-        if (!artifact?.body) return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
-        if (parsedArtifactBoard.parseError || !parsedArtifactBoard.board) {
-            console.error('Failed to parse kanban data', parsedArtifactBoard.parseError);
-            return { tasks: [], columns: DEFAULT_KANBAN_BOARD.columns };
-        }
-
-        return ensureColumns(parsedArtifactBoard.board);
+        lastKnownKanbanBoardRef.current = board;
+        return board;
     }, [artifact?.body, desktopBoard, desktopBridge, parsedArtifactBoard.board, parsedArtifactBoard.parseError]);
 
     const sessionLookup = React.useMemo(() => {
@@ -1241,6 +1153,64 @@ export default function TeamDashboardScreen() {
         }
     }, [allMachines, kanbanData.team?.members, sessionLookup, teamId]);
 
+    const handleRenameSessionMember = React.useCallback(async (sessionId: string, currentName: string) => {
+        const newName = await Modal.prompt(
+            t('teams.renameAgent'),
+            t('teams.renameAgentPrompt'),
+            {
+                defaultValue: currentName,
+                placeholder: currentName,
+                confirmText: t('common.rename'),
+                cancelText: t('common.cancel'),
+            }
+        );
+        if (!newName || newName.trim() === currentName) return;
+        try {
+            await sync.renameSession(sessionId, newName.trim());
+        } catch (error) {
+            console.error('Failed to rename session:', error);
+            Modal.alert(t('common.error'), t('teams.renameAgentError'));
+        }
+    }, []);
+
+    const handleRemoveTeamMember = React.useCallback(async (sessionId: string, displayName: string) => {
+        const confirmed = await Modal.confirm(
+            t('teams.removeMember'),
+            t('teams.removeMemberConfirm', { name: displayName }),
+            {
+                confirmText: t('teams.removeMember'),
+                cancelText: t('common.cancel'),
+                destructive: true,
+            }
+        );
+        if (!confirmed) return;
+        try {
+            await sync.removeTeamMember(teamId, sessionId);
+        } catch (error) {
+            console.error('Failed to remove team member:', error);
+            Modal.alert(t('common.error'), t('teams.removeMemberError'));
+        }
+    }, [teamId]);
+
+    const handleAgentLongPress = React.useCallback((sessionId: string, displayName: string) => {
+        Modal.alert(
+            displayName,
+            undefined,
+            [
+                {
+                    text: t('teams.renameAgent'),
+                    onPress: () => handleRenameSessionMember(sessionId, displayName),
+                },
+                {
+                    text: t('teams.removeMember'),
+                    style: 'destructive',
+                    onPress: () => handleRemoveTeamMember(sessionId, displayName),
+                },
+                { text: t('common.cancel'), style: 'cancel' },
+            ]
+        );
+    }, [handleRenameSessionMember, handleRemoveTeamMember]);
+
     const handleTaskUpdate = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
         if (desktopBridge && roomId) {
             await desktopBridge.updateTask(taskId, updates);
@@ -1360,6 +1330,10 @@ export default function TeamDashboardScreen() {
         onMessageSend: handleTeamMessageSend,
         onTaskCreate: handleTaskCreate,
     });
+    const {
+        updateTaskWithSync,
+        createTaskWithSync,
+    } = taskChatSync;
 
     React.useEffect(() => {
         if (!artifact?.body || !parsedArtifactBoard.board?.team?.members?.length) {
@@ -1507,7 +1481,7 @@ export default function TeamDashboardScreen() {
 
         // 🆕 使用 Chat-Board 同步功能：自动发送通知到聊天
         try {
-            await taskChatSync.updateTaskWithSync(
+            await updateTaskWithSync(
                 task.id,
                 { status: nextStatus },
                 myDisplayName || '用户'
@@ -1531,7 +1505,7 @@ export default function TeamDashboardScreen() {
             console.error('Failed to sync task update:', error);
             // 即使同步失败，任务状态更新仍然会进行（在 updateTaskWithSync 中）
         }
-    }, [myDisplayName, normalizeStatus, taskChatSync, teamId]);
+    }, [myDisplayName, normalizeStatus, teamId, updateTaskWithSync]);
 
     const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
     const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
@@ -1759,14 +1733,14 @@ export default function TeamDashboardScreen() {
     const isArtifactParseError = !desktopBridge && !!artifact?.body && !!parsedArtifactBoard.parseError;
     const isAuthMissing = !desktopBridge && !isAuthenticated;
     const shouldShowBoardFallback = isAuthMissing || isMissingDesktopRoom || isMissingDesktopBoard || isMissingArtifact || isArtifactParseError;
-    const fallbackTitle = isAuthMissing
+    const boardFallbackTitle = isAuthMissing
         ? 'Authentication Required'
         : isArtifactParseError
         ? 'Team Board Failed to Load'
         : isMissingDesktopRoom
             ? 'Team Room Not Found'
             : 'Team Board Not Found';
-    const fallbackDescription = isAuthMissing
+    const boardFallbackDescription = isAuthMissing
         ? 'This browser session does not currently have valid credentials. Sign in or restore your account before opening team boards.'
         : isArtifactParseError
         ? 'This team exists, but its board data could not be parsed. Fix the stored board payload before continuing.'
@@ -1776,7 +1750,7 @@ export default function TeamDashboardScreen() {
                 ? 'This team room exists, but no board is attached to it yet.'
                 : 'This team doesn\'t have a Kanban board yet. Initialize one to start tracking tasks.';
 
-    const renderKanban = () => (
+    const kanbanPanel = React.useMemo(() => (
         <KanbanBoardPanel
             styles={styles}
             theme={theme}
@@ -1786,12 +1760,25 @@ export default function TeamDashboardScreen() {
             taskSessionLinks={taskSessionLinks}
             sessionLookup={sessionLookup}
             matchesColumn={matchesColumn}
-            onSignalPress={handleBoardSignalPress}
+            onBoardSignalPress={handleBoardSignalPress}
             onOpenTask={handleOpenTaskDetail}
             onMoveTask={handleMoveTask}
             onAddTask={handleAddTask}
         />
-    );
+    ), [
+        styles,
+        theme,
+        kanbanData.tasks,
+        approvedTasks,
+        kanbanData.columns,
+        taskSessionLinks,
+        sessionLookup,
+        matchesColumn,
+        handleBoardSignalPress,
+        handleOpenTaskDetail,
+        handleMoveTask,
+        handleAddTask,
+    ]);
 
     const renderInfo = () => (
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -1819,13 +1806,12 @@ export default function TeamDashboardScreen() {
                         const displayName = entry.member.displayName || entry.session?.metadata?.name || roleId;
                         const executionPlane = entry.member.executionPlane || entry.session?.metadata?.executionPlane || 'bypass';
                         const runtime = entry.member.runtimeType || entry.session?.metadata?.flavor || 'claude';
-                        const statusLabel = entry.session?.active ? 'Monitoring now' : 'Standby';
 
                         return (
                             <View key={entry.member.sessionId} style={styles.roleCard}>
                                 <Text style={styles.roleTitle}>{displayName}</Text>
                                 <Text style={styles.roleSummary}>
-                                    {roleId} · {executionPlane} · {runtime} · {statusLabel}
+                                    {roleId} · {executionPlane} · {runtime}
                                 </Text>
                             </View>
                         );
@@ -1853,71 +1839,14 @@ export default function TeamDashboardScreen() {
         </ScrollView>
     );
 
-    // Convert roster to MatrixRosterEntry format
-    const matrixRoster: MatrixRosterEntry[] = React.useMemo(() => {
-        return roster.map((entry, idx) => ({
-            member: entry.member,
-            session: entry.session,
-            role: entry.role,
-            index: idx,
-            tasks: entry.tasks,
-            activeTask: entry.activeTask,
-        }));
-    }, [roster]);
+    const handleTaskDetailSave = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
+        await updateTaskWithSync(taskId, updates, myDisplayName || '用户');
+        setShowTaskDetail(false);
+    }, [myDisplayName, updateTaskWithSync]);
 
-    const handleAssignTaskToAgent = React.useCallback(async (taskId: string, agentSessionId: string) => {
-        const task = kanbanData.tasks.find(t => t.id === taskId);
-        if (!task || task.assigneeId === agentSessionId) return;
-
-        const assigneeEntry = roster.find((entry) => entry.member.sessionId === agentSessionId);
-        const assigneeName = assigneeEntry?.member.displayName
-            || (assigneeEntry?.session ? getSessionName(assigneeEntry.session) : null)
-            || agentSessionId.slice(0, 8);
-
-        try {
-            await taskChatSync.updateTaskWithSync(taskId, { assigneeId: agentSessionId }, myDisplayName || 'User');
-
-            await sync.sendTeamMessage({
-                teamId,
-                id: randomUUID(),
-                content: `Assigned ${formatTaskReference(task)} to **${assigneeName}** from Matrix view.`,
-                type: 'notification',
-                mentions: [agentSessionId],
-                metadata: {
-                    taskId: task.id,
-                    taskChange: {
-                        field: 'assigneeId',
-                        oldValue: task.assigneeId ?? null,
-                        newValue: agentSessionId,
-                    },
-                    source: 'matrix-view',
-                },
-                fromDisplayName: myDisplayName || 'User',
-            });
-        } catch (error) {
-            console.error('Failed to assign task to agent:', error);
-        }
-    }, [kanbanData.tasks, myDisplayName, roster, taskChatSync, teamId]);
-
-    const renderMatrix = () => (
-        <MatrixView
-            roster={matrixRoster}
-            tasks={kanbanData.tasks}
-            initialGrid={storedWorkspacePreference?.matrixGrid}
-            onAgentPress={(sessionId) => {
-                pushSessionRoute(router, sessionId, { teamReturnTo });
-            }}
-            onAssignTask={handleAssignTaskToAgent}
-            onGridChange={(nextGrid) => {
-                persistWorkspacePreference({
-                    mode: 'matrix',
-                    standardTab: activeTab,
-                    matrixGrid: nextGrid,
-                    matrixTasksVisible: storedWorkspacePreference?.matrixTasksVisible,
-                });
-            }}
-        />
-    );
+    const handleNewTaskCreate = React.useCallback(async (taskInput: Partial<KanbanTask>) => {
+        await createTaskWithSync(taskInput, myDisplayName || '用户');
+    }, [createTaskWithSync, myDisplayName]);
 
     const renderChat = () => {
         // Try to find current user's session in roster
@@ -1995,6 +1924,10 @@ export default function TeamDashboardScreen() {
                         returnTo: teamReturnTo,
                     });
                 },
+                onLongPress: () => {
+                    const displayName = entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId;
+                    handleAgentLongPress(entry.member.sessionId, displayName);
+                },
                 };
             })}
             statusItems={[
@@ -2052,10 +1985,10 @@ export default function TeamDashboardScreen() {
                 <View style={{ alignItems: 'center', padding: 20 }}>
                     <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
                     <Text style={[styles.title, { marginTop: 16, textAlign: 'center' }]}>
-                        {fallbackTitle}
+                        {boardFallbackTitle}
                     </Text>
                     <Text style={[styles.subtitle, { marginTop: 8, textAlign: 'center', maxWidth: 300 }]}>
-                        {fallbackDescription}
+                        {boardFallbackDescription}
                     </Text>
                     {!desktopBridge && !isArtifactParseError && !isAuthMissing ? (
                         <Pressable
@@ -2088,18 +2021,17 @@ export default function TeamDashboardScreen() {
             >
                 <View style={styles.desktopHeaderTopRow}>
                     <View style={styles.desktopTabsRow}>
-                        {WORKSPACE_MODE_OPTIONS.map((option) => {
-                            const isActive = workspaceMode === option.id;
+                        {STANDARD_SHELL_TABS.map((tab) => {
+                            const isActive = activeTab === tab.id;
                             return (
                                 <Pressable
-                                    key={option.id}
+                                    key={tab.id}
                                     onPress={() => {
-                                        selectWorkspaceMode(option.id);
+                                        selectTab(tab.id);
                                         setShowMenu(false);
                                     }}
                                     style={[
                                         styles.desktopTab,
-                                        { width: 96 },
                                         isActive && styles.desktopTabActive,
                                     ]}
                                 >
@@ -2123,54 +2055,11 @@ export default function TeamDashboardScreen() {
                                             },
                                         ]}
                                     >
-                                        {option.label}
+                                        {tab.label}
                                     </Text>
                                 </Pressable>
                             );
                         })}
-                        {workspaceMode === 'standard' ? (
-                            <View style={[styles.desktopTabsRow, { marginLeft: 12 }]}>
-                                {STANDARD_SHELL_TABS.map((tab) => {
-                                    const isActive = activeTab === tab.id;
-                                    return (
-                                        <Pressable
-                                            key={tab.id}
-                                            onPress={() => {
-                                                selectTab(tab.id);
-                                                setShowMenu(false);
-                                            }}
-                                            style={[
-                                                styles.desktopTab,
-                                                isActive && styles.desktopTabActive,
-                                            ]}
-                                        >
-                                            {isActive ? (
-                                                <LinearGradient
-                                                    colors={['#FFFFFF', '#EDF3F7']}
-                                                    start={{ x: 0, y: 0 }}
-                                                    end={{ x: 0, y: 1 }}
-                                                    style={{
-                                                        ...StyleSheet.absoluteFillObject as object,
-                                                        borderRadius: 999,
-                                                    }}
-                                                />
-                                            ) : null}
-                                            <Text
-                                                style={[
-                                                    styles.desktopTabText,
-                                                    {
-                                                        color: isActive ? '#233648' : '#92A1AF',
-                                                        fontWeight: isActive ? '600' : 'normal',
-                                                    },
-                                                ]}
-                                            >
-                                                {tab.label}
-                                            </Text>
-                                        </Pressable>
-                                    );
-                                })}
-                            </View>
-                        ) : null}
                     </View>
                     <View style={{ flex: 1 }} />
                     <Pressable
@@ -2216,12 +2105,10 @@ export default function TeamDashboardScreen() {
             <View style={styles.desktopPanelBody}>
                 {shouldShowBoardFallback ? (
                     boardFallbackPanel
-                ) : workspaceMode === 'matrix' ? (
-                    renderMatrix()
                 ) : (
                     <>
                         {activeTab === 'chat' && renderChat()}
-                        {activeTab === 'board' && renderKanban()}
+                        {activeTab === 'board' && kanbanPanel}
                         {activeTab === 'info' && renderInfo()}
                         {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
                     </>
@@ -2234,10 +2121,7 @@ export default function TeamDashboardScreen() {
                     onClose={() => setShowTaskDetail(false)}
                     onDiscuss={handleDiscussTask}
                     onDelete={handleDeleteTask}
-                    onSave={async (taskId, updates) => {
-                        await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
-                        setShowTaskDetail(false);
-                    }}
+                    onSave={handleTaskDetailSave}
                     allSessions={allSessions}
                 />
                 <NewTaskModal
@@ -2246,9 +2130,7 @@ export default function TeamDashboardScreen() {
                     columns={kanbanData.columns}
                     initialStatus={newTaskStatus}
                     onClose={() => setShowNewTaskModal(false)}
-                    onCreate={async (taskInput) => {
-                        await taskChatSync.createTaskWithSync(taskInput, myDisplayName || '用户');
-                    }}
+                    onCreate={handleNewTaskCreate}
                 />
             </View>
         </>
@@ -2420,71 +2302,40 @@ export default function TeamDashboardScreen() {
                             </Pressable>
                         </View>
                         <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
-                            {WORKSPACE_MODE_OPTIONS.map((option) => (
+                            {STANDARD_SHELL_TABS.map((tab) => (
                                 <Pressable
-                                    key={option.id}
-                                    onPress={() => selectWorkspaceMode(option.id)}
+                                    key={tab.id}
+                                    onPress={() => selectTab(tab.id)}
                                     style={{
                                         flex: 1,
                                         paddingVertical: 8,
                                         alignItems: 'center',
                                         borderRadius: 8,
-                                        backgroundColor: workspaceMode === option.id ? theme.colors.surface : 'transparent',
-                                        shadowColor: workspaceMode === option.id ? '#000' : 'transparent',
+                                        backgroundColor: activeTab === tab.id ? theme.colors.surface : 'transparent',
+                                        shadowColor: activeTab === tab.id ? '#000' : 'transparent',
                                         shadowOffset: { width: 0, height: 1 },
-                                        shadowOpacity: workspaceMode === option.id ? 0.1 : 0,
+                                        shadowOpacity: activeTab === tab.id ? 0.1 : 0,
                                         shadowRadius: 2,
                                     }}
                                 >
                                     <Text style={{
                                         fontSize: 14,
                                         fontWeight: '600',
-                                        color: workspaceMode === option.id ? theme.colors.text : theme.colors.textSecondary,
+                                        color: activeTab === tab.id ? theme.colors.text : theme.colors.textSecondary,
                                     }}>
-                                        {option.label}
+                                        {tab.label}
                                     </Text>
                                 </Pressable>
                             ))}
                         </View>
-                        {workspaceMode === 'standard' ? (
-                            <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4, marginTop: 8 }}>
-                                {STANDARD_SHELL_TABS.map((tab) => (
-                                    <Pressable
-                                        key={tab.id}
-                                        onPress={() => selectTab(tab.id)}
-                                        style={{
-                                            flex: 1,
-                                            paddingVertical: 8,
-                                            alignItems: 'center',
-                                            borderRadius: 8,
-                                            backgroundColor: activeTab === tab.id ? theme.colors.surface : 'transparent',
-                                            shadowColor: activeTab === tab.id ? '#000' : 'transparent',
-                                            shadowOffset: { width: 0, height: 1 },
-                                            shadowOpacity: activeTab === tab.id ? 0.1 : 0,
-                                            shadowRadius: 2,
-                                        }}
-                                    >
-                                        <Text style={{
-                                            fontSize: 14,
-                                            fontWeight: '600',
-                                            color: activeTab === tab.id ? theme.colors.text : theme.colors.textSecondary,
-                                        }}>
-                                            {tab.label}
-                                        </Text>
-                                    </Pressable>
-                                ))}
-                            </View>
-                        ) : null}
                     </View>
 
                     {shouldShowBoardFallback ? (
                         boardFallbackPanel
-                    ) : workspaceMode === 'matrix' ? (
-                        renderMatrix()
                     ) : (
                         <>
                             {activeTab === 'chat' && renderChat()}
-                            {activeTab === 'board' && renderKanban()}
+                            {activeTab === 'board' && kanbanPanel}
                             {activeTab === 'info' && renderInfo()}
                             {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
                         </>
@@ -2504,11 +2355,7 @@ export default function TeamDashboardScreen() {
                         onClose={() => setShowTaskDetail(false)}
                         onDiscuss={handleDiscussTask}
                         onDelete={handleDeleteTask}
-                        onSave={async (taskId, updates) => {
-                            // 使用 taskChatSync 更新任务，会自动发送通知
-                            await taskChatSync.updateTaskWithSync(taskId, updates, myDisplayName || '用户');
-                            setShowTaskDetail(false);
-                        }}
+                        onSave={handleTaskDetailSave}
                         allSessions={allSessions}
                     />
                     <NewTaskModal
@@ -2516,9 +2363,7 @@ export default function TeamDashboardScreen() {
                         columns={kanbanData.columns}
                         initialStatus={newTaskStatus}
                         onClose={() => setShowNewTaskModal(false)}
-                        onCreate={async (taskInput) => {
-                            await taskChatSync.createTaskWithSync(taskInput, myDisplayName || '用户');
-                        }}
+                        onCreate={handleNewTaskCreate}
                     />
                 </>
             )}

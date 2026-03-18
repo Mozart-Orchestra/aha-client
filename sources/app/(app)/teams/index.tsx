@@ -737,7 +737,7 @@ export default function TeamsScreen() {
         }
 
         try {
-            await sync.deleteArtifact(teamId);
+            await sync.deleteTeam(teamId);
         } catch (error) {
             console.error('Failed to delete team:', error);
             await Modal.alert(t('common.error'), t('teams.deleteTeamFailed'));

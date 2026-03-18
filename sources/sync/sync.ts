@@ -3249,6 +3249,17 @@ class Sync {
     }
 
     /**
+     * Register a team on the server (call after createArtifact to sync with backend)
+     */
+    public async registerTeam(params: { name: string; description?: string }): Promise<import('./apiTeamManagement').TeamSummary> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { createTeam } = await import('./apiTeamManagement');
+        return await createTeam(this.credentials, params);
+    }
+
+    /**
      * Archive a team and all its sessions
      * @param sessionIds - Session IDs to archive (passed to server since body is encrypted)
      */

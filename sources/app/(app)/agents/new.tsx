@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, TextInput, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { View, TextInput, Pressable, ActivityIndicator, ScrollView, Platform, useWindowDimensions } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
 import { Stack, useRouter } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -14,6 +14,8 @@ import { Item } from '@/components/ui/Item';
 import { layout } from '@/utils/layout';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { goBackOrReturn } from '@/utils/returnNavigation';
+import { SidebarView } from '@/components/layout/SidebarView';
+import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
 
 type Runtime = 'claude' | 'codex';
 
@@ -25,6 +27,8 @@ const RUNTIMES: { value: Runtime; label: string }[] = [
 export default React.memo(function NewAgentScreen() {
     const { theme } = useUnistyles();
     const router = useRouter();
+    const { width } = useWindowDimensions();
+    const isDesktopShell = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
 
     const [name, setName] = React.useState('');
     const [runtime, setRuntime] = React.useState<Runtime>('claude');
@@ -60,10 +64,72 @@ export default React.memo(function NewAgentScreen() {
         }
     }, [canCreate, name, router, runtime, saving]);
 
+    const formContent = (
+        <ItemList>
+            <ItemGroup title={t('agents.agentName')}>
+                <View style={[styles.inputWrap, { backgroundColor: theme.colors.surface, borderColor: nameFocused ? theme.colors.button.primary.background : theme.colors.divider }]}>
+                    <TextInput
+                        style={[styles.input, { color: theme.colors.text }]}
+                        placeholder={t('agents.agentNamePlaceholder')}
+                        placeholderTextColor={theme.colors.input.placeholder}
+                        value={name}
+                        onChangeText={setName}
+                        onFocus={() => setNameFocused(true)}
+                        onBlur={() => setNameFocused(false)}
+                        autoFocus
+                        returnKeyType="done"
+                        onSubmitEditing={handleCreate}
+                    />
+                </View>
+            </ItemGroup>
+
+            <ItemGroup title={t('agents.agentRuntime')}>
+                {RUNTIMES.map(({ value, label }) => (
+                    <Item
+                        key={value}
+                        title={label}
+                        onPress={() => setRuntime(value)}
+                        icon={
+                            runtime === value
+                                ? <Ionicons name="checkmark-circle" size={20} color={theme.colors.button.primary.background} />
+                                : <Ionicons name="radio-button-off-outline" size={20} color={theme.colors.textSecondary} />
+                        }
+                    />
+                ))}
+            </ItemGroup>
+        </ItemList>
+    );
+
+    const desktopMainPanel = (
+        <View style={styles.desktopPanel}>
+            <View style={styles.desktopHeader}>
+                <Text style={styles.desktopTitle}>{t('agents.createAgent')}</Text>
+                <Pressable
+                    onPress={handleCreate}
+                    disabled={!canCreate || saving}
+                    style={[styles.desktopCreateButton, (!canCreate || saving) && styles.desktopCreateButtonDisabled]}
+                >
+                    {saving ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                        <Text style={styles.desktopCreateButtonText}>{t('common.create')}</Text>
+                    )}
+                </Pressable>
+            </View>
+            <ScrollView
+                contentContainerStyle={[styles.desktopContent, { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' }]}
+                keyboardShouldPersistTaps="handled"
+            >
+                {formContent}
+            </ScrollView>
+        </View>
+    );
+
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.groupped.background }]}>
+        <>
             <Stack.Screen
                 options={{
+                    headerShown: !isDesktopShell,
                     headerTitle: t('agents.createAgent'),
                     headerRight: () => (
                         <Pressable
@@ -89,46 +155,19 @@ export default React.memo(function NewAgentScreen() {
                     ),
                 }}
             />
-
-            <ScrollView
-                contentContainerStyle={[styles.content, { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' }]}
-                keyboardShouldPersistTaps="handled"
-            >
-                <ItemList>
-                    <ItemGroup title={t('agents.agentName')}>
-                        <View style={[styles.inputWrap, { backgroundColor: theme.colors.surface, borderColor: nameFocused ? theme.colors.button.primary.background : theme.colors.divider }]}>
-                            <TextInput
-                                style={[styles.input, { color: theme.colors.text }]}
-                                placeholder={t('agents.agentNamePlaceholder')}
-                                placeholderTextColor={theme.colors.input.placeholder}
-                                value={name}
-                                onChangeText={setName}
-                                onFocus={() => setNameFocused(true)}
-                                onBlur={() => setNameFocused(false)}
-                                autoFocus
-                                returnKeyType="done"
-                                onSubmitEditing={handleCreate}
-                            />
-                        </View>
-                    </ItemGroup>
-
-                    <ItemGroup title={t('agents.agentRuntime')}>
-                        {RUNTIMES.map(({ value, label }) => (
-                            <Item
-                                key={value}
-                                title={label}
-                                onPress={() => setRuntime(value)}
-                                icon={
-                                    runtime === value
-                                        ? <Ionicons name="checkmark-circle" size={20} color={theme.colors.button.primary.background} />
-                                        : <Ionicons name="radio-button-off-outline" size={20} color={theme.colors.textSecondary} />
-                                }
-                            />
-                        ))}
-                    </ItemGroup>
-                </ItemList>
-            </ScrollView>
-        </View>
+            {isDesktopShell ? (
+                <SidebarView mainPanel={desktopMainPanel} />
+            ) : (
+                <View style={[styles.container, { backgroundColor: theme.colors.groupped.background }]}>
+                    <ScrollView
+                        contentContainerStyle={[styles.content, { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' }]}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {formContent}
+                    </ScrollView>
+                </View>
+            )}
+        </>
     );
 });
 
@@ -155,5 +194,44 @@ const styles = StyleSheet.create((theme) => ({
     },
     input: {
         fontSize: 16,
+    },
+    // Desktop shell styles
+    desktopPanel: {
+        flex: 1,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    desktopHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.divider,
+    },
+    desktopTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    desktopCreateButton: {
+        backgroundColor: theme.colors.button.primary.background,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 10,
+        minWidth: 80,
+        alignItems: 'center',
+    },
+    desktopCreateButtonDisabled: {
+        opacity: 0.4,
+    },
+    desktopCreateButtonText: {
+        color: theme.colors.button.primary.text,
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    desktopContent: {
+        paddingTop: 24,
+        paddingBottom: 40,
     },
 }));

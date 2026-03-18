@@ -31,7 +31,7 @@ export interface GenomeRecord {
     namespace: string | null;
     name: string;
     version: number;
-    status: 'draft' | 'verified' | 'official';
+    status: 'draft' | 'unverified' | 'verified' | 'official' | 'archived';
     description: string | null;
     spec: string;
     tags: string | null;

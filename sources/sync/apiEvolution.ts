@@ -6,6 +6,7 @@
  *
  * Endpoints:
  *   GET    /v1/teams/:teamId/bypass-agents              - List active bypass agents
+ *   GET    /v1/teams/:teamId/supervisor-state           - Read persisted supervisor facts
  *   DELETE /v1/teams/:teamId/bypass-agents/:id          - Retire a bypass agent
  *   POST   /v1/teams/:teamId/bypass-agents/leases       - Create a bypass agent lease
  *   GET    /v1/teams/:teamId/bypass-agents/leases/:id   - Get lease status
@@ -45,6 +46,29 @@ export interface BypassAgentsResponse {
     agents: BypassAgent[];
 }
 
+export interface SupervisorStateSummary {
+    teamId: string;
+    lastRunAt: number;
+    lastConclusion: string;
+    lastSessionId: string | null;
+    terminated: boolean;
+    idleRuns: number;
+    pendingAction: {
+        type: 'notify_help';
+        message: string;
+    } | {
+        type: 'conditional_escalation';
+        condition: string;
+        action: string;
+        deadline: number;
+    } | null;
+    calibrationScore: number | null;
+}
+
+export interface SupervisorStateResponse {
+    state: SupervisorStateSummary | null;
+}
+
 export interface GenomeSpec {
     roleId?: string;
     systemPrompt?: string;
@@ -63,6 +87,7 @@ export interface Genome {
     namespace?: string | null;
     name: string;
     version?: number;
+    status?: 'draft' | 'unverified' | 'verified' | 'official' | 'archived';
     description: string | null;
     spec: string;   // JSON string of GenomeSpec
     parentSessionId: string;
@@ -154,6 +179,31 @@ export async function retireBypassAgent(
         if (!response.ok) {
             throw new Error(await parseError(response));
         }
+    });
+}
+
+/**
+ * Read persisted supervisor facts for a team.
+ * Returns null when the supervisor has not saved any state yet.
+ */
+export async function fetchSupervisorState(
+    credentials: AuthCredentials,
+    teamId: string
+): Promise<SupervisorStateResponse> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/teams/${teamId}/supervisor-state`,
+            { headers: authHeaders(credentials.token) }
+        );
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as SupervisorStateResponse;
     });
 }
 

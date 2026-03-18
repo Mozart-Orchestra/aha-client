@@ -924,6 +924,13 @@ export default function NewTeamScreen() {
                     'team'
                 );
 
+                // Register team on server
+                try {
+                    await sync.registerTeam({ name: title.trim() });
+                } catch (e) {
+                    console.warn('Failed to register team on server:', e);
+                }
+
                 if (hasRequestedSpawns) {
                     const targetMachine = machineIdForSpawn ? storage.getState().machines[machineIdForSpawn] : null;
 
@@ -1099,6 +1106,13 @@ export default function NewTeamScreen() {
                     false,
                     'team'
                 );
+
+                // Register team on server
+                try {
+                    await sync.registerTeam({ name: title.trim() });
+                } catch (e) {
+                    console.warn('Failed to register team on server:', e);
+                }
 
                 for (const member of manualMembers) {
                     const session = sessionLookup.get(member.sessionId);

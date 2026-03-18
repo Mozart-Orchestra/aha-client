@@ -97,12 +97,6 @@ export function getTeamSessionIdsFromArtifact(artifact: TeamArtifactLike): strin
 }
 
 export function compareTeamRosterEntries(left: TeamRosterSortEntry, right: TeamRosterSortEntry): number {
-    const leftDead = left.session && !left.session.active ? 1 : 0;
-    const rightDead = right.session && !right.session.active ? 1 : 0;
-    if (leftDead !== rightDead) {
-        return leftDead - rightDead;
-    }
-
     const leftRoleId = left.member?.roleId || left.session?.metadata?.role || '';
     const rightRoleId = right.member?.roleId || right.session?.metadata?.role || '';
     const leftPriority = TEAM_MEMBER_ROLE_PRIORITY[leftRoleId] ?? 5;

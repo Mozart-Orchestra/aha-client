@@ -35,12 +35,16 @@ import { useProfile } from '@/sync/storage';
 function getStatusColor(status: GenomeRecord['status']) {
     if (status === 'official') return { text: '#007AFF', bg: '#007AFF18' };
     if (status === 'verified') return { text: '#22c55e', bg: '#22c55e18' };
+    if (status === 'unverified') return { text: '#f59e0b', bg: '#f59e0b18' };
+    if (status === 'archived') return { text: '#6b7280', bg: '#6b728018' };
     return { text: '#8A7F74', bg: '#8A7F7418' };
 }
 
 function getStatusLabel(status: GenomeRecord['status']): string {
     if (status === 'official') return t('agents.official');
     if (status === 'verified') return t('agents.verified');
+    if (status === 'unverified') return t('agents.unverified');
+    if (status === 'archived') return t('agents.archived');
     return t('agents.draft');
 }
 

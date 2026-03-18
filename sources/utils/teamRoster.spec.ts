@@ -129,10 +129,10 @@ describe('compareTeamRosterEntries', () => {
         expect(compareTeamRosterEntries(earlier, later)).toBeLessThan(0);
     });
 
-    it('pushes inactive agents below active ones', () => {
+    it('keeps stable ordering regardless of active flag changes', () => {
         const active = {
             member: {
-                sessionId: 'active',
+                sessionId: 'same-session',
                 roleId: 'implementer',
             },
             session: {
@@ -140,22 +140,22 @@ describe('compareTeamRosterEntries', () => {
                 active: true,
                 metadata: { role: 'implementer' },
             } as any,
-            fallbackIndex: 0,
+            fallbackIndex: 1,
         };
 
         const inactive = {
             member: {
-                sessionId: 'inactive',
+                sessionId: 'same-session',
                 roleId: 'implementer',
             },
             session: {
-                createdAt: 50,
+                createdAt: 100,
                 active: false,
                 metadata: { role: 'implementer' },
             } as any,
-            fallbackIndex: 1,
+            fallbackIndex: 0,
         };
 
-        expect(compareTeamRosterEntries(active, inactive)).toBeLessThan(0);
+        expect(compareTeamRosterEntries(active, inactive)).toBeGreaterThan(0);
     });
 });

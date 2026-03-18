@@ -376,14 +376,14 @@ function WorkspaceStatsCard() {
 
             <StatsBarSection
                 title={`${t('teams.title')} · ${t('usage.totalTokens')}`}
-                items={stats.teamUsageItems}
+                items={stats.teamUsageItems.map((item) => ({ id: item.id, label: item.label, value: item.tokens }))}
                 color="#007AFF"
                 formatValue={(value) => `${formatCompactTokens(value)} tok`}
             />
 
             <StatsBarSection
                 title={`${t('sidebar.agents')} · ${t('usage.totalTokens')}`}
-                items={stats.agentUsageItems}
+                items={stats.agentUsageItems.map((item) => ({ id: item.id, label: item.label, value: item.tokens }))}
                 color="#7C3AED"
                 formatValue={(value) => `${formatCompactTokens(value)} tok`}
             />
