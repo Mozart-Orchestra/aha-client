@@ -322,6 +322,15 @@ export default function RootLayout() {
                 }}
             />
             <Stack.Screen
+                name="agents/new"
+                options={{
+                    headerShown: true,
+                    headerTitle: t('agents.createAgent'),
+                    headerBackTitle: t('common.back'),
+                    presentation: 'modal',
+                }}
+            />
+            <Stack.Screen
                 name="teams/index"
                 options={{
                     headerShown: true,
