@@ -14,6 +14,8 @@ import {
 } from '@/auth/pendingTerminalConnect';
 import { getServerUrl, setServerUrl, validateServerUrl } from '@/sync/serverConfig';
 import { useAuth } from '@/auth/AuthContext';
+import { useIsDataReady, useMachine } from '@/sync/storage';
+import { isMachineOnline } from '@/utils/machineUtils';
 
 type AuthMode = 'auto' | 'create' | 'reconnect';
 
@@ -29,6 +31,7 @@ interface PendingTerminalConnectRequest {
 export default function TerminalConnectScreen() {
     const router = useRouter();
     const auth = useAuth();
+    const isDataReady = useIsDataReady();
     const [publicKey, setPublicKey] = useState<string | null>(null);
     const [hashProcessed, setHashProcessed] = useState(false);
     const [awaitingRedirect, setAwaitingRedirect] = useState(false);
@@ -37,6 +40,11 @@ export default function TerminalConnectScreen() {
     const [requestedServerUrl, setRequestedServerUrl] = useState<string | null>(null);
     const [autoConnectTriggered, setAutoConnectTriggered] = useState(false);
     const [authMode, setAuthMode] = useState<AuthMode>('auto');
+    const targetMachine = useMachine(targetMachineId ?? '');
+    const shouldAwaitMachine = !!targetMachineId && !!nextPath?.startsWith('/teams/new');
+    const targetMachineReady = React.useMemo(() => (
+        shouldAwaitMachine ? !!targetMachine && isMachineOnline(targetMachine) : true
+    ), [shouldAwaitMachine, targetMachine]);
     const nextHref = React.useMemo(() => {
         if (!nextPath) {
             return null;
@@ -102,8 +110,14 @@ export default function TerminalConnectScreen() {
             return;
         }
 
+        if (shouldAwaitMachine) {
+            if (!isDataReady || !targetMachineReady) {
+                return;
+            }
+        }
+
         router.replace(nextHref as Href);
-    }, [awaitingRedirect, nextHref, router]);
+    }, [awaitingRedirect, isDataReady, nextHref, router, shouldAwaitMachine, targetMachineReady]);
 
     // Extract key from hash on web platform
     useEffect(() => {
@@ -215,7 +229,10 @@ export default function TerminalConnectScreen() {
     }
 
     // Show loading state while processing hash or auto-connecting
-    if (!hashProcessed || (publicKey && !awaitingRedirect)) {
+    if (!hashProcessed || (publicKey && (!awaitingRedirect || (shouldAwaitMachine && !targetMachineReady)))) {
+        const statusMessage = awaitingRedirect && shouldAwaitMachine
+            ? 'Waiting for the selected machine to come online...'
+            : t('terminal.processingConnection');
         return (
             <ItemList>
                 <ItemGroup>
@@ -226,7 +243,7 @@ export default function TerminalConnectScreen() {
                     }}>
                         <ActivityIndicator size="large" style={{ marginBottom: 16 }} />
                         <Text style={{ ...Typography.default(), color: '#666' }}>
-                            {t('terminal.processingConnection')}
+                            {statusMessage}
                         </Text>
                     </View>
                 </ItemGroup>

@@ -19,6 +19,7 @@ import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { goBackOrReturn } from '@/utils/returnNavigation';
 import { fetchGenomeByName } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
+import { isMachineOnline } from '@/utils/machineUtils';
 
 // Use localized team roles instead of hardcoded ones
 const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
@@ -53,6 +54,13 @@ const PROMPT_AGENT_PREFERENCE_LABELS: Record<PromptAgentPreference, string> = {
     codex: 'Codex',
     mixed: 'Mixed',
 };
+
+const MANUAL_TEAM_COORDINATOR_ROLES = new Set([
+    'master',
+    'orchestrator',
+    'project-manager',
+    'product-owner',
+]);
 
 function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
     return `team:${teamId}:member:${memberId}`;
@@ -683,6 +691,34 @@ export default function NewTeamScreen() {
         return machine.metadata?.displayName || machine.metadata?.host || 'Machine';
     }, []);
 
+    const sendManualKickoffMessage = React.useCallback(async (
+        teamId: string,
+        members: KanbanTeamMember[],
+        goal: string
+    ) => {
+        const mentions = members
+            .filter((member) => MANUAL_TEAM_COORDINATOR_ROLES.has(member.roleId))
+            .map((member) => member.sessionId)
+            .filter((sessionId): sessionId is string => typeof sessionId === 'string' && sessionId.length > 0);
+
+        const content = [
+            `User goal for this team: ${goal}`,
+            '',
+            'Coordinators: break this goal into concrete tasks, assign owners, and start execution now.',
+        ].join('\n');
+
+        await sync.sendTeamMessage({
+            teamId,
+            content,
+            type: 'chat',
+            mentions,
+            metadata: {
+                priority: 'high',
+                kickoff: true,
+            },
+        });
+    }, []);
+
     const handleSave = React.useCallback(async () => {
         if (isSaving) return;
 
@@ -772,7 +808,7 @@ export default function NewTeamScreen() {
                 }
 
                 const targetMachineCheck = storage.getState().machines[machineIdForSpawn];
-                if (!targetMachineCheck?.active) {
+                if (!targetMachineCheck || !isMachineOnline(targetMachineCheck)) {
                     await Modal.alert(
                         t('common.error'),
                         'The selected machine is offline. Please select an online machine or wait for the machine to come online.'
@@ -1064,6 +1100,10 @@ export default function NewTeamScreen() {
                         }
                     }
                 }
+
+                if (!isPromptMode && target.trim()) {
+                    await sendManualKickoffMessage(artifactId, [...manualMembers, ...spawnedMembers], target.trim());
+                }
             } else {
                 const board: KanbanBoard = JSON.parse(JSON.stringify(DEFAULT_KANBAN_BOARD));
                 if (!board.team) {
@@ -1127,6 +1167,10 @@ export default function NewTeamScreen() {
                             console.warn(`Failed to update metadata for session ${member.sessionId}:`, error);
                         }
                     }
+                }
+
+                if (!isPromptMode && target.trim()) {
+                    await sendManualKickoffMessage(artifactId, [...manualMembers, ...spawnedMembers], target.trim());
                 }
             }
 

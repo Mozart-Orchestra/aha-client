@@ -134,6 +134,59 @@ export function parseCorpsSpec(specJson: string): CorpsSpec | null {
     }
 }
 
+export interface AgentPackageRef {
+    ref: string;
+    version: number;
+    digest?: string;
+    source?: 'hub' | 'server' | 'local-file';
+}
+
+export interface RuntimeAdapterSpec {
+    runtime: 'claude' | 'codex' | 'open-code';
+    entry?: {
+        instructionFile?: string;
+        bootstrapPrompt?: string;
+        workingDirectoryMode?: 'inherit' | 'fixed';
+    };
+    model?: {
+        provider?: 'anthropic' | 'zhipu' | 'openai' | 'local' | string;
+        primary?: string;
+        fallback?: string;
+        preferred?: string;
+    };
+    tools?: {
+        allowed?: string[];
+        disallowed?: string[];
+        mcpServers?: string[];
+        skills?: string[];
+        hooks?: {
+            preToolUse?: Array<{ matcher: string; command: string; description?: string }>;
+            postToolUse?: Array<{ matcher: string; command: string; description?: string }>;
+            stop?: Array<{ command: string; description?: string }>;
+        };
+    };
+    sandbox?: {
+        permissionMode?: string;
+        accessLevel?: string;
+        executionPlane?: 'mainline' | 'bypass';
+        maxTurns?: number;
+    };
+    env?: {
+        requiredEnv?: string[];
+        optionalEnv?: string[];
+        secretsPolicy?: string[];
+    };
+    io?: {
+        expects?: string[];
+        produces?: string[];
+        artifactFormats?: string[];
+    };
+    evidence?: {
+        logKinds?: string[];
+        scorecardSchemaVersion?: string;
+    };
+}
+
 // ─── GenomeSpec (display-only subset of the canonical spec) ─────────────────
 
 export interface GenomeSpec {
@@ -256,6 +309,59 @@ export interface GenomeSpec {
     skills?: string[];
 
     meta?: Record<string, unknown>;
+}
+
+export interface CanonicalAgentCard {
+    kind: 'aha.agent.v1';
+    identity: AgentPackageRef & {
+        namespace: string;
+        name: string;
+        displayName?: string;
+        description?: string;
+    };
+    genome: GenomeSpec;
+    adapters?: {
+        claude?: RuntimeAdapterSpec;
+        codex?: RuntimeAdapterSpec;
+        'open-code'?: RuntimeAdapterSpec;
+    };
+    market?: {
+        category?: string;
+        tags?: string[];
+        lifecycle?: 'experimental' | 'active' | 'deprecated';
+        tagline?: string;
+    };
+    lineage?: {
+        origin?: 'original' | 'forked' | 'mutated';
+        parentId?: string;
+        variantOf?: string;
+        mutationNote?: string;
+    };
+}
+
+export type AgentPackageManifest = CanonicalAgentCard;
+
+export interface A2AProjectionCard {
+    protocolVersion: string;
+    name: string;
+    description: string;
+    url: string;
+    version?: string;
+    preferredTransport?: string;
+    defaultInputModes?: string[];
+    defaultOutputModes?: string[];
+    capabilities?: Record<string, unknown>;
+    securitySchemes?: Record<string, unknown>;
+    security?: Array<Record<string, unknown>>;
+    skills?: Array<{
+        id: string;
+        name: string;
+        description?: string;
+        tags?: string[];
+        examples?: string[];
+        inputModes?: string[];
+        outputModes?: string[];
+    }>;
 }
 
 export function parseSpec(specJson: string): GenomeSpec | null {
