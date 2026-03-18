@@ -66,7 +66,45 @@ export interface BatchDeleteTeamsResponse {
     results: Array<{ teamId: string; success: boolean; deletedSessions?: number; error?: string }>;
 }
 
+export interface TeamSummary {
+    id: string;
+    name: string;
+    memberCount: number;
+    taskCount: number;
+    createdAt: number;
+    updatedAt: number;
+}
+
 // === API Functions ===
+
+/**
+ * Create a new team
+ */
+export async function createTeam(
+    credentials: AuthCredentials,
+    params: { name: string; description?: string },
+): Promise<TeamSummary> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v1/teams`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(params),
+        });
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(`Failed to create team: ${response.status}`);
+        }
+
+        const data = await response.json() as { team: TeamSummary };
+        return data.team;
+    });
+}
 
 /**
  * Add a member to a team

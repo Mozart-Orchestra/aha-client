@@ -13,7 +13,9 @@ export type AgentMarketplaceCategory = typeof AGENT_MARKETPLACE_CATEGORIES[numbe
 const STATUS_PRIORITY: Record<GenomeRecord['status'], number> = {
     official: 0,
     verified: 1,
-    draft: 2,
+    unverified: 2,
+    draft: 3,
+    archived: 4,
 };
 
 export function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRecord {
@@ -22,7 +24,7 @@ export function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRe
         namespace: genome.namespace ?? '@private',
         name: genome.name,
         version: genome.version ?? 1,
-        status: genome.namespace === '@official' ? 'official' : 'draft',
+        status: genome.namespace === '@official' ? 'official' : (genome.status ?? 'draft'),
         description: genome.description,
         spec: genome.spec,
         tags: genome.tags ?? null,
@@ -32,6 +34,7 @@ export function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRe
         downloadCount: 0,
         starCount: 0,
         feedbackData: genome.feedbackData ?? null,
+        lifecycle: null,
         publisherId: genome.accountId,
         parentId: null,
         createdAt: genome.createdAt,

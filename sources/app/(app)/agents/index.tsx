@@ -40,9 +40,13 @@ import { loadFavoriteGenomeIdsFromStorage, toggleFavoriteGenomeIdInStorage } fro
 import { fetchGenomes } from '@/sync/apiEvolution';
 import { sync } from '@/sync/sync';
 import { useProfile } from '@/sync/storage';
+import { FAB } from '@/components/ui/FAB';
+import { listAgents, deleteAgent, type AgentRecord } from '@/sync/apiAgents';
+import { Modal } from '@/modal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type TopTab = 'marketplace' | 'mine';
 type PageTab = MarketplacePageTab;
 type SourceTab = MarketplaceSourceTab;
 type AgentCategory = AgentMarketplaceCategory;
@@ -78,12 +82,16 @@ function getCategoryLabel(cat: AgentCategory): string {
 function getGenomeStatusLabel(status: GenomeRecord['status']): string {
     if (status === 'official') return t('agents.official');
     if (status === 'verified') return t('agents.verified');
+    if (status === 'unverified') return t('agents.unverified');
+    if (status === 'archived') return t('agents.archived');
     return t('agents.draft');
 }
 
 function getGenomeStatusColor(status: GenomeRecord['status']) {
     if (status === 'official') return { text: '#007AFF', background: '#007AFF18' };
     if (status === 'verified') return { text: '#22c55e', background: '#22c55e18' };
+    if (status === 'unverified') return { text: '#f59e0b', background: '#f59e0b18' };
+    if (status === 'archived') return { text: '#6b7280', background: '#6b728018' };
     return { text: '#8A7F74', background: '#8A7F7418' };
 }
 
@@ -356,6 +364,7 @@ export default React.memo(function AgentsScreen() {
     const router = useRouter();
     const profile = useProfile();
     const actorId = profile.id || null;
+    const [topTab, setTopTab] = React.useState<TopTab>('marketplace');
     const [tab, setTab] = React.useState<PageTab>('agents');
     const [sourceTab, setSourceTab] = React.useState<SourceTab>('market');
     const [query, setQuery] = React.useState('');
@@ -366,6 +375,51 @@ export default React.memo(function AgentsScreen() {
     const [localFavoriteGenomeIds, setLocalFavoriteGenomeIds] = React.useState<string[]>(() => loadFavoriteGenomeIdsFromStorage());
     const [loaded, setLoaded] = React.useState(false);
     const debouncedQuery = useDebounce(query, 300);
+
+    // ── My Agents (deployed instances) ──
+    const [myAgents, setMyAgents] = React.useState<AgentRecord[]>([]);
+    const [myAgentsLoaded, setMyAgentsLoaded] = React.useState(false);
+    const [myAgentsLoading, setMyAgentsLoading] = React.useState(false);
+
+    const loadMyAgents = React.useCallback(async () => {
+        const credentials = sync.getCredentials();
+        if (!credentials) return;
+        setMyAgentsLoading(true);
+        try {
+            const result = await listAgents(credentials, { type: 'standalone', limit: 50 });
+            setMyAgents(result.agents.filter(a => a.status !== 'archived'));
+        } catch {
+            // silently ignore
+        } finally {
+            setMyAgentsLoading(false);
+            setMyAgentsLoaded(true);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (topTab === 'mine') {
+            loadMyAgents();
+        }
+    }, [topTab, loadMyAgents]);
+
+    const handleDeleteMyAgent = React.useCallback(async (agent: AgentRecord) => {
+        const confirmed = await Modal.confirm(
+            t('agents.agentDeleteAction'),
+            t('agents.agentDeleteConfirm'),
+            { confirmText: t('agents.agentDeleteAction'), destructive: true },
+        );
+        if (!confirmed) return;
+
+        const credentials = sync.getCredentials();
+        if (!credentials) return;
+        try {
+            await deleteAgent(credentials, agent.id);
+            setMyAgents(prev => prev.filter(a => a.id !== agent.id));
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            await Modal.alert(t('common.error'), msg);
+        }
+    }, []);
 
     React.useEffect(() => {
         trackAgentsPageViewed();
@@ -511,14 +565,41 @@ export default React.memo(function AgentsScreen() {
                 <View style={stylesheet.headerTop}>
                     <View>
                         <Text style={[stylesheet.headerTitle, { color: theme.colors.text }]}>
-                            {t('agents.marketplace')}
+                            {topTab === 'mine' ? t('agents.myAgents') : t('agents.marketplace')}
                         </Text>
                         <Text style={[stylesheet.headerSub, { color: theme.colors.textSecondary }]}>
-                            {isCorpsTab ? t('agents.corpsSubtitle') : t('agents.marketplaceSubtitle')}
+                            {topTab === 'mine'
+                                ? t('agents.myAgentsEmptyHint')
+                                : isCorpsTab ? t('agents.corpsSubtitle') : t('agents.marketplaceSubtitle')}
                         </Text>
                     </View>
                 </View>
 
+                {/* Top tab: Marketplace | My */}
+                <View style={[stylesheet.tabBar, { backgroundColor: theme.colors.surfaceHigh, marginBottom: 12 }]}>
+                    {(['marketplace', 'mine'] as TopTab[]).map(key => {
+                        const active = topTab === key;
+                        return (
+                            <Pressable
+                                key={key}
+                                onPress={() => setTopTab(key)}
+                                style={[stylesheet.tabItem, active && { backgroundColor: theme.colors.surface }]}
+                            >
+                                <Ionicons
+                                    name={key === 'marketplace' ? 'storefront-outline' : 'flash-outline'}
+                                    size={14}
+                                    color={active ? theme.colors.text : theme.colors.textSecondary}
+                                    style={{ marginRight: 5 }}
+                                />
+                                <Text style={[stylesheet.tabText, { color: active ? theme.colors.text : theme.colors.textSecondary, fontWeight: active ? '600' : '400' }]}>
+                                    {key === 'marketplace' ? t('agents.marketplace') : t('agents.myAgentsTab')}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
+                </View>
+
+                {topTab === 'marketplace' ? (<>
                 {/* Tab bar */}
                 <View style={[stylesheet.tabBar, { backgroundColor: theme.colors.surfaceHigh }]}>
                     {(['agents', 'corps'] as PageTab[]).map(tabKey => {
@@ -621,9 +702,43 @@ export default React.memo(function AgentsScreen() {
                         })}
                     </ScrollView>
                 ) : <View style={{ height: 12 }} />}
+                </>) : null}
             </View>
 
-            {/* Content */}
+            {/* Content — My Agents */}
+            {topTab === 'mine' ? (
+                <View style={{ flex: 1 }}>
+                    {myAgentsLoading && !myAgentsLoaded ? (
+                        <View style={stylesheet.center}>
+                            <ActivityIndicator color={theme.colors.textSecondary} />
+                        </View>
+                    ) : myAgents.length === 0 && myAgentsLoaded ? (
+                        <View style={stylesheet.center}>
+                            <Ionicons name="flash-outline" size={48} color={theme.colors.textSecondary} style={{ marginBottom: 12 }} />
+                            <Text style={[stylesheet.emptyTitle, { color: theme.colors.text }]}>
+                                {t('agents.myAgentsEmpty')}
+                            </Text>
+                            <Text style={[stylesheet.emptyHint, { color: theme.colors.textSecondary }]}>
+                                {t('agents.myAgentsEmptyHint')}
+                            </Text>
+                        </View>
+                    ) : (
+                        <ScrollView style={stylesheet.list} contentContainerStyle={[stylesheet.listContent, { paddingBottom: 100 }]}>
+                            {myAgents.map(agent => (
+                                <MyAgentRow
+                                    key={agent.id}
+                                    agent={agent}
+                                    onDelete={handleDeleteMyAgent}
+                                    theme={theme}
+                                />
+                            ))}
+                        </ScrollView>
+                    )}
+                    <FAB onPress={() => router.push('/agents/new' as any)} />
+                </View>
+            ) : (
+            /* Content — Marketplace */
+            <View style={{ flex: 1 }}>
             {loading && !loaded ? (
                 <View style={stylesheet.center}>
                     <ActivityIndicator color={theme.colors.textSecondary} />
@@ -693,11 +808,71 @@ export default React.memo(function AgentsScreen() {
                     }
                 </ScrollView>
             )}
+            </View>
+            )}
         </View>
     );
 
     return <SidebarView mainPanel={mainPanel} />;
 });
+
+// ─── MyAgentRow ──────────────────────────────────────────────────────────────
+
+interface MyAgentRowProps {
+    agent: AgentRecord;
+    onDelete: (agent: AgentRecord) => void;
+    theme: any;
+}
+
+const MyAgentRow = React.memo(function MyAgentRow({ agent, onDelete, theme }: MyAgentRowProps) {
+    const statusColor = agent.status === 'active' ? '#22c55e' : '#f59e0b';
+    return (
+        <View style={[rowStyles.row, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.divider }]}>
+            <View style={[rowStyles.statusDot, { backgroundColor: statusColor }]} />
+            <View style={rowStyles.info}>
+                <Text style={[rowStyles.name, { color: theme.colors.text }]} numberOfLines={1}>
+                    {agent.displayName}
+                </Text>
+                <Text style={[rowStyles.meta, { color: theme.colors.textSecondary }]}>
+                    {agent.runtimeType} · {agent.status}
+                </Text>
+            </View>
+            <Pressable onPress={() => onDelete(agent)} hitSlop={12} style={rowStyles.deleteBtn}>
+                <Ionicons name="trash-outline" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
+        </View>
+    );
+});
+
+const rowStyles = StyleSheet.create((theme) => ({
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        gap: 12,
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    info: {
+        flex: 1,
+        gap: 2,
+    },
+    name: {
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    meta: {
+        fontSize: 12,
+    },
+    deleteBtn: {
+        padding: 4,
+    },
+}));
 
 // ─── Debounce ─────────────────────────────────────────────────────────────────
 

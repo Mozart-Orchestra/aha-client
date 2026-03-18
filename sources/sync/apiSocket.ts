@@ -249,6 +249,19 @@ class ApiSocket {
 
         this.socket.on('error', (error) => {
             console.error('🔌 SyncSocket: Error', error);
+            // Server emits error with an object after connection; check for auth rejection
+            const msg = typeof error === 'object' && error !== null
+                ? (error as any).message as string | undefined
+                : undefined;
+            if (msg === 'Authentication failed' || msg === 'Invalid token' || msg === 'Account not found for token' || msg === 'Invalid authentication token' || msg === 'Missing authentication token') {
+                console.error('🔌 SyncSocket: Auth rejected via error event, logging out');
+                this.disconnect();
+                const auth = getCurrentAuth();
+                if (auth) {
+                    auth.logout();
+                }
+                return;
+            }
             this.updateStatus('error');
         });
 

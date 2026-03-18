@@ -28,6 +28,7 @@ function createGenomeRecord(overrides: Partial<GenomeRecord> & Pick<GenomeRecord
         downloadCount: overrides.downloadCount ?? 0,
         starCount: overrides.starCount ?? 0,
         feedbackData: overrides.feedbackData ?? null,
+        lifecycle: overrides.lifecycle ?? null,
         publisherId: overrides.publisherId ?? null,
         parentId: overrides.parentId ?? null,
         createdAt: overrides.createdAt ?? '2026-03-17T00:00:00.000Z',
