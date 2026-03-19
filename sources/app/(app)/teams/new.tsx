@@ -1039,6 +1039,13 @@ export default function NewTeamScreen() {
                         }
                     } else {
                         for (const [roleId, count] of Object.entries(roleCounts)) {
+                            // ── Phase 3-B Change 6: resolve specId for manual role spawn ──
+                            let roleSpecId: string | undefined;
+                            try {
+                                const roleGenome = await fetchGenomeByName('@official', roleId);
+                                roleSpecId = roleGenome?.id;
+                            } catch { /* genome-hub unreachable — proceed without specId */ }
+
                             for (let i = 0; i < count; i++) {
                                 try {
                                     const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
@@ -1056,6 +1063,7 @@ export default function NewTeamScreen() {
                                                 role: roleId,
                                                 sessionName: agentTitle,
                                                 sessionPath: resolvedCwd,
+                                                ...(roleSpecId ? { specId: roleSpecId } : {}),
                                                 env: {
                                                     AHA_TEAM_MEMBER_ID: memberId,
                                                 },
@@ -1067,6 +1075,7 @@ export default function NewTeamScreen() {
                                                     sessionTag,
                                                     roleId,
                                                     displayName: agentTitle,
+                                                    ...(roleSpecId ? { specId: roleSpecId } : {}),
                                                     lifecycle: {
                                                         spawnRequestedAt,
                                                     },

@@ -22,6 +22,7 @@ import { MainView } from '@/components/layout/MainView';
 import { PreviewSessionCard } from '@/components/session/PreviewSessionCard';
 import { encodeBase64 } from '@/encryption/base64';
 import { useAllSessions } from '@/sync/storage';
+import { isSessionActive } from '@/utils/sessionUtils';
 import { getCurrentLanguage, t } from '@/text';
 import { trackAccountCreated, trackAccountRestored } from '@/track';
 
@@ -32,7 +33,6 @@ type LandingCopy = {
     trustEncrypted: string;
     trustLocal: string;
     previewTitle: string;
-    previewCount: string;
     primarySessionTitle: string;
     primarySessionSubtitle: string;
     primarySessionMeta: string;
@@ -50,7 +50,6 @@ const ENGLISH_LANDING_COPY: LandingCopy = {
     trustEncrypted: 'End-to-end encrypted',
     trustLocal: 'Stored only on your device',
     previewTitle: 'Live sessions',
-    previewCount: '2 active',
     primarySessionTitle: 'shell-alignment-fix',
     primarySessionSubtitle: 'Reviewing spacing, rail states, and responsive shell behavior',
     primarySessionMeta: 'active now',
@@ -68,7 +67,6 @@ const CHINESE_LANDING_COPY: LandingCopy = {
     trustEncrypted: '端到端加密',
     trustLocal: '仅存储在你的设备上',
     previewTitle: '实时会话',
-    previewCount: '2 个活跃',
     primarySessionTitle: 'shell-alignment-fix',
     primarySessionSubtitle: '正在检查三栏间距、导航状态与响应式布局',
     primarySessionMeta: '当前活跃',
@@ -420,6 +418,16 @@ function NotAuthenticated() {
     const previewSessions = useAllSessions();
     const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
     const copy = getCurrentLanguage() === 'zh-Hans' ? CHINESE_LANDING_COPY : ENGLISH_LANDING_COPY;
+    const liveSessionCount = React.useMemo(() => (
+        previewSessions.filter((session) => (
+            isSessionActive(session) || session.presence === 'online' || session.thinking
+        )).length
+    ), [previewSessions]);
+    const previewCountLabel = React.useMemo(() => {
+        return getCurrentLanguage() === 'zh-Hans'
+            ? `${liveSessionCount} 个活跃`
+            : `${liveSessionCount} active`;
+    }, [liveSessionCount]);
 
     const handleCreateAccount = React.useCallback(async () => {
         try {
@@ -451,7 +459,7 @@ function NotAuthenticated() {
             <View style={styles.landingPreviewHeader}>
                 <Text style={styles.landingPreviewTitle}>{copy.previewTitle}</Text>
                 <View style={styles.landingPreviewBadge}>
-                    <Text style={styles.landingPreviewBadgeText}>{copy.previewCount}</Text>
+                    <Text style={styles.landingPreviewBadgeText}>{previewCountLabel}</Text>
                 </View>
             </View>
             <PreviewSessionCard
