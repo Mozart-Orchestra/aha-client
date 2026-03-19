@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
+import { useAuth } from '@/auth/AuthContext';
 import { FAB } from '@/components/ui/FAB';
 import { Text } from '@/components/ui/StyledText';
 import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell';
@@ -22,9 +24,14 @@ import { SidebarView } from '@/components/layout/SidebarView';
 import { layout } from '@/utils/layout';
 import { Modal } from '@/modal/ModalManager';
 import { DecryptedArtifact } from '@/sync/artifactTypes';
+import { fetchWorkspaceOverview } from '@/sync/apiTeamManagement';
+import { loadWorkspaceOverview, saveWorkspaceOverview } from '@/sync/persistence';
 import { useArtifacts } from '@/sync/storage';
 import { sync } from '@/sync/sync';
+import type { WorkspaceOverviewSnapshot } from '@/sync/workspaceOverviewTypes';
 import { t } from '@/text';
+import { getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
+import { listAgents, type AgentRecord } from '@/sync/apiAgents';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -60,6 +67,54 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.textSecondary,
         textAlign: 'center',
         lineHeight: 20,
+    },
+    overviewCard: {
+        marginHorizontal: 16,
+        marginTop: 16,
+        marginBottom: 4,
+        padding: 16,
+        borderRadius: 16,
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    overviewEyebrow: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
+        color: theme.colors.textSecondary,
+        marginBottom: 6,
+    },
+    overviewTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: theme.colors.text,
+    },
+    overviewSubtitle: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: theme.colors.textSecondary,
+        marginTop: 4,
+    },
+    overviewChipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 12,
+    },
+    overviewChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    overviewChipText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
     },
     teamItem: {
         backgroundColor: theme.colors.surface,
@@ -575,9 +630,23 @@ const stylesheet = StyleSheet.create((theme) => ({
         alignItems: 'center',
         gap: 12,
     },
+    soloAgentsCard: {
+        borderRadius: 12,
+        marginTop: 16,
+        marginBottom: 4,
+    },
+    soloAgentsIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
 }));
 
 export default function TeamsScreen() {
+    const { credentials } = useAuth();
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const router = useRouter();
@@ -595,6 +664,34 @@ export default function TeamsScreen() {
     const [isSelectionMode, setIsSelectionMode] = React.useState(false);
     const [selectedTeams, setSelectedTeams] = React.useState<Set<string>>(new Set());
     const [isBatchProcessing, setIsBatchProcessing] = React.useState(false);
+    const [workspaceOverview, setWorkspaceOverview] = React.useState<WorkspaceOverviewSnapshot | null>(
+        () => loadWorkspaceOverview(),
+    );
+
+    // Standalone agents (for Solo Agents count badge)
+    const [standaloneAgents, setStandaloneAgents] = React.useState<AgentRecord[]>([]);
+
+    const refreshStandaloneAgents = React.useCallback(async () => {
+        const creds = sync.getCredentials();
+        if (!creds) {
+            setStandaloneAgents([]);
+            return;
+        }
+
+        try {
+            const { agents } = await listAgents(creds, { type: 'standalone', limit: 50 });
+            setStandaloneAgents(agents.filter((a) => a.status !== 'archived'));
+        } catch (err) {
+            console.error('Failed to fetch standalone agents:', err);
+        }
+    }, []);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            void refreshStandaloneAgents();
+            return undefined;
+        }, [refreshStandaloneAgents]),
+    );
 
     const openNewTeam = React.useCallback(() => {
         router.push('/teams/new');
@@ -725,6 +822,31 @@ export default function TeamsScreen() {
         };
     }, []);
 
+    React.useEffect(() => {
+        if (!credentials) {
+            return;
+        }
+
+        let cancelled = false;
+
+        fetchWorkspaceOverview(credentials)
+            .then((overview) => {
+                if (cancelled) {
+                    return;
+                }
+
+                setWorkspaceOverview(overview);
+                saveWorkspaceOverview(overview);
+            })
+            .catch((error) => {
+                console.error('Failed to fetch teams overview snapshot', error);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [credentials?.token]);
+
     const handleDelete = React.useCallback(async (teamId: string, event: GestureResponderEvent) => {
         event.stopPropagation();
         const confirmed = await Modal.confirm(
@@ -755,6 +877,96 @@ export default function TeamsScreen() {
     const formatUpdatedDate = React.useCallback((timestamp: number) => {
         return new Date(timestamp).toLocaleDateString();
     }, []);
+
+    const formatCompactTokens = React.useCallback((tokens: number) => {
+        if (tokens >= 1_000_000) {
+            return `${(tokens / 1_000_000).toFixed(1)}M tok`;
+        }
+        if (tokens >= 1_000) {
+            return tokens >= 10_000 ? `${Math.round(tokens / 1_000)}K tok` : `${(tokens / 1_000).toFixed(1)}K tok`;
+        }
+        return `${tokens.toLocaleString()} tok`;
+    }, []);
+
+    const overviewChips = React.useMemo(() => {
+        if (!workspaceOverview) {
+            return [
+                { id: 'teams', label: `${teams.length} total` },
+                { id: 'selected', label: `${selectedTeams.size} selected` },
+            ];
+        }
+
+        return [
+            { id: 'teams', label: `${workspaceOverview.teamCount} total` },
+            { id: 'selected', label: `${selectedTeams.size} selected` },
+            { id: 'tokens', label: formatCompactTokens(workspaceOverview.teamTotalTokens) },
+            { id: 'completed', label: `${workspaceOverview.completedTasksTotal} done` },
+        ];
+    }, [formatCompactTokens, selectedTeams.size, teams.length, workspaceOverview]);
+
+    const soloAgentsCard = React.useMemo(() => {
+        if (isSelectionMode) return null;
+
+        const count = standaloneAgents.length;
+
+        return (
+            <Pressable
+                style={[
+                    styles.teamItem,
+                    styles.soloAgentsCard,
+                ]}
+                onPress={() => router.push('/teams/solo' as any)}
+            >
+                <View style={[styles.soloAgentsIcon, { backgroundColor: theme.colors.button.primary.background }]}>
+                    <Ionicons name="person" size={14} color="#FFFFFF" />
+                </View>
+                <View style={styles.teamContent}>
+                    <Text style={styles.teamTitle} numberOfLines={1}>
+                        {t('teams.soloAgents')}
+                    </Text>
+                    <View style={styles.teamMeta}>
+                        <Text style={styles.teamDate}>
+                            {t('teams.soloAgentsCount', { count })}
+                        </Text>
+                    </View>
+                </View>
+                <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    style={styles.teamChevron}
+                    color={theme.colors.textSecondary}
+                />
+            </Pressable>
+        );
+    }, [isSelectionMode, router, standaloneAgents.length, styles, theme.colors]);
+
+    const listHeaderComponent = React.useMemo(() => {
+        const overviewCard = workspaceOverview && !isSelectionMode ? (
+            <View style={styles.overviewCard}>
+                <Text style={styles.overviewEyebrow}>{t('home.reportTitle')}</Text>
+                <Text style={styles.overviewTitle}>{t('teams.workspaceTeams')}</Text>
+                <Text style={styles.overviewSubtitle}>{t('home.reportSubtitle')}</Text>
+                <View style={styles.overviewChipRow}>
+                    {overviewChips
+                        .filter((chip) => chip.id !== 'selected')
+                        .map((chip) => (
+                            <View key={chip.id} style={styles.overviewChip}>
+                                <Text style={styles.overviewChipText}>{chip.label}</Text>
+                            </View>
+                        ))}
+                </View>
+            </View>
+        ) : null;
+
+        if (!soloAgentsCard && !overviewCard) return null;
+
+        return (
+            <>
+                {soloAgentsCard}
+                {overviewCard}
+            </>
+        );
+    }, [isSelectionMode, overviewChips, soloAgentsCard, styles, workspaceOverview]);
 
     const ListEmptyComponent = React.useCallback(() => {
         if (isLoading) {
@@ -821,7 +1033,7 @@ export default function TeamsScreen() {
                     </Text>
                     <View style={styles.teamMeta}>
                         <Text style={styles.teamDate}>
-                            {t('teams.membersLabel', { count: item.sessions?.length || 0 })} • {formatUpdatedDate(item.updatedAt)}
+                            {t('teams.membersLabel', { count: getTeamSessionIdsFromArtifact(item).length })} • {formatUpdatedDate(item.updatedAt)}
                         </Text>
                     </View>
                 </View>
@@ -858,7 +1070,7 @@ export default function TeamsScreen() {
 
     const renderDesktopTeamItem = React.useCallback(({ item }: { item: DecryptedArtifact }) => {
         const isSelected = selectedTeams.has(item.id);
-        const memberCount = item.sessions?.length || 0;
+        const memberCount = getTeamSessionIdsFromArtifact(item).length;
         const teamName = item.title || t('teams.untitledTeam');
 
         return (
@@ -1048,32 +1260,22 @@ export default function TeamsScreen() {
                         </View>
                     </View>
                     <View style={styles.desktopCountRow}>
-                        <View
-                            style={[
-                                styles.desktopCountChip,
-                                {
-                                    backgroundColor: desktopTheme.chipBackground,
-                                    borderColor: desktopTheme.chipBorder,
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.desktopCountChipText, { color: desktopTheme.chipText }]}>
-                                {teams.length} total
-                            </Text>
-                        </View>
-                        <View
-                            style={[
-                                styles.desktopCountChip,
-                                {
-                                    backgroundColor: desktopTheme.chipBackground,
-                                    borderColor: desktopTheme.chipBorder,
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.desktopCountChipText, { color: desktopTheme.chipText }]}>
-                                {selectedTeams.size} selected
-                            </Text>
-                        </View>
+                        {overviewChips.map((chip) => (
+                            <View
+                                key={chip.id}
+                                style={[
+                                    styles.desktopCountChip,
+                                    {
+                                        backgroundColor: desktopTheme.chipBackground,
+                                        borderColor: desktopTheme.chipBorder,
+                                    },
+                                ]}
+                            >
+                                <Text style={[styles.desktopCountChipText, { color: desktopTheme.chipText }]}>
+                                    {chip.label}
+                                </Text>
+                            </View>
+                        ))}
                     </View>
                 </View>
 
@@ -1141,6 +1343,7 @@ export default function TeamsScreen() {
         desktopTeamsContentStyle,
         desktopTheme,
         exitSelectionMode,
+        overviewChips,
         handleBatchArchive,
         handleBatchDelete,
         isBatchProcessing,
@@ -1195,6 +1398,7 @@ export default function TeamsScreen() {
                         data={teams}
                         renderItem={renderMobileTeamItem}
                         keyExtractor={(item) => item.id}
+                        ListHeaderComponent={listHeaderComponent}
                         contentContainerStyle={[
                             styles.contentContainer,
                             teams.length === 0 && { flex: 1 },

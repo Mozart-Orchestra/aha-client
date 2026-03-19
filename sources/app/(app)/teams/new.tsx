@@ -939,6 +939,7 @@ export default function NewTeamScreen() {
             let artifactId: string;
 
             if (!desktopBridge) {
+                artifactId = randomUUID();
                 const board: KanbanBoard = JSON.parse(JSON.stringify(DEFAULT_KANBAN_BOARD));
                 if (!board.team) {
                     board.team = {
@@ -959,24 +960,6 @@ export default function NewTeamScreen() {
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     });
-                }
-
-                const initialBody = JSON.stringify(board, null, 2);
-                const allMemberSessionIds = manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0);
-
-                artifactId = await sync.createArtifact(
-                    title.trim(),
-                    initialBody,
-                    allMemberSessionIds,
-                    false,
-                    'team'
-                );
-
-                // Register team on server
-                try {
-                    await sync.registerTeam({ name: title.trim() });
-                } catch (e) {
-                    console.warn('Failed to register team on server:', e);
                 }
 
                 if (hasRequestedSpawns) {
@@ -1106,17 +1089,18 @@ export default function NewTeamScreen() {
 
                 board.team.members = [...manualMembers, ...spawnedMembers];
                 const updatedBody = JSON.stringify(board, null, 2);
-                const allMemberIds = [
-                    ...manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0),
-                    ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
-                ];
 
                 if (isPromptMode && hasRequestedSpawns && spawnedMembers.length === 0) {
-                    await sync.deleteArtifact(artifactId);
                     throw new Error(seedSpawnFailureReason || 'Failed to auto-spawn org-manager.');
                 }
 
-                await sync.updateArtifact(artifactId, title.trim(), updatedBody, allMemberIds, false, 'team');
+                await sync.registerTeam({
+                    id: artifactId,
+                    name: title.trim(),
+                    ...(target.trim() ? { description: target.trim() } : {}),
+                    board: JSON.parse(updatedBody) as KanbanBoard,
+                });
+                await sync.fetchArtifactWithBody(artifactId);
 
                 if (manualMembers.length > 0) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1165,29 +1149,19 @@ export default function NewTeamScreen() {
                 }
 
                 const initialBody = JSON.stringify(board, null, 2);
-                const allMemberIds = [
-                    ...manualMembers.map(m => m.sessionId).filter(id => id && id.length > 0),
-                    ...spawnedMembers.map(m => m.sessionId).filter(id => id && id.length > 0)
-                ];
 
                 if (isPromptMode && hasRequestedSpawns && spawnedMembers.length === 0) {
                     throw new Error(seedSpawnFailureReason || 'Failed to auto-spawn org-manager.');
                 }
 
-                artifactId = await sync.createArtifact(
-                    title.trim(),
-                    initialBody,
-                    allMemberIds,
-                    false,
-                    'team'
-                );
-
-                // Register team on server
-                try {
-                    await sync.registerTeam({ name: title.trim() });
-                } catch (e) {
-                    console.warn('Failed to register team on server:', e);
-                }
+                const createdTeam = await sync.registerTeam({
+                    id: room.id,
+                    name: title.trim(),
+                    ...(target.trim() ? { description: target.trim() } : {}),
+                    board: JSON.parse(initialBody) as KanbanBoard,
+                });
+                artifactId = createdTeam.id;
+                await sync.fetchArtifactWithBody(artifactId);
 
                 for (const member of manualMembers) {
                     const session = sessionLookup.get(member.sessionId);

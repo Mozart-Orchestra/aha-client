@@ -22,6 +22,7 @@ import { projectManager } from "./projectManager";
 import { DecryptedArtifact } from "./artifactTypes";
 import { FeedItem } from "./feedTypes";
 import { apiSocket } from "./apiSocket";
+import { mergeArtifact } from "./mergeArtifacts";
 
 /**
  * Centralized session online state resolver
@@ -1124,7 +1125,7 @@ export const storage = create<StorageState>()((set, get) => {
         applyArtifacts: (artifacts: DecryptedArtifact[]) => set((state) => {
             const mergedArtifacts = { ...state.artifacts };
             artifacts.forEach(artifact => {
-                mergedArtifacts[artifact.id] = artifact;
+                mergedArtifacts[artifact.id] = mergeArtifact(mergedArtifacts[artifact.id], artifact);
             });
 
             // Persist artifacts to storage

@@ -5,6 +5,34 @@ export type RecentMachinePath = {
     path: string;
 };
 
+function isGenericHomeFallback(path: string | null | undefined): boolean {
+    if (!path) {
+        return false;
+    }
+
+    return path === '/home' || path === '/home/';
+}
+
+function isPathUsableForMachine(machineId: string | null, path: string | null | undefined): boolean {
+    if (!machineId || !path || path.trim().length === 0) {
+        return false;
+    }
+
+    const machine = storage.getState().machines[machineId];
+    const platform = machine?.metadata?.platform?.toLowerCase() || '';
+    const homeDir = machine?.metadata?.homeDir;
+
+    if (!isGenericHomeFallback(path)) {
+        return true;
+    }
+
+    if (homeDir && homeDir !== path) {
+        return false;
+    }
+
+    return platform.includes('linux');
+}
+
 /**
  * Returns the best known path for a machine by checking recent selections first,
  * then falling back to the latest sessions tied to that machine, and finally
@@ -12,16 +40,16 @@ export type RecentMachinePath = {
  */
 export function getRecentPathForMachine(machineId: string | null, recentPaths: RecentMachinePath[]): string {
     if (!machineId) {
-        return '/home/';
+        return '';
     }
 
     const recentPath = recentPaths.find((entry) => entry.machineId === machineId);
-    if (recentPath) {
+    if (recentPath && isPathUsableForMachine(machineId, recentPath.path)) {
         return recentPath.path;
     }
 
     const machine = storage.getState().machines[machineId];
-    const defaultPath = machine?.metadata?.homeDir || '/home/';
+    const defaultPath = machine?.metadata?.homeDir || '';
 
     const sessions = Object.values(storage.getState().sessions);
     const pathSet = new Set<string>();
@@ -30,7 +58,7 @@ export function getRecentPathForMachine(machineId: string | null, recentPaths: R
     sessions.forEach((session) => {
         if (session.metadata?.machineId === machineId && session.metadata?.path) {
             const sessionPath = session.metadata.path;
-            if (!pathSet.has(sessionPath)) {
+            if (isPathUsableForMachine(machineId, sessionPath) && !pathSet.has(sessionPath)) {
                 pathSet.add(sessionPath);
                 pathsWithTimestamps.push({
                     path: sessionPath,
@@ -57,7 +85,7 @@ export function getKnownPathsForMachine(
     const results: string[] = [];
 
     recentPaths.forEach((entry) => {
-        if (entry.machineId === machineId && entry.path && !seen.has(entry.path)) {
+        if (entry.machineId === machineId && isPathUsableForMachine(machineId, entry.path) && !seen.has(entry.path)) {
             seen.add(entry.path);
             results.push(entry.path);
         }
@@ -70,7 +98,7 @@ export function getKnownPathsForMachine(
 
     for (const session of machineSessions) {
         const path = session.metadata?.path;
-        if (path && !seen.has(path)) {
+        if (isPathUsableForMachine(machineId, path) && !seen.has(path)) {
             seen.add(path);
             results.push(path);
         }
@@ -96,6 +124,9 @@ export function updateRecentMachinePaths(
     machineId: string,
     path: string
 ): RecentMachinePath[] {
+    if (!isPathUsableForMachine(machineId, path)) {
+        return currentPaths;
+    }
     const filtered = currentPaths.filter((entry) => entry.machineId !== machineId);
     const updated = [{ machineId, path }, ...filtered];
     return updated.slice(0, 10);

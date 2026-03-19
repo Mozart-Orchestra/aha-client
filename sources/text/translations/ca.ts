@@ -1194,6 +1194,18 @@ export const ca: TranslationStructure = {
         publisher: 'Editor',
         protocolRules: 'Regles de protocol',
         suggestions: 'Suggeriments',
+        runStandalone: 'Executar de manera independent',
+        joinTeam: 'Unir-se a l\'equip',
+        runStandaloneTitle: 'Executar agent independent',
+        selectMachine: 'Seleccionar màquina',
+        workingDirectory: 'Directori de treball',
+        directoryPlaceholder: '/camí/al/projecte',
+        spawningAgent: 'Iniciant...',
+        noMachinesHint: 'No hi ha màquines connectades',
+        joinTeamTitle: 'Unir-se a l\'equip',
+        selectTeam: 'Seleccionar equip',
+        selectRole: 'Rol',
+        agentNameLabel: 'Nom de l\'agent',
     },
 
     favorites: {
@@ -1290,6 +1302,12 @@ export const ca: TranslationStructure = {
         recoverySkipped: ({ count }: { count: number }) => `Skipped ${count} already-active agent${count === 1 ? '' : 's'}.`,
         recoveryIssues: ({ issues }: { issues: string }) => `Issues: ${issues}`,
         recoveryFailed: 'Failed to recover team. Please try again.',
+        soloAgents: 'Agents Solo',
+        soloAgentsCount: ({ count }: { count: number }) => count === 1 ? '1 agent' : `${count} agents`,
+        soloAgentsEmpty: 'Encara no hi ha agents solo',
+        soloAgentsEmptyHint: 'Executa un agent des del marketplace',
+        soloAgentsTitle: 'Agents Solo',
+        soloAgentsNewAgent: 'Nou agent',
     },
 
     zen: {

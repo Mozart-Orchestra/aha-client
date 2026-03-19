@@ -13,8 +13,13 @@ import { Image } from 'expo-image';
 
 import { useArtifacts, useAllSessions, useIsDataReady } from '@/sync/storage';
 import { sync } from '@/sync/sync';
+import { useAuth } from '@/auth/AuthContext';
+import type { DecryptedArtifact } from '@/sync/artifactTypes';
 import type { KanbanTask } from '@/sync/kanbanTypes';
 import type { Session } from '@/sync/storageTypes';
+import { fetchWorkspaceOverview } from '@/sync/apiTeamManagement';
+import { loadWorkspaceOverview, saveWorkspaceOverview } from '@/sync/persistence';
+import type { WorkspaceOverviewSnapshot } from '@/sync/workspaceOverviewTypes';
 import { UsageBar } from '@/components/usage/UsageBar';
 import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
@@ -192,6 +197,104 @@ function parseTeamTasks(body?: string | null): KanbanTask[] {
     }
 }
 
+interface WorkspaceStatsViewModel extends WorkspaceOverviewSnapshot {
+    isLoadingTaskBodies: boolean;
+}
+
+function computeLocalWorkspaceStats(teamArtifacts: DecryptedArtifact[], sessions: Session[]): WorkspaceStatsViewModel {
+    const agentSessions = sessions.filter(isTeamAgentSession);
+    const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+
+    const teamUsageItems = teamArtifacts.map((artifact) => {
+        const linkedSessionIds = new Set<string>(artifact.sessions ?? []);
+        sessions.forEach((session) => {
+            if (session.metadata?.teamId === artifact.id) {
+                linkedSessionIds.add(session.id);
+            }
+        });
+
+        const linkedSessions = Array.from(linkedSessionIds)
+            .map((sessionId) => sessionMap.get(sessionId))
+            .filter((session): session is Session => !!session);
+
+        const tokens = linkedSessions.reduce((total, session) => {
+            return total + getSessionTokenTotal(session);
+        }, 0);
+
+        const tasks = parseTeamTasks(artifact.body);
+        const visibleTasks = tasks.filter((task) => !task.isDeleted);
+        const completedTasks = visibleTasks.filter((task) => task.status === 'done').length;
+
+        return {
+            id: artifact.id,
+            label: artifact.title || t('teams.untitledTeam'),
+            tokens,
+            completedTasks,
+        };
+    });
+
+    const agentUsageItems = agentSessions
+        .map((session) => {
+            const role = session.metadata?.role ?? session.metadata?.flavor;
+            return {
+                id: session.id,
+                label: role ? `${getSessionName(session)} · ${role}` : getSessionName(session),
+                tokens: getSessionTokenTotal(session),
+            };
+        })
+        .sort((a, b) => b.tokens - a.tokens);
+
+    return {
+        generatedAt: Date.now(),
+        teamCount: teamArtifacts.length,
+        teamTotalTokens: teamUsageItems.reduce((total, item) => total + item.tokens, 0),
+        agentTotalTokens: agentUsageItems.reduce((total, item) => total + item.tokens, 0),
+        completedTasksTotal: teamUsageItems.reduce((total, item) => total + item.completedTasks, 0),
+        teamUsageItems: teamUsageItems
+            .filter((item) => item.tokens > 0)
+            .sort((a, b) => b.tokens - a.tokens)
+            .slice(0, 4),
+        agentUsageItems: agentUsageItems
+            .filter((item) => item.tokens > 0)
+            .slice(0, 4),
+        completedTaskItems: teamUsageItems
+            .filter((item) => item.completedTasks > 0)
+            .sort((a, b) => b.completedTasks - a.completedTasks)
+            .slice(0, 4),
+        isLoadingTaskBodies: teamArtifacts.some((artifact) => artifact.body === undefined),
+    };
+}
+
+function shouldUsePersistedOverview(
+    liveStats: WorkspaceStatsViewModel,
+    persistedOverview: WorkspaceOverviewSnapshot | null,
+): boolean {
+    if (!persistedOverview) {
+        return false;
+    }
+
+    if (liveStats.teamCount === 0 && persistedOverview.teamCount > 0) {
+        return true;
+    }
+
+    if (liveStats.teamTotalTokens === 0 && persistedOverview.teamTotalTokens > 0) {
+        return true;
+    }
+
+    if (liveStats.agentTotalTokens === 0 && persistedOverview.agentTotalTokens > 0) {
+        return true;
+    }
+
+    if (
+        liveStats.isLoadingTaskBodies &&
+        persistedOverview.completedTasksTotal > liveStats.completedTasksTotal
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
 interface StatsBarSectionProps {
     title: string;
     items: Array<{
@@ -244,9 +347,13 @@ function StatsBarSection({
 function WorkspaceStatsCard() {
     const styles = stylesheet;
     const { theme } = useUnistyles();
+    const { credentials } = useAuth();
     const artifacts = useArtifacts();
     const sessions = useAllSessions();
     const requestedTeamBodiesRef = React.useRef<Set<string>>(new Set());
+    const [persistedOverview, setPersistedOverview] = React.useState<WorkspaceOverviewSnapshot | null>(
+        () => loadWorkspaceOverview(),
+    );
 
     const teamArtifacts = React.useMemo(() => {
         return artifacts
@@ -271,68 +378,45 @@ function WorkspaceStatsCard() {
         });
     }, [teamArtifacts]);
 
-    const stats = React.useMemo(() => {
-        const agentSessions = sessions.filter(isTeamAgentSession);
-        const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+    React.useEffect(() => {
+        if (!credentials) {
+            return;
+        }
 
-        const teamUsageItems = teamArtifacts.map((artifact) => {
-            const linkedSessionIds = new Set<string>(artifact.sessions ?? []);
-            sessions.forEach((session) => {
-                if (session.metadata?.teamId === artifact.id) {
-                    linkedSessionIds.add(session.id);
+        let cancelled = false;
+
+        fetchWorkspaceOverview(credentials)
+            .then((overview) => {
+                if (cancelled) {
+                    return;
                 }
+
+                setPersistedOverview(overview);
+                saveWorkspaceOverview(overview);
+            })
+            .catch((error) => {
+                console.error('Failed to fetch persisted workspace overview', error);
             });
 
-            const linkedSessions = Array.from(linkedSessionIds)
-                .map((sessionId) => sessionMap.get(sessionId))
-                .filter((session): session is Session => !!session);
+        return () => {
+            cancelled = true;
+        };
+    }, [credentials?.token]);
 
-            const tokens = linkedSessions.reduce((total, session) => {
-                return total + getSessionTokenTotal(session);
-            }, 0);
+    const liveStats = React.useMemo(() => {
+        return computeLocalWorkspaceStats(teamArtifacts, sessions);
+    }, [sessions, teamArtifacts]);
 
-            const tasks = parseTeamTasks(artifact.body);
-            const visibleTasks = tasks.filter((task) => !task.isDeleted);
-            const completedTasks = visibleTasks.filter((task) => task.status === 'done').length;
-
-            return {
-                id: artifact.id,
-                label: artifact.title || t('teams.untitledTeam'),
-                tokens,
-                completedTasks,
-            };
-        });
-
-        const agentUsageItems = agentSessions
-            .map((session) => {
-                const role = session.metadata?.role ?? session.metadata?.flavor;
-                return {
-                    id: session.id,
-                    label: role ? `${getSessionName(session)} · ${role}` : getSessionName(session),
-                    tokens: getSessionTokenTotal(session),
-                };
-            })
-            .sort((a, b) => b.tokens - a.tokens);
+    const stats = React.useMemo<WorkspaceStatsViewModel>(() => {
+        if (!shouldUsePersistedOverview(liveStats, persistedOverview)) {
+            return liveStats;
+        }
 
         return {
-            teamCount: teamArtifacts.length,
-            teamTotalTokens: teamUsageItems.reduce((total, item) => total + item.tokens, 0),
-            agentTotalTokens: agentUsageItems.reduce((total, item) => total + item.tokens, 0),
-            completedTasksTotal: teamUsageItems.reduce((total, item) => total + item.completedTasks, 0),
-            teamUsageItems: teamUsageItems
-                .filter((item) => item.tokens > 0)
-                .sort((a, b) => b.tokens - a.tokens)
-                .slice(0, 4),
-            agentUsageItems: agentUsageItems
-                .filter((item) => item.tokens > 0)
-                .slice(0, 4),
-            completedTaskItems: teamUsageItems
-                .filter((item) => item.completedTasks > 0)
-                .sort((a, b) => b.completedTasks - a.completedTasks)
-                .slice(0, 4),
-            isLoadingTaskBodies: teamArtifacts.some((artifact) => artifact.body === undefined),
+            ...persistedOverview!,
+            isLoadingTaskBodies: liveStats.isLoadingTaskBodies,
         };
-    }, [sessions, teamArtifacts]);
+    }, [liveStats, persistedOverview]);
 
     if (stats.teamCount === 0 && stats.agentTotalTokens === 0) {
         return null;

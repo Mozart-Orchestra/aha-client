@@ -1119,6 +1119,18 @@ export const ru: TranslationStructure = {
         publisher: 'Издатель',
         protocolRules: 'Правила протокола',
         suggestions: 'Предложения',
+        runStandalone: 'Запустить автономно',
+        joinTeam: 'Добавить в команду',
+        runStandaloneTitle: 'Запустить автономного агента',
+        selectMachine: 'Выбрать машину',
+        workingDirectory: 'Рабочая директория',
+        directoryPlaceholder: '/путь/к/проекту',
+        spawningAgent: 'Запуск...',
+        noMachinesHint: 'Нет подключённых машин',
+        joinTeamTitle: 'Добавить в команду',
+        selectTeam: 'Выбрать команду',
+        selectRole: 'Роль',
+        agentNameLabel: 'Имя агента',
     },
 
     favorites: {
@@ -1215,6 +1227,12 @@ export const ru: TranslationStructure = {
         recoverySkipped: ({ count }: { count: number }) => `Skipped ${count} already-active agent${count === 1 ? '' : 's'}.`,
         recoveryIssues: ({ issues }: { issues: string }) => `Issues: ${issues}`,
         recoveryFailed: 'Failed to recover team. Please try again.',
+        soloAgents: 'Одиночные агенты',
+        soloAgentsCount: ({ count }: { count: number }) => count === 1 ? '1 агент' : `${count} агентов`,
+        soloAgentsEmpty: 'Нет одиночных агентов',
+        soloAgentsEmptyHint: 'Запустите агента из маркетплейса',
+        soloAgentsTitle: 'Одиночные агенты',
+        soloAgentsNewAgent: 'Новый агент',
     },
 
     zen: {

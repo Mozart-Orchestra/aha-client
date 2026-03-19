@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, Platform } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { ItemList } from '@/components/ui/ItemList';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { Item } from '@/components/ui/Item';
+import { SidebarView } from '@/components/layout/SidebarView';
+import { DesktopShellContext } from '@/components/layout/DesktopShellContext';
 import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import {
@@ -28,7 +30,11 @@ import {
 } from '@/utils/favoriteGenomesStorage';
 import { isFavoriteGenomeId } from '@/utils/favoriteGenomes';
 import { sync } from '@/sync/sync';
-import { useProfile } from '@/sync/storage';
+import { useProfile, useSession } from '@/sync/storage';
+import { DeployCorpsModal } from './DeployCorpsModal';
+import { RunStandaloneModal } from './RunStandaloneModal';
+import { JoinTeamModal } from './JoinTeamModal';
+import { getAgent, type AgentDetailRecord } from '@/sync/apiAgents';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +60,22 @@ function scoreColor(score: number): string {
     return '#ef4444';
 }
 
+/** Compact horizontal score bar for Crowd Review dimensions */
+function ScoreBar({ label, value, compact }: { label: string; value: number; compact?: boolean }) {
+    const color = scoreColor(value);
+    const height = compact ? 6 : 8;
+    const fontSize = compact ? 11 : 12;
+    return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize, width: compact ? 80 : 100, color: '#8A7F74' }} numberOfLines={1}>{label}</Text>
+            <View style={{ flex: 1, height, backgroundColor: '#f0f0f0', borderRadius: height / 2, overflow: 'hidden' }}>
+                <View style={{ width: `${Math.min(100, value)}%`, height, backgroundColor: color, borderRadius: height / 2 }} />
+            </View>
+            <Text style={{ fontSize, fontWeight: '600', color, width: 28, textAlign: 'right' }}>{value}</Text>
+        </View>
+    );
+}
+
 function formatLatestAction(action: GenomeFeedback['latestAction']): string {
     return action
         .split('_')
@@ -69,24 +91,47 @@ function formatDate(iso: string): string {
     }
 }
 
+function parseAgentDetailSpec(agent: AgentDetailRecord | null): GenomeSpec | null {
+    if (!agent) return null;
+
+    const embeddedGenome = agent.genome as { spec?: string } | null | undefined;
+    if (embeddedGenome?.spec && typeof embeddedGenome.spec === 'string') {
+        return parseSpec(embeddedGenome.spec);
+    }
+
+    if (agent.genomeSpec && typeof agent.genomeSpec === 'object') {
+        return agent.genomeSpec as GenomeSpec;
+    }
+
+    return null;
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default React.memo(function AgentDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
+    const router = useRouter();
     const { theme } = useUnistyles();
     const profile = useProfile();
     const actorId = profile.id || null;
+    const desktopShell = React.useContext(DesktopShellContext);
 
     const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
+    const [agentDetail, setAgentDetail] = React.useState<AgentDetailRecord | null>(null);
+    const [linkedGenome, setLinkedGenome] = React.useState<GenomeRecord | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [favoriteIds, setFavoriteIds] = React.useState<string[]>(() => loadFavoriteGenomeIdsFromStorage());
     const [serverFavorited, setServerFavorited] = React.useState(false);
     const [favoriteLoading, setFavoriteLoading] = React.useState(false);
+    const [showRunStandalone, setShowRunStandalone] = React.useState(false);
+    const [showJoinTeam, setShowJoinTeam] = React.useState(false);
 
     React.useEffect(() => {
         if (!id) {
             setLoading(false);
             setGenome(null);
+            setAgentDetail(null);
+            setLinkedGenome(null);
             return;
         }
         let cancelled = false;
@@ -95,14 +140,45 @@ export default React.memo(function AgentDetailScreen() {
         fetchAccessibleGenomeById(id, {
             credentials: sync.getCredentials(),
             fetchPublicGenomeById: fetchGenomeById,
-        }).then((g) => {
+        }).then(async (g) => {
             if (!cancelled) {
-                setGenome(g);
-                setLoading(false);
+                if (g) {
+                    setGenome(g);
+                    setAgentDetail(null);
+                    setLinkedGenome(null);
+                    setLoading(false);
+                    return;
+                }
+
+                const credentials = sync.getCredentials();
+                const agent = credentials ? await getAgent(credentials, id) : null;
+                if (!cancelled) {
+                    setGenome(null);
+                    setAgentDetail(agent);
+                    setLinkedGenome(null);
+                    setLoading(false);
+                }
+
+                if (!cancelled && credentials && agent?.genomeId) {
+                    fetchAccessibleGenomeById(agent.genomeId, {
+                        credentials,
+                        fetchPublicGenomeById: fetchGenomeById,
+                    }).then((resolvedGenome) => {
+                        if (!cancelled) {
+                            setLinkedGenome(resolvedGenome);
+                        }
+                    }).catch(() => {
+                        if (!cancelled) {
+                            setLinkedGenome(null);
+                        }
+                    });
+                }
             }
         }).catch(() => {
             if (!cancelled) {
                 setGenome(null);
+                setAgentDetail(null);
+                setLinkedGenome(null);
                 setLoading(false);
             }
         });
@@ -111,7 +187,10 @@ export default React.memo(function AgentDetailScreen() {
     }, [id]);
 
     React.useEffect(() => {
-        if (!genome) return;
+        if (!genome) {
+            setServerFavorited(false);
+            return;
+        }
         let cancelled = false;
 
         if (genome.isPublic && actorId) {
@@ -123,14 +202,20 @@ export default React.memo(function AgentDetailScreen() {
             return () => { cancelled = true; };
         }
 
-        setServerFavorited(false);
         return () => { cancelled = true; };
     }, [actorId, genome]);
 
-    const spec = React.useMemo(() => genome ? parseSpec(genome.spec) : null, [genome]);
-    const feedback = React.useMemo(() => genome ? parseFeedback(genome.feedbackData) : null, [genome]);
-    const tags = React.useMemo(() => genome ? parseTags(genome.tags) : [], [genome]);
-    const corpsSpec = React.useMemo(() => (genome?.category === 'corps') ? parseCorpsSpec(genome.spec) : null, [genome]);
+    const spec = React.useMemo(() => {
+        if (genome) {
+            return parseSpec(genome.spec);
+        }
+        return parseAgentDetailSpec(agentDetail);
+    }, [agentDetail, genome]);
+    const templateGenome = genome ?? linkedGenome;
+    const feedback = React.useMemo(() => templateGenome ? parseFeedback(templateGenome.feedbackData) : null, [templateGenome]);
+    const tags = React.useMemo(() => templateGenome ? parseTags(templateGenome.tags) : [], [templateGenome]);
+    const corpsSpec = React.useMemo(() => (templateGenome?.category === 'corps') ? parseCorpsSpec(templateGenome.spec) : null, [templateGenome]);
+    const standaloneSession = useSession(agentDetail?.sessionId ?? '');
     const storefrontRating = React.useMemo(() => {
         if (typeof feedback?.avgScore === 'number') {
             return feedback.avgScore;
@@ -140,6 +225,7 @@ export default React.memo(function AgentDetailScreen() {
         }
         return null;
     }, [feedback?.avgScore, spec?.resume?.performanceRating]);
+    const isTemplateDetail = !!genome;
     const isFav = genome
         ? (genome.isPublic && actorId ? serverFavorited : isFavoriteGenomeId(genome.id, favoriteIds))
         : false;
@@ -175,48 +261,83 @@ export default React.memo(function AgentDetailScreen() {
     }, [actorId, favoriteLoading, genome, serverFavorited]);
 
     if (loading) {
-        return (
+        const loadingView = (
             <View style={[styles.center, { backgroundColor: theme.colors.groupped.background }]}>
-                <Stack.Screen options={{ headerTitle: t('agents.title') }} />
                 <ActivityIndicator color={theme.colors.textSecondary} />
             </View>
         );
+
+        return (
+            <>
+                <Stack.Screen options={{ headerTitle: t('agents.title'), headerShown: !desktopShell }} />
+                {desktopShell ? <SidebarView mainPanel={loadingView} /> : loadingView}
+            </>
+        );
     }
 
-    if (!genome) {
-        return (
+    if (!genome && !agentDetail) {
+        const emptyView = (
             <View style={[styles.center, { backgroundColor: theme.colors.groupped.background }]}>
-                <Stack.Screen options={{ headerTitle: t('agents.title') }} />
                 <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
                 <Text style={{ color: theme.colors.textSecondary, marginTop: 12, fontSize: 15 }}>
                     {t('agents.noResults')}
                 </Text>
             </View>
         );
+
+        return (
+            <>
+                <Stack.Screen options={{ headerTitle: t('agents.title'), headerShown: !desktopShell }} />
+                {desktopShell ? <SidebarView mainPanel={emptyView} /> : emptyView}
+            </>
+        );
     }
 
-    const status = getStatusColor(genome.status);
-    const isCorps = genome.category === 'corps';
+    const status = genome ? getStatusColor(genome.status) : null;
+    const isCorps = genome?.category === 'corps' || corpsSpec != null;
+    const standaloneStatusColor = agentDetail?.status === 'active'
+        ? '#22c55e'
+        : agentDetail?.status === 'paused'
+            ? '#f59e0b'
+            : '#6b7280';
+    const standalonePath = standaloneSession?.metadata?.path;
+    const standaloneResolvedModel = standaloneSession?.metadata?.resolvedModel;
 
-    return (
+    const detailView = (
         <View style={{ flex: 1, backgroundColor: theme.colors.groupped.background }}>
-            <Stack.Screen options={{ headerTitle: genome.name }} />
             <ScrollView contentContainerStyle={[styles.scrollContent, { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' }]}>
 
                 {/* ── Header Card ── */}
                 <View style={[styles.headerCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
                     <View style={styles.headerRow}>
                         <View style={styles.badgeRow}>
-                            <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHigh }]}>
-                                <Text style={[styles.badgeText, styles.mono, { color: theme.colors.textSecondary }]}>
-                                    {genome.namespace ?? '@public'}
-                                </Text>
-                            </View>
-                            <View style={[styles.badge, { backgroundColor: status.bg }]}>
-                                <Text style={[styles.badgeText, { color: status.text }]}>
-                                    {getStatusLabel(genome.status)}
-                                </Text>
-                            </View>
+                            {genome ? (
+                                <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                    <Text style={[styles.badgeText, styles.mono, { color: theme.colors.textSecondary }]}>
+                                        {genome.namespace ?? '@public'}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                    <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>
+                                        Standalone Agent
+                                    </Text>
+                                </View>
+                            )}
+                            {genome && status ? (
+                                <View style={[styles.badge, { backgroundColor: status.bg }]}>
+                                    <Text style={[styles.badgeText, { color: status.text }]}>
+                                        {getStatusLabel(genome.status)}
+                                    </Text>
+                                </View>
+                            ) : null}
+                            {agentDetail ? (
+                                <View style={[styles.badge, { backgroundColor: `${standaloneStatusColor}18` }]}>
+                                    <Text style={[styles.badgeText, { color: standaloneStatusColor }]}>
+                                        {agentDetail.status}
+                                    </Text>
+                                </View>
+                            ) : null}
                             {isCorps ? (
                                 <View style={[styles.badge, { backgroundColor: '#FF950018' }]}>
                                     <Text style={[styles.badgeText, { color: '#FF9500' }]}>Corps</Text>
@@ -229,51 +350,120 @@ export default React.memo(function AgentDetailScreen() {
                                     </Text>
                                 </View>
                             ) : null}
-                            <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
-                                {t('agents.versionLabel', { version: genome.version })}
-                            </Text>
+                            {genome ? (
+                                <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
+                                    {t('agents.versionLabel', { version: genome.version })}
+                                </Text>
+                            ) : null}
                         </View>
-                        <Pressable onPress={toggleFavorite} hitSlop={12} disabled={favoriteLoading}>
-                            <Ionicons
-                                name={isFav ? 'star' : 'star-outline'}
-                                size={22}
-                                color={isFav ? '#FFB547' : theme.colors.textSecondary}
-                            />
-                        </Pressable>
+                        {genome ? (
+                            <Pressable onPress={toggleFavorite} hitSlop={12} disabled={favoriteLoading}>
+                                <Ionicons
+                                    name={isFav ? 'star' : 'star-outline'}
+                                    size={22}
+                                    color={isFav ? '#FFB547' : theme.colors.textSecondary}
+                                />
+                            </Pressable>
+                        ) : (
+                            <Pressable onPress={() => agentDetail?.sessionId ? router.push(`/session/${agentDetail.sessionId}` as any) : undefined} hitSlop={12}>
+                                <Ionicons
+                                    name="open-outline"
+                                    size={22}
+                                    color={agentDetail?.sessionId ? theme.colors.textSecondary : theme.colors.divider}
+                                />
+                            </Pressable>
+                        )}
                     </View>
-                    <Text style={[styles.name, { color: theme.colors.text }]}>{genome.name}</Text>
-                    {genome.description ? (
+                    <Text style={[styles.name, { color: theme.colors.text }]}>{genome?.name ?? agentDetail?.displayName}</Text>
+                    {genome?.description ? (
                         <Text style={[styles.description, { color: theme.colors.textSecondary }]}>{genome.description}</Text>
+                    ) : agentDetail?.metadata?.source ? (
+                        <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
+                            {`Source: ${String(agentDetail.metadata.source)}`}
+                        </Text>
+                    ) : null}
+
+                    {isTemplateDetail ? (
+                        <View style={styles.actionRow}>
+                            <Pressable
+                                style={[styles.primaryAction, { backgroundColor: theme.colors.button.primary.background }]}
+                                onPress={() => setShowRunStandalone(true)}
+                            >
+                                <Ionicons name="play" size={14} color={theme.colors.button.primary.tint} style={{ marginRight: 6 }} />
+                                <Text style={[styles.primaryActionText, { color: theme.colors.button.primary.tint }]}>
+                                    {isCorps ? t('agents.deployCorps') : t('agents.runStandalone')}
+                                </Text>
+                            </Pressable>
+                            {!isCorps ? (
+                                <Pressable
+                                    style={[styles.secondaryAction, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surfaceHigh }]}
+                                    onPress={() => setShowJoinTeam(true)}
+                                >
+                                    <Ionicons name="people-outline" size={14} color={theme.colors.text} style={{ marginRight: 6 }} />
+                                    <Text style={[styles.secondaryActionText, { color: theme.colors.text }]}>
+                                        {t('agents.joinTeamTitle')}
+                                    </Text>
+                                </Pressable>
+                            ) : null}
+                        </View>
                     ) : null}
 
                     {/* Spawn & score row */}
                     <View style={[styles.statsRow, { borderTopColor: theme.colors.divider }]}>
-                        <Ionicons name="flash-outline" size={14} color={theme.colors.textSecondary} />
-                        <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
-                            {t('agents.spawnCount', { count: genome.spawnCount })}
-                        </Text>
-                        <Ionicons name="star-outline" size={14} color={theme.colors.textSecondary} style={styles.statIconSpacer} />
-                        <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
-                            {genome.starCount}
-                        </Text>
-                        <Ionicons name="download-outline" size={14} color={theme.colors.textSecondary} style={styles.statIconSpacer} />
-                        <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
-                            {genome.downloadCount}
-                        </Text>
-                        {storefrontRating != null ? (
+                        {genome ? (
                             <>
-                                <View style={{ width: 12 }} />
-                                <Ionicons name="people-outline" size={14} color={scoreColor(storefrontRating)} />
-                                <Text style={[styles.statText, { color: scoreColor(storefrontRating), fontWeight: '600' }]}>
-                                    {t('agents.crowd')} {Math.round(storefrontRating)}
-                                    {crowdReviewCount ? ` · ${crowdReviewCount}` : ''}
+                                <Ionicons name="flash-outline" size={14} color={theme.colors.textSecondary} />
+                                <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
+                                    {t('agents.spawnCount', { count: genome.spawnCount })}
+                                </Text>
+                                <Ionicons name="star-outline" size={14} color={theme.colors.textSecondary} style={styles.statIconSpacer} />
+                                <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
+                                    {genome.starCount}
+                                </Text>
+                                <Ionicons name="download-outline" size={14} color={theme.colors.textSecondary} style={styles.statIconSpacer} />
+                                <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
+                                    {genome.downloadCount}
+                                </Text>
+                                {storefrontRating != null ? (
+                                    <>
+                                        <View style={{ width: 12 }} />
+                                        <Ionicons name="people-outline" size={14} color={scoreColor(storefrontRating)} />
+                                        <Text style={[styles.statText, { color: scoreColor(storefrontRating), fontWeight: '600' }]}>
+                                            {t('agents.crowd')} {Math.round(storefrontRating)}
+                                            {crowdReviewCount ? ` · ${crowdReviewCount}` : ''}
+                                        </Text>
+                                    </>
+                                ) : null}
+                            </>
+                        ) : (
+                            <>
+                                <Ionicons name="radio-button-on-outline" size={14} color={standaloneStatusColor} />
+                                <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
+                                    {agentDetail?.sessionId ? 'Running instance linked to session' : 'Standalone registry record'}
                                 </Text>
                             </>
-                        ) : null}
+                        )}
                     </View>
                 </View>
 
                 <ItemList>
+                    {agentDetail ? (
+                        <ItemGroup title="Instance">
+                            <Item title="Status" detail={agentDetail.status} />
+                            {agentDetail.sessionId ? <Item title="Session ID" detail={agentDetail.sessionId} /> : null}
+                            {agentDetail.sessionTag ? <Item title="Session Tag" detail={agentDetail.sessionTag} /> : null}
+                            {agentDetail.memberId ? <Item title="Member ID" detail={agentDetail.memberId} /> : null}
+                            {standaloneSession?.active != null ? (
+                                <Item title="Session Active" detail={standaloneSession.active ? 'Yes' : 'No'} />
+                            ) : null}
+                            {agentDetail.runtimeType ? <Item title="Runtime" detail={agentDetail.runtimeType} /> : null}
+                            {standaloneResolvedModel ? <Item title="Resolved Model" detail={standaloneResolvedModel} /> : null}
+                            {standalonePath ? <Item title="Working Directory" subtitle={standalonePath} subtitleLines={0} /> : null}
+                            {standaloneSession?.metadata?.machineId ? <Item title="Machine ID" detail={standaloneSession.metadata.machineId} /> : null}
+                            {agentDetail.genomeId ? <Item title="Genome ID" detail={agentDetail.genomeId} /> : null}
+                        </ItemGroup>
+                    ) : null}
+
                     {/* ── Storefront / Resume ── */}
                     {(spec?.resume?.specialties?.length || storefrontRating != null || spec?.preferredModel || modelScores.length > 0) ? (
                         <ItemGroup title="Storefront">
@@ -458,17 +648,20 @@ export default React.memo(function AgentDetailScreen() {
                             <Item title={t('agents.evaluations', { count: feedback.evaluationCount })} />
                             <Item title={t('agents.latestVerdict')} detail={formatLatestAction(feedback.latestAction)} />
                             {feedback.sessionScore ? (
-                                <>
-                                    <Item title={t('agents.taskCompletion')} detail={`${feedback.sessionScore.taskCompletion}`} />
-                                    <Item title={t('agents.codeQuality')} detail={`${feedback.sessionScore.codeQuality}`} />
-                                    <Item title={t('agents.collaborationScore')} detail={`${feedback.sessionScore.collaboration}`} />
-                                </>
+                                <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 6 }}>
+                                    <ScoreBar label={t('agents.taskCompletion')} value={feedback.sessionScore.taskCompletion} />
+                                    <ScoreBar label={t('agents.codeQuality')} value={feedback.sessionScore.codeQuality} />
+                                    <ScoreBar label={t('agents.collaborationScore')} value={feedback.sessionScore.collaboration} />
+                                </View>
                             ) : null}
-                            <Item title="Delivery" detail={`${feedback.dimensions.delivery}`} />
-                            <Item title="Integrity" detail={`${feedback.dimensions.integrity}`} />
-                            <Item title="Efficiency" detail={`${feedback.dimensions.efficiency}`} />
-                            <Item title="Collaboration" detail={`${feedback.dimensions.collaboration}`} />
-                            <Item title="Reliability" detail={`${feedback.dimensions.reliability}`} />
+                            <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 4 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 2 }}>Dimensions</Text>
+                                <ScoreBar label="Delivery" value={feedback.dimensions.delivery} compact />
+                                <ScoreBar label="Integrity" value={feedback.dimensions.integrity} compact />
+                                <ScoreBar label="Efficiency" value={feedback.dimensions.efficiency} compact />
+                                <ScoreBar label="Collaboration" value={feedback.dimensions.collaboration} compact />
+                                <ScoreBar label="Reliability" value={feedback.dimensions.reliability} compact />
+                            </View>
                             {feedback.suggestions?.length ? (
                                 <Item
                                     title={t('agents.suggestions')}
@@ -492,13 +685,51 @@ export default React.memo(function AgentDetailScreen() {
 
                     {/* ── Metadata ── */}
                     <ItemGroup title={t('agents.metadata')}>
-                        <Item title={t('agents.createdAt')} detail={formatDate(genome.createdAt)} />
-                        {genome.publisherId ? <Item title={t('agents.publisher')} detail={genome.publisherId} /> : null}
-                        {genome.parentId ? <Item title="Parent Genome" detail={genome.parentId} /> : null}
+                        <Item
+                            title={t('agents.createdAt')}
+                            detail={formatDate(
+                                genome?.createdAt
+                                    ?? new Date(agentDetail?.createdAt ?? Date.now()).toISOString()
+                            )}
+                        />
+                        {genome?.publisherId ? <Item title={t('agents.publisher')} detail={genome.publisherId} /> : null}
+                        {genome?.parentId ? <Item title="Parent Genome" detail={genome.parentId} /> : null}
+                        {agentDetail?.metadata?.source ? <Item title="Source" detail={String(agentDetail.metadata.source)} /> : null}
                     </ItemGroup>
                 </ItemList>
             </ScrollView>
+            {showRunStandalone && genome ? (
+                isCorps ? (
+                    <DeployCorpsModal
+                        genome={genome}
+                        onClose={() => setShowRunStandalone(false)}
+                        onSuccess={(teamId) => {
+                            setShowRunStandalone(false);
+                            router.push(`/teams/${teamId}` as any);
+                        }}
+                    />
+                ) : (
+                    <RunStandaloneModal
+                        genome={genome}
+                        onClose={() => setShowRunStandalone(false)}
+                        onSuccess={() => setShowRunStandalone(false)}
+                    />
+                )
+            ) : null}
+            {showJoinTeam && genome ? (
+                <JoinTeamModal
+                    genome={genome}
+                    onClose={() => setShowJoinTeam(false)}
+                />
+            ) : null}
         </View>
+    );
+
+    return (
+        <>
+            <Stack.Screen options={{ headerTitle: genome?.name ?? agentDetail?.displayName ?? t('agents.title'), headerShown: !desktopShell }} />
+            {desktopShell ? <SidebarView mainPanel={detailView} /> : detailView}
+        </>
     );
 });
 
@@ -558,6 +789,35 @@ const styles = StyleSheet.create((theme) => ({
     description: {
         fontSize: 14,
         lineHeight: 20,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 12,
+        flexWrap: 'wrap',
+    },
+    primaryAction: {
+        minHeight: 38,
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    primaryActionText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    secondaryAction: {
+        minHeight: 38,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    secondaryActionText: {
+        fontSize: 13,
+        fontWeight: '500',
     },
     statsRow: {
         flexDirection: 'row',

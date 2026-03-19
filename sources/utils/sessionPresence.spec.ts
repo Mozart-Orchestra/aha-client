@@ -12,6 +12,14 @@ describe('getAgentPresenceVisual', () => {
         expect(result.dead).toBe(false);
     });
 
+    it('stale-but-active state stays in the live bucket with a grey dot', () => {
+        const staleActiveAt = Date.now() - (3 * 60 * 1000);
+        const result = getAgentPresenceVisual({ active: true, activeAt: staleActiveAt });
+        expect(result.dotColor).toBe('#8A7F74');
+        expect(result.inactive).toBe(false);
+        expect(result.dead).toBe(false);
+    });
+
     it('offline state: active=false, within 1h returns grey dot, inactive=true, dead=false', () => {
         const recentlyActiveAt = Date.now() - (30 * 60 * 1000); // 30 min ago
         const result = getAgentPresenceVisual({ active: false, activeAt: recentlyActiveAt });

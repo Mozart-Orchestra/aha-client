@@ -5,6 +5,7 @@ import { Purchases, purchasesDefaults, purchasesParse } from './purchases';
 import { Profile, profileDefaults, profileParse } from './profile';
 import type { PermissionMode } from '@/types/agentModes';
 import type { DecryptedArtifact } from './artifactTypes';
+import type { WorkspaceOverviewSnapshot } from './workspaceOverviewTypes';
 
 const mmkv = new MMKV();
 
@@ -162,6 +163,23 @@ export function loadArtifacts(): Record<string, DecryptedArtifact> {
 
 export function saveArtifacts(artifacts: Record<string, DecryptedArtifact>) {
     mmkv.set('artifacts', JSON.stringify(artifacts));
+}
+
+export function loadWorkspaceOverview(): WorkspaceOverviewSnapshot | null {
+    const snapshot = mmkv.getString('workspace-overview');
+    if (snapshot) {
+        try {
+            return JSON.parse(snapshot) as WorkspaceOverviewSnapshot;
+        } catch (e) {
+            console.error('Failed to parse workspace overview', e);
+            return null;
+        }
+    }
+    return null;
+}
+
+export function saveWorkspaceOverview(snapshot: WorkspaceOverviewSnapshot) {
+    mmkv.set('workspace-overview', JSON.stringify(snapshot));
 }
 
 // Simple temporary text storage for passing large strings between screens

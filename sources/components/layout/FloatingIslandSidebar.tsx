@@ -47,6 +47,8 @@ interface FloatingIslandAgentItem {
     description?: string;
     score?: number;
     scoreCount?: number;
+    activityLabel?: string;
+    activityColor?: string;
     activeTaskTitle?: string;
     activeTaskStartedAt?: number;
     onPress?: () => void;
@@ -81,6 +83,8 @@ interface FloatingIslandSidebarProps {
     header: FloatingIslandHeader;
     agentItems?: FloatingIslandAgentItem[];
     agentSectionLabel?: string;
+    agentHeaderAction?: () => void;
+    agentHeaderActionLabel?: string;
     statusItems?: FloatingIslandStatusItem[];
     conversationItems?: FloatingIslandConversationItem[];
     conversationSectionLabel?: string;
@@ -243,6 +247,20 @@ const styles = StyleSheet.create(() => ({
     },
     sectionAddButton: {
         padding: 2,
+    },
+    sectionActionButton: {
+        marginTop: 8,
+        minHeight: 34,
+        borderRadius: 10,
+        borderWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    sectionActionText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     sectionScroll: {
         flex: 1,
@@ -483,6 +501,8 @@ function areAgentRowPropsEqual(
         && previous.item.description === next.item.description
         && previous.item.score === next.item.score
         && previous.item.scoreCount === next.item.scoreCount
+        && previous.item.activityLabel === next.item.activityLabel
+        && previous.item.activityColor === next.item.activityColor
         && previous.item.activeTaskTitle === next.item.activeTaskTitle
         && previous.item.activeTaskStartedAt === next.item.activeTaskStartedAt
     );
@@ -506,7 +526,9 @@ const AgentRow = React.memo(function AgentRow({
     const lastPressMsRef = React.useRef(0);
 
     const contextSize = latestUsage?.contextSize ?? 0;
-    const totalTokens = latestUsage ? latestUsage.inputTokens + latestUsage.outputTokens : 0;
+    const totalTokens = latestUsage
+        ? latestUsage.inputTokens + latestUsage.outputTokens + latestUsage.cacheCreation + latestUsage.cacheRead
+        : 0;
     const hasValidTotalTokens = Number.isFinite(totalTokens) && totalTokens > 0;
     const modifiedFileCount = React.useMemo(() => getModifiedFileCount(sessionMessages), [sessionMessages]);
     const contextUtilization = getContextUtilization(latestUsage?.contextSize ?? latestUsage?.inputTokens);
@@ -628,6 +650,28 @@ const AgentRow = React.memo(function AgentRow({
                                 <Ionicons name="flash-outline" size={11} color={theme.colors.textSecondary} />
                                 <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
                                     {formatCompactNumber(totalTokens)} tok
+                                </Text>
+                            </View>
+                        ) : null}
+                        {item.activityLabel ? (
+                            <View
+                                style={[
+                                    styles.agentMetaChip,
+                                    { backgroundColor: (item.activityColor || theme.colors.textSecondary) + '14' },
+                                ]}
+                            >
+                                <Ionicons
+                                    name="pulse-outline"
+                                    size={11}
+                                    color={item.activityColor || theme.colors.textSecondary}
+                                />
+                                <Text
+                                    style={[
+                                        styles.agentMetaText,
+                                        { color: item.activityColor || theme.colors.textSecondary },
+                                    ]}
+                                >
+                                    {item.activityLabel}
                                 </Text>
                             </View>
                         ) : null}
@@ -822,6 +866,8 @@ export function FloatingIslandSidebar({
     header,
     agentItems = [],
     agentSectionLabel = t('sidebar.agents'),
+    agentHeaderAction,
+    agentHeaderActionLabel,
     statusItems = [],
     conversationItems = [],
     conversationSectionLabel = t('sidebar.conversations'),
@@ -938,12 +984,36 @@ export function FloatingIslandSidebar({
                 <View style={styles.sectionExpanded}>
                     <View style={styles.sectionLabelRow}>
                         <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{agentSectionLabel}</Text>
-                        <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
-                            <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
-                                {agentItems.length}
-                            </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
+                                <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
+                                    {agentItems.length}
+                                </Text>
+                            </View>
+                            {agentHeaderAction ? (
+                                <Pressable onPress={agentHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
+                                    <Ionicons name="add" size={16} color="#8C9CAA" />
+                                </Pressable>
+                            ) : null}
                         </View>
                     </View>
+                    {agentHeaderAction && agentHeaderActionLabel ? (
+                        <Pressable
+                            onPress={agentHeaderAction}
+                            style={[
+                                styles.sectionActionButton,
+                                {
+                                    borderColor: '#DCE7EE',
+                                    backgroundColor: '#F7FBFD',
+                                },
+                            ]}
+                        >
+                            <Ionicons name="add" size={14} color={tokens.panelTitle} />
+                            <Text style={[styles.sectionActionText, { color: tokens.panelTitle }]}>
+                                {agentHeaderActionLabel}
+                            </Text>
+                        </Pressable>
+                    ) : null}
                     <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
                         {agentItems.length > 0 ? (
                             <>

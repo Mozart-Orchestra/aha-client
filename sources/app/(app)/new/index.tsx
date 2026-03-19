@@ -423,7 +423,7 @@ function NewSessionScreen() {
                                     paddingVertical: 8,
                                     borderRadius: 20,
                                     borderWidth: 1,
-                                    borderColor: theme.colors.button.secondary.border || theme.colors.border,
+                                    borderColor: theme.colors.divider,
                                     backgroundColor: p.pressed ? theme.colors.input.background : 'transparent',
                                     flexDirection: 'row',
                                     alignItems: 'center',

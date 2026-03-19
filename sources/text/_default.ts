@@ -1497,6 +1497,19 @@ export const en = {
         publisher: 'Publisher',
         protocolRules: 'Protocol Rules',
         suggestions: 'Suggestions',
+        // Marketplace action buttons
+        runStandalone: 'Run Standalone',
+        joinTeam: 'Join Team',
+        runStandaloneTitle: 'Run Standalone Agent',
+        selectMachine: 'Select Machine',
+        workingDirectory: 'Working Directory',
+        directoryPlaceholder: '/path/to/project',
+        spawningAgent: 'Spawning...',
+        noMachinesHint: 'No machines connected',
+        joinTeamTitle: 'Join Team',
+        selectTeam: 'Select Team',
+        selectRole: 'Role',
+        agentNameLabel: 'Agent Name',
     },
 
     favorites: {
@@ -1556,6 +1569,13 @@ export const en = {
         recoverySkipped: ({ count }: { count: number }) => `Skipped ${count} already-active agent${count === 1 ? '' : 's'}.`,
         recoveryIssues: ({ issues }: { issues: string }) => `Issues: ${issues}`,
         recoveryFailed: 'Failed to recover team. Please try again.',
+        // Solo Agents virtual team on Teams page
+        soloAgents: 'Solo Agents',
+        soloAgentsCount: ({ count }: { count: number }) => count === 1 ? '1 agent' : `${count} agents`,
+        soloAgentsEmpty: 'No solo agents yet',
+        soloAgentsEmptyHint: 'Run an agent from the marketplace',
+        soloAgentsTitle: 'Solo Agents',
+        soloAgentsNewAgent: 'New Agent',
     },
 
     zen: {

@@ -43,13 +43,16 @@ import { useProfile } from '@/sync/storage';
 import { FAB } from '@/components/ui/FAB';
 import { listAgents, deleteAgent, type AgentRecord } from '@/sync/apiAgents';
 import { Modal } from '@/modal';
+import { DeployCorpsModal } from './DeployCorpsModal';
+import { RunStandaloneModal } from './RunStandaloneModal';
+import { JoinTeamModal } from './JoinTeamModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TopTab = 'marketplace' | 'mine';
 type PageTab = MarketplacePageTab;
 type SourceTab = MarketplaceSourceTab;
 type AgentCategory = AgentMarketplaceCategory;
+type AgentSourceFilter = SourceTab | 'deployed';
 
 function upsertGenomeRecord(records: GenomeRecord[], genome: GenomeRecord): GenomeRecord[] {
     const next = records.filter((record) => record.id !== genome.id);
@@ -102,131 +105,130 @@ function GenomeCard({
     isFavorited,
     onToggleFavorite,
     onPress,
+    onRunStandalone,
+    onJoinTeam,
 }: {
     genome: GenomeRecord;
     isFavorited: boolean;
     onToggleFavorite: (genomeId: string) => void;
     onPress?: () => void;
+    onRunStandalone?: () => void;
+    onJoinTeam?: () => void;
 }) {
     const { theme } = useUnistyles();
-    const tags = parseTags(genome.tags);
     const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
     const feedback = React.useMemo(() => parseFeedback(genome.feedbackData), [genome.feedbackData]);
-    const specialties = spec?.resume?.specialties ?? [];
-    const runtimeType = spec?.runtimeType ?? null;
-    const namespace = genome.namespace ?? '@public';
-    const status = getGenomeStatusColor(genome.status);
     const storefrontRating = getStorefrontRating(genome);
     const crowdReviewCount = feedback?.evaluationCount ?? spec?.resume?.totalSessions ?? null;
+    const tags = parseTags(genome.tags);
+    const categoryLabel = genome.category || spec?.category || null;
+
+    // What it does — from spec responsibilities or description
+    const whatItDoes = spec?.responsibilities?.slice(0, 2)?.join(' · ')
+        || genome.description
+        || '';
+
+    // Special badges — authority/celebrity tags + verified status
+    const isOfficial = genome.status === 'official';
+    const isVerified = genome.status === 'verified';
+    const specialTags = tags.filter(tag =>
+        tag.toLowerCase().includes('expert') ||
+        tag.toLowerCase().includes('exclusive') ||
+        tag.toLowerCase().includes('pro') ||
+        tag.toLowerCase().includes('karpathy') ||
+        tag.toLowerCase().includes('official')
+    );
+
+    // Rating color
+    const ratingColor = storefrontRating != null
+        ? (storefrontRating >= 85 ? '#22c55e' : storefrontRating >= 70 ? '#f59e0b' : '#ef4444')
+        : theme.colors.textSecondary;
 
     return (
         <Pressable onPress={onPress} style={[stylesheet.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
             <View style={stylesheet.cardHeader}>
-                <View style={stylesheet.cardMeta}>
-                    <View style={[stylesheet.namespaceBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
-                        <Text style={[stylesheet.namespaceText, { color: theme.colors.textSecondary }]}>
-                            {namespace}
-                        </Text>
-                    </View>
-                    <View style={[stylesheet.categoryBadge, { backgroundColor: status.background }]}>
-                        <Text style={[stylesheet.categoryText, { color: status.text }]}>
-                            {getGenomeStatusLabel(genome.status)}
-                        </Text>
-                    </View>
-                    {genome.category ? (
-                        <View style={[stylesheet.categoryBadge, { backgroundColor: theme.colors.surfaceHighest }]}>
-                            <Text style={[stylesheet.categoryText, { color: theme.colors.textSecondary }]}>
-                                {genome.category}
-                            </Text>
+                <View style={stylesheet.cardTitleWrap}>
+                    <Text style={[stylesheet.cardName, { color: theme.colors.text }]} numberOfLines={1}>
+                        {spec?.displayName || genome.name}
+                    </Text>
+                    {isOfficial ? (
+                        <View style={[stylesheet.trustBadge, { backgroundColor: '#007AFF18' }]}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#007AFF' }}>{t('agents.official')}</Text>
                         </View>
-                    ) : null}
-                    {runtimeType ? (
-                        <View style={[stylesheet.categoryBadge, { backgroundColor: theme.colors.surfaceHighest }]}>
-                            <Text style={[stylesheet.categoryText, { color: theme.colors.textSecondary }]}>
-                                {runtimeType}
-                            </Text>
+                    ) : isVerified ? (
+                        <View style={[stylesheet.trustBadge, { backgroundColor: '#22c55e18' }]}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#22c55e' }}>{t('agents.verified')}</Text>
                         </View>
                     ) : null}
                 </View>
                 <View style={stylesheet.headerRight}>
-                    <Text style={[stylesheet.versionText, { color: theme.colors.textSecondary }]}>
-                        {t('agents.versionLabel', { version: genome.version })}
-                    </Text>
+                    {storefrontRating != null ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <Ionicons name="star" size={13} color={ratingColor} />
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: ratingColor }}>
+                                {Math.round(storefrontRating)}
+                            </Text>
+                            {crowdReviewCount ? (
+                                <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                                    ({crowdReviewCount})
+                                </Text>
+                            ) : null}
+                        </View>
+                    ) : null}
                     <Pressable onPress={() => onToggleFavorite(genome.id)} hitSlop={8}>
                         <Ionicons
                             name={isFavorited ? 'star' : 'star-outline'}
-                            size={16}
+                            size={15}
                             color={isFavorited ? '#FFB547' : theme.colors.textSecondary}
                         />
                     </Pressable>
                 </View>
             </View>
 
-            <Text style={[stylesheet.cardName, { color: theme.colors.text }]} numberOfLines={1}>
-                {genome.name}
-            </Text>
-
-            {genome.description ? (
+            {whatItDoes ? (
                 <Text style={[stylesheet.cardDesc, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-                    {genome.description}
+                    {whatItDoes}
                 </Text>
             ) : null}
 
-            {tags.length > 0 ? (
-                <View style={stylesheet.tagRow}>
-                    {tags.slice(0, 4).map(tag => (
-                        <View key={tag} style={[stylesheet.tag, { backgroundColor: theme.colors.surfaceHigh }]}>
-                            <Text style={[stylesheet.tagText, { color: theme.colors.textSecondary }]}>{tag}</Text>
-                        </View>
-                    ))}
-                </View>
-            ) : null}
-
-            {specialties.length > 0 ? (
-                <View style={stylesheet.tagRow}>
-                    {specialties.slice(0, 2).map((specialty) => (
-                        <View key={specialty} style={[stylesheet.specialtyTag, { backgroundColor: theme.colors.surfaceHighest }]}>
-                            <Text style={[stylesheet.tagText, { color: theme.colors.textSecondary }]}>{specialty}</Text>
-                        </View>
-                    ))}
-                </View>
-            ) : null}
-
-            <View style={[stylesheet.cardFooter, { borderTopColor: theme.colors.divider }]}>
-                <Ionicons name="flash-outline" size={13} color={theme.colors.textSecondary} />
-                <Text style={[stylesheet.spawnText, { color: theme.colors.textSecondary }]}>
-                    {t('agents.spawnCount', { count: genome.spawnCount })}
-                </Text>
-                <View style={stylesheet.metricGroup}>
-                    <Ionicons name="star-outline" size={12} color={theme.colors.textSecondary} />
-                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
-                        {genome.starCount}
-                    </Text>
-                </View>
-                <View style={stylesheet.metricGroup}>
-                    <Ionicons name="download-outline" size={12} color={theme.colors.textSecondary} />
-                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
-                        {genome.downloadCount}
-                    </Text>
-                </View>
-                {storefrontRating != null ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 8 }}>
-                        <Ionicons
-                            name="people-outline"
-                            size={11}
-                            color={storefrontRating >= 85 ? '#22c55e' : storefrontRating >= 70 ? '#f59e0b' : '#ef4444'}
-                        />
-                        <Text
-                            style={{
-                                fontSize: 11,
-                                color: storefrontRating >= 85 ? '#22c55e' : storefrontRating >= 70 ? '#f59e0b' : '#ef4444',
-                                fontWeight: '600'
-                            }}
-                        >
-                            {t('agents.crowd')} {Math.round(storefrontRating)}
-                            {crowdReviewCount ? ` · ${crowdReviewCount}` : ''}
+            <View style={stylesheet.cardMetaRow}>
+                {categoryLabel ? (
+                    <View style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                        <Text style={[stylesheet.metaBadgeText, { color: theme.colors.textSecondary }]}>
+                            {categoryLabel}
                         </Text>
                     </View>
+                ) : null}
+                {spec?.runtimeType ? (
+                    <View style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                        <Text style={[stylesheet.metaBadgeText, { color: theme.colors.textSecondary }]}>
+                            {spec.runtimeType}
+                        </Text>
+                    </View>
+                ) : null}
+                {specialTags.length > 0 ? (
+                    <View style={[stylesheet.specialTag, { backgroundColor: '#FFB54720' }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#D4870A' }}>{specialTags[0]}</Text>
+                    </View>
+                ) : null}
+            </View>
+
+            <View style={stylesheet.cardFooter}>
+                {genome.spawnCount > 0 ? (
+                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
+                        {t('agents.spawnCount', { count: genome.spawnCount })}
+                    </Text>
+                ) : null}
+                <View style={{ flex: 1 }} />
+                {onRunStandalone ? (
+                    <Pressable onPress={onRunStandalone} hitSlop={6} style={[stylesheet.miniAction, { borderColor: theme.colors.divider }]}>
+                        <Ionicons name="play" size={12} color={theme.colors.textSecondary} />
+                    </Pressable>
+                ) : null}
+                {onJoinTeam ? (
+                    <Pressable onPress={onJoinTeam} hitSlop={6} style={[stylesheet.miniAction, { borderColor: theme.colors.divider }]}>
+                        <Ionicons name="people" size={12} color={theme.colors.textSecondary} />
+                    </Pressable>
                 ) : null}
             </View>
         </Pressable>
@@ -240,28 +242,31 @@ function CorpsCard({
     isFavorited,
     onToggleFavorite,
     onPress,
+    onRunStandalone,
 }: {
     genome: GenomeRecord;
     isFavorited: boolean;
     onToggleFavorite: (genomeId: string) => void;
     onPress?: () => void;
+    onRunStandalone?: () => void;
 }) {
     const { theme } = useUnistyles();
-    const namespace = genome.namespace ?? '@public';
     const corps = parseCorpsSpec(genome.spec);
-    const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
-    const runtimeType = spec?.runtimeType ?? null;
     const memberCount = corps?.members?.length ?? 0;
-    const tags = parseTags(genome.tags);
     const status = getGenomeStatusColor(genome.status);
+    const memberPreview = corps?.members?.slice(0, 3) ?? [];
+    const whatItDoes = genome.description || `${memberCount} agents ready to deploy together`;
 
     return (
         <Pressable onPress={onPress} style={[stylesheet.card, stylesheet.corpsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
             <View style={stylesheet.cardHeader}>
-                <View style={stylesheet.cardMeta}>
-                    <View style={[stylesheet.namespaceBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
-                        <Text style={[stylesheet.namespaceText, { color: theme.colors.textSecondary }]}>
-                            {namespace}
+                <View style={stylesheet.cardTitleWrap}>
+                    <Text style={[stylesheet.cardName, { color: theme.colors.text }]} numberOfLines={1}>
+                        {genome.name}
+                    </Text>
+                    <View style={[stylesheet.categoryBadge, { backgroundColor: '#FF950018' }]}>
+                        <Text style={[stylesheet.categoryText, { color: '#FF9500' }]}>
+                            {t('agents.corpsTab')}
                         </Text>
                     </View>
                     <View style={[stylesheet.categoryBadge, { backgroundColor: status.background }]}>
@@ -269,86 +274,52 @@ function CorpsCard({
                             {getGenomeStatusLabel(genome.status)}
                         </Text>
                     </View>
-                    <View style={[stylesheet.categoryBadge, { backgroundColor: '#FF950018' }]}>
-                        <Text style={[stylesheet.categoryText, { color: '#FF9500' }]}>
-                            {t('agents.corpsTab')}
-                        </Text>
-                    </View>
-                    {runtimeType ? (
-                        <View style={[stylesheet.categoryBadge, { backgroundColor: theme.colors.surfaceHighest }]}>
-                            <Text style={[stylesheet.categoryText, { color: theme.colors.textSecondary }]}>
-                                {runtimeType}
-                            </Text>
-                        </View>
-                    ) : null}
                 </View>
                 <View style={stylesheet.headerRight}>
-                    <Text style={[stylesheet.versionText, { color: theme.colors.textSecondary }]}>
-                        {t('agents.versionLabel', { version: genome.version })}
-                    </Text>
                     <Pressable onPress={() => onToggleFavorite(genome.id)} hitSlop={8}>
                         <Ionicons
                             name={isFavorited ? 'star' : 'star-outline'}
-                            size={16}
+                            size={15}
                             color={isFavorited ? '#FFB547' : theme.colors.textSecondary}
                         />
                     </Pressable>
                 </View>
             </View>
 
-            <Text style={[stylesheet.cardName, { color: theme.colors.text }]} numberOfLines={1}>
-                {genome.name}
-            </Text>
-
-            {genome.description ? (
+            {whatItDoes ? (
                 <Text style={[stylesheet.cardDesc, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-                    {genome.description}
+                    {whatItDoes}
                 </Text>
             ) : null}
 
-            {memberCount > 0 ? (
-                <View style={stylesheet.membersRow}>
-                    <Ionicons name="people-outline" size={13} color={theme.colors.textSecondary} />
-                    <Text style={[stylesheet.memberCountText, { color: theme.colors.textSecondary }]}>
+            <View style={stylesheet.cardMetaRow}>
+                <View style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <Text style={[stylesheet.metaBadgeText, { color: theme.colors.textSecondary }]}>
                         {t('agents.memberCount', { count: memberCount })}
                     </Text>
-                    {corps?.members?.slice(0, 5).map((m, i) => (
-                        <View key={i} style={[stylesheet.memberChip, { backgroundColor: theme.colors.surfaceHigh }]}>
-                            <Text style={[stylesheet.memberChipText, { color: theme.colors.textSecondary }]}>
-                                {m.roleAlias ?? m.genome.split('/').pop()?.split('@')[0] ?? '?'}
-                            </Text>
-                        </View>
-                    ))}
                 </View>
-            ) : null}
+                {memberPreview.map((member, index) => (
+                    <View key={`${member.genome}-${index}`} style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                        <Text style={[stylesheet.metaBadgeText, { color: theme.colors.textSecondary }]}>
+                            {member.roleAlias ?? member.genome.split('/').pop()?.split('@')[0] ?? '?'}
+                        </Text>
+                    </View>
+                ))}
+            </View>
 
-            {tags.length > 0 ? (
-                <View style={stylesheet.tagRow}>
-                    {tags.slice(0, 3).map(tag => (
-                        <View key={tag} style={[stylesheet.tag, { backgroundColor: theme.colors.surfaceHigh }]}>
-                            <Text style={[stylesheet.tagText, { color: theme.colors.textSecondary }]}>{tag}</Text>
-                        </View>
-                    ))}
-                </View>
-            ) : null}
-
-            <View style={[stylesheet.cardFooter, { borderTopColor: theme.colors.divider }]}>
-                <Ionicons name="flash-outline" size={13} color={theme.colors.textSecondary} />
-                <Text style={[stylesheet.spawnText, { color: theme.colors.textSecondary }]}>
+            <View style={stylesheet.cardFooter}>
+                <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
                     {t('agents.spawnCount', { count: genome.spawnCount })}
                 </Text>
-                <View style={stylesheet.metricGroup}>
-                    <Ionicons name="star-outline" size={12} color={theme.colors.textSecondary} />
-                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
-                        {genome.starCount}
-                    </Text>
-                </View>
-                <View style={stylesheet.metricGroup}>
-                    <Ionicons name="download-outline" size={12} color={theme.colors.textSecondary} />
-                    <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
-                        {genome.downloadCount}
-                    </Text>
-                </View>
+                <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
+                    {genome.starCount} saves
+                </Text>
+                <View style={{ flex: 1 }} />
+                {onRunStandalone ? (
+                    <Pressable onPress={onRunStandalone} hitSlop={6} style={[stylesheet.miniAction, { borderColor: theme.colors.divider }]}>
+                        <Ionicons name="play" size={12} color={theme.colors.textSecondary} />
+                    </Pressable>
+                ) : null}
             </View>
         </Pressable>
     );
@@ -364,9 +335,8 @@ export default React.memo(function AgentsScreen() {
     const router = useRouter();
     const profile = useProfile();
     const actorId = profile.id || null;
-    const [topTab, setTopTab] = React.useState<TopTab>('marketplace');
     const [tab, setTab] = React.useState<PageTab>('agents');
-    const [sourceTab, setSourceTab] = React.useState<SourceTab>('market');
+    const [sourceFilter, setSourceFilter] = React.useState<AgentSourceFilter>('market');
     const [query, setQuery] = React.useState('');
     const [category, setCategory] = React.useState<AgentCategory>('all');
     const [publicGenomes, setPublicGenomes] = React.useState<GenomeRecord[]>([]);
@@ -381,6 +351,11 @@ export default React.memo(function AgentsScreen() {
     const [myAgentsLoaded, setMyAgentsLoaded] = React.useState(false);
     const [myAgentsLoading, setMyAgentsLoading] = React.useState(false);
 
+    // ── Marketplace action modals ──
+    const [activeGenome, setActiveGenome] = React.useState<GenomeRecord | null>(null);
+    const [runModal, setRunModal] = React.useState(false);
+    const [joinModal, setJoinModal] = React.useState(false);
+
     const loadMyAgents = React.useCallback(async () => {
         const credentials = sync.getCredentials();
         if (!credentials) return;
@@ -394,13 +369,13 @@ export default React.memo(function AgentsScreen() {
             setMyAgentsLoading(false);
             setMyAgentsLoaded(true);
         }
-    }, []);
+    }, [sourceFilter]);
 
     React.useEffect(() => {
-        if (topTab === 'mine') {
+        if (tab === 'agents' && sourceFilter === 'deployed') {
             loadMyAgents();
         }
-    }, [topTab, loadMyAgents]);
+    }, [loadMyAgents, sourceFilter, tab]);
 
     const handleDeleteMyAgent = React.useCallback(async (agent: AgentRecord) => {
         const confirmed = await Modal.confirm(
@@ -428,8 +403,9 @@ export default React.memo(function AgentsScreen() {
     const doLoad = React.useCallback(async () => {
         const credentials = sync.getCredentials();
         const isCorps = tab === 'corps';
+        const marketplaceSource = sourceFilter === 'deployed' ? 'market' : sourceFilter;
 
-        const publicPromise = sourceTab === 'market' || (!actorId && sourceTab === 'favorites')
+        const publicPromise = marketplaceSource === 'market' || (!actorId && marketplaceSource === 'favorites')
             ? searchGenomes({
                 q: debouncedQuery || undefined,
                 category: isCorps ? 'corps' : (category === 'all' ? undefined : category),
@@ -441,8 +417,8 @@ export default React.memo(function AgentsScreen() {
             ? fetchFavoriteGenomes(actorId).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }))
             : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
 
-        const privatePromise = credentials && sourceTab !== 'market'
-            ? fetchGenomes(credentials, { ownedOnly: sourceTab === 'mine', limit: 100 }).catch(() => ({ genomes: [], total: 0 }))
+        const privatePromise = credentials && marketplaceSource !== 'market'
+            ? fetchGenomes(credentials, { ownedOnly: marketplaceSource === 'mine', limit: 100 }).catch(() => ({ genomes: [], total: 0 }))
             : Promise.resolve({ genomes: [], total: 0 });
 
         const [publicResult, favoritePublicResult, privateResult] = await Promise.all([
@@ -452,10 +428,10 @@ export default React.memo(function AgentsScreen() {
         ]);
 
         setServerFavoriteGenomes(favoritePublicResult.genomes);
-        setPublicGenomes(sourceTab === 'favorites' && actorId ? favoritePublicResult.genomes : publicResult.genomes);
+        setPublicGenomes(marketplaceSource === 'favorites' && actorId ? favoritePublicResult.genomes : publicResult.genomes);
         setPrivateGenomes(mapOwnedPrivateGenomesToRecords(privateResult.genomes));
         setLoaded(true);
-    }, [actorId, category, debouncedQuery, profile.id, sourceTab, tab]);
+    }, [actorId, category, debouncedQuery, profile.id, sourceFilter, tab]);
 
     const [loading, load] = useHappyAction(doLoad);
 
@@ -493,10 +469,13 @@ export default React.memo(function AgentsScreen() {
         setTab(newTab);
         setQuery('');
         setCategory('all');
-    }, []);
+        if (newTab === 'corps' && sourceFilter === 'deployed') {
+            setSourceFilter('market');
+        }
+    }, [sourceFilter]);
 
-    const handleSourceTabChange = React.useCallback((nextSourceTab: SourceTab) => {
-        setSourceTab(nextSourceTab);
+    const handleSourceTabChange = React.useCallback((nextSourceTab: AgentSourceFilter) => {
+        setSourceFilter(nextSourceTab);
         setQuery('');
     }, []);
 
@@ -529,7 +508,7 @@ export default React.memo(function AgentsScreen() {
 
             setPublicGenomes((current) => {
                 const next = current.map((item) => item.id === genomeId ? response.genome : item);
-                if (sourceTab === 'favorites' && isFavorited) {
+                if (sourceFilter === 'favorites' && isFavorited) {
                     return next.filter((item) => item.id !== genomeId);
                 }
                 return next;
@@ -537,18 +516,19 @@ export default React.memo(function AgentsScreen() {
         } catch {
             setLocalFavoriteGenomeIds(toggleFavoriteGenomeIdInStorage(genomeId));
         }
-    }, [actorId, genomeById, serverFavoriteGenomes, sourceTab]);
+    }, [actorId, genomeById, serverFavoriteGenomes, sourceFilter]);
 
     const isCorpsTab = tab === 'corps';
+    const marketplaceSource = sourceFilter === 'deployed' ? 'market' : sourceFilter;
     const selectedGenomes = React.useMemo(() => selectMarketplaceGenomes({
-        sourceTab,
+        sourceTab: marketplaceSource,
         publicGenomes,
         privateGenomes,
         favoriteGenomeIds,
         tab,
         category,
         query: debouncedQuery,
-    }), [category, debouncedQuery, favoriteGenomeIds, privateGenomes, publicGenomes, sourceTab, tab]);
+    }), [category, debouncedQuery, favoriteGenomeIds, marketplaceSource, privateGenomes, publicGenomes, tab]);
     const displayedGenomes = React.useMemo(
         () => sortGenomesForDisplay(selectedGenomes, favoriteGenomeIds),
         [favoriteGenomeIds, selectedGenomes]
@@ -557,6 +537,31 @@ export default React.memo(function AgentsScreen() {
         () => displayedGenomes.filter((genome) => isFavoriteGenomeId(genome.id, favoriteGenomeIds)).slice(0, 8),
         [displayedGenomes, favoriteGenomeIds]
     );
+    const showDeployedList = tab === 'agents' && sourceFilter === 'deployed';
+    const sourceOptions = React.useMemo(() => (
+        isCorpsTab
+            ? ([
+                { key: 'market', label: t('agents.market'), icon: 'globe-outline' },
+                { key: 'favorites', label: t('favorites.title'), icon: 'star-outline' },
+                { key: 'mine', label: t('agents.mine'), icon: 'person-outline' },
+            ] as const)
+            : ([
+                { key: 'market', label: t('agents.market'), icon: 'globe-outline' },
+                { key: 'favorites', label: t('favorites.title'), icon: 'star-outline' },
+                { key: 'mine', label: t('agents.mine'), icon: 'person-outline' },
+                { key: 'deployed', label: t('agents.myAgentsTab'), icon: 'flash-outline' },
+            ] as const)
+    ), [isCorpsTab]);
+    const headerTitle = showDeployedList
+        ? t('agents.myAgents')
+        : isCorpsTab
+            ? t('agents.corpsTab')
+            : t('agents.marketplace');
+    const headerSubtitle = showDeployedList
+        ? t('agents.myAgentsEmptyHint')
+        : isCorpsTab
+            ? t('agents.corpsSubtitle')
+            : t('agents.marketplaceSubtitle');
 
     const mainPanel = (
         <View style={[stylesheet.root, { backgroundColor: theme.colors.groupped.background }]}>
@@ -565,42 +570,23 @@ export default React.memo(function AgentsScreen() {
                 <View style={stylesheet.headerTop}>
                     <View>
                         <Text style={[stylesheet.headerTitle, { color: theme.colors.text }]}>
-                            {topTab === 'mine' ? t('agents.myAgents') : t('agents.marketplace')}
+                            {headerTitle}
                         </Text>
                         <Text style={[stylesheet.headerSub, { color: theme.colors.textSecondary }]}>
-                            {topTab === 'mine'
-                                ? t('agents.myAgentsEmptyHint')
-                                : isCorpsTab ? t('agents.corpsSubtitle') : t('agents.marketplaceSubtitle')}
+                            {headerSubtitle}
                         </Text>
                     </View>
+                    <Pressable
+                        onPress={() => router.push('/agents/new' as any)}
+                        style={[stylesheet.headerCreateButton, { backgroundColor: theme.colors.button.primary.background }]}
+                    >
+                        <Ionicons name="add" size={14} color={theme.colors.button.primary.tint} />
+                        <Text style={[stylesheet.headerCreateButtonText, { color: theme.colors.button.primary.tint }]}>
+                            {t('agents.createAgent')}
+                        </Text>
+                    </Pressable>
                 </View>
 
-                {/* Top tab: Marketplace | My */}
-                <View style={[stylesheet.tabBar, { backgroundColor: theme.colors.surfaceHigh, marginBottom: 12 }]}>
-                    {(['marketplace', 'mine'] as TopTab[]).map(key => {
-                        const active = topTab === key;
-                        return (
-                            <Pressable
-                                key={key}
-                                onPress={() => setTopTab(key)}
-                                style={[stylesheet.tabItem, active && { backgroundColor: theme.colors.surface }]}
-                            >
-                                <Ionicons
-                                    name={key === 'marketplace' ? 'storefront-outline' : 'flash-outline'}
-                                    size={14}
-                                    color={active ? theme.colors.text : theme.colors.textSecondary}
-                                    style={{ marginRight: 5 }}
-                                />
-                                <Text style={[stylesheet.tabText, { color: active ? theme.colors.text : theme.colors.textSecondary, fontWeight: active ? '600' : '400' }]}>
-                                    {key === 'marketplace' ? t('agents.marketplace') : t('agents.myAgentsTab')}
-                                </Text>
-                            </Pressable>
-                        );
-                    })}
-                </View>
-
-                {topTab === 'marketplace' ? (<>
-                {/* Tab bar */}
                 <View style={[stylesheet.tabBar, { backgroundColor: theme.colors.surfaceHigh }]}>
                     {(['agents', 'corps'] as PageTab[]).map(tabKey => {
                         const active = tab === tabKey;
@@ -627,31 +613,38 @@ export default React.memo(function AgentsScreen() {
                     })}
                 </View>
 
-                <View style={[stylesheet.tabBar, { backgroundColor: theme.colors.surfaceHigh, marginBottom: 12 }]}>
-                    {(['market', 'favorites', 'mine'] as SourceTab[]).map(sourceKey => {
-                        const active = sourceTab === sourceKey;
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={stylesheet.filterScroll}
+                    contentContainerStyle={[stylesheet.filterContent, { paddingTop: 12 }]}
+                >
+                    {sourceOptions.map(({ key, label, icon }) => {
+                        const active = sourceFilter === key;
                         return (
                             <Pressable
-                                key={sourceKey}
-                                onPress={() => handleSourceTabChange(sourceKey)}
+                                key={key}
+                                onPress={() => handleSourceTabChange(key as AgentSourceFilter)}
                                 style={[
-                                    stylesheet.tabItem,
-                                    active && { backgroundColor: theme.colors.surface }
+                                    stylesheet.filterChip,
+                                    active
+                                        ? { backgroundColor: theme.colors.button.primary.background }
+                                        : { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider, borderWidth: 1 }
                                 ]}
                             >
                                 <Ionicons
-                                    name={sourceKey === 'market' ? 'globe-outline' : sourceKey === 'favorites' ? 'star-outline' : 'person-outline'}
+                                    name={icon as any}
                                     size={14}
-                                    color={active ? theme.colors.text : theme.colors.textSecondary}
+                                    color={active ? theme.colors.button.primary.tint : theme.colors.textSecondary}
                                     style={{ marginRight: 5 }}
                                 />
-                                <Text style={[stylesheet.tabText, { color: active ? theme.colors.text : theme.colors.textSecondary, fontWeight: active ? '600' : '400' }]}>
-                                    {sourceKey === 'market' ? t('agents.market') : sourceKey === 'favorites' ? t('favorites.title') : t('agents.mine')}
+                                <Text style={[stylesheet.filterChipText, { color: active ? theme.colors.button.primary.tint : theme.colors.textSecondary }]}>
+                                    {label}
                                 </Text>
                             </Pressable>
                         );
                     })}
-                </View>
+                </ScrollView>
 
                 {/* Search bar */}
                 <View style={[stylesheet.searchBar, { backgroundColor: theme.colors.input.background }]}>
@@ -674,7 +667,7 @@ export default React.memo(function AgentsScreen() {
                 </View>
 
                 {/* Category filters — only for agents tab */}
-                {!isCorpsTab ? (
+                {!isCorpsTab && !showDeployedList ? (
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -702,11 +695,10 @@ export default React.memo(function AgentsScreen() {
                         })}
                     </ScrollView>
                 ) : <View style={{ height: 12 }} />}
-                </>) : null}
             </View>
 
-            {/* Content — My Agents */}
-            {topTab === 'mine' ? (
+            {/* Content — Deployed Instances */}
+            {showDeployedList ? (
                 <View style={{ flex: 1 }}>
                     {myAgentsLoading && !myAgentsLoaded ? (
                         <View style={stylesheet.center}>
@@ -728,6 +720,7 @@ export default React.memo(function AgentsScreen() {
                                 <MyAgentRow
                                     key={agent.id}
                                     agent={agent}
+                                    onPress={() => router.push({ pathname: '/agents/[id]', params: { id: agent.id } } as any)}
                                     onDelete={handleDeleteMyAgent}
                                     theme={theme}
                                 />
@@ -737,97 +730,137 @@ export default React.memo(function AgentsScreen() {
                     <FAB onPress={() => router.push('/agents/new' as any)} />
                 </View>
             ) : (
-            /* Content — Marketplace */
-            <View style={{ flex: 1 }}>
-            {loading && !loaded ? (
-                <View style={stylesheet.center}>
-                    <ActivityIndicator color={theme.colors.textSecondary} />
-                </View>
-            ) : displayedGenomes.length === 0 && loaded ? (
-                <View style={stylesheet.center}>
-                    <Ionicons
-                        name={isCorpsTab ? 'people-outline' : 'cube-outline'}
-                        size={48}
-                        color={theme.colors.textSecondary}
-                        style={{ marginBottom: 12 }}
-                    />
-                    <Text style={[stylesheet.emptyTitle, { color: theme.colors.text }]}>
-                        {isCorpsTab ? t('agents.noCorps') : t('agents.noResults')}
-                    </Text>
-                    <Text style={[stylesheet.emptyHint, { color: theme.colors.textSecondary }]}>
-                        {isCorpsTab ? t('agents.noCorpsHint') : t('agents.noResultsHint')}
-                    </Text>
-                </View>
-            ) : (
-                <ScrollView
-                    style={stylesheet.list}
-                    contentContainerStyle={stylesheet.listContent}
-                    showsVerticalScrollIndicator={true}
-                >
-                    {loading ? <ActivityIndicator color={theme.colors.textSecondary} style={{ marginBottom: 12 }} /> : null}
-                    {favoriteGenomes.length > 0 && sourceTab !== 'favorites' ? (
-                        <View style={stylesheet.favoritesSection}>
-                            <Text style={[stylesheet.favoritesTitle, { color: theme.colors.text }]}>
-                                {t('favorites.title')}
-                            </Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={stylesheet.favoriteChipRow}>
-                                {favoriteGenomes.map((genome) => (
-                                    <Pressable
-                                        key={genome.id}
-                                        onPress={() => setQuery(genome.name)}
-                                        style={[stylesheet.favoriteChip, { backgroundColor: theme.colors.surfaceHigh }]}
-                                    >
-                                        <Ionicons name="star" size={12} color="#FFB547" />
-                                        <Text style={[stylesheet.favoriteChipText, { color: theme.colors.textSecondary }]}>
-                                            {genome.name}
-                                        </Text>
-                                    </Pressable>
-                                ))}
-                            </ScrollView>
+                <View style={{ flex: 1 }}>
+                    {loading && !loaded ? (
+                        <View style={stylesheet.center}>
+                            <ActivityIndicator color={theme.colors.textSecondary} />
                         </View>
-                    ) : null}
-                    {isCorpsTab
-                        ? displayedGenomes.map(g => (
-                            <CorpsCardMemo
-                                key={g.id}
-                                genome={g}
-                                isFavorited={isFavoriteGenomeId(g.id, favoriteGenomeIds)}
-                                onToggleFavorite={handleToggleFavorite}
-                                onPress={() => router.push({ pathname: '/agents/[id]', params: { id: g.id } } as any)}
+                    ) : displayedGenomes.length === 0 && loaded ? (
+                        <View style={stylesheet.center}>
+                            <Ionicons
+                                name={isCorpsTab ? 'people-outline' : 'cube-outline'}
+                                size={48}
+                                color={theme.colors.textSecondary}
+                                style={{ marginBottom: 12 }}
                             />
-                        ))
-                        : displayedGenomes.map(g => (
-                            <GenomeCardMemo
-                                key={g.id}
-                                genome={g}
-                                isFavorited={isFavoriteGenomeId(g.id, favoriteGenomeIds)}
-                                onToggleFavorite={handleToggleFavorite}
-                                onPress={() => router.push({ pathname: '/agents/[id]', params: { id: g.id } } as any)}
-                            />
-                        ))
-                    }
-                </ScrollView>
-            )}
-            </View>
+                            <Text style={[stylesheet.emptyTitle, { color: theme.colors.text }]}>
+                                {isCorpsTab ? t('agents.noCorps') : t('agents.noResults')}
+                            </Text>
+                            <Text style={[stylesheet.emptyHint, { color: theme.colors.textSecondary }]}>
+                                {isCorpsTab ? t('agents.noCorpsHint') : t('agents.noResultsHint')}
+                            </Text>
+                        </View>
+                    ) : (
+                        <ScrollView
+                            style={stylesheet.list}
+                            contentContainerStyle={stylesheet.listContent}
+                            showsVerticalScrollIndicator={true}
+                        >
+                            {loading ? <ActivityIndicator color={theme.colors.textSecondary} style={{ marginBottom: 12 }} /> : null}
+                            {favoriteGenomes.length > 0 && sourceFilter !== 'favorites' ? (
+                                <View style={stylesheet.favoritesSection}>
+                                    <Text style={[stylesheet.favoritesTitle, { color: theme.colors.text }]}>
+                                        {t('favorites.title')}
+                                    </Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={stylesheet.favoriteChipRow}>
+                                        {favoriteGenomes.map((genome) => (
+                                            <Pressable
+                                                key={genome.id}
+                                                onPress={() => setQuery(genome.name)}
+                                                style={[stylesheet.favoriteChip, { backgroundColor: theme.colors.surfaceHigh }]}
+                                            >
+                                                <Ionicons name="star" size={12} color="#FFB547" />
+                                                <Text style={[stylesheet.favoriteChipText, { color: theme.colors.textSecondary }]}>
+                                                    {genome.name}
+                                                </Text>
+                                            </Pressable>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+                            ) : null}
+                            <View style={stylesheet.cardGrid}>
+                                {isCorpsTab
+                                    ? displayedGenomes.map(g => (
+                                        <CorpsCardMemo
+                                            key={g.id}
+                                            genome={g}
+                                            isFavorited={isFavoriteGenomeId(g.id, favoriteGenomeIds)}
+                                            onToggleFavorite={handleToggleFavorite}
+                                            onPress={() => router.push({ pathname: '/agents/[id]', params: { id: g.id } } as any)}
+                                            onRunStandalone={() => { setActiveGenome(g); setRunModal(true); }}
+                                        />
+                                    ))
+                                    : displayedGenomes.map(g => (
+                                        <GenomeCardMemo
+                                            key={g.id}
+                                            genome={g}
+                                            isFavorited={isFavoriteGenomeId(g.id, favoriteGenomeIds)}
+                                            onToggleFavorite={handleToggleFavorite}
+                                            onPress={() => router.push({ pathname: '/agents/[id]', params: { id: g.id } } as any)}
+                                            onRunStandalone={() => { setActiveGenome(g); setRunModal(true); }}
+                                            onJoinTeam={() => { setActiveGenome(g); setJoinModal(true); }}
+                                        />
+                                    ))
+                                }
+                            </View>
+                        </ScrollView>
+                    )}
+                </View>
             )}
         </View>
     );
 
-    return <SidebarView mainPanel={mainPanel} />;
+    return (
+        <>
+            <SidebarView mainPanel={mainPanel} />
+            {runModal && activeGenome ? (
+                activeGenome.category === 'corps' ? (
+                    <DeployCorpsModal
+                        genome={activeGenome}
+                        onClose={() => { setRunModal(false); setActiveGenome(null); }}
+                        onSuccess={(teamId) => {
+                            setRunModal(false);
+                            setActiveGenome(null);
+                            router.push(`/teams/${teamId}` as any);
+                        }}
+                    />
+                ) : (
+                    <RunStandaloneModal
+                        genome={activeGenome}
+                        onClose={() => { setRunModal(false); setActiveGenome(null); }}
+                        onSuccess={() => {
+                            setRunModal(false);
+                            setActiveGenome(null);
+                            if (tab === 'agents' && sourceFilter === 'deployed') {
+                                loadMyAgents();
+                            }
+                        }}
+                    />
+                )
+            ) : null}
+            {joinModal && activeGenome ? (
+                <JoinTeamModal
+                    genome={activeGenome}
+                    onClose={() => { setJoinModal(false); setActiveGenome(null); }}
+                />
+            ) : null}
+        </>
+    );
 });
 
 // ─── MyAgentRow ──────────────────────────────────────────────────────────────
 
 interface MyAgentRowProps {
     agent: AgentRecord;
+    onPress: () => void;
     onDelete: (agent: AgentRecord) => void;
     theme: any;
 }
 
-const MyAgentRow = React.memo(function MyAgentRow({ agent, onDelete, theme }: MyAgentRowProps) {
+const MyAgentRow = React.memo(function MyAgentRow({ agent, onPress, onDelete, theme }: MyAgentRowProps) {
     const statusColor = agent.status === 'active' ? '#22c55e' : '#f59e0b';
     return (
-        <View style={[rowStyles.row, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.divider }]}>
+        <Pressable onPress={onPress} style={[rowStyles.row, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.divider }]}>
             <View style={[rowStyles.statusDot, { backgroundColor: statusColor }]} />
             <View style={rowStyles.info}>
                 <Text style={[rowStyles.name, { color: theme.colors.text }]} numberOfLines={1}>
@@ -837,10 +870,11 @@ const MyAgentRow = React.memo(function MyAgentRow({ agent, onDelete, theme }: My
                     {agent.runtimeType} · {agent.status}
                 </Text>
             </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
             <Pressable onPress={() => onDelete(agent)} hitSlop={12} style={rowStyles.deleteBtn}>
                 <Ionicons name="trash-outline" size={18} color={theme.colors.textSecondary} />
             </Pressable>
-        </View>
+        </Pressable>
     );
 });
 
@@ -899,7 +933,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        marginBottom: 12,
+        marginBottom: 8,
     },
     headerTitle: {
         fontSize: 22,
@@ -910,29 +944,42 @@ const stylesheet = StyleSheet.create((theme) => ({
     headerSub: {
         fontSize: 13,
     },
+    headerCreateButton: {
+        minHeight: 36,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    headerCreateButtonText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
     tabBar: {
         flexDirection: 'row',
-        borderRadius: 10,
+        borderRadius: 12,
         padding: 3,
-        marginBottom: 12,
+        marginBottom: 4,
     },
     tabItem: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 7,
-        borderRadius: 8,
+        paddingVertical: 8,
+        borderRadius: 9,
     },
     tabText: {
         fontSize: 13,
+        fontWeight: '600',
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 10,
-        paddingHorizontal: 10,
-        height: 38,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        height: 40,
         marginBottom: 12,
     },
     searchIcon: { marginRight: 7 },
@@ -949,12 +996,14 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row',
     },
     filterChip: {
-        borderRadius: 20,
-        paddingHorizontal: 14,
-        paddingVertical: 6,
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     filterChipText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '500',
     },
     favoritesSection: {
@@ -983,8 +1032,14 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     list: { flex: 1 },
     listContent: {
-        padding: 12,
-        gap: 10,
+        padding: 14,
+        gap: 14,
+    },
+    cardGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        alignItems: 'stretch',
     },
     center: {
         flex: 1,
@@ -1004,13 +1059,26 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     // Card
     card: {
-        borderRadius: 12,
+        borderRadius: 14,
         borderWidth: StyleSheet.hairlineWidth,
-        padding: 14,
-        gap: 6,
+        padding: 12,
+        gap: 8,
+        flexBasis: Platform.select({ web: '49%', default: '100%' }) as any,
+        flexGrow: 1,
+        minWidth: Platform.select({ web: 280, default: 0 }),
+    },
+    trustBadge: {
+        borderRadius: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+    },
+    specialTag: {
+        borderRadius: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
     },
     corpsCard: {
-        borderLeftWidth: 3,
+        borderLeftWidth: 2,
         borderLeftColor: '#FF9500',
     },
     cardHeader: {
@@ -1021,7 +1089,14 @@ const stylesheet = StyleSheet.create((theme) => ({
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
+    },
+    cardTitleWrap: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flexWrap: 'wrap',
     },
     cardMeta: {
         flexDirection: 'row',
@@ -1030,36 +1105,36 @@ const stylesheet = StyleSheet.create((theme) => ({
         flex: 1,
     },
     namespaceBadge: {
-        borderRadius: 6,
-        paddingHorizontal: 7,
-        paddingVertical: 2,
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
     },
     namespaceText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600',
         fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
     },
     categoryBadge: {
-        borderRadius: 6,
-        paddingHorizontal: 7,
-        paddingVertical: 2,
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
     },
     categoryText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '500',
     },
     versionText: {
-        fontSize: 11,
+        fontSize: 10,
         fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
     },
     cardName: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '600',
         letterSpacing: -0.2,
     },
     cardDesc: {
-        fontSize: 13,
-        lineHeight: 18,
+        fontSize: 12,
+        lineHeight: 17,
     },
     tagRow: {
         flexDirection: 'row',
@@ -1077,14 +1152,28 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 8,
         paddingVertical: 3,
     },
+    cardMetaRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginTop: 2,
+    },
+    metaBadge: {
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    metaBadgeText: {
+        fontSize: 10,
+        fontWeight: '500',
+    },
     tagText: { fontSize: 11 },
     cardFooter: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 6,
         marginTop: 4,
-        paddingTop: 8,
-        borderTopWidth: StyleSheet.hairlineWidth,
+        minHeight: 24,
     },
     spawnText: { fontSize: 12 },
     metricGroup: {
@@ -1111,4 +1200,13 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingVertical: 2,
     },
     memberChipText: { fontSize: 11 },
+    // Small icon buttons in card header
+    miniAction: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 }));

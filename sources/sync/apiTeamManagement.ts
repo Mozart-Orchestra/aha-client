@@ -1,7 +1,9 @@
-import { AuthCredentials } from '@/auth/tokenStorage';
-import { backoff } from '@/utils/time';
+import type { AuthCredentials } from '@/auth/tokenStorage';
+import { backoff, NonRetryableError } from '@/utils/time';
 import { checkAuth } from '@/utils/handleResponse';
 import { getServerUrl } from './serverConfig';
+import type { WorkspaceOverviewSnapshot } from './workspaceOverviewTypes';
+import type { KanbanBoard } from './kanbanTypes';
 
 // === Response Types ===
 
@@ -75,6 +77,53 @@ export interface TeamSummary {
     updatedAt: number;
 }
 
+async function throwTeamManagementHttpError(response: Response, fallbackMessage: string): Promise<never> {
+    let serverMessage: string | null = null;
+
+    try {
+        const body = await response.json() as { error?: unknown; message?: unknown };
+        if (typeof body.error === 'string' && body.error.trim()) {
+            serverMessage = body.error;
+        } else if (typeof body.message === 'string' && body.message.trim()) {
+            serverMessage = body.message;
+        }
+    } catch {
+        // Ignore malformed or empty error bodies and fall back to the provided message.
+    }
+
+    const message = serverMessage ?? fallbackMessage;
+    const isClientError = response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429;
+
+    if (isClientError) {
+        throw new NonRetryableError(message);
+    }
+
+    throw new Error(message);
+}
+
+export async function fetchWorkspaceOverview(
+    credentials: AuthCredentials,
+): Promise<WorkspaceOverviewSnapshot> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v1/teams/overview`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+            },
+        });
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch workspace overview: ${response.status}`);
+        }
+
+        const data = await response.json() as { overview: WorkspaceOverviewSnapshot };
+        return data.overview;
+    });
+}
+
 // === API Functions ===
 
 /**
@@ -82,7 +131,7 @@ export interface TeamSummary {
  */
 export async function createTeam(
     credentials: AuthCredentials,
-    params: { name: string; description?: string },
+    params: { id?: string; name: string; description?: string; board?: KanbanBoard },
 ): Promise<TeamSummary> {
     const API_ENDPOINT = getServerUrl();
 
@@ -98,7 +147,7 @@ export async function createTeam(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            throw new Error(`Failed to create team: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to create team: ${response.status}`);
         }
 
         const data = await response.json() as { team: TeamSummary };
@@ -149,10 +198,7 @@ export async function addTeamMember(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('Team not found');
-            }
-            throw new Error(`Failed to add team member: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to add team member: ${response.status}`);
         }
 
         return await response.json() as TeamMemberResponse;
@@ -180,10 +226,7 @@ export async function removeTeamMember(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('Team or member not found');
-            }
-            throw new Error(`Failed to remove team member: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to remove team member: ${response.status}`);
         }
 
         return await response.json() as { success: boolean };
@@ -214,10 +257,7 @@ export async function archiveTeam(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('Team not found');
-            }
-            throw new Error(`Failed to archive team: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to archive team: ${response.status}`);
         }
 
         return await response.json() as TeamArchiveResponse;
@@ -248,10 +288,7 @@ export async function deleteTeam(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('Team not found');
-            }
-            throw new Error(`Failed to delete team: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to delete team: ${response.status}`);
         }
 
         return await response.json() as TeamDeleteResponse;
@@ -281,10 +318,7 @@ export async function renameTeam(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('Team not found');
-            }
-            throw new Error(`Failed to rename team: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to rename team: ${response.status}`);
         }
 
         return await response.json() as TeamRenameResponse;
@@ -313,7 +347,7 @@ export async function batchArchiveSessions(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            throw new Error(`Failed to batch archive sessions: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to batch archive sessions: ${response.status}`);
         }
 
         return await response.json() as BatchArchiveSessionsResponse;
@@ -342,7 +376,7 @@ export async function batchDeleteSessions(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            throw new Error(`Failed to batch delete sessions: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to batch delete sessions: ${response.status}`);
         }
 
         return await response.json() as BatchDeleteSessionsResponse;
@@ -372,10 +406,7 @@ export async function renameSession(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('Session not found');
-            }
-            throw new Error(`Failed to rename session: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to rename session: ${response.status}`);
         }
 
         return await response.json() as SessionRenameResponse;
@@ -404,7 +435,7 @@ export async function batchArchiveTeams(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            throw new Error(`Failed to batch archive teams: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to batch archive teams: ${response.status}`);
         }
 
         return await response.json() as BatchArchiveTeamsResponse;
@@ -433,7 +464,7 @@ export async function batchDeleteTeams(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
-            throw new Error(`Failed to batch delete teams: ${response.status}`);
+            await throwTeamManagementHttpError(response, `Failed to batch delete teams: ${response.status}`);
         }
 
         return await response.json() as BatchDeleteTeamsResponse;

@@ -79,6 +79,9 @@ export async function createArtifact(
             if (response.status === 409) {
                 throw new NonRetryableError('Artifact ID already exists');
             }
+            if (response.status >= 400 && response.status < 500) {
+                throw new NonRetryableError(`Failed to create artifact: ${response.status}`);
+            }
             throw new Error(`Failed to create artifact: ${response.status}`);
         }
 

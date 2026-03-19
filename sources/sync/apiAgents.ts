@@ -11,6 +11,8 @@ export interface AgentRecord {
     id: string;
     displayName: string;
     sessionId: string | null;
+    sessionTag?: string | null;
+    memberId?: string | null;
     roleId: string | null;
     runtimeType: 'claude' | 'codex';
     genomeId: string | null;
@@ -21,10 +23,18 @@ export interface AgentRecord {
     updatedAt: number;
 }
 
+export interface AgentDetailRecord extends AgentRecord {
+    genomeSpec?: Record<string, unknown> | null;
+    genome?: Record<string, unknown> | null;
+}
+
 export interface AgentCreateParams {
     displayName: string;
     genomeId?: string;
     genomeSpec?: Record<string, unknown>;
+    sessionId?: string;
+    sessionTag?: string;
+    memberId?: string;
     runtimeType?: 'claude' | 'codex';
     modelId?: string;
     metadata?: Record<string, unknown>;
@@ -110,7 +120,7 @@ export async function listAgents(
 export async function getAgent(
     credentials: AuthCredentials,
     id: string,
-): Promise<AgentRecord | null> {
+): Promise<AgentDetailRecord | null> {
     const API_ENDPOINT = getServerUrl();
 
     return await backoff(async () => {
@@ -126,7 +136,7 @@ export async function getAgent(
             throw new Error(`Failed to get agent: ${response.status}`);
         }
 
-        const data = await response.json() as { agent: AgentRecord };
+        const data = await response.json() as { agent: AgentDetailRecord };
         return data.agent;
     });
 }

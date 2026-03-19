@@ -97,6 +97,10 @@ export interface Genome {
     spawnCount: number;
     lastSpawnedAt: string | null;
     isPublic: boolean;
+    hubGenomeId?: string | null;
+    origin?: 'manual' | 'auto-created' | 'forked' | 'mutated' | 'market-installed' | null;
+    variantOf?: string | null;
+    mutationNote?: string | null;
     feedbackData?: string | null;
     createdAt: string;
     updatedAt: string;
@@ -105,6 +109,35 @@ export interface Genome {
 export interface GenomesResponse {
     genomes: Genome[];
     total: number;
+}
+
+export interface CreateGenomeParams {
+    id?: string;
+    name: string;
+    description?: string;
+    spec: string;
+    parentSessionId?: string;
+    teamId?: string;
+    namespace?: string;
+    tags?: string;
+    category?: string;
+    isPublic?: boolean;
+    status?: 'draft' | 'unverified' | 'verified' | 'official' | 'archived';
+    origin?: 'manual' | 'auto-created' | 'forked' | 'mutated' | 'market-installed';
+    variantOf?: string;
+    mutationNote?: string;
+}
+
+export interface PublishGenomeParams {
+    marketplaceUrl?: string;
+}
+
+export interface PublishGenomeResponse {
+    genome: Genome;
+    published: {
+        genome?: Record<string, unknown>;
+        [key: string]: unknown;
+    };
 }
 
 // ============================================================================
@@ -247,6 +280,58 @@ export async function fetchGenomes(
         }
 
         return await response.json() as GenomesResponse;
+    });
+}
+
+/**
+ * Create a reusable genome in the private evolution store.
+ * Use publishGenome() if the genome should also appear in the marketplace.
+ */
+export async function createGenome(
+    credentials: AuthCredentials,
+    params: CreateGenomeParams,
+): Promise<{ genome: Genome }> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v1/genomes`, {
+            method: 'POST',
+            headers: authHeaders(credentials.token),
+            body: JSON.stringify(params),
+        });
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as { genome: Genome };
+    });
+}
+
+/**
+ * Publish a private genome to genome-hub so it becomes visible in the marketplace.
+ */
+export async function publishGenome(
+    credentials: AuthCredentials,
+    genomeId: string,
+    params: PublishGenomeParams = {},
+): Promise<PublishGenomeResponse> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v1/genomes/${genomeId}/publish`, {
+            method: 'POST',
+            headers: authHeaders(credentials.token),
+            body: JSON.stringify(params),
+        });
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as PublishGenomeResponse;
     });
 }
 

@@ -5,7 +5,16 @@ import { getDisplayName } from '@/sync/profile';
 import { useAllSessions, useArtifacts, useProfile } from '@/sync/storage';
 import type { Session } from '@/sync/storageTypes';
 import { getSessionName } from '@/utils/sessionUtils';
-import { getTeamMemberMapFromArtifact, getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
+import {
+    buildSessionActivityMetrics,
+    type SessionActivitySnapshot,
+    compareAgentSidebarEntries,
+    formatTokenRateLabel,
+    getStableSessionOrder,
+    getTokenRateAccentColor,
+} from '@/utils/sessionActivityRanking';
+import { buildSidebarAgentRosterEntries, selectSidebarAgentSessions } from '@/utils/sidebarAgentSessions';
+import { getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { fetchGenomeByName, parseFeedback } from '@/utils/genomeHub';
 
@@ -73,56 +82,88 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             : null;
     }, [allArtifacts, selectedTeamId]);
 
-    const agents = React.useMemo(() => {
-        const teamSessionIds = new Set(getTeamSessionIdsFromArtifact(selectedTeamArtifact));
-        const teamMemberMap = getTeamMemberMapFromArtifact(selectedTeamArtifact);
-        const sourceSessions = selectedTeamId
-            ? allSessions.filter((session) =>
-                session.metadata?.teamId === selectedTeamId || teamSessionIds.has(session.id)
-            )
-            : allSessions.filter((session) => session.active || session.presence === 'online' || session.thinking);
+    const teamSessionIds = React.useMemo(
+        () => new Set(getTeamSessionIdsFromArtifact(selectedTeamArtifact)),
+        [selectedTeamArtifact],
+    );
+    const sourceSessions = React.useMemo(
+        () => selectSidebarAgentSessions(allSessions, {
+            selectedTeamId,
+            teamSessionIds,
+        }),
+        [allSessions, selectedTeamId, teamSessionIds],
+    );
+    const teamArtifacts = React.useMemo(
+        () => allArtifacts.filter((artifact) => artifact.type === 'team'),
+        [allArtifacts],
+    );
+    const rosterEntries = React.useMemo(
+        () => buildSidebarAgentRosterEntries(allSessions, teamArtifacts, {
+            selectedTeamId,
+            teamSessionIds,
+        }),
+        [allSessions, teamArtifacts, selectedTeamId, teamSessionIds],
+    );
+    const activitySnapshotsRef = React.useRef<Map<string, SessionActivitySnapshot>>(new Map());
+    const activityMetrics = React.useMemo(() => {
+        const result = buildSessionActivityMetrics(sourceSessions, activitySnapshotsRef.current);
+        activitySnapshotsRef.current = result.snapshots;
+        return result.metrics;
+    }, [sourceSessions]);
 
-        const result: { id: string; name: string; dotColor: string; description: string; inactive: boolean; dead: boolean; session: Session }[] = [];
+    const agents = React.useMemo(() => {
+        const result: {
+            id: string;
+            name: string;
+            dotColor: string;
+            description: string;
+            inactive: boolean;
+            dead: boolean;
+            session: Session | null;
+            teamId: string | null;
+            tokenRateBucket: number;
+            tokenRate: number;
+            stableOrder: number;
+            activityLabel?: string;
+            activityColor: string;
+        }[] = [];
 
         const DEAD_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour without activity = "ended"
 
-        sourceSessions.forEach((session) => {
-            const member = teamMemberMap.get(session.id);
-            const flavor = member?.roleId ?? session.metadata?.flavor ?? session.metadata?.role ?? '';
+        rosterEntries.forEach((entry) => {
+            const session = entry.session;
+            const member = entry.member;
+            const flavor = member?.roleId ?? session?.metadata?.flavor ?? session?.metadata?.role ?? '';
             const runtimeLabel = member?.runtimeType ? member.runtimeType : undefined;
-            const inactive = !session.active;
-            const dead = inactive && session.activeAt > 0 && (Date.now() - session.activeAt > DEAD_THRESHOLD_MS);
+            const inactive = session ? !session.active : true;
+            const dead = !!session && inactive && session.activeAt > 0 && (Date.now() - session.activeAt > DEAD_THRESHOLD_MS);
+            const activity = session ? activityMetrics.get(session.id) : undefined;
+            const tokenRateBucket = activity?.tokenRateBucket ?? 0;
+            const tokenRate = activity?.tokenRate ?? 0;
             result.push({
-                id: session.id,
-                name: member?.displayName || getSessionName(session),
+                id: entry.sessionId,
+                name: member?.displayName || (session ? getSessionName(session) : entry.sessionId),
                 dotColor: AGENT_DOT_COLORS[flavor.toLowerCase()] ?? '#007AFF',
                 description: [flavor, runtimeLabel].filter(Boolean).join(' · '),
                 inactive,
                 dead,
                 session,
+                teamId: entry.teamId,
+                tokenRateBucket,
+                tokenRate,
+                stableOrder: member?.lifecycle?.processStartedAt
+                    ?? member?.lifecycle?.spawnRequestedAt
+                    ?? (session ? getStableSessionOrder(session) : Number.MAX_SAFE_INTEGER),
+                activityLabel: session ? formatTokenRateLabel(tokenRate) : undefined,
+                activityColor: getTokenRateAccentColor(tokenRateBucket),
             });
         });
 
-        result.sort((a, b) => {
-            // Active before inactive
-            if (a.inactive !== b.inactive) {
-                return a.inactive ? 1 : -1;
-            }
-            // Within inactive: dead at the very bottom
-            if (a.inactive && b.inactive && a.dead !== b.dead) {
-                return a.dead ? 1 : -1;
-            }
-
-            const updatedAtDelta = b.session.updatedAt - a.session.updatedAt;
-            if (updatedAtDelta !== 0) {
-                return updatedAtDelta;
-            }
-
-            return b.session.createdAt - a.session.createdAt;
-        });
+        // Keep sidebar ordering stable by activity bucket instead of volatile message timestamps.
+        result.sort((left, right) => compareAgentSidebarEntries(left, right));
 
         return result;
-    }, [allSessions, selectedTeamArtifact, selectedTeamId]);
+    }, [activityMetrics, rosterEntries]);
 
     const teams = React.useMemo(() => {
         return allArtifacts
@@ -214,13 +255,13 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
 
     const statusCounts = React.useMemo(() => {
         return agents.reduce((acc, agent) => {
-            const hasPendingRequests = !!agent.session.agentState?.requests && Object.keys(agent.session.agentState.requests).length > 0;
+            const hasPendingRequests = !!agent.session?.agentState?.requests && Object.keys(agent.session.agentState.requests).length > 0;
 
             if (hasPendingRequests) {
                 acc.needsDecision += 1;
-            } else if (agent.session.thinking) {
+            } else if (agent.session?.thinking) {
                 acc.working += 1;
-            } else if (agent.session.presence === 'online') {
+            } else if (agent.session?.presence === 'online') {
                 acc.online += 1;
             }
 
@@ -251,14 +292,30 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 description: agent.description || undefined,
                 score: roleScores[normalizeRoleKey(agent.description || '')]?.score,
                 scoreCount: roleScores[normalizeRoleKey(agent.description || '')]?.evaluationCount,
+                activityLabel: agent.activityLabel,
+                activityColor: agent.activityColor,
                 selected: selectedAgentId === agent.id,
                 onPress: () => {
                     setSelectedAgentId(agent.id);
-                    navigateToSession(agent.id);
+                    if (agent.session) {
+                        navigateToSession(agent.id);
+                        return;
+                    }
+                    if (agent.teamId) {
+                        setSelectedTeamId(agent.teamId);
+                        router.push(`/teams/${agent.teamId}` as never);
+                    }
                 },
                 onDoublePress: () => {
                     setSelectedAgentId(agent.id);
-                    navigateToSession(agent.id);
+                    if (agent.session) {
+                        navigateToSession(agent.id);
+                        return;
+                    }
+                    if (agent.teamId) {
+                        setSelectedTeamId(agent.teamId);
+                        router.push(`/teams/${agent.teamId}` as never);
+                    }
                 },
             }))}
             statusItems={[
@@ -287,6 +344,8 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     count: statusCounts.online || undefined,
                 },
             ]}
+            agentHeaderAction={() => router.push('/agents/new' as never)}
+            agentHeaderActionLabel={t('agents.createAgent')}
             conversationSectionLabel={t('sidebar.workspace')}
             conversationItems={teams.map((team) => ({
                 ...team,

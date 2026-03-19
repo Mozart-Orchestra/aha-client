@@ -1458,6 +1458,18 @@ export const zhHans: TranslationStructure = {
         publisher: '发布者',
         protocolRules: '协议规则',
         suggestions: '改进建议',
+        runStandalone: '独立运行',
+        joinTeam: '加入团队',
+        runStandaloneTitle: '独立运行代理',
+        selectMachine: '选择机器',
+        workingDirectory: '工作目录',
+        directoryPlaceholder: '/路径/到/项目',
+        spawningAgent: '启动中...',
+        noMachinesHint: '没有连接的机器',
+        joinTeamTitle: '加入团队',
+        selectTeam: '选择团队',
+        selectRole: '角色',
+        agentNameLabel: '代理名称',
     },
 
     favorites: {
@@ -1554,6 +1566,12 @@ export const zhHans: TranslationStructure = {
         recoverySkipped: ({ count }: { count: number }) => `已跳过 ${count} 个活跃中的 Agent。`,
         recoveryIssues: ({ issues }: { issues: string }) => `问题：${issues}`,
         recoveryFailed: '恢复团队失败，请重试。',
+        soloAgents: '独立代理',
+        soloAgentsCount: ({ count }: { count: number }) => count === 1 ? '1 个代理' : `${count} 个代理`,
+        soloAgentsEmpty: '还没有独立代理',
+        soloAgentsEmptyHint: '从市场运行代理',
+        soloAgentsTitle: '独立代理',
+        soloAgentsNewAgent: '新建代理',
     },
 
     zen: {

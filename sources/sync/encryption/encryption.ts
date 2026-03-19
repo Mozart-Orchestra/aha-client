@@ -197,9 +197,14 @@ export class Encryption {
                 }
 
                 if (typeof key === 'object' && key !== null) {
-                    const numericEntries = Object.entries(key)
-                        .filter(([entryKey, value]) => /^\d+$/.test(entryKey) && typeof value === 'number')
-                        .sort(([left], [right]) => Number(left) - Number(right))
+                    const numericEntries = Object.entries(key as Record<string, unknown>)
+                        .reduce<Array<[number, number]>>((acc, [entryKey, value]) => {
+                            if (/^\d+$/.test(entryKey) && typeof value === 'number') {
+                                acc.push([Number(entryKey), value]);
+                            }
+                            return acc;
+                        }, [])
+                        .sort(([left], [right]) => left - right)
                         .map(([, value]) => value);
 
                     if (numericEntries.length > 0) {

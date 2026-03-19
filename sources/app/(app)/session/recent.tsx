@@ -120,7 +120,7 @@ const styles = StyleSheet.create((theme) => ({
     },
     usageStatsLink: {
         fontSize: 13,
-        color: theme.colors.accent,
+        color: theme.colors.textLink,
         ...Typography.default('semiBold'),
     },
     emptyContainer: {

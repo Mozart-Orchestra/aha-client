@@ -164,22 +164,6 @@ type ArtifactEncryptionContext = {
     wrapper: 'boxed-v0' | 'legacy';
 };
 
-const extractTeamSessionIds = (body: string | null | undefined): string[] => {
-    if (!body) {
-        return [];
-    }
-    try {
-        const parsed = JSON.parse(body);
-        const members = parsed?.team?.members;
-        if (!Array.isArray(members)) {
-            return [];
-        }
-        return members.map((member: any) => member.sessionId).filter((id: any) => typeof id === 'string' && id.length > 0);
-    } catch {
-        return [];
-    }
-};
-
 const buildTeamMentionCandidates = (
     teamId: string,
     sessions: Session[],
@@ -1219,8 +1203,7 @@ class Sync {
             // Encrypt the data encryption key with user's key
             const encryptedKey = await this.encryption.encryptEncryptionKey(dataEncryptionKey);
 
-            // Create artifact encryption instance only when this artifact uses encrypted header/body
-            const artifactEncryption = dataEncryptionKey ? new ArtifactEncryption(dataEncryptionKey) : null;
+            const artifactEncryption = new ArtifactEncryption(dataEncryptionKey);
 
             // Encrypt header
             const encryptedHeader = await artifactEncryption.encryptHeader({ title, sessions, draft, type });
@@ -2044,9 +2027,7 @@ class Sync {
 
         const localArtifact = storage.getState().artifacts[teamId];
         const title = localArtifact?.title ?? 'Team';
-        const draft = localArtifact?.draft ?? false;
         let body = localArtifact?.body ?? null;
-        let sessions = localArtifact?.sessions ?? [];
 
         if (!body) {
             const members = this.getTeamMembersFromSessions(teamId);
@@ -2061,11 +2042,20 @@ class Sync {
             body = JSON.stringify(fallbackBoard, null, 2);
         }
 
-        if (sessions.length === 0) {
-            sessions = extractTeamSessionIds(body);
+        let parsedBoard: KanbanBoard | undefined;
+        try {
+            parsedBoard = body ? JSON.parse(body) as KanbanBoard : undefined;
+        } catch {
+            parsedBoard = undefined;
         }
 
-        await this.createArtifact(title, body, sessions, draft, 'team', teamId);
+        await this.registerTeam({
+            id: teamId,
+            name: title,
+            ...(parsedBoard?.description ? { description: parsedBoard.description } : {}),
+            ...(parsedBoard ? { board: parsedBoard } : {}),
+        });
+        await this.fetchArtifactWithBody(teamId);
         return true;
     }
 
@@ -3494,9 +3484,9 @@ class Sync {
     }
 
     /**
-     * Register a team on the server (call after createArtifact to sync with backend)
+     * Register a team on the server using the canonical /v1/teams path.
      */
-    public async registerTeam(params: { name: string; description?: string }): Promise<import('./apiTeamManagement').TeamSummary> {
+    public async registerTeam(params: { id?: string; name: string; description?: string; board?: KanbanBoard }): Promise<import('./apiTeamManagement').TeamSummary> {
         if (!this.credentials) {
             throw new Error('Not authenticated');
         }
@@ -3513,11 +3503,20 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { archiveTeam } = await import('./apiTeamManagement');
-        const result = await this.withTeamRecovery(teamId, () => archiveTeam(this.credentials, teamId, sessionIds));
-        if (result.success) {
-            this.sessionsSync.invalidate();
+        try {
+            const result = await archiveTeam(this.credentials, teamId, sessionIds);
+            if (result.success) {
+                storage.getState().deleteArtifact(teamId);
+                this.sessionsSync.invalidate();
+            }
+            return result;
+        } catch (error) {
+            if (this.isTeamNotFoundError(error)) {
+                storage.getState().deleteArtifact(teamId);
+                return { success: true, archivedSessions: 0 };
+            }
+            throw error;
         }
-        return result;
     }
 
     /**
@@ -3529,12 +3528,20 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { deleteTeam } = await import('./apiTeamManagement');
-        const result = await this.withTeamRecovery(teamId, () => deleteTeam(this.credentials, teamId, sessionIds));
-        if (result.success) {
-            storage.getState().deleteArtifact(teamId);
-            this.sessionsSync.invalidate();
+        try {
+            const result = await deleteTeam(this.credentials, teamId, sessionIds);
+            if (result.success) {
+                storage.getState().deleteArtifact(teamId);
+                this.sessionsSync.invalidate();
+            }
+            return result;
+        } catch (error) {
+            if (this.isTeamNotFoundError(error)) {
+                storage.getState().deleteArtifact(teamId);
+                return { success: true, deletedSessions: 0 };
+            }
+            throw error;
         }
-        return result;
     }
 
     /**
@@ -3545,7 +3552,33 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { renameTeam } = await import('./apiTeamManagement');
-        return this.withTeamRecovery(teamId, () => renameTeam(this.credentials, teamId, newName));
+        const result = await this.withTeamRecovery(teamId, () => renameTeam(this.credentials, teamId, newName));
+
+        const currentArtifact = storage.getState().artifacts[teamId];
+        if (currentArtifact) {
+            let nextBody = currentArtifact.body;
+            if (currentArtifact.body) {
+                try {
+                    const parsed = JSON.parse(currentArtifact.body) as KanbanBoard;
+                    parsed.name = newName;
+                    if (parsed.team) {
+                        parsed.team.name = newName;
+                    }
+                    nextBody = JSON.stringify(parsed, null, 2);
+                } catch {
+                    // Best effort: keep existing body if local parse fails.
+                }
+            }
+
+            storage.getState().updateArtifact({
+                ...currentArtifact,
+                title: newName,
+                body: nextBody,
+                updatedAt: Date.now(),
+            });
+        }
+
+        return result;
     }
 
     /**
@@ -3589,7 +3622,12 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { batchArchiveTeams } = await import('./apiTeamManagement');
-        return batchArchiveTeams(this.credentials, teamIds);
+        const result = await batchArchiveTeams(this.credentials, teamIds);
+        result.results
+            .filter((entry) => entry.success)
+            .forEach((entry) => storage.getState().deleteArtifact(entry.teamId));
+        this.sessionsSync.invalidate();
+        return result;
     }
 
     /**
@@ -3600,7 +3638,12 @@ class Sync {
             throw new Error('Not authenticated');
         }
         const { batchDeleteTeams } = await import('./apiTeamManagement');
-        return batchDeleteTeams(this.credentials, teamIds);
+        const result = await batchDeleteTeams(this.credentials, teamIds);
+        result.results
+            .filter((entry) => entry.success)
+            .forEach((entry) => storage.getState().deleteArtifact(entry.teamId));
+        this.sessionsSync.invalidate();
+        return result;
     }
 }
 

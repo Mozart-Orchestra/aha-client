@@ -1120,6 +1120,18 @@ export const pl: TranslationStructure = {
         publisher: 'Wydawca',
         protocolRules: 'Reguły protokołu',
         suggestions: 'Sugestie',
+        runStandalone: 'Uruchom samodzielnie',
+        joinTeam: 'Dołącz do zespołu',
+        runStandaloneTitle: 'Uruchom agenta samodzielnie',
+        selectMachine: 'Wybierz maszynę',
+        workingDirectory: 'Katalog roboczy',
+        directoryPlaceholder: '/ścieżka/do/projektu',
+        spawningAgent: 'Uruchamianie...',
+        noMachinesHint: 'Brak podłączonych maszyn',
+        joinTeamTitle: 'Dołącz do zespołu',
+        selectTeam: 'Wybierz zespół',
+        selectRole: 'Rola',
+        agentNameLabel: 'Nazwa agenta',
     },
 
     favorites: {
@@ -1216,6 +1228,12 @@ export const pl: TranslationStructure = {
         recoverySkipped: ({ count }: { count: number }) => `Skipped ${count} already-active agent${count === 1 ? '' : 's'}.`,
         recoveryIssues: ({ issues }: { issues: string }) => `Issues: ${issues}`,
         recoveryFailed: 'Failed to recover team. Please try again.',
+        soloAgents: 'Agenci Solo',
+        soloAgentsCount: ({ count }: { count: number }) => count === 1 ? '1 agent' : `${count} agentów`,
+        soloAgentsEmpty: 'Brak agentów solo',
+        soloAgentsEmptyHint: 'Uruchom agenta z marketplace',
+        soloAgentsTitle: 'Agenci Solo',
+        soloAgentsNewAgent: 'Nowy agent',
     },
 
     zen: {

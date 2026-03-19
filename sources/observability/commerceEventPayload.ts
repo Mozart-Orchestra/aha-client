@@ -48,24 +48,22 @@ export function sanitizeStructuredCommerceProperties(
         return undefined;
     }
 
-    const entries = Object.entries(properties)
-        .map(([key, value]) => {
-            const normalizedKey = normalizeStructuredCommerceString(key, 64);
-            if (!normalizedKey || value === undefined) {
-                return null;
-            }
+    const entries: Array<[string, StructuredCommerceProperty]> = [];
+    for (const [key, value] of Object.entries(properties)) {
+        const normalizedKey = normalizeStructuredCommerceString(key, 64);
+        if (!normalizedKey || value === undefined) {
+            continue;
+        }
 
-            if (typeof value === 'string') {
-                return [normalizedKey, value.slice(0, 256)] as const;
-            }
+        if (typeof value === 'string') {
+            entries.push([normalizedKey, value.slice(0, 256)]);
+            continue;
+        }
 
-            if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
-                return [normalizedKey, value] as const;
-            }
-
-            return null;
-        })
-        .filter((entry): entry is readonly [string, StructuredCommerceProperty] => !!entry);
+        if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+            entries.push([normalizedKey, value]);
+        }
+    }
 
     if (entries.length === 0) {
         return undefined;

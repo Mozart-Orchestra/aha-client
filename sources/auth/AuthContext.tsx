@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { TokenStorage, AuthCredentials } from '@/auth/tokenStorage';
+import { autoDownloadRestoreKeyBackup } from '@/auth/restoreKeyDownload';
 import { syncCreate, syncReinitialize } from '@/sync/sync';
 import * as Updates from 'expo-updates';
 import { clearPersistence } from '@/sync/persistence';
@@ -18,11 +19,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children, initialCredentials }: { children: ReactNode; initialCredentials: AuthCredentials | null }) {
     const [isAuthenticated, setIsAuthenticated] = useState(!!initialCredentials);
     const [credentials, setCredentials] = useState<AuthCredentials | null>(initialCredentials);
+    const downloadedSecretRef = React.useRef<string | null>(null);
 
     // Update global auth state when local state changes
     useEffect(() => {
         setCurrentAuth(credentials ? { isAuthenticated, credentials, login, logout } : null);
     }, [isAuthenticated, credentials]);
+
+    useEffect(() => {
+        const secret = credentials?.secret;
+        if (!secret || downloadedSecretRef.current === secret) {
+            return;
+        }
+
+        downloadedSecretRef.current = secret;
+        autoDownloadRestoreKeyBackup(secret).catch((error) => {
+            console.warn('Failed to auto-download restore key backup:', error);
+        });
+    }, [credentials?.secret]);
 
     const login = async (token: string, secret: string) => {
         const newCredentials: AuthCredentials = { token, secret };
