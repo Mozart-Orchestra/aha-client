@@ -22,6 +22,9 @@ export const MetadataSchema = z.object({
     happyHomeDir: z.string().optional(), // Happy configuration directory 
     processStartedAt: z.number().optional(), // Authoritative timestamp when the agent process actually started running
     hostPid: z.number().optional(), // Process ID of the session
+    resolvedModel: z.string().optional(),
+    fallbackModel: z.string().nullable().optional(),
+    contextWindowTokens: z.number().optional(),
     flavor: z.string().nullish(), // Session flavor/variant identifier
     role: z.string().optional(), // Agent role in team
     memberId: z.string().optional(),
@@ -108,18 +111,22 @@ export interface DecryptedMessage {
 export const MachineMetadataSchema = z.object({
     host: z.string(),
     platform: z.string(),
+    // Accept both old (happy*) and new (aha*) field names for backward compatibility
     happyCliVersion: z.string().optional(),
-    happyHomeDir: z.string().optional(), // Directory for Happy auth, settings, logs (usually .happy/ or .happy-dev/)
-    homeDir: z.string().optional(), // User's home directory (matches CLI field name)
-    // Optional fields that may be added in future versions
+    ahaCliVersion: z.string().optional(),
+    happyHomeDir: z.string().optional(),
+    ahaHomeDir: z.string().optional(),
+    ahaLibDir: z.string().optional(),
+    homeDir: z.string().optional(),
+    // Optional fields
     username: z.string().optional(),
     arch: z.string().optional(),
-    displayName: z.string().optional(), // Custom display name for the machine
+    displayName: z.string().optional(),
     // Daemon status fields
     daemonLastKnownStatus: z.enum(['running', 'shutting-down']).optional(),
     daemonLastKnownPid: z.number().optional(),
     shutdownRequestedAt: z.number().optional(),
-    shutdownSource: z.enum(['happy-app', 'happy-cli', 'os-signal', 'unknown']).optional()
+    shutdownSource: z.enum(['happy-app', 'happy-cli', 'aha-app', 'aha-cli', 'os-signal', 'unknown']).optional()
 });
 
 export type MachineMetadata = z.infer<typeof MachineMetadataSchema>;
