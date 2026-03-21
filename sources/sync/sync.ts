@@ -45,6 +45,7 @@ import type { KanbanBoard, KanbanTeamMember } from '@/sync/kanbanTypes';
 import { canonicalizeTeamMentions, type TeamMentionCandidate } from './teamMessageTypes';
 import { getNextPersistedMessageCount } from './persistedMessageCount';
 import { logCommerceEvent } from '@/observability/commerceEvents';
+import { getServiceToken } from './apiServices';
 
 const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
     if (!body) {
@@ -2477,15 +2478,37 @@ class Sync {
                 throw new Error(`Machine encryption not found for ${machineId} after refresh`);
             }
 
+            let resolvedToken = params.token;
+            if (!resolvedToken && this.credentials && params.agent === 'codex') {
+                try {
+                    const openAiToken = await getServiceToken(this.credentials, 'openai');
+                    if (openAiToken) {
+                        resolvedToken = typeof openAiToken === 'string'
+                            ? openAiToken
+                            : JSON.stringify(openAiToken);
+                        log.log(`Resolved stored OpenAI token for Codex spawn on machine ${machineId}`);
+                    } else {
+                        log.log(`No stored OpenAI token found for Codex spawn on machine ${machineId}; relying on machine-local Codex auth`);
+                    }
+                } catch (error) {
+                    log.log(`Failed to resolve stored OpenAI token for Codex spawn on machine ${machineId}: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+
             const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-aha-session', {
                 ...params,
                 machineId,
                 approvedNewDirectoryCreation: true,
+                token: resolvedToken,
                 teamId: params.teamId,
                 role: params.role,
                 sessionName: params.sessionName,
                 sessionPath: params.sessionPath,
-                env: params.env,
+                env: params.env
+                    ? Object.fromEntries(
+                        Object.entries(params.env).filter(([k]) => k.startsWith('AHA_'))
+                    )
+                    : undefined,
                 runId: params.runId,
                 executionPlane: params.executionPlane,
                 parentSessionId: params.parentSessionId,
@@ -2739,6 +2762,14 @@ class Sync {
                     // Refresh sessions list (sessions may have been archived/deleted)
                     this.sessionsSync.invalidate();
                     break;
+                case 'team-unarchived':
+                    // Re-fetch the restored team artifact and refresh sessions
+                    this.fetchArtifactWithBody(teamId).catch(err => {
+                        console.error(`Failed to fetch artifact for team unarchive ${teamId}:`, err);
+                    });
+                    this.artifactsSync.invalidate();
+                    this.sessionsSync.invalidate();
+                    break;
                 case 'team-renamed':
                     // Fetch full artifact with body to get updated name
                     // Note: Server updates name in body, not header title
@@ -2767,6 +2798,10 @@ class Sync {
                     projectManager.removeSession(sessionId);
                     // Clear any cached git status
                     gitStatusSync.clearForSession(sessionId);
+                    break;
+                case 'session-unarchived':
+                    // Refresh sessions list to reload the restored session
+                    this.sessionsSync.invalidate();
                     break;
                 case 'session-renamed':
                     // Refresh sessions list to get updated name
@@ -3460,9 +3495,12 @@ class Sync {
             memberId?: string;
             sessionTag?: string;
             specId?: string;
+            customPrompt?: string;
             parentSessionId?: string;
             executionPlane?: string;
             runtimeType?: string;
+            authorities?: string[];
+            teamOverlay?: Record<string, unknown>;
         }
     ): Promise<import('./apiTeamManagement').TeamMemberResponse> {
         if (!this.credentials) {
@@ -3517,6 +3555,41 @@ class Sync {
             }
             throw error;
         }
+    }
+
+    /**
+     * Unarchive (restore) a team and all its sessions
+     * @param sessionIds - Session IDs to restore (passed to server since body is encrypted)
+     */
+    public async unarchiveTeam(teamId: string, sessionIds: string[] = []): Promise<import('./apiTeamManagement').TeamUnarchiveResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { unarchiveTeam } = await import('./apiTeamManagement');
+        const result = await unarchiveTeam(this.credentials, teamId, sessionIds);
+        if (result.success) {
+            this.artifactsSync.invalidate();
+            this.sessionsSync.invalidate();
+            this.fetchArtifactWithBody(teamId).catch(err => {
+                console.error(`Failed to fetch artifact after unarchive for team ${teamId}:`, err);
+            });
+        }
+        return result;
+    }
+
+    /**
+     * Batch unarchive (restore) multiple sessions
+     */
+    public async batchUnarchiveSessions(sessionIds: string[]): Promise<import('./apiTeamManagement').BatchUnarchiveSessionsResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { batchUnarchiveSessions } = await import('./apiTeamManagement');
+        const result = await batchUnarchiveSessions(this.credentials, sessionIds);
+        if (result.restored > 0) {
+            this.sessionsSync.invalidate();
+        }
+        return result;
     }
 
     /**

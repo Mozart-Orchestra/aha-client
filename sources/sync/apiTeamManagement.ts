@@ -15,6 +15,8 @@ export interface TeamMemberResponse {
         sessionTag?: string;
         role?: string;
         joinedAt: number;
+        authorities?: string[];
+        teamOverlay?: Record<string, unknown>;
     };
 }
 
@@ -60,6 +62,17 @@ export interface BatchArchiveTeamsResponse {
     success: boolean;
     archived: number;
     results: Array<{ teamId: string; success: boolean; archivedSessions?: number; error?: string }>;
+}
+
+export interface TeamUnarchiveResponse {
+    success: boolean;
+    restoredSessions: number;
+}
+
+export interface BatchUnarchiveSessionsResponse {
+    success: boolean;
+    restored: number;
+    results: Array<{ sessionId: string; success: boolean; error?: string }>;
 }
 
 export interface BatchDeleteTeamsResponse {
@@ -168,9 +181,12 @@ export async function addTeamMember(
         memberId?: string;
         sessionTag?: string;
         specId?: string;
+        customPrompt?: string;
         parentSessionId?: string;
         executionPlane?: string;
         runtimeType?: string;
+        authorities?: string[];
+        teamOverlay?: Record<string, unknown>;
     }
 ): Promise<TeamMemberResponse> {
     const API_ENDPOINT = getServerUrl();
@@ -189,9 +205,12 @@ export async function addTeamMember(
                 ...(opts?.memberId !== undefined ? { memberId: opts.memberId } : {}),
                 ...(opts?.sessionTag !== undefined ? { sessionTag: opts.sessionTag } : {}),
                 ...(opts?.specId !== undefined ? { specId: opts.specId } : {}),
+                ...(opts?.customPrompt !== undefined ? { customPrompt: opts.customPrompt } : {}),
                 ...(opts?.parentSessionId !== undefined ? { parentSessionId: opts.parentSessionId } : {}),
                 ...(opts?.executionPlane !== undefined ? { executionPlane: opts.executionPlane } : {}),
                 ...(opts?.runtimeType !== undefined ? { runtimeType: opts.runtimeType } : {}),
+                ...(opts?.authorities !== undefined ? { authorities: opts.authorities } : {}),
+                ...(opts?.teamOverlay !== undefined ? { teamOverlay: opts.teamOverlay } : {}),
             })
         });
 
@@ -351,6 +370,65 @@ export async function batchArchiveSessions(
         }
 
         return await response.json() as BatchArchiveSessionsResponse;
+    });
+}
+
+/**
+ * Unarchive (restore) a team and all its sessions
+ */
+export async function unarchiveTeam(
+    credentials: AuthCredentials,
+    teamId: string,
+    sessionIds: string[] = []
+): Promise<TeamUnarchiveResponse> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/unarchive`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ sessionIds })
+        });
+
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            await throwTeamManagementHttpError(response, `Failed to unarchive team: ${response.status}`);
+        }
+
+        return await response.json() as TeamUnarchiveResponse;
+    });
+}
+
+/**
+ * Batch unarchive (restore) multiple sessions
+ */
+export async function batchUnarchiveSessions(
+    credentials: AuthCredentials,
+    sessionIds: string[]
+): Promise<BatchUnarchiveSessionsResponse> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v1/sessions/batch/unarchive`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ sessionIds })
+        });
+
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            await throwTeamManagementHttpError(response, `Failed to batch unarchive sessions: ${response.status}`);
+        }
+
+        return await response.json() as BatchUnarchiveSessionsResponse;
     });
 }
 

@@ -12,7 +12,7 @@ import { initialWindowMetrics, SafeAreaProvider, useSafeAreaInsets } from 'react
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SidebarNavigator } from '@/components/layout/SidebarNavigator';
 import sodium from '@/encryption/libsodium.lib';
-import { View, Platform } from 'react-native';
+import { View, Text, Pressable, Platform } from 'react-native';
 import { ModalProvider } from '@/modal';
 import { PostHogProvider } from 'posthog-react-native';
 import { tracking } from '@/track/tracking';
@@ -155,7 +155,7 @@ export default function RootLayout() {
     //
     // Init sequence
     //
-    const [initState, setInitState] = React.useState<{ credentials: AuthCredentials | null } | null>(null);
+    const [initState, setInitState] = React.useState<{ credentials: AuthCredentials | null; initError?: string } | null>(null);
     React.useEffect(() => {
         (async () => {
             try {
@@ -164,14 +164,13 @@ export default function RootLayout() {
                 await initializeTextLanguage();
                 await initializeI18n();
                 const credentials = await TokenStorage.getCredentials();
-                console.log('credentials', credentials);
                 if (credentials) {
                     await syncRestore(credentials);
                 }
 
                 setInitState({ credentials });
             } catch (error) {
-                console.error('Error initializing:', error);
+                setInitState({ credentials: null, initError: String(error) });
             }
         })();
     }, []);
@@ -194,6 +193,21 @@ export default function RootLayout() {
 
     if (!initState) {
         return null;
+    }
+
+    if (initState.initError) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: '#fff' }}>
+                <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12 }}>Failed to initialize</Text>
+                <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 24 }}>{initState.initError}</Text>
+                <Pressable
+                    onPress={() => { setInitState(null); /* re-trigger init */ }}
+                    style={{ paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#000', borderRadius: 8 }}
+                >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+                </Pressable>
+            </View>
+        );
     }
 
     //
