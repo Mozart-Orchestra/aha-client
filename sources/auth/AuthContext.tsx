@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { TokenStorage, AuthCredentials } from '@/auth/tokenStorage';
+import { TokenStorage, AuthCredentials, subscribeToWebAuthSync, applyExternalWebCredentials, clearExternalWebCredentials } from '@/auth/tokenStorage';
 import { autoDownloadRestoreKeyBackup } from '@/auth/restoreKeyDownload';
 import { syncCreate, syncReinitialize } from '@/sync/sync';
 import * as Updates from 'expo-updates';
@@ -15,6 +15,15 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function isSameCredentials(a: AuthCredentials | null, b: AuthCredentials | null): boolean {
+    if (!a || !b) {
+        return a === b;
+    }
+
+    return a.token === b.token && a.secret === b.secret;
+}
+
 
 export function AuthProvider({ children, initialCredentials }: { children: ReactNode; initialCredentials: AuthCredentials | null }) {
     const [isAuthenticated, setIsAuthenticated] = useState(!!initialCredentials);
@@ -37,6 +46,37 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             console.warn('Failed to auto-download restore key backup:', error);
         });
     }, [credentials?.secret]);
+
+    useEffect(() => {
+        if (Platform.OS !== 'web') {
+            return;
+        }
+
+        return subscribeToWebAuthSync((event) => {
+            if (event.type === 'login') {
+                if (isSameCredentials(credentials, event.credentials)) {
+                    return;
+                }
+
+                applyExternalWebCredentials(event.credentials);
+                clearPersistence();
+                setCredentials(event.credentials);
+                setIsAuthenticated(true);
+                window.location.reload();
+                return;
+            }
+
+            if (!credentials) {
+                return;
+            }
+
+            clearExternalWebCredentials();
+            clearPersistence();
+            setCredentials(null);
+            setIsAuthenticated(false);
+            window.location.reload();
+        });
+    }, [credentials]);
 
     const login = async (token: string, secret: string) => {
         const newCredentials: AuthCredentials = { token, secret };

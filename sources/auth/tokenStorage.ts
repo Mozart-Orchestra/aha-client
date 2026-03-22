@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const AUTH_KEY = 'auth_credentials';
+const AUTH_SYNC_EVENT_KEY = 'auth_credentials_sync';
 
 // Cache for synchronous access
 let credentialsCache: string | null = null;
@@ -11,6 +12,10 @@ export interface AuthCredentials {
     secret: string;
 }
 
+export type WebAuthSyncEvent =
+    | { type: 'login'; credentials: AuthCredentials; timestamp: number }
+    | { type: 'logout'; timestamp: number };
+
 /**
  * Web storage using sessionStorage only for better security.
  * Note: For production web apps, consider using HttpOnly cookies
@@ -18,17 +23,67 @@ export interface AuthCredentials {
  */
 const WebStorage = {
     getItem(key: string): string | null {
-        // Use sessionStorage only (cleared on tab close)
         return sessionStorage.getItem(key);
     },
     setItem(key: string, value: string): void {
-        // Store in sessionStorage only for security
         sessionStorage.setItem(key, value);
     },
     removeItem(key: string): void {
         sessionStorage.removeItem(key);
     }
 };
+
+function broadcastWebAuthSyncEvent(event: WebAuthSyncEvent): void {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+    }
+
+    try {
+        localStorage.setItem(AUTH_SYNC_EVENT_KEY, JSON.stringify(event));
+    } catch (error) {
+        console.warn('Failed to broadcast auth sync event:', error);
+    }
+}
+
+export function subscribeToWebAuthSync(listener: (event: WebAuthSyncEvent) => void): () => void {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+        return () => { /* noop */ };
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+        if (event.key !== AUTH_SYNC_EVENT_KEY || !event.newValue) {
+            return;
+        }
+
+        try {
+            listener(JSON.parse(event.newValue) as WebAuthSyncEvent);
+        } catch (error) {
+            console.warn('Failed to parse auth sync event:', error);
+        }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+}
+
+export function applyExternalWebCredentials(credentials: AuthCredentials): void {
+    if (Platform.OS !== 'web') {
+        return;
+    }
+
+    const json = JSON.stringify(credentials);
+    WebStorage.setItem(AUTH_KEY, json);
+    credentialsCache = json;
+}
+
+export function clearExternalWebCredentials(): void {
+    if (Platform.OS !== 'web') {
+        return;
+    }
+
+    WebStorage.removeItem(AUTH_KEY);
+    credentialsCache = null;
+}
 
 export const TokenStorage = {
     async getCredentials(): Promise<AuthCredentials | null> {
@@ -57,7 +112,12 @@ export const TokenStorage = {
     async setCredentials(credentials: AuthCredentials): Promise<boolean> {
         if (Platform.OS === 'web') {
             try {
-                WebStorage.setItem(AUTH_KEY, JSON.stringify(credentials));
+                applyExternalWebCredentials(credentials);
+                broadcastWebAuthSyncEvent({
+                    type: 'login',
+                    credentials,
+                    timestamp: Date.now(),
+                });
                 return true;
             } catch (error) {
                 console.error('Error setting web credentials:', error);
@@ -77,7 +137,11 @@ export const TokenStorage = {
 
     async removeCredentials(): Promise<boolean> {
         if (Platform.OS === 'web') {
-            WebStorage.removeItem(AUTH_KEY);
+            clearExternalWebCredentials();
+            broadcastWebAuthSyncEvent({
+                type: 'logout',
+                timestamp: Date.now(),
+            });
             return true;
         }
         try {
