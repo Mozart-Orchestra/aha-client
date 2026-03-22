@@ -56,8 +56,12 @@ class ApiSocket {
 
         this.updateStatus('connecting');
 
-        this.socket = io(this.config.endpoint, {
-            path: '/v1/updates',
+        // Extract path prefix from endpoint URL (e.g. '/api/v3' from 'https://top1vibe.com/api/v3')
+        // socket.io path is relative to the domain root, so we must prepend the prefix
+        const endpointUrl = new URL(this.config.endpoint);
+        const pathPrefix = endpointUrl.pathname.replace(/\/+$/, ''); // remove trailing slash
+        this.socket = io(endpointUrl.origin, {
+            path: `${pathPrefix}/v1/updates`,
             auth: {
                 token: this.config.token,
                 clientType: 'user-scoped' as const
