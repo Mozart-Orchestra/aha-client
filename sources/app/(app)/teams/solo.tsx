@@ -9,10 +9,12 @@ import { Text } from '@/components/ui/StyledText';
 import { Stack, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { sync } from '@/sync/sync';
+import { useAllSessions } from '@/sync/storage';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { listAgents, AgentRecord } from '@/sync/apiAgents';
 import { t } from '@/text';
+import { getStandaloneAgentStatusVisual } from '@/utils/standaloneAgentStatus';
 
 /**
  * Solo Agents detail page — /teams/solo
@@ -24,6 +26,7 @@ import { t } from '@/text';
 export default React.memo(function SoloAgentsScreen() {
     const { theme } = useUnistyles();
     const router = useRouter();
+    const allSessions = useAllSessions();
 
     const [agents, setAgents] = React.useState<AgentRecord[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -67,11 +70,26 @@ export default React.memo(function SoloAgentsScreen() {
         router.push('/agents' as any);
     }, [router]);
 
+    const sessionById = React.useMemo(() => {
+        return new Map(allSessions.map((session) => [session.id, session]));
+    }, [allSessions]);
+
     const renderAgentItem = React.useCallback(({ item, index }: { item: AgentRecord; index: number }) => {
         const isFirst = index === 0;
         const isLast = index === agents.length - 1;
         const isSingle = agents.length === 1;
-        const isActive = item.status === 'active';
+        const session = item.sessionId ? sessionById.get(item.sessionId) ?? null : null;
+        const liveStatus = getStandaloneAgentStatusVisual(item, session);
+        const liveStatusLabel = liveStatus.liveState === 'online'
+            ? t('status.online')
+            : liveStatus.liveState === 'ended'
+                ? t('status.ended')
+                : t('status.offline');
+        const metaParts = [item.runtimeType, liveStatusLabel];
+
+        if (item.status !== 'active') {
+            metaParts.push(item.status);
+        }
 
         return (
             <Pressable
@@ -87,7 +105,7 @@ export default React.memo(function SoloAgentsScreen() {
                 <View
                     style={[
                         styles.statusDot,
-                        { backgroundColor: isActive ? '#34C759' : theme.colors.textSecondary },
+                        { backgroundColor: liveStatus.dotColor },
                     ]}
                 />
                 <View style={styles.agentContent}>
@@ -96,7 +114,7 @@ export default React.memo(function SoloAgentsScreen() {
                     </Text>
                     <View style={styles.agentMeta}>
                         <Text style={styles.agentMetaText}>
-                            {item.runtimeType} {item.status !== 'active' ? `\u00B7 ${item.status}` : ''}
+                            {metaParts.join(' · ')}
                         </Text>
                     </View>
                 </View>
@@ -109,7 +127,7 @@ export default React.memo(function SoloAgentsScreen() {
                 ) : null}
             </Pressable>
         );
-    }, [agents.length, handleAgentPress, theme.colors.textSecondary]);
+    }, [agents.length, handleAgentPress, sessionById, theme.colors.textSecondary]);
 
     const ListHeaderComponent = React.useMemo(() => (
         <View style={styles.header}>
