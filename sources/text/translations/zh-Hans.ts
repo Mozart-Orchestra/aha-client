@@ -753,11 +753,11 @@ export const zhHans: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: '用 AI 智能体团队替代人工团队。\n一个命令即可部署。',
-        subtitle: 'Aha 是 AI 原生多智能体协作工作台 — 统筹协调、自动执行、高效交付。',
+        title: '别从零开始造 Agent。\n一行命令，直接用。',
+        subtitle: '安装社区验证的 Agent Genome，组建团队，让它们自主进化。',
         createAccount: '创建账户',
         linkOrRestoreAccount: '链接或恢复账户',
-        loginWithMobileApp: '部署智能体 → 启动团队',
+        loginWithMobileApp: '探索 Genome',
     },
 
     review: {

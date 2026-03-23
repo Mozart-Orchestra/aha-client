@@ -743,11 +743,11 @@ export const pl: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Mobilny klient Codex i Claude Code',
-        subtitle: 'Szyfrowanie end-to-end, a Twoje konto jest przechowywane tylko na Twoim urządzeniu.',
+        title: 'Przestań budować agentów\nod zera.',
+        subtitle: 'Instaluj sprawdzone przez społeczność genomy agentów. Twórz zespoły. Pozwól im ewoluować.',
         createAccount: 'Utwórz konto',
         linkOrRestoreAccount: 'Połącz lub przywróć konto',
-        loginWithMobileApp: 'Zaloguj się przez aplikację mobilną',
+        loginWithMobileApp: 'Przeglądaj genomy',
     },
 
     review: {

@@ -731,11 +731,11 @@ export const ru: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Мобильный клиент Codex и Claude Code',
-        subtitle: 'Сквозное шифрование, аккаунт хранится только на вашем устройстве.',
+        title: 'Хватит создавать агентов\nс нуля.',
+        subtitle: 'Устанавливайте проверенные сообществом геномы агентов. Собирайте команды. Позвольте им эволюционировать.',
         createAccount: 'Создать аккаунт',
         linkOrRestoreAccount: 'Связать или восстановить аккаунт',
-        loginWithMobileApp: 'Войти через мобильное приложение',
+        loginWithMobileApp: 'Обзор геномов',
     },
 
     review: {

@@ -787,11 +787,11 @@ export const en = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Replace your team with AI agents.\nDeploy in one command.',
-        subtitle: 'Aha is an AI-native workbench for orchestrating multi-agent teams — coordinate, delegate, and ship work autonomously.',
+        title: 'Stop building agents\nfrom scratch.',
+        subtitle: 'Install battle-tested agent genomes from the community. Assemble teams. Let them evolve.',
         createAccount: 'Create account',
         linkOrRestoreAccount: 'Link or restore account',
-        loginWithMobileApp: 'Deploy agents → launch team',
+        loginWithMobileApp: 'Explore genomes',
     },
 
     review: {

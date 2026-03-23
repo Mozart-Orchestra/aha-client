@@ -46,13 +46,13 @@ type LandingCopy = {
 };
 
 const ENGLISH_LANDING_COPY: LandingCopy = {
-    eyebrow: 'AI-Native Team Workbench',
+    eyebrow: 'npm for AI Agents',
     trustEncrypted: 'End-to-end encrypted',
-    trustLocal: 'Stored only on your device',
+    trustLocal: 'Agents evolve over time',
     previewTitle: 'Live agent sessions',
-    primarySessionTitle: 'build-dashboard-ui',
-    primarySessionSubtitle: 'Implementing kanban board with real-time sync and multi-agent collaboration',
-    primarySessionMeta: 'active now',
+    primarySessionTitle: 'refactor-auth-module',
+    primarySessionSubtitle: 'Architect agent coordinating with Builder and QA — 3 agents evolving together',
+    primarySessionMeta: 'evolving',
     secondarySessionTitle: 'deploy-to-production',
     secondarySessionSubtitle: 'Agent awaiting approval to push changes to the production environment',
     secondarySessionMeta: 'awaiting decision',
@@ -63,13 +63,13 @@ const ENGLISH_LANDING_COPY: LandingCopy = {
 };
 
 const CHINESE_LANDING_COPY: LandingCopy = {
-    eyebrow: 'AI 原生团队工作台',
+    eyebrow: 'AI Agent 的 npm',
     trustEncrypted: '端到端加密',
-    trustLocal: '仅存储在你的设备上',
+    trustLocal: 'Agent 持续进化',
     previewTitle: '实时智能体会话',
-    primarySessionTitle: 'build-dashboard-ui',
-    primarySessionSubtitle: '正在实现看板界面，支持实时同步与多智能体协作',
-    primarySessionMeta: '当前活跃',
+    primarySessionTitle: 'refactor-auth-module',
+    primarySessionSubtitle: '架构师 Agent 协调 Builder 和 QA — 3 个 Agent 协同进化',
+    primarySessionMeta: '进化中',
     secondarySessionTitle: 'deploy-to-production',
     secondarySessionSubtitle: '智能体等待授权，将变更推送至生产环境',
     secondarySessionMeta: '等待决策',
