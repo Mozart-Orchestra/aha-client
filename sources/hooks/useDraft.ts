@@ -17,11 +17,12 @@ export function useDraft(
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSavedValue = useRef<string>('');
     const isFocused = useIsFocused();
+    const wasFocusedRef = useRef(isFocused);
 
     // Save draft to storage
     const saveDraft = useCallback((draft: string) => {
         if (!sessionId) return;
-        
+
         storage.getState().updateSessionDraft(sessionId, draft);
         lastSavedValue.current = draft;
     }, [sessionId]);
@@ -39,6 +40,22 @@ export function useDraft(
             lastSavedValue.current = '';
         }
     }, [sessionId, isFocused, onChange]);
+
+    // Save immediately when screen loses focus (navigating away in a stack leaves
+    // the component mounted, so unmount cleanup won't fire in time)
+    useEffect(() => {
+        const justLostFocus = wasFocusedRef.current && !isFocused;
+        wasFocusedRef.current = isFocused;
+
+        if (justLostFocus && sessionId && value !== lastSavedValue.current) {
+            // Clear any pending debounce and save immediately
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+                saveTimeoutRef.current = null;
+            }
+            saveDraft(value);
+        }
+    }, [isFocused, sessionId, value, saveDraft]);
 
     // Auto-save with smart debouncing
     useEffect(() => {
@@ -106,7 +123,7 @@ export function useDraft(
     // Clear draft (used after message is sent)
     const clearDraft = useCallback(() => {
         if (!sessionId) return;
-        
+
         storage.getState().updateSessionDraft(sessionId, null);
         lastSavedValue.current = '';
     }, [sessionId]);

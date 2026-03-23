@@ -32,6 +32,15 @@ export interface TaskBlocker {
     resolution?: string;
 }
 
+export interface HumanStatusLock {
+    mode: 'viewing' | 'editing' | 'manual-status';
+    lockedAt: number;
+    lockedBySessionId?: string;
+    lockedByRole?: string;
+    lockedByDisplayName?: string;
+    reason?: string;
+}
+
 // 状态传播配置
 export type StatusPropagation = SharedStatusPropagation;
 
@@ -97,6 +106,9 @@ export interface KanbanTask {
     // 🆕 阻塞追踪
     blockers?: TaskBlocker[];
 
+    // 🆕 人工锁 - 人类用户正在查看/编辑或刚手动改状态时，阻止 agent 覆盖
+    humanStatusLock?: HumanStatusLock | null;
+
     // 🆕 Chat-Board 集成
     relatedMessageIds?: string[];     // 关联的聊天消息ID列表
     dueDate?: number;                 // 截止日期
@@ -156,21 +168,68 @@ export interface TaskChecklistItem {
 }
 
 // 🆕 任务评论
+export type TaskCommentType =
+    | 'note'
+    | 'status-change'
+    | 'review-feedback'
+    | 'handoff'
+    | 'blocker'
+    | 'decision'
+    | 'human-override'
+    | 'plan'
+    | 'plan-review'
+    | 'execution-check'
+    | 'rework-request';
+
 export interface TaskComment {
     id: string;
-    sessionId: string;
-    displayName: string;
+    authorSessionId: string;
+    authorRole?: string;
+    authorDisplayName?: string;
+    type: TaskCommentType;
     content: string;
     createdAt: number;
     updatedAt?: number;
+    fromStatus?: string;
+    toStatus?: string;
+    mentions?: string[];
 }
 
 export interface KanbanBoard {
+    name?: string;
+    description?: string;
     columns: KanbanColumn[];
     tasks: KanbanTask[];
     roomId?: string;
     taskSettings?: NestedTaskSettings;
     team?: KanbanTeam;
+}
+
+export type TeamAuthority =
+    | 'user.reply'
+    | 'message.route'
+    | 'task.create'
+    | 'task.assign'
+    | 'task.update.any'
+    | 'task.approve'
+    | 'task.start.self'
+    | 'task.complete.self'
+    | 'agent.spawn';
+
+export interface KanbanTeamMemberOverlay {
+    promptSuffix?: string;
+    messaging?: {
+        listenFrom?: string[] | '*';
+        receiveUserMessages?: boolean;
+        replyMode?: 'proactive' | 'responsive' | 'passive';
+    };
+    behavior?: {
+        onIdle?: 'wait' | 'self-assign' | 'ask';
+        onBlocked?: 'report' | 'escalate' | 'retry';
+        canSpawnAgents?: boolean;
+        requireExplicitAssignment?: boolean;
+    };
+    authorities?: TeamAuthority[];
 }
 
 export interface KanbanTeamMember {
@@ -189,6 +248,9 @@ export interface KanbanTeamMember {
     displayName?: string;
     focusAreas?: string[];
     specId?: string;
+    authorities?: TeamAuthority[];
+    teamOverlay?: KanbanTeamMemberOverlay;
+    customPrompt?: string;
     parentSessionId?: string;
     executionPlane?: string;
     runtimeType?: string;
@@ -236,9 +298,22 @@ export interface KanbanTeamAgreement {
 }
 
 export interface KanbanTeam {
+    name?: string;
     members: KanbanTeamMember[];
     roles: KanbanTeamRole[];
     agreements: KanbanTeamAgreement;
+    bootContext?: {
+        teamDescription?: string;
+        initialObjective?: string;
+        sharedContext?: string[];
+        commandChain?: string[];
+        taskPolicy?: {
+            boardIsSourceOfTruth?: boolean;
+            requireTaskForExecution?: boolean;
+            forbidChatOnlyExecution?: boolean;
+            forbidPeerToPeerRouting?: boolean;
+        };
+    };
 }
 
 const cloneRole = (role: (typeof TEAM_ROLE_LIBRARY)[number]): KanbanTeamRole => ({

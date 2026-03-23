@@ -1,4 +1,5 @@
 import { storage } from '@/sync/storage';
+import { findWorkspacePathProblem } from '@/utils/workspacePathGuard';
 
 export type RecentMachinePath = {
     machineId: string;
@@ -15,6 +16,10 @@ function isGenericHomeFallback(path: string | null | undefined): boolean {
 
 function isPathUsableForMachine(machineId: string | null, path: string | null | undefined): boolean {
     if (!machineId || !path || path.trim().length === 0) {
+        return false;
+    }
+
+    if (findWorkspacePathProblem(path)) {
         return false;
     }
 
@@ -98,6 +103,9 @@ export function getKnownPathsForMachine(
 
     for (const session of machineSessions) {
         const path = session.metadata?.path;
+        if (!path) {
+            continue;
+        }
         if (isPathUsableForMachine(machineId, path) && !seen.has(path)) {
             seen.add(path);
             results.push(path);

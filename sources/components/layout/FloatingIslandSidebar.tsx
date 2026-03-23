@@ -1017,9 +1017,23 @@ export function FloatingIslandSidebar({
                     <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
                         {agentItems.length > 0 ? (
                             <>
-                                {activeAgentItems.map((item) => (
-                                    <AgentRow key={item.id} item={item} tokens={tokens} />
-                                ))}
+                                {activeAgentItems.length > 0 ? (
+                                    <>
+                                        <View style={styles.subsectionLabelRow}>
+                                            <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>
+                                                {t('status.online')}
+                                            </Text>
+                                            <View style={[styles.sectionCountBadge, { backgroundColor: '#EAF8EF' }]}>
+                                                <Text style={[styles.sectionCountText, { color: '#22C55E' }]}>
+                                                    {activeAgentItems.length}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {activeAgentItems.map((item) => (
+                                            <AgentRow key={item.id} item={item} tokens={tokens} />
+                                        ))}
+                                    </>
+                                ) : null}
                                 {(offlineAgentItems.length > 0 || deadAgentItems.length > 0) ? (
                                     <>
                                         {activeAgentItems.length > 0 ? (

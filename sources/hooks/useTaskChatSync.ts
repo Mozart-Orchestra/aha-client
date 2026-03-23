@@ -124,8 +124,12 @@ export function useTaskChatSync(options: UseTaskChatSyncOptions) {
         // 1. 更新任务
         await onTaskUpdate?.(taskId, updates);
 
+        const changedKeys = Object.keys(updates).filter((key) => (updates as Record<string, unknown>)[key] !== undefined);
+        const commentOnly = changedKeys.length > 0 && changedKeys.every((key) => key === 'comments');
+
         // 2. 发送通知到聊天
         if (!mergedTask) return;
+        if (commentOnly) return;
 
         const message = createTaskUpdateMessage(mergedTask, updates, actorName);
         message.teamId = teamId;

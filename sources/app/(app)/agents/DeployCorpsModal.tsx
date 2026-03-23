@@ -132,6 +132,17 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                         sessionTag,
                         roleId: plan.roleId,
                         displayName: plan.displayName,
+                        ...(plan.authorities?.length ? { authorities: [...plan.authorities] } : {}),
+                        ...(plan.overlay
+                            ? {
+                                teamOverlay: {
+                                    ...plan.overlay,
+                                    ...(plan.overlay.messaging ? { messaging: { ...plan.overlay.messaging } } : {}),
+                                    ...(plan.overlay.behavior ? { behavior: { ...plan.overlay.behavior } } : {}),
+                                    ...(plan.overlay.authorities ? { authorities: [...plan.overlay.authorities] } : {}),
+                                },
+                            }
+                            : {}),
                         ...(matchedGenome ? { specId: matchedGenome.id } : {}),
                         runtimeType,
                         lifecycle: {

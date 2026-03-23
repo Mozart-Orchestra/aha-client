@@ -12,6 +12,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
+import { SessionView } from '@/-session/SessionView';
 import { Text } from '@/components/ui/StyledText';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { layout } from '@/utils/layout';
@@ -19,19 +20,29 @@ import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
 import { t } from '@/text';
 import { Modal } from '@/modal';
 import { sync } from '@/sync/sync';
-import { createAgent } from '@/sync/apiAgents';
-import { createGenome, fetchGenomes, publishGenome, type Genome } from '@/sync/apiEvolution';
-import { useArtifacts, useAllMachines, useSetting } from '@/sync/storage';
+import { createGenome, publishGenome } from '@/sync/apiEvolution';
+import { useAllMachines, useSessionMessages, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
-import { buildAgentBuilderGenomeSpec, buildManualGenomeSpec, getTeamDerivedGenomes, slugifyAgentName, type ManualAgentCategory, type ManualAgentDraft, type ManualAgentRuntime, type ManualPermissionMode } from '@/utils/agentCreation';
-import { parseSpec } from '@/utils/genomeHub';
-import { trackAgentDeployed } from '@/track';
+import {
+    buildManualGenomeSpec,
+    buildPrivateAgentBuilderGenomeSpec,
+    buildPrivateAgentBuilderKickoff,
+    mergeManualDraftUpdate,
+    parseManualDraftSyncComment,
+    slugifyAgentName,
+    PRIVATE_AGENT_BUILDER_VERSION,
+    type ManualAgentCategory,
+    type ManualAgentDraft,
+    type ManualAgentRuntime,
+    type ManualPermissionMode,
+} from '@/utils/agentCreation';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { goBackOrReturn } from '@/utils/returnNavigation';
 import { randomUUID } from '@/utils/uuid';
+import { getConcatenatedPathErrorMessage } from '@/utils/workingDirectory';
 
-type CreationMode = 'team' | 'manual' | 'chat';
+type CreationMode = 'manual' | 'chat' | 'market';
 
 const CATEGORY_OPTIONS: Array<{ value: ManualAgentCategory; label: string }> = [
     { value: 'coordination', label: t('agents.coordination') },
@@ -62,105 +73,31 @@ const DEFAULT_MANUAL_DRAFT: ManualAgentDraft = {
     tags: '',
     modelId: '',
     permissionMode: 'acceptEdits',
+    kanbanOwnTasks: true,
+    kanbanBoardAuthority: false,
 };
+
+const PRIVATE_BUILDER_NAME = `Agent Creator V${PRIVATE_AGENT_BUILDER_VERSION}`;
 
 function buildStandaloneSessionTag() {
     return `standalone:${randomUUID()}`;
 }
 
-function getTeamTitle(teamLookup: Map<string, string>, teamId: string | null | undefined): string {
-    if (!teamId) {
-        return 'Unknown team';
-    }
-    return teamLookup.get(teamId) || `Team ${teamId.slice(0, 8)}`;
-}
-
-function TeamGenomeCard({
-    genome,
-    teamTitle,
-    isPublishing,
-    onPublish,
-}: {
-    genome: Genome;
-    teamTitle: string;
-    isPublishing: boolean;
-    onPublish: () => void;
-}) {
-    const { theme } = useUnistyles();
-    const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
-
-    return (
-        <View style={[styles.teamGenomeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}> 
-            <View style={styles.teamGenomeHeader}>
-                <View style={{ flex: 1, gap: 6 }}>
-                    <Text style={[styles.teamGenomeName, { color: theme.colors.text }]} numberOfLines={1}>
-                        {spec?.displayName || genome.name}
-                    </Text>
-                    <Text style={[styles.teamGenomeMeta, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-                        {teamTitle}
-                    </Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: genome.isPublic ? '#22c55e14' : theme.colors.surfaceHigh }]}>
-                    <Text style={[styles.statusBadgeText, { color: genome.isPublic ? '#22c55e' : theme.colors.textSecondary }]}>
-                        {genome.isPublic ? 'Live' : 'Draft'}
-                    </Text>
-                </View>
-            </View>
-
-            {genome.description ? (
-                <Text style={[styles.teamGenomeDescription, { color: theme.colors.textSecondary }]} numberOfLines={3}>
-                    {genome.description}
-                </Text>
-            ) : null}
-
-            <View style={styles.badgeRow}>
-                {genome.category ? (
-                    <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHigh }]}> 
-                        <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>{genome.category}</Text>
-                    </View>
-                ) : null}
-                {spec?.runtimeType ? (
-                    <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHigh }]}> 
-                        <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>{spec.runtimeType}</Text>
-                    </View>
-                ) : null}
-                {spec?.baseRoleId ? (
-                    <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHigh }]}> 
-                        <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>{spec.baseRoleId}</Text>
-                    </View>
-                ) : null}
-            </View>
-
-            <View style={styles.teamGenomeFooter}>
-                <Text style={[styles.teamGenomeMeta, { color: theme.colors.textSecondary }]}>
-                    {genome.spawnCount} spawns
-                </Text>
-                <View style={{ flex: 1 }} />
-                <Pressable
-                    onPress={onPublish}
-                    disabled={genome.isPublic || isPublishing}
-                    style={[
-                        styles.secondaryButton,
-                        { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface },
-                        (genome.isPublic || isPublishing) && styles.disabledButton,
-                    ]}
-                >
-                    {isPublishing ? (
-                        <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-                    ) : (
-                        <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}> 
-                            {genome.isPublic ? 'Published' : 'Publish'}
-                        </Text>
-                    )}
-                </Pressable>
-            </View>
-        </View>
-    );
+function splitDraftList(value: string): string[] {
+    return value
+        .split(/\n|,/g)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
     const { theme } = useUnistyles();
     return <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>{children}</Text>;
+}
+
+function SectionHint({ children }: { children: React.ReactNode }) {
+    const { theme } = useUnistyles();
+    return <Text style={[styles.sectionHint, { color: theme.colors.textSecondary }]}>{children}</Text>;
 }
 
 function TextField({
@@ -202,396 +139,144 @@ function TextField({
     );
 }
 
-export default React.memo(function NewAgentScreen() {
+function GuideCard({ title, body }: { title: string; body: string }) {
     const { theme } = useUnistyles();
-    const router = useRouter();
-    const { width } = useWindowDimensions();
-    const isDesktopShell = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
-    const machines = useAllMachines();
-    const recentMachinePaths = useSetting('recentMachinePaths');
-    const artifacts = useArtifacts();
-
-    const [mode, setMode] = React.useState<CreationMode>('team');
-    const [saving, setSaving] = React.useState(false);
-    const [manualDraft, setManualDraft] = React.useState<ManualAgentDraft>(DEFAULT_MANUAL_DRAFT);
-    const [manualPublishNow, setManualPublishNow] = React.useState(true);
-    const [builderName, setBuilderName] = React.useState('Agent Builder');
-    const [builderBrief, setBuilderBrief] = React.useState('');
-    const [builderRuntime, setBuilderRuntime] = React.useState<ManualAgentRuntime>('claude');
-    const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
-        () => machines.find(isMachineOnline)?.id ?? null,
-    );
-    const [cwd, setCwd] = React.useState('');
-    const [showPathDropdown, setShowPathDropdown] = React.useState(false);
-    const [ownedGenomes, setOwnedGenomes] = React.useState<Genome[]>([]);
-    const [loadingOwnedGenomes, setLoadingOwnedGenomes] = React.useState(true);
-    const [publishingGenomeIds, setPublishingGenomeIds] = React.useState<string[]>([]);
-
-    useEscapeAction(true, () => goBackOrReturn(router, '/agents'));
-
-    React.useEffect(() => {
-        setCwd(getRecentPathForMachine(selectedMachineId, recentMachinePaths));
-    }, [recentMachinePaths, selectedMachineId]);
-
-    const knownPaths = React.useMemo(
-        () => getKnownPathsForMachine(selectedMachineId, recentMachinePaths),
-        [recentMachinePaths, selectedMachineId],
-    );
-
-    const selectedMachine = machines.find((machine) => machine.id === selectedMachineId) ?? null;
-    const canStartBuilder = !!selectedMachine && isMachineOnline(selectedMachine) && !!cwd.trim() && !!builderName.trim();
-
-    const teamLookup = React.useMemo(() => {
-        return new Map(
-            artifacts
-                .filter((artifact) => artifact.type === 'team')
-                .map((artifact) => [artifact.id, artifact.title || t('teams.untitledTeam')] as const),
-        );
-    }, [artifacts]);
-
-    const loadOwnedGenomes = React.useCallback(async () => {
-        const credentials = sync.getCredentials();
-        if (!credentials) {
-            setOwnedGenomes([]);
-            setLoadingOwnedGenomes(false);
-            return;
-        }
-
-        setLoadingOwnedGenomes(true);
-        try {
-            const result = await fetchGenomes(credentials, { ownedOnly: true, limit: 200 });
-            setOwnedGenomes(result.genomes);
-        } catch {
-            setOwnedGenomes([]);
-        } finally {
-            setLoadingOwnedGenomes(false);
-        }
-    }, []);
-
-    React.useEffect(() => {
-        void loadOwnedGenomes();
-    }, [loadOwnedGenomes]);
-
-    const teamGenomes = React.useMemo(() => {
-        return getTeamDerivedGenomes(ownedGenomes).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-    }, [ownedGenomes]);
-
-    const publishableTeamGenomes = React.useMemo(
-        () => teamGenomes.filter((genome) => !genome.isPublic),
-        [teamGenomes],
-    );
-
-    const canCreateManual = React.useMemo(() => {
-        return !!manualDraft.displayName.trim() && !!manualDraft.systemPrompt.trim();
-    }, [manualDraft.displayName, manualDraft.systemPrompt]);
-
-    const primaryActionLabel = mode === 'team'
-        ? (publishableTeamGenomes.length > 1 ? 'Publish all' : 'Publish')
-        : mode === 'manual'
-            ? t('common.create')
-            : 'Start';
-
-    const canSubmit = mode === 'team'
-        ? publishableTeamGenomes.length > 0
-        : mode === 'manual'
-            ? canCreateManual
-            : canStartBuilder;
-
-    const handlePublishSingleGenome = React.useCallback(async (genome: Genome) => {
-        const credentials = sync.getCredentials();
-        if (!credentials) {
-            await Modal.alert(t('common.error'), 'Not authenticated');
-            return;
-        }
-
-        setPublishingGenomeIds((current) => [...current, genome.id]);
-        try {
-            const response = await publishGenome(credentials, genome.id);
-            setOwnedGenomes((current) => current.map((item) => item.id === genome.id ? response.genome : item));
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to publish genome';
-            await Modal.alert(t('common.error'), message);
-        } finally {
-            setPublishingGenomeIds((current) => current.filter((id) => id !== genome.id));
-        }
-    }, []);
-
-    const handlePublishAllTeamGenomes = React.useCallback(async () => {
-        const credentials = sync.getCredentials();
-        if (!credentials) {
-            await Modal.alert(t('common.error'), 'Not authenticated');
-            return;
-        }
-        if (publishableTeamGenomes.length === 0 || saving) {
-            return;
-        }
-
-        setSaving(true);
-        setPublishingGenomeIds(publishableTeamGenomes.map((genome) => genome.id));
-        try {
-            const published = await Promise.all(
-                publishableTeamGenomes.map(async (genome) => {
-                    const response = await publishGenome(credentials, genome.id);
-                    return response.genome;
-                }),
-            );
-            const publishedById = new Map(published.map((genome) => [genome.id, genome]));
-            setOwnedGenomes((current) => current.map((genome) => publishedById.get(genome.id) || genome));
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to publish genomes';
-            await Modal.alert(t('common.error'), message);
-        } finally {
-            setPublishingGenomeIds([]);
-            setSaving(false);
-        }
-    }, [publishableTeamGenomes, saving]);
-
-    const handleCreateManualAgent = React.useCallback(async () => {
-        const credentials = sync.getCredentials();
-        if (!credentials) {
-            await Modal.alert(t('common.error'), 'Not authenticated');
-            return;
-        }
-        if (!canCreateManual || saving) {
-            return;
-        }
-
-        setSaving(true);
-        try {
-            const spec = buildManualGenomeSpec(manualDraft);
-            const name = slugifyAgentName(manualDraft.displayName);
-            const created = await createGenome(credentials, {
-                name,
-                description: manualDraft.description.trim() || undefined,
-                spec: JSON.stringify(spec),
-                tags: spec.tags && spec.tags.length > 0 ? JSON.stringify(spec.tags) : undefined,
-                category: manualDraft.category,
-                isPublic: false,
-                status: 'draft',
-                origin: 'manual',
-            });
-
-            let resolvedGenome = created.genome;
-            if (manualPublishNow) {
-                const published = await publishGenome(credentials, created.genome.id);
-                resolvedGenome = published.genome;
-            }
-
-            setOwnedGenomes((current) => [resolvedGenome, ...current.filter((genome) => genome.id !== resolvedGenome.id)]);
-            router.push({ pathname: '/agents/[id]', params: { id: resolvedGenome.id } } as any);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to create agent';
-            await Modal.alert(t('common.error'), message);
-        } finally {
-            setSaving(false);
-        }
-    }, [canCreateManual, manualDraft, manualPublishNow, router, saving]);
-
-    const handleStartBuilderChat = React.useCallback(async () => {
-        const credentials = sync.getCredentials();
-        if (!credentials) {
-            await Modal.alert(t('common.error'), 'Not authenticated');
-            return;
-        }
-        if (!canStartBuilder || saving || !selectedMachineId) {
-            return;
-        }
-
-        setSaving(true);
-        try {
-            const sessionTag = buildStandaloneSessionTag();
-            const builderSpec = buildAgentBuilderGenomeSpec({
-                displayName: builderName.trim(),
-                runtime: builderRuntime,
-                brief: builderBrief,
-            });
-            const genomeName = `${slugifyAgentName(builderName)}-${randomUUID().slice(0, 8)}`;
-            const createdGenome = await createGenome(credentials, {
-                name: genomeName,
-                description: builderSpec.description,
-                spec: JSON.stringify(builderSpec),
-                tags: builderSpec.tags && builderSpec.tags.length > 0 ? JSON.stringify(builderSpec.tags) : undefined,
-                category: builderSpec.category,
-                isPublic: false,
-                status: 'draft',
-                origin: 'manual',
-            });
-
-            const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
-                directory: cwd.trim(),
-                agent: builderRuntime,
-                sessionTag,
-                role: builderSpec.baseRoleId ?? 'standalone',
-                specId: createdGenome.genome.id,
-                sessionName: builderName.trim(),
-            });
-
-            if (!sessionId) {
-                throw new Error('Spawn returned no session ID');
-            }
-
-            const agent = await createAgent(credentials, {
-                displayName: builderName.trim(),
-                genomeId: createdGenome.genome.id,
-                genomeSpec: builderSpec as Record<string, unknown>,
-                runtimeType: builderRuntime,
-                sessionId,
-                sessionTag,
-                metadata: {
-                    source: 'agent_builder_chat',
-                    deployMode: 'standalone',
-                },
-            });
-
-            const updatedPaths = updateRecentMachinePaths(recentMachinePaths, selectedMachineId, cwd.trim());
-            sync.applySettings({ recentMachinePaths: updatedPaths });
-            setOwnedGenomes((current) => [createdGenome.genome, ...current.filter((genome) => genome.id !== createdGenome.genome.id)]);
-            trackAgentDeployed(agent.id, {
-                source: 'agent_builder_chat',
-                runtime_type: builderRuntime,
-                session_id: sessionId,
-                agent_type: agent.type,
-            });
-            router.push({ pathname: '/session/[id]', params: { id: sessionId } } as any);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to start agent builder';
-            await Modal.alert(t('common.error'), message);
-        } finally {
-            setSaving(false);
-        }
-    }, [builderBrief, builderName, builderRuntime, canStartBuilder, cwd, recentMachinePaths, router, saving, selectedMachineId]);
-
-    const handlePrimaryAction = React.useCallback(async () => {
-        if (mode === 'team') {
-            await handlePublishAllTeamGenomes();
-            return;
-        }
-        if (mode === 'manual') {
-            await handleCreateManualAgent();
-            return;
-        }
-        await handleStartBuilderChat();
-    }, [handleCreateManualAgent, handlePublishAllTeamGenomes, handleStartBuilderChat, mode]);
-
-    const renderModePicker = () => (
-        <View style={styles.modeSection}>
-            <SectionLabel>How do you want to create it?</SectionLabel>
-            <View style={styles.modeGrid}>
-                {[
-                    {
-                        key: 'team' as const,
-                        icon: 'git-network-outline' as const,
-                        title: 'Team -> Market',
-                        subtitle: 'Publish agents already born inside teams.',
-                    },
-                    {
-                        key: 'manual' as const,
-                        icon: 'create-outline' as const,
-                        title: 'Pure Manual',
-                        subtitle: 'Fill the genome spec yourself field by field.',
-                    },
-                    {
-                        key: 'chat' as const,
-                        icon: 'chatbubbles-outline' as const,
-                        title: 'Chat Builder',
-                        subtitle: 'Launch a dedicated builder agent and design with chat.',
-                    },
-                ].map((item) => {
-                    const active = mode === item.key;
-                    return (
-                        <Pressable
-                            key={item.key}
-                            onPress={() => setMode(item.key)}
-                            style={[
-                                styles.modeCard,
-                                {
-                                    borderColor: active ? theme.colors.button.primary.background : theme.colors.divider,
-                                    backgroundColor: active ? theme.colors.groupped.background : theme.colors.surface,
-                                },
-                            ]}
-                        >
-                            <View style={[styles.modeIcon, { backgroundColor: active ? theme.colors.button.primary.background : theme.colors.surfaceHigh }]}> 
-                                <Ionicons name={item.icon} size={18} color={active ? theme.colors.button.primary.tint : theme.colors.textSecondary} />
-                            </View>
-                            <Text style={[styles.modeTitle, { color: theme.colors.text }]}>{item.title}</Text>
-                            <Text style={[styles.modeSubtitle, { color: theme.colors.textSecondary }]}>{item.subtitle}</Text>
-                        </Pressable>
-                    );
-                })}
-            </View>
+    return (
+        <View style={[styles.guideCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+            <Text style={[styles.guideTitle, { color: theme.colors.text }]}>{title}</Text>
+            <Text style={[styles.guideBody, { color: theme.colors.textSecondary }]}>{body}</Text>
         </View>
     );
+}
 
-    const renderTeamMode = () => (
-        <View style={styles.sectionBlock}>
-            <SectionLabel>Team-created agents</SectionLabel>
-            <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}> 
-                <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>Ship team outputs into the marketplace</Text>
-                <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>Any genome saved inside a team can be published here. Use Publish all to report every unpublished team agent at once.</Text>
+function AgentPreviewCard({ draft }: { draft: ManualAgentDraft }) {
+    const { theme } = useUnistyles();
+    const responsibilities = splitDraftList(draft.responsibilities).slice(0, 3);
+    const tags = splitDraftList(draft.tags).slice(0, 4);
+
+    return (
+        <View style={[styles.previewCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+            <View style={styles.previewHeader}>
+                <View style={styles.previewTitleWrap}>
+                    <Text style={[styles.previewTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                        {draft.displayName.trim() || t('agents.previewCard')}
+                    </Text>
+                    <View style={[styles.previewStatusBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                        <Text style={[styles.previewStatusText, { color: theme.colors.textSecondary }]}>
+                            {t('agents.previewDraft')}
+                        </Text>
+                    </View>
+                </View>
             </View>
-            {loadingOwnedGenomes ? (
-                <View style={styles.centerState}>
-                    <ActivityIndicator color={theme.colors.textSecondary} />
+
+            <Text style={[styles.previewBody, { color: theme.colors.textSecondary }]} numberOfLines={4}>
+                {draft.description.trim() || t('agents.previewEmptyHint')}
+            </Text>
+
+            <View style={styles.previewBadgeRow}>
+                <View style={[styles.previewBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <Text style={[styles.previewBadgeText, { color: theme.colors.textSecondary }]}>
+                        {draft.category}
+                    </Text>
                 </View>
-            ) : teamGenomes.length === 0 ? (
-                <View style={[styles.emptyState, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}> 
-                    <Ionicons name="git-network-outline" size={28} color={theme.colors.textSecondary} />
-                    <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No team genomes yet</Text>
-                    <Text style={[styles.emptyHint, { color: theme.colors.textSecondary }]}>Once org-manager or a team agent saves a genome, it will show up here for publication.</Text>
+                <View style={[styles.previewBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <Text style={[styles.previewBadgeText, { color: theme.colors.textSecondary }]}>
+                        {draft.runtime}
+                    </Text>
                 </View>
-            ) : (
-                <View style={styles.teamGenomeList}>
-                    {teamGenomes.map((genome) => (
-                        <TeamGenomeCard
-                            key={genome.id}
-                            genome={genome}
-                            teamTitle={getTeamTitle(teamLookup, genome.teamId)}
-                            isPublishing={publishingGenomeIds.includes(genome.id)}
-                            onPublish={() => void handlePublishSingleGenome(genome)}
-                        />
+                <View style={[styles.previewBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <Text style={[styles.previewBadgeText, { color: theme.colors.textSecondary }]}>
+                        {draft.roleId || 'role'}
+                    </Text>
+                </View>
+            </View>
+
+            {draft.systemPrompt.trim() ? (
+                <Text style={[styles.previewPrompt, { color: theme.colors.text }]} numberOfLines={4}>
+                    {draft.systemPrompt.trim()}
+                </Text>
+            ) : null}
+
+            {responsibilities.length > 0 ? (
+                <View style={styles.previewList}>
+                    {responsibilities.map((item) => (
+                        <View key={item} style={styles.previewListRow}>
+                            <View style={[styles.previewListDot, { backgroundColor: theme.colors.button.primary.background }]} />
+                            <Text style={[styles.previewListText, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                                {item}
+                            </Text>
+                        </View>
                     ))}
                 </View>
-            )}
+            ) : null}
+
+            {tags.length > 0 ? (
+                <View style={styles.previewBadgeRow}>
+                    {tags.map((tag) => (
+                        <View key={tag} style={[styles.previewBadge, { backgroundColor: '#0EA5E914' }]}>
+                            <Text style={[styles.previewBadgeText, { color: '#0EA5E9' }]}>{tag}</Text>
+                        </View>
+                    ))}
+                </View>
+            ) : null}
         </View>
     );
+}
 
-    const renderManualMode = () => (
-        <View style={styles.sectionBlock}>
-            <SectionLabel>Manual genome</SectionLabel>
-            <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}> 
-                <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>Author the reusable agent spec directly</Text>
-                <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>This creates a reusable agent genome first. You can publish it immediately or keep it as a private draft.</Text>
+function DraftEditor({
+    draft,
+    setDraft,
+    publishNow,
+    setPublishNow,
+}: {
+    draft: ManualAgentDraft;
+    setDraft: React.Dispatch<React.SetStateAction<ManualAgentDraft>>;
+    publishNow: boolean;
+    setPublishNow: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+    const { theme } = useUnistyles();
+
+    const updateDraft = React.useCallback((patch: Partial<ManualAgentDraft>) => {
+        setDraft((current) => mergeManualDraftUpdate(current, patch));
+    }, [setDraft]);
+
+    return (
+        <View style={styles.sidebarContent}>
+            <View style={styles.sidebarIntro}>
+                <SectionLabel>{t('agents.manualSidebarTitle')}</SectionLabel>
+                <SectionHint>{t('agents.manualSidebarHint')}</SectionHint>
             </View>
+
+            <AgentPreviewCard draft={draft} />
 
             <View style={styles.formGroup}>
                 <SectionLabel>{t('agents.agentName')}</SectionLabel>
                 <TextField
-                    value={manualDraft.displayName}
-                    onChangeText={(value) => setManualDraft((current) => ({ ...current, displayName: value }))}
+                    value={draft.displayName}
+                    onChangeText={(value) => updateDraft({ displayName: value })}
                     placeholder={t('agents.agentNamePlaceholder')}
-                    autoFocus
                 />
             </View>
 
             <View style={styles.formGroup}>
-                <SectionLabel>Description</SectionLabel>
+                <SectionLabel>{t('agents.descriptionLabel')}</SectionLabel>
                 <TextField
-                    value={manualDraft.description}
-                    onChangeText={(value) => setManualDraft((current) => ({ ...current, description: value }))}
-                    placeholder="What should this agent be great at?"
+                    value={draft.description}
+                    onChangeText={(value) => updateDraft({ description: value })}
+                    placeholder={t('agents.descriptionPlaceholder')}
                     multiline
                 />
             </View>
 
             <View style={styles.formGroup}>
-                <SectionLabel>Category</SectionLabel>
+                <SectionLabel>{t('agents.categoryLabel')}</SectionLabel>
                 <View style={styles.chipRow}>
                     {CATEGORY_OPTIONS.map((option) => {
-                        const active = manualDraft.category === option.value;
+                        const active = draft.category === option.value;
                         return (
                             <Pressable
                                 key={option.value}
-                                onPress={() => setManualDraft((current) => ({ ...current, category: option.value }))}
+                                onPress={() => updateDraft({ category: option.value })}
                                 style={[
                                     styles.choiceChip,
                                     {
@@ -613,11 +298,11 @@ export default React.memo(function NewAgentScreen() {
                 <SectionLabel>{t('agents.agentRuntime')}</SectionLabel>
                 <View style={styles.chipRow}>
                     {RUNTIME_OPTIONS.map((option) => {
-                        const active = manualDraft.runtime === option.value;
+                        const active = draft.runtime === option.value;
                         return (
                             <Pressable
                                 key={option.value}
-                                onPress={() => setManualDraft((current) => ({ ...current, runtime: option.value }))}
+                                onPress={() => updateDraft({ runtime: option.value })}
                                 style={[
                                     styles.choiceChip,
                                     {
@@ -636,50 +321,50 @@ export default React.memo(function NewAgentScreen() {
             </View>
 
             <View style={styles.formGroup}>
-                <SectionLabel>Role ID</SectionLabel>
+                <SectionLabel>{t('agents.roleIdLabel')}</SectionLabel>
                 <TextField
-                    value={manualDraft.roleId}
-                    onChangeText={(value) => setManualDraft((current) => ({ ...current, roleId: value }))}
-                    placeholder="builder"
+                    value={draft.roleId}
+                    onChangeText={(value) => updateDraft({ roleId: value })}
+                    placeholder={t('agents.roleIdPlaceholder')}
                 />
             </View>
 
             <View style={styles.formGroup}>
-                <SectionLabel>System prompt</SectionLabel>
+                <SectionLabel>{t('agents.systemPromptLabel')}</SectionLabel>
                 <TextField
-                    value={manualDraft.systemPrompt}
-                    onChangeText={(value) => setManualDraft((current) => ({ ...current, systemPrompt: value }))}
-                    placeholder="Describe how the agent should think, act, and decide."
+                    value={draft.systemPrompt}
+                    onChangeText={(value) => updateDraft({ systemPrompt: value })}
+                    placeholder={t('agents.systemPromptPlaceholder')}
                     multiline
                 />
             </View>
 
             <View style={styles.formGroup}>
-                <SectionLabel>Responsibilities</SectionLabel>
+                <SectionLabel>{t('agents.responsibilitiesLabel')}</SectionLabel>
                 <TextField
-                    value={manualDraft.responsibilities}
-                    onChangeText={(value) => setManualDraft((current) => ({ ...current, responsibilities: value }))}
-                    placeholder="One item per line"
+                    value={draft.responsibilities}
+                    onChangeText={(value) => updateDraft({ responsibilities: value })}
+                    placeholder={t('agents.listOnePerLineHint')}
                     multiline
                 />
             </View>
 
             <View style={styles.formGroup}>
-                <SectionLabel>Capabilities</SectionLabel>
+                <SectionLabel>{t('agents.capabilitiesLabel')}</SectionLabel>
                 <TextField
-                    value={manualDraft.capabilities}
-                    onChangeText={(value) => setManualDraft((current) => ({ ...current, capabilities: value }))}
-                    placeholder="One item per line"
+                    value={draft.capabilities}
+                    onChangeText={(value) => updateDraft({ capabilities: value })}
+                    placeholder={t('agents.listOnePerLineHint')}
                     multiline
                 />
             </View>
 
             <View style={styles.formGroup}>
-                <SectionLabel>Tags</SectionLabel>
+                <SectionLabel>{t('agents.tagsLabel')}</SectionLabel>
                 <TextField
-                    value={manualDraft.tags}
-                    onChangeText={(value) => setManualDraft((current) => ({ ...current, tags: value }))}
-                    placeholder="typescript, support, sales"
+                    value={draft.tags}
+                    onChangeText={(value) => updateDraft({ tags: value })}
+                    placeholder={t('agents.tagsPlaceholder')}
                 />
             </View>
 
@@ -687,20 +372,20 @@ export default React.memo(function NewAgentScreen() {
                 <View style={[styles.formGroup, styles.formGroupHalf]}>
                     <SectionLabel>{t('agents.model')}</SectionLabel>
                     <TextField
-                        value={manualDraft.modelId}
-                        onChangeText={(value) => setManualDraft((current) => ({ ...current, modelId: value }))}
-                        placeholder="Optional"
+                        value={draft.modelId}
+                        onChangeText={(value) => updateDraft({ modelId: value })}
+                        placeholder={t('agents.modelPlaceholderOptional')}
                     />
                 </View>
                 <View style={[styles.formGroup, styles.formGroupHalf]}>
                     <SectionLabel>{t('agents.permissionMode')}</SectionLabel>
                     <View style={styles.chipRow}>
                         {PERMISSION_OPTIONS.map((option) => {
-                            const active = manualDraft.permissionMode === option.value;
+                            const active = draft.permissionMode === option.value;
                             return (
                                 <Pressable
                                     key={option.value}
-                                    onPress={() => setManualDraft((current) => ({ ...current, permissionMode: option.value }))}
+                                    onPress={() => updateDraft({ permissionMode: option.value })}
                                     style={[
                                         styles.choiceChip,
                                         styles.compactChip,
@@ -720,171 +405,541 @@ export default React.memo(function NewAgentScreen() {
                 </View>
             </View>
 
+            <View style={styles.formGroup}>
+                <SectionLabel>{t('agents.kanbanProfileLabel')}</SectionLabel>
+
+                <View style={[styles.toggleRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                    <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={[styles.toggleTitle, { color: theme.colors.text }]}>{t('agents.boardVisibilityTitle')}</Text>
+                        <Text style={[styles.toggleHint, { color: theme.colors.textSecondary }]}>{t('agents.boardVisibilityHint')}</Text>
+                    </View>
+                    <View style={[styles.toggleIndicator, { backgroundColor: theme.colors.button.primary.background }]}>
+                        <Ionicons name="eye-outline" size={16} color={theme.colors.button.primary.tint} />
+                    </View>
+                </View>
+
+                <Pressable
+                    onPress={() => setDraft((current) => ({
+                        ...current,
+                        kanbanOwnTasks: !current.kanbanOwnTasks,
+                        kanbanBoardAuthority: current.kanbanOwnTasks ? false : current.kanbanBoardAuthority,
+                    }))}
+                    style={[styles.toggleRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
+                >
+                    <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={[styles.toggleTitle, { color: theme.colors.text }]}>{t('agents.ownTaskLifecycleTitle')}</Text>
+                        <Text style={[styles.toggleHint, { color: theme.colors.textSecondary }]}>{t('agents.ownTaskLifecycleHint')}</Text>
+                    </View>
+                    <View style={[
+                        styles.toggleIndicator,
+                        { backgroundColor: draft.kanbanOwnTasks ? theme.colors.button.primary.background : theme.colors.surfaceHigh },
+                    ]}>
+                        <Ionicons name={draft.kanbanOwnTasks ? 'checkmark' : 'remove'} size={16} color={draft.kanbanOwnTasks ? theme.colors.button.primary.tint : theme.colors.textSecondary} />
+                    </View>
+                </Pressable>
+
+                <Pressable
+                    onPress={() => setDraft((current) => ({
+                        ...current,
+                        kanbanOwnTasks: true,
+                        kanbanBoardAuthority: !current.kanbanBoardAuthority,
+                    }))}
+                    style={[styles.toggleRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
+                >
+                    <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={[styles.toggleTitle, { color: theme.colors.text }]}>{t('agents.boardAuthorityTitle')}</Text>
+                        <Text style={[styles.toggleHint, { color: theme.colors.textSecondary }]}>{t('agents.boardAuthorityHint')}</Text>
+                    </View>
+                    <View style={[
+                        styles.toggleIndicator,
+                        { backgroundColor: draft.kanbanBoardAuthority ? theme.colors.button.primary.background : theme.colors.surfaceHigh },
+                    ]}>
+                        <Ionicons name={draft.kanbanBoardAuthority ? 'checkmark' : 'remove'} size={16} color={draft.kanbanBoardAuthority ? theme.colors.button.primary.tint : theme.colors.textSecondary} />
+                    </View>
+                </Pressable>
+            </View>
+
             <Pressable
-                onPress={() => setManualPublishNow((value) => !value)}
+                onPress={() => setPublishNow((value) => !value)}
                 style={[styles.toggleRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
             >
                 <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={[styles.toggleTitle, { color: theme.colors.text }]}>Publish to marketplace now</Text>
-                    <Text style={[styles.toggleHint, { color: theme.colors.textSecondary }]}>Turn this on if the draft should appear in the public agent marketplace right away.</Text>
+                    <Text style={[styles.toggleTitle, { color: theme.colors.text }]}>{t('agents.publishNowTitle')}</Text>
+                    <Text style={[styles.toggleHint, { color: theme.colors.textSecondary }]}>{t('agents.publishNowHint')}</Text>
                 </View>
                 <View style={[
                     styles.toggleIndicator,
-                    { backgroundColor: manualPublishNow ? theme.colors.button.primary.background : theme.colors.surfaceHigh },
+                    { backgroundColor: publishNow ? theme.colors.button.primary.background : theme.colors.surfaceHigh },
                 ]}>
-                    <Ionicons name={manualPublishNow ? 'checkmark' : 'remove'} size={16} color={manualPublishNow ? theme.colors.button.primary.tint : theme.colors.textSecondary} />
+                    <Ionicons name={publishNow ? 'checkmark' : 'remove'} size={16} color={publishNow ? theme.colors.button.primary.tint : theme.colors.textSecondary} />
                 </View>
             </Pressable>
         </View>
     );
+}
 
-    const renderChatMode = () => (
+export default React.memo(function NewAgentScreen() {
+    const { theme } = useUnistyles();
+    const router = useRouter();
+    const { width } = useWindowDimensions();
+    const isDesktopShell = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
+    const machines = useAllMachines();
+    const recentMachinePaths = useSetting('recentMachinePaths');
+
+    const [mode, setMode] = React.useState<CreationMode>('chat');
+    const [saving, setSaving] = React.useState(false);
+    const [manualDraft, setManualDraft] = React.useState<ManualAgentDraft>(DEFAULT_MANUAL_DRAFT);
+    const [manualPublishNow, setManualPublishNow] = React.useState(false);
+    const [chatBrief, setChatBrief] = React.useState('');
+    const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
+        () => machines.find(isMachineOnline)?.id ?? null,
+    );
+    const [cwd, setCwd] = React.useState('');
+    const [showPathDropdown, setShowPathDropdown] = React.useState(false);
+    const [builderSessionId, setBuilderSessionId] = React.useState<string | null>(null);
+    const processedBuilderMessagesRef = React.useRef<Set<string>>(new Set());
+
+    const { messages: builderMessages } = useSessionMessages(builderSessionId ?? '');
+
+    useEscapeAction(true, () => goBackOrReturn(router, '/agents'));
+
+    React.useEffect(() => {
+        setCwd(getRecentPathForMachine(selectedMachineId, recentMachinePaths));
+    }, [recentMachinePaths, selectedMachineId]);
+
+    React.useEffect(() => {
+        if (!selectedMachineId) {
+            setSelectedMachineId(machines.find(isMachineOnline)?.id ?? null);
+        }
+    }, [machines, selectedMachineId]);
+
+    React.useEffect(() => {
+        if (!builderSessionId) {
+            return;
+        }
+
+        for (const message of builderMessages) {
+            if (message.kind !== 'agent-text') {
+                continue;
+            }
+            if (processedBuilderMessagesRef.current.has(message.id)) {
+                continue;
+            }
+
+            processedBuilderMessagesRef.current.add(message.id);
+            const update = parseManualDraftSyncComment(message.text);
+            if (update) {
+                setManualDraft((current) => mergeManualDraftUpdate(current, update));
+            }
+        }
+    }, [builderMessages, builderSessionId]);
+
+    const selectedMachine = machines.find((machine) => machine.id === selectedMachineId) ?? null;
+    const knownPaths = React.useMemo(
+        () => getKnownPathsForMachine(selectedMachineId, recentMachinePaths),
+        [recentMachinePaths, selectedMachineId],
+    );
+    const canCreateDraft = React.useMemo(() => {
+        return !!manualDraft.displayName.trim() && !!manualDraft.systemPrompt.trim();
+    }, [manualDraft.displayName, manualDraft.systemPrompt]);
+    const canStartChat = !!selectedMachine && isMachineOnline(selectedMachine) && !!cwd.trim();
+
+    const primaryActionLabel = React.useMemo(() => {
+        if (mode === 'manual') {
+            return t('common.create');
+        }
+        if (mode === 'market') {
+            return t('agents.openMarketplace');
+        }
+        if (!builderSessionId) {
+            return t('agents.startChat');
+        }
+        return canCreateDraft ? t('common.create') : t('agents.openFullChat');
+    }, [builderSessionId, canCreateDraft, mode]);
+
+    const canSubmit = React.useMemo(() => {
+        if (mode === 'manual') {
+            return canCreateDraft;
+        }
+        if (mode === 'market') {
+            return true;
+        }
+        if (!builderSessionId) {
+            return canStartChat;
+        }
+        return canCreateDraft || !!builderSessionId;
+    }, [builderSessionId, canCreateDraft, canStartChat, mode]);
+
+    const handleCreateDraft = React.useCallback(async () => {
+        const credentials = sync.getCredentials();
+        if (!credentials) {
+            await Modal.alert(t('common.error'), 'Not authenticated');
+            return;
+        }
+        if (!canCreateDraft || saving) {
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const spec = buildManualGenomeSpec(manualDraft);
+            const created = await createGenome(credentials, {
+                name: slugifyAgentName(manualDraft.displayName),
+                description: manualDraft.description.trim() || undefined,
+                spec: JSON.stringify(spec),
+                tags: spec.tags && spec.tags.length > 0 ? JSON.stringify(spec.tags) : undefined,
+                category: manualDraft.category,
+                isPublic: false,
+                status: 'draft',
+                origin: 'manual',
+            });
+
+            let resolvedGenome = created.genome;
+            if (manualPublishNow) {
+                const published = await publishGenome(credentials, created.genome.id);
+                resolvedGenome = published.genome;
+            }
+
+            router.push({ pathname: '/agents/[id]', params: { id: resolvedGenome.id } } as any);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create agent';
+            await Modal.alert(t('common.error'), message);
+        } finally {
+            setSaving(false);
+        }
+    }, [canCreateDraft, manualDraft, manualPublishNow, router, saving]);
+
+    const handleStartBuilderChat = React.useCallback(async () => {
+        const credentials = sync.getCredentials();
+        if (!credentials) {
+            await Modal.alert(t('common.error'), 'Not authenticated');
+            return;
+        }
+        if (!canStartChat || saving || !selectedMachineId) {
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const cwdValidationError = getConcatenatedPathErrorMessage(cwd.trim());
+            if (cwdValidationError) {
+                await Modal.alert(t('common.error'), cwdValidationError);
+                return;
+            }
+
+            const builderSpec = buildPrivateAgentBuilderGenomeSpec({
+                displayName: PRIVATE_BUILDER_NAME,
+                runtime: manualDraft.runtime,
+                brief: chatBrief,
+            });
+            const createdGenome = await createGenome(credentials, {
+                name: `private-agent-creator-v${PRIVATE_AGENT_BUILDER_VERSION}-${randomUUID().slice(0, 8)}`,
+                description: builderSpec.description,
+                spec: JSON.stringify(builderSpec),
+                tags: builderSpec.tags ? JSON.stringify(builderSpec.tags) : undefined,
+                category: builderSpec.category,
+                isPublic: false,
+                status: 'draft',
+                origin: 'manual',
+            });
+
+            const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
+                directory: cwd.trim(),
+                agent: manualDraft.runtime,
+                sessionTag: buildStandaloneSessionTag(),
+                role: builderSpec.baseRoleId ?? 'agent-builder',
+                specId: createdGenome.genome.id,
+                sessionName: PRIVATE_BUILDER_NAME,
+            });
+
+            if (!sessionId) {
+                throw new Error('Spawn returned no session ID');
+            }
+
+            const updatedPaths = updateRecentMachinePaths(recentMachinePaths, selectedMachineId, cwd.trim());
+            sync.applySettings({ recentMachinePaths: updatedPaths });
+            processedBuilderMessagesRef.current.clear();
+            setBuilderSessionId(sessionId);
+            sync.onSessionVisible(sessionId);
+
+            const kickoff = buildPrivateAgentBuilderKickoff({
+                brief: chatBrief,
+                currentDraft: manualDraft,
+            });
+            await sync.sendMessage(sessionId, kickoff.text, kickoff.displayText);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to start builder chat';
+            await Modal.alert(t('common.error'), message);
+        } finally {
+            setSaving(false);
+        }
+    }, [canStartChat, chatBrief, cwd, manualDraft, recentMachinePaths, saving, selectedMachineId]);
+
+    const openFullChat = React.useCallback(() => {
+        if (!builderSessionId) {
+            return;
+        }
+
+        router.push({
+            pathname: '/session/[id]',
+            params: {
+                id: builderSessionId,
+                returnTo: '/agents/new',
+            },
+        } as any);
+    }, [builderSessionId, router]);
+
+    const handlePrimaryAction = React.useCallback(async () => {
+        if (mode === 'manual') {
+            await handleCreateDraft();
+            return;
+        }
+        if (mode === 'market') {
+            router.push({ pathname: '/agents', params: { launchHint: 'great-agent' } } as any);
+            return;
+        }
+        if (!builderSessionId) {
+            await handleStartBuilderChat();
+            return;
+        }
+        if (canCreateDraft) {
+            await handleCreateDraft();
+            return;
+        }
+        openFullChat();
+    }, [builderSessionId, canCreateDraft, handleCreateDraft, handleStartBuilderChat, mode, openFullChat, router]);
+
+    const renderModePicker = () => (
+        <View style={styles.modeSection}>
+            <SectionLabel>{t('agents.creationFlow')}</SectionLabel>
+            <View style={styles.modeGrid}>
+                {[
+                    {
+                        key: 'manual' as const,
+                        icon: 'create-outline' as const,
+                        title: t('agents.modeManualTitle'),
+                        subtitle: t('agents.modeManualSubtitle'),
+                    },
+                    {
+                        key: 'chat' as const,
+                        icon: 'chatbubbles-outline' as const,
+                        title: t('agents.modeChatTitle'),
+                        subtitle: t('agents.modeChatSubtitle'),
+                    },
+                    {
+                        key: 'market' as const,
+                        icon: 'sparkles-outline' as const,
+                        title: t('agents.modeMarketTitle'),
+                        subtitle: t('agents.modeMarketSubtitle'),
+                    },
+                ].map((item) => {
+                    const active = mode === item.key;
+                    return (
+                        <Pressable
+                            key={item.key}
+                            onPress={() => setMode(item.key)}
+                            style={[
+                                styles.modeCard,
+                                {
+                                    borderColor: active ? theme.colors.button.primary.background : theme.colors.divider,
+                                    backgroundColor: active ? theme.colors.groupped.background : theme.colors.surface,
+                                },
+                            ]}
+                        >
+                            <View style={[styles.modeIcon, { backgroundColor: active ? theme.colors.button.primary.background : theme.colors.surfaceHigh }]}>
+                                <Ionicons name={item.icon} size={18} color={active ? theme.colors.button.primary.tint : theme.colors.textSecondary} />
+                            </View>
+                            <Text style={[styles.modeTitle, { color: theme.colors.text }]}>{item.title}</Text>
+                            <Text style={[styles.modeSubtitle, { color: theme.colors.textSecondary }]}>{item.subtitle}</Text>
+                        </Pressable>
+                    );
+                })}
+            </View>
+        </View>
+    );
+
+    const renderManualMain = () => (
         <View style={styles.sectionBlock}>
-            <SectionLabel>Chat builder</SectionLabel>
-            <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}> 
-                <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>Launch a dedicated creation agent</Text>
-                <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>This starts a standalone builder session. You can talk with it, iterate on the genome, and have it create public or private agents for you.</Text>
+            <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>{t('agents.manualSidebarTitle')}</Text>
+                <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>{t('agents.manualSidebarHint')}</Text>
             </View>
+            <GuideCard title={t('agents.guideIdentityTitle')} body={t('agents.guideIdentityBody')} />
+            <GuideCard title={t('agents.guideBehaviorTitle')} body={t('agents.guideBehaviorBody')} />
+            <GuideCard title={t('agents.guideOperationsTitle')} body={t('agents.guideOperationsBody')} />
+        </View>
+    );
 
-            <View style={styles.formGroup}>
-                <SectionLabel>{t('agents.agentName')}</SectionLabel>
-                <TextField
-                    value={builderName}
-                    onChangeText={setBuilderName}
-                    placeholder="Agent Builder"
-                    autoFocus
-                />
-            </View>
-
-            <View style={styles.formGroup}>
-                <SectionLabel>Creation brief</SectionLabel>
-                <TextField
-                    value={builderBrief}
-                    onChangeText={setBuilderBrief}
-                    placeholder="Example: Help me design customer support agents for a SaaS team."
-                    multiline
-                />
-            </View>
-
-            <View style={styles.formGroup}>
-                <SectionLabel>{t('agents.agentRuntime')}</SectionLabel>
-                <View style={styles.chipRow}>
-                    {RUNTIME_OPTIONS.map((option) => {
-                        const active = builderRuntime === option.value;
+    const renderMachinePicker = () => (
+        <View style={styles.formGroup}>
+            <SectionLabel>{t('agents.selectMachine')}</SectionLabel>
+            {machines.length === 0 ? (
+                <Text style={[styles.inlineHint, { color: theme.colors.textSecondary }]}>{t('agents.noMachinesHint')}</Text>
+            ) : (
+                <View style={styles.machineList}>
+                    {machines.map((machine) => {
+                        const online = isMachineOnline(machine);
+                        const selected = machine.id === selectedMachineId;
                         return (
                             <Pressable
-                                key={option.value}
-                                onPress={() => setBuilderRuntime(option.value)}
+                                key={machine.id}
+                                onPress={() => online ? setSelectedMachineId(machine.id) : undefined}
                                 style={[
-                                    styles.choiceChip,
-                                    {
-                                        borderColor: active ? theme.colors.button.primary.background : theme.colors.divider,
-                                        backgroundColor: active ? theme.colors.button.primary.background : theme.colors.surface,
+                                    styles.machineChip,
+                                    { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface },
+                                    selected && {
+                                        borderColor: theme.colors.button.primary.background,
+                                        backgroundColor: theme.colors.groupped.background,
                                     },
+                                    !online && styles.machineChipDisabled,
                                 ]}
                             >
-                                <Text style={[styles.choiceChipText, { color: active ? theme.colors.button.primary.tint : theme.colors.text }]}>
-                                    {option.label}
+                                <View style={[styles.statusDot, online ? styles.statusOnline : styles.statusOffline]} />
+                                <Text style={[styles.machineName, { color: theme.colors.text }]} numberOfLines={1}>
+                                    {machine.metadata?.displayName ?? machine.metadata?.host ?? machine.id.slice(0, 8)}
                                 </Text>
                             </Pressable>
                         );
                     })}
                 </View>
-            </View>
-
-            <View style={styles.formGroup}>
-                <SectionLabel>{t('agents.selectMachine')}</SectionLabel>
-                {machines.length === 0 ? (
-                    <Text style={[styles.inlineHint, { color: theme.colors.textSecondary }]}>{t('agents.noMachinesHint')}</Text>
-                ) : (
-                    <View style={styles.machineList}>
-                        {machines.map((machine) => {
-                            const online = isMachineOnline(machine);
-                            const selected = machine.id === selectedMachineId;
-                            return (
-                                <Pressable
-                                    key={machine.id}
-                                    onPress={() => online ? setSelectedMachineId(machine.id) : undefined}
-                                    style={[
-                                        styles.machineChip,
-                                        { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface },
-                                        selected && {
-                                            borderColor: theme.colors.button.primary.background,
-                                            backgroundColor: theme.colors.groupped.background,
-                                        },
-                                        !online && styles.machineChipDisabled,
-                                    ]}
-                                >
-                                    <View style={[styles.statusDot, online ? styles.statusOnline : styles.statusOffline]} />
-                                    <Text style={[styles.machineName, { color: theme.colors.text }]} numberOfLines={1}>
-                                        {machine.metadata?.displayName ?? machine.metadata?.host ?? machine.id.slice(0, 8)}
-                                    </Text>
-                                </Pressable>
-                            );
-                        })}
-                    </View>
-                )}
-            </View>
-
-            <View style={styles.formGroup}>
-                <SectionLabel>{t('agents.workingDirectory')}</SectionLabel>
-                <TextInput
-                    style={[
-                        styles.textField,
-                        {
-                            color: theme.colors.text,
-                            backgroundColor: theme.colors.surface,
-                            borderColor: theme.colors.divider,
-                        },
-                        Platform.OS === 'web' && { outlineStyle: 'none' } as any,
-                    ]}
-                    value={cwd}
-                    onChangeText={(value) => {
-                        setCwd(value);
-                        setShowPathDropdown(false);
-                    }}
-                    placeholder={t('agents.directoryPlaceholder')}
-                    placeholderTextColor={theme.colors.input.placeholder}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                />
-                {knownPaths.length > 0 ? (
-                    <>
-                        <Pressable
-                            style={[styles.dropdownToggle, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
-                            onPress={() => setShowPathDropdown((current) => !current)}
-                        >
-                            <Text style={[styles.dropdownToggleText, { color: theme.colors.textSecondary }]}>Recent paths</Text>
-                            <Ionicons name={showPathDropdown ? 'chevron-up' : 'chevron-down'} size={14} color={theme.colors.textSecondary} />
-                        </Pressable>
-                        {showPathDropdown ? (
-                            <View style={[styles.dropdown, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}> 
-                                {knownPaths.map((path) => (
-                                    <Pressable
-                                        key={path}
-                                        style={[styles.dropdownItem, { borderBottomColor: theme.colors.divider }]}
-                                        onPress={() => {
-                                            setCwd(path);
-                                            setShowPathDropdown(false);
-                                        }}
-                                    >
-                                        <Text style={[styles.dropdownItemText, { color: theme.colors.text }]} numberOfLines={1}>{path}</Text>
-                                    </Pressable>
-                                ))}
-                            </View>
-                        ) : null}
-                    </>
-                ) : null}
-            </View>
+            )}
         </View>
     );
 
-    const formContent = (
+    const renderWorkingDirectory = () => (
+        <View style={styles.formGroup}>
+            <SectionLabel>{t('agents.workingDirectory')}</SectionLabel>
+            <TextInput
+                style={[
+                    styles.textField,
+                    {
+                        color: theme.colors.text,
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.divider,
+                    },
+                    Platform.OS === 'web' && { outlineStyle: 'none' } as any,
+                ]}
+                value={cwd}
+                onChangeText={(value) => {
+                    setCwd(value);
+                    setShowPathDropdown(false);
+                }}
+                placeholder={t('agents.directoryPlaceholder')}
+                placeholderTextColor={theme.colors.input.placeholder}
+                autoCapitalize="none"
+                autoCorrect={false}
+            />
+            {knownPaths.length > 0 ? (
+                <>
+                    <Pressable
+                        style={[styles.dropdownToggle, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
+                        onPress={() => setShowPathDropdown((current) => !current)}
+                    >
+                        <Text style={[styles.dropdownToggleText, { color: theme.colors.textSecondary }]}>{t('agents.recentPaths')}</Text>
+                        <Ionicons name={showPathDropdown ? 'chevron-up' : 'chevron-down'} size={14} color={theme.colors.textSecondary} />
+                    </Pressable>
+                    {showPathDropdown ? (
+                        <View style={[styles.dropdown, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}>
+                            {knownPaths.map((path) => (
+                                <Pressable
+                                    key={path}
+                                    style={[styles.dropdownItem, { borderBottomColor: theme.colors.divider }]}
+                                    onPress={() => {
+                                        setCwd(path);
+                                        setShowPathDropdown(false);
+                                    }}
+                                >
+                                    <Text style={[styles.dropdownItemText, { color: theme.colors.text }]} numberOfLines={1}>{path}</Text>
+                                </Pressable>
+                            ))}
+                        </View>
+                    ) : null}
+                </>
+            ) : null}
+        </View>
+    );
+
+    const renderChatMain = () => {
+        if (builderSessionId) {
+            return (
+                <View style={styles.sectionBlock}>
+                    <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                        <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>{t('agents.chatRunningTitle')}</Text>
+                        <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>{t('agents.chatRunningBody')}</Text>
+                    </View>
+                    <Pressable
+                        onPress={openFullChat}
+                        style={[styles.inlineButton, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}
+                    >
+                        <Ionicons name="open-outline" size={14} color={theme.colors.textSecondary} />
+                        <Text style={[styles.inlineButtonText, { color: theme.colors.text }]}>{t('agents.openFullChat')}</Text>
+                    </Pressable>
+                    <View style={[styles.chatCanvas, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}>
+                        <SessionView id={builderSessionId} returnTo="/agents/new" />
+                    </View>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.sectionBlock}>
+                <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                    <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>{t('agents.chatIntroTitle')}</Text>
+                    <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>{t('agents.chatIntroBody')}</Text>
+                </View>
+
+                <View style={styles.formGroup}>
+                    <SectionLabel>{t('agents.chatBriefLabel')}</SectionLabel>
+                    <TextField
+                        value={chatBrief}
+                        onChangeText={setChatBrief}
+                        placeholder={t('agents.chatBriefPlaceholder')}
+                        multiline
+                    />
+                    <SectionHint>{t('agents.chatBriefHint')}</SectionHint>
+                </View>
+
+                {renderMachinePicker()}
+                {renderWorkingDirectory()}
+
+                <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                    <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>{t('agents.launchPrivateBuilderTitle')}</Text>
+                    <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>{t('agents.launchPrivateBuilderBody')}</Text>
+                </View>
+            </View>
+        );
+    };
+
+    const renderMarketMain = () => (
+        <View style={styles.sectionBlock}>
+            <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>{t('agents.marketJumpTitle')}</Text>
+                <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>{t('agents.marketJumpBody')}</Text>
+            </View>
+            <Pressable
+                onPress={() => router.push({ pathname: '/agents', params: { launchHint: 'great-agent' } } as any)}
+                style={[styles.marketButton, { backgroundColor: theme.colors.button.primary.background }]}
+            >
+                <Ionicons name="sparkles-outline" size={16} color={theme.colors.button.primary.tint} />
+                <Text style={[styles.marketButtonText, { color: theme.colors.button.primary.tint }]}>{t('agents.openMarketplace')}</Text>
+            </Pressable>
+        </View>
+    );
+
+    const mainContent = (
         <View style={styles.formShell}>
             {renderModePicker()}
-            {mode === 'team' ? renderTeamMode() : null}
-            {mode === 'manual' ? renderManualMode() : null}
-            {mode === 'chat' ? renderChatMode() : null}
+            {mode === 'manual' ? renderManualMain() : null}
+            {mode === 'chat' ? renderChatMain() : null}
+            {mode === 'market' ? renderMarketMain() : null}
+            {!isDesktopShell ? (
+                <DraftEditor
+                    draft={manualDraft}
+                    setDraft={setManualDraft}
+                    publishNow={manualPublishNow}
+                    setPublishNow={setManualPublishNow}
+                />
+            ) : null}
         </View>
     );
 
@@ -894,7 +949,7 @@ export default React.memo(function NewAgentScreen() {
                 <View style={styles.desktopHeaderCopy}>
                     <Text style={styles.desktopEyebrow}>Agents</Text>
                     <Text style={styles.desktopTitle}>{t('agents.createAgent')}</Text>
-                    <Text style={styles.desktopSubtitle}>Create reusable agents in three ways: publish team outputs, author by hand, or launch a chat builder.</Text>
+                    <Text style={styles.desktopSubtitle}>{t('agents.createAgentSubtitle')}</Text>
                 </View>
                 <Pressable
                     onPress={() => void handlePrimaryAction()}
@@ -917,10 +972,27 @@ export default React.memo(function NewAgentScreen() {
                 contentContainerStyle={[styles.desktopContent, { maxWidth: Math.min(layout.maxWidth, 960), alignSelf: 'center', width: '100%' }]}
                 keyboardShouldPersistTaps="handled"
             >
-                {formContent}
+                {mainContent}
             </ScrollView>
         </View>
     );
+
+    const desktopSecondaryPanel = isDesktopShell ? (
+        <View style={[styles.secondaryPanel, { backgroundColor: theme.colors.groupped.background }]}>
+            <ScrollView
+                style={styles.secondaryScroll}
+                contentContainerStyle={styles.secondaryContent}
+                keyboardShouldPersistTaps="handled"
+            >
+                <DraftEditor
+                    draft={manualDraft}
+                    setDraft={setManualDraft}
+                    publishNow={manualPublishNow}
+                    setPublishNow={setManualPublishNow}
+                />
+            </ScrollView>
+        </View>
+    ) : undefined;
 
     return (
         <>
@@ -945,14 +1017,14 @@ export default React.memo(function NewAgentScreen() {
                 }}
             />
             {isDesktopShell ? (
-                <SidebarView mainPanel={desktopMainPanel} />
+                <SidebarView mainPanel={desktopMainPanel} secondaryPanel={desktopSecondaryPanel} />
             ) : (
-                <View style={[styles.container, { backgroundColor: theme.colors.groupped.background }]}> 
+                <View style={[styles.container, { backgroundColor: theme.colors.groupped.background }]}>
                     <ScrollView
                         contentContainerStyle={[styles.mobileContent, { maxWidth: layout.maxWidth, alignSelf: 'center', width: '100%' }]}
                         keyboardShouldPersistTaps="handled"
                     >
-                        {formContent}
+                        {mainContent}
                     </ScrollView>
                 </View>
             )}
@@ -1017,6 +1089,10 @@ const styles = StyleSheet.create((theme) => ({
         letterSpacing: 0.3,
         textTransform: 'uppercase',
     },
+    sectionHint: {
+        fontSize: 12,
+        lineHeight: 18,
+    },
     callout: {
         borderRadius: 16,
         borderWidth: 1,
@@ -1031,94 +1107,104 @@ const styles = StyleSheet.create((theme) => ({
         fontSize: 13,
         lineHeight: 19,
     },
-    centerState: {
-        minHeight: 120,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    emptyState: {
+    guideCard: {
         borderRadius: 16,
         borderWidth: 1,
-        padding: 20,
-        alignItems: 'center',
+        padding: 16,
         gap: 8,
     },
-    emptyTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    emptyHint: {
-        fontSize: 13,
-        lineHeight: 19,
-        textAlign: 'center',
-    },
-    teamGenomeList: {
-        gap: 12,
-    },
-    teamGenomeCard: {
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 14,
-        gap: 12,
-    },
-    teamGenomeHeader: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 12,
-    },
-    teamGenomeName: {
+    guideTitle: {
         fontSize: 15,
         fontWeight: '700',
     },
-    teamGenomeMeta: {
-        fontSize: 12,
-    },
-    teamGenomeDescription: {
+    guideBody: {
         fontSize: 13,
-        lineHeight: 18,
+        lineHeight: 19,
     },
-    statusBadge: {
+    sidebarPanel: {
+        flex: 1,
+    },
+    sidebarContent: {
+        gap: 16,
+        padding: 16,
+    },
+    sidebarIntro: {
+        gap: 6,
+    },
+    previewCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        padding: 16,
+        gap: 12,
+    },
+    previewHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    previewTitleWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+        flex: 1,
+    },
+    previewTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        flexShrink: 1,
+    },
+    previewStatusBadge: {
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 999,
     },
-    statusBadgeText: {
+    previewStatusText: {
         fontSize: 11,
         fontWeight: '700',
     },
-    badgeRow: {
+    previewBody: {
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    previewBadgeRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
     },
-    badge: {
+    previewBadge: {
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 999,
     },
-    badgeText: {
+    previewBadgeText: {
         fontSize: 11,
         fontWeight: '600',
     },
-    teamGenomeFooter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    secondaryButton: {
-        minHeight: 36,
-        paddingHorizontal: 14,
-        borderRadius: 10,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    secondaryButtonText: {
+    previewPrompt: {
         fontSize: 13,
+        lineHeight: 19,
         fontWeight: '600',
     },
-    disabledButton: {
-        opacity: 0.45,
+    previewList: {
+        gap: 8,
+    },
+    previewListRow: {
+        flexDirection: 'row',
+        gap: 10,
+        alignItems: 'flex-start',
+    },
+    previewListDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginTop: 6,
+    },
+    previewListText: {
+        flex: 1,
+        fontSize: 12,
+        lineHeight: 17,
     },
     formGroup: {
         gap: 8,
@@ -1244,6 +1330,51 @@ const styles = StyleSheet.create((theme) => ({
     dropdownItemText: {
         fontSize: 13,
     },
+    inlineButton: {
+        minHeight: 40,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    inlineButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    chatCanvas: {
+        minHeight: 620,
+        borderRadius: 18,
+        borderWidth: 1,
+        overflow: 'hidden',
+    },
+    marketButton: {
+        minHeight: 44,
+        borderRadius: 12,
+        paddingHorizontal: 18,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        alignSelf: 'flex-start',
+    },
+    marketButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    secondaryPanel: {
+        flex: 1,
+        borderLeftWidth: 1,
+        borderLeftColor: theme.colors.divider,
+    },
+    secondaryScroll: {
+        flex: 1,
+    },
+    secondaryContent: {
+        paddingBottom: 32,
+    },
     desktopPanel: {
         flex: 1,
         backgroundColor: theme.colors.groupped.background,
@@ -1299,5 +1430,8 @@ const styles = StyleSheet.create((theme) => ({
         paddingTop: 24,
         paddingHorizontal: 24,
         paddingBottom: 40,
+    },
+    disabledButton: {
+        opacity: 0.45,
     },
 }));

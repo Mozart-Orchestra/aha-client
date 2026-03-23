@@ -10,7 +10,7 @@ import {
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/StyledText';
-import { t } from '@/text';
+import { getTranslationSection, t } from '@/text';
 import { sync } from '@/sync/sync';
 import { useArtifacts, useAllMachines, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
@@ -18,8 +18,6 @@ import { getRecentPathForMachine, getKnownPathsForMachine, updateRecentMachinePa
 import { parseSpec } from '@/utils/genomeHub';
 import type { GenomeRecord } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
-
-const ROLES = ['implementer', 'architect', 'qa-engineer', 'researcher', 'builder'];
 
 function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
     return `team:${teamId}:member:${memberId}`;
@@ -34,7 +32,7 @@ type Step = 'team' | 'machine';
 
 /**
  * Two-step modal for joining a genome agent to an existing team.
- * Step 1: Select team + role
+ * Step 1: Select team + optional custom context
  * Step 2: Select machine + working directory → spawn
  */
 export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose }: Props) {
@@ -51,14 +49,18 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
 
     const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
     const runtimeType = (spec?.runtimeType === 'codex' ? 'codex' : 'claude') as 'claude' | 'codex';
+    const roleId = spec?.teamRole ?? spec?.baseRoleId ?? 'member';
+    const roleTranslations = getTranslationSection('teamRoles') as Record<string, { title?: string; summary?: string }>;
+    const roleTitle = roleTranslations[roleId]?.title || roleId;
+    const roleSummary = roleTranslations[roleId]?.summary || '';
 
     const [step, setStep] = React.useState<Step>('team');
     const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
-    const [selectedRole, setSelectedRole] = React.useState(ROLES[0]);
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
         () => machines.find(isMachineOnline)?.id ?? null,
     );
     const [cwd, setCwd] = React.useState('');
+    const [customPrompt, setCustomPrompt] = React.useState('');
     const [showPathDropdown, setShowPathDropdown] = React.useState(false);
     const [spawning, setSpawning] = React.useState(false);
 
@@ -87,18 +89,20 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
         try {
             const memberId = randomUUID();
             const sessionTag = buildTeamMemberSessionTag(selectedTeamId, memberId);
-            const sessionName = `${selectedRole} · ${genome.name}`;
+            const sessionName = spec?.displayName?.trim() || genome.name;
+            const trimmedCustomPrompt = customPrompt.trim();
 
             const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
                 directory: cwd.trim(),
                 agent: runtimeType,
                 sessionTag,
                 teamId: selectedTeamId,
-                role: selectedRole,
+                role: roleId,
                 specId: genome.id,
                 sessionName,
                 env: {
                     AHA_TEAM_MEMBER_ID: memberId,
+                    ...(trimmedCustomPrompt ? { AHA_AGENT_PROMPT: trimmedCustomPrompt } : {}),
                 },
             });
 
@@ -106,11 +110,12 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
                 throw new Error('Spawn returned no session ID');
             }
 
-            await sync.addTeamMember(selectedTeamId, sessionId, selectedRole, sessionName, {
+            await sync.addTeamMember(selectedTeamId, sessionId, roleId, sessionName, {
                 memberId,
                 sessionTag,
                 specId: genome.id,
                 runtimeType,
+                ...(trimmedCustomPrompt ? { customPrompt: trimmedCustomPrompt } : {}),
             });
 
             const updatedPaths = updateRecentMachinePaths(recentPaths, selectedMachineId, cwd.trim());
@@ -123,7 +128,7 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
         } finally {
             setSpawning(false);
         }
-    }, [cwd, genome, onClose, recentPaths, runtimeType, selectedMachineId, selectedRole, selectedTeamId]);
+    }, [customPrompt, cwd, genome, onClose, recentPaths, roleId, runtimeType, selectedMachineId, selectedTeamId, spec?.displayName]);
 
     return (
         <Modal
@@ -185,30 +190,57 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
                                     </View>
                                 )}
 
-                                {/* Role selector */}
+                                {/* Built-in role */}
                                 <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                                    {t('agents.selectRole')}
+                                    {t('agents.builtInRole')}
                                 </Text>
-                                <View style={styles.roleList}>
-                                    {ROLES.map((role) => {
-                                        const active = role === selectedRole;
-                                        return (
-                                            <Pressable
-                                                key={role}
-                                                style={[
-                                                    styles.roleChip,
-                                                    { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface },
-                                                    active && { borderColor: theme.colors.button.primary.background, backgroundColor: theme.colors.button.primary.background },
-                                                ]}
-                                                onPress={() => setSelectedRole(role)}
-                                            >
-                                                <Text style={[styles.roleChipText, { color: active ? theme.colors.button.primary.tint : theme.colors.text }]}>
-                                                    {role}
-                                                </Text>
-                                            </Pressable>
-                                        );
-                                    })}
+                                <View style={[styles.roleCard, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}>
+                                    <View style={styles.roleCardHeader}>
+                                        <Text style={[styles.roleCardTitle, { color: theme.colors.text }]}>
+                                            {roleTitle}
+                                        </Text>
+                                        <View style={[styles.roleBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                            <Text style={[styles.roleBadgeText, { color: theme.colors.textSecondary }]}>
+                                                {roleId}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    {roleSummary ? (
+                                        <Text style={[styles.roleCardSummary, { color: theme.colors.textSecondary }]}>
+                                            {roleSummary}
+                                        </Text>
+                                    ) : null}
                                 </View>
+                                <Text style={[styles.hint, { color: theme.colors.textSecondary }]}>
+                                    {t('agents.builtInRoleHint')}
+                                </Text>
+
+                                {/* Custom context */}
+                                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+                                    {t('agents.customContextLabel')}
+                                </Text>
+                                <TextInput
+                                    style={[
+                                        styles.input,
+                                        styles.textArea,
+                                        {
+                                            color: theme.colors.text,
+                                            backgroundColor: theme.colors.surfaceHigh,
+                                            borderColor: theme.colors.divider,
+                                        },
+                                    ]}
+                                    value={customPrompt}
+                                    onChangeText={setCustomPrompt}
+                                    placeholder={t('agents.customContextPlaceholder')}
+                                    placeholderTextColor={theme.colors.input.placeholder}
+                                    autoCapitalize="sentences"
+                                    autoCorrect={false}
+                                    multiline
+                                    textAlignVertical="top"
+                                />
+                                <Text style={[styles.hint, { color: theme.colors.textSecondary }]}>
+                                    {t('agents.customContextHint')}
+                                </Text>
                             </>
                         ) : (
                             <>
@@ -421,19 +453,34 @@ const styles = StyleSheet.create((theme) => ({
         height: 10,
         borderRadius: 5,
     },
-    roleList: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    roleChip: {
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 999,
+    roleCard: {
+        borderRadius: 14,
         borderWidth: 1,
+        padding: 14,
+        gap: 10,
     },
-    roleChipText: {
+    roleCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    roleCardTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        flex: 1,
+    },
+    roleCardSummary: {
         fontSize: 13,
+        lineHeight: 18,
+    },
+    roleBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    roleBadgeText: {
+        fontSize: 12,
         fontWeight: '600',
     },
     machineList: {
@@ -479,6 +526,9 @@ const styles = StyleSheet.create((theme) => ({
         paddingVertical: 12,
         fontSize: 15,
     } as any,
+    textArea: {
+        minHeight: 110,
+    },
     dropdownToggle: {
         marginTop: 8,
         paddingHorizontal: 12,

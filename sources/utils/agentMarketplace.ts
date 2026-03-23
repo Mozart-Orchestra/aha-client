@@ -18,6 +18,15 @@ const STATUS_PRIORITY: Record<GenomeRecord['status'], number> = {
     archived: 4,
 };
 
+export function isSpecialMarketplaceGenome(genome: Pick<GenomeRecord, 'name' | 'tags'>): boolean {
+    const tags = parseTags(genome.tags).map((tag) => tag.toLowerCase());
+    const normalizedName = genome.name.toLowerCase();
+
+    return tags.includes('special')
+        || tags.includes('agent-builder')
+        || normalizedName.includes('agent-builder');
+}
+
 export function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRecord {
     return {
         id: genome.id,
@@ -48,6 +57,11 @@ export function mapOwnedPrivateGenomesToRecords(genomes: PrivateGenome[]): Genom
 
 export function sortGenomesForDisplay(genomes: GenomeRecord[], favoriteGenomeIds: string[]): GenomeRecord[] {
     return [...genomes].sort((left, right) => {
+        const specialDelta = Number(isSpecialMarketplaceGenome(right)) - Number(isSpecialMarketplaceGenome(left));
+        if (specialDelta !== 0) {
+            return specialDelta;
+        }
+
         const favoriteDelta = Number(isFavoriteGenomeId(right.id, favoriteGenomeIds)) - Number(isFavoriteGenomeId(left.id, favoriteGenomeIds));
         if (favoriteDelta !== 0) {
             return favoriteDelta;

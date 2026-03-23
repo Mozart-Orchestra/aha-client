@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { t } from '@/text';
 import {
@@ -98,6 +98,14 @@ function getGenomeStatusColor(status: GenomeRecord['status']) {
     return { text: '#8A7F74', background: '#8A7F7418' };
 }
 
+function isSpecialGenome(tags: string[], genomeName: string): boolean {
+    const normalizedTags = tags.map((tag) => tag.toLowerCase());
+    const normalizedName = genomeName.toLowerCase();
+    return normalizedTags.includes('special')
+        || normalizedTags.includes('agent-builder')
+        || normalizedName.includes('agent-builder');
+}
+
 // ─── Genome Card ─────────────────────────────────────────────────────────────
 
 function GenomeCard({
@@ -122,6 +130,7 @@ function GenomeCard({
     const crowdReviewCount = feedback?.evaluationCount ?? spec?.resume?.totalSessions ?? null;
     const tags = parseTags(genome.tags);
     const categoryLabel = genome.category || spec?.category || null;
+    const isSpecial = isSpecialGenome(tags, genome.name);
 
     // What it does — from spec responsibilities or description
     const whatItDoes = spec?.responsibilities?.slice(0, 2)?.join(' · ')
@@ -136,7 +145,9 @@ function GenomeCard({
         tag.toLowerCase().includes('exclusive') ||
         tag.toLowerCase().includes('pro') ||
         tag.toLowerCase().includes('karpathy') ||
-        tag.toLowerCase().includes('official')
+        tag.toLowerCase().includes('official') ||
+        tag.toLowerCase().includes('special') ||
+        tag.toLowerCase().includes('agent-builder')
     );
 
     // Rating color
@@ -196,6 +207,13 @@ function GenomeCard({
                     <View style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
                         <Text style={[stylesheet.metaBadgeText, { color: theme.colors.textSecondary }]}>
                             {categoryLabel}
+                        </Text>
+                    </View>
+                ) : null}
+                {isSpecial ? (
+                    <View style={[stylesheet.metaBadge, { backgroundColor: '#0EA5E914' }]}>
+                        <Text style={[stylesheet.metaBadgeText, { color: '#0EA5E9' }]}>
+                            SPECIAL
                         </Text>
                     </View>
                 ) : null}
@@ -333,6 +351,8 @@ const CorpsCardMemo = React.memo(CorpsCard);
 export default React.memo(function AgentsScreen() {
     const { theme } = useUnistyles();
     const router = useRouter();
+    const params = useLocalSearchParams<{ launchHint?: string | string[] }>();
+    const launchHint = Array.isArray(params.launchHint) ? params.launchHint[0] : params.launchHint;
     const profile = useProfile();
     const actorId = profile.id || null;
     const [tab, setTab] = React.useState<PageTab>('agents');
@@ -399,6 +419,13 @@ export default React.memo(function AgentsScreen() {
     React.useEffect(() => {
         trackAgentsPageViewed();
     }, []);
+
+    React.useEffect(() => {
+        if (launchHint === 'great-agent') {
+            setTab('agents');
+            setSourceFilter('market');
+        }
+    }, [launchHint]);
 
     const doLoad = React.useCallback(async () => {
         const credentials = sync.getCredentials();
@@ -586,6 +613,22 @@ export default React.memo(function AgentsScreen() {
                         </Text>
                     </Pressable>
                 </View>
+
+                {launchHint === 'great-agent' ? (
+                    <View style={[stylesheet.launchHintBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                        <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={[stylesheet.launchHintTitle, { color: theme.colors.text }]}>
+                                {t('agents.marketHintTitle')}
+                            </Text>
+                            <Text style={[stylesheet.launchHintBody, { color: theme.colors.textSecondary }]}>
+                                {t('agents.marketHintBody')}
+                            </Text>
+                        </View>
+                        <Pressable onPress={() => router.replace('/agents' as any)} hitSlop={8}>
+                            <Ionicons name="close" size={16} color={theme.colors.textSecondary} />
+                        </Pressable>
+                    </View>
+                ) : null}
 
                 <View style={[stylesheet.tabBar, { backgroundColor: theme.colors.surfaceHigh }]}>
                     {(['agents', 'corps'] as PageTab[]).map(tabKey => {
@@ -955,6 +998,24 @@ const stylesheet = StyleSheet.create((theme) => ({
     headerCreateButtonText: {
         fontSize: 13,
         fontWeight: '700',
+    },
+    launchHintBanner: {
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    launchHintTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    launchHintBody: {
+        fontSize: 12,
+        lineHeight: 18,
     },
     tabBar: {
         flexDirection: 'row',

@@ -6,10 +6,14 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-web/
+dist-v3/
+dist-deploy/
 web-build/
 expo-env.d.ts
 /ios
 /android
+.aha/
 
 # Native
 .kotlin/

@@ -155,6 +155,16 @@ export const SettingsView = React.memo(function SettingsView() {
                 />
             </ItemGroup>
 
+            <ItemGroup title={t('settings.channels')}>
+                <Item
+                    title={t('settings.channelsWeixin')}
+                    subtitle={t('settings.channelsWeixinSubtitle')}
+                    icon={<Ionicons name="chatbubbles-outline" size={29} color="#09B83E" />}
+                    onPress={() => router.push('/settings/channels/weixin')}
+                    showChevron
+                />
+            </ItemGroup>
+
             {/* Developer */}
             {(__DEV__ || devModeEnabled) && (
                 <ItemGroup title={t('settings.developer')}>

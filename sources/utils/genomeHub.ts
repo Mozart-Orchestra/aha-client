@@ -4,6 +4,8 @@
  */
 
 const BASE = (process.env.EXPO_PUBLIC_GENOME_HUB_URL ?? 'http://localhost:3006').replace(/\/$/, '');
+const GENOME_BY_NAME_TTL_MS = 30_000;
+const genomeByNameCache = new Map<string, { expiresAt: number; value: Promise<GenomeRecord | null> }>();
 
 export interface GenomeFeedback {
     evaluationCount: number;
@@ -86,12 +88,34 @@ export async function searchGenomes(params: SearchParams = {}): Promise<SearchRe
 
 /** Fetch a genome by namespace + name (latest version). Returns null if not found. */
 export async function fetchGenomeByName(namespace: string, name: string): Promise<GenomeRecord | null> {
+    const cacheKey = `${namespace}::${name}`;
+    const cached = genomeByNameCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.value;
+    }
+
+    const request = (async () => {
+        try {
+            const encodedNs = encodeURIComponent(namespace);
+            const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(name)}`);
+            if (res.status === 429) {
+                return null;
+            }
+            if (!res.ok) return null;
+            const data = await res.json() as { genome?: GenomeRecord };
+            return data.genome ?? null;
+        } catch {
+            return null;
+        }
+    })();
+
+    genomeByNameCache.set(cacheKey, {
+        value: request,
+        expiresAt: Date.now() + GENOME_BY_NAME_TTL_MS,
+    });
+
     try {
-        const encodedNs = encodeURIComponent(namespace);
-        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(name)}`);
-        if (!res.ok) return null;
-        const data = await res.json() as { genome?: GenomeRecord };
-        return data.genome ?? null;
+        return await request;
     } catch {
         return null;
     }
@@ -107,6 +131,40 @@ export function parseTags(tagsJson: string | null): string[] {
     }
 }
 
+export type TeamAuthority =
+    | 'user.reply'
+    | 'message.route'
+    | 'task.create'
+    | 'task.assign'
+    | 'task.update.any'
+    | 'task.approve'
+    | 'task.start.self'
+    | 'task.complete.self'
+    | 'agent.spawn';
+
+export interface CorpsMemberOverlay {
+    promptSuffix?: string;
+    messaging?: {
+        listenFrom?: string[] | '*';
+        receiveUserMessages?: boolean;
+        replyMode?: 'proactive' | 'responsive' | 'passive';
+    };
+    behavior?: {
+        onIdle?: 'wait' | 'self-assign' | 'ask';
+        onBlocked?: 'report' | 'escalate' | 'retry';
+        canSpawnAgents?: boolean;
+        requireExplicitAssignment?: boolean;
+    };
+    authorities?: TeamAuthority[];
+}
+
+export interface CorpsTaskPolicy {
+    boardIsSourceOfTruth?: boolean;
+    requireTaskForExecution?: boolean;
+    forbidChatOnlyExecution?: boolean;
+    forbidPeerToPeerRouting?: boolean;
+}
+
 export interface CorpsSpec {
     namespace: string;
     name: string;
@@ -119,10 +177,14 @@ export interface CorpsSpec {
         roleAlias?: string;
         count?: number;
         required?: boolean;
+        overlay?: CorpsMemberOverlay;
     }[];
     bootContext?: {
         teamDescription?: string;
         initialObjective?: string;
+        sharedContext?: string[];
+        commandChain?: string[];
+        taskPolicy?: CorpsTaskPolicy;
     };
 }
 
@@ -206,6 +268,7 @@ export interface GenomeSpec {
     responsibilities?: string[];
     protocol?: string[];
     capabilities?: string[];
+    authorities?: TeamAuthority[];
 
     // Tier 2 — Model
     modelId?: string;

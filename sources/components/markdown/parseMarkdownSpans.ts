@@ -31,8 +31,11 @@ export function parseMarkdownSpans(markdown: string, header: boolean) {
             }
         } else if (match[5]) {
             // Link - handle incomplete links (no URL part)
-            if (match[7]) {
+            if (match[7] && /^https?:\/\//i.test(match[7])) {
                 spans.push({ styles: [], text: match[6], url: match[7] });
+            } else if (match[7]) {
+                // Non http/https protocol (e.g. javascript:) — downgrade to plain text
+                spans.push({ styles: [], text: match[6], url: null });
             } else {
                 // If no URL part, treat as plain text with brackets
                 spans.push({ styles: [], text: `[${match[6]}]`, url: null });

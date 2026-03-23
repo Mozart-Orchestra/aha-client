@@ -35,6 +35,7 @@ import { DeployCorpsModal } from './DeployCorpsModal';
 import { RunStandaloneModal } from './RunStandaloneModal';
 import { JoinTeamModal } from './JoinTeamModal';
 import { getAgent, type AgentDetailRecord } from '@/sync/apiAgents';
+import { getStandaloneAgentStatusVisual } from '@/utils/standaloneAgentStatus';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,14 @@ function getStatusLabel(status: GenomeRecord['status']): string {
     if (status === 'unverified') return t('agents.unverified');
     if (status === 'archived') return t('agents.archived');
     return t('agents.draft');
+}
+
+function isSpecialGenome(tags: string[], genomeName: string): boolean {
+    const normalizedTags = tags.map((tag) => tag.toLowerCase());
+    const normalizedName = genomeName.toLowerCase();
+    return normalizedTags.includes('special')
+        || normalizedTags.includes('agent-builder')
+        || normalizedName.includes('agent-builder');
 }
 
 function scoreColor(score: number): string {
@@ -89,6 +98,13 @@ function formatDate(iso: string): string {
     } catch {
         return iso;
     }
+}
+
+function splitPromptLines(text: string): string[] {
+    return text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
 }
 
 function parseAgentDetailSpec(agent: AgentDetailRecord | null): GenomeSpec | null {
@@ -214,7 +230,22 @@ export default React.memo(function AgentDetailScreen() {
     const templateGenome = genome ?? linkedGenome;
     const feedback = React.useMemo(() => templateGenome ? parseFeedback(templateGenome.feedbackData) : null, [templateGenome]);
     const tags = React.useMemo(() => templateGenome ? parseTags(templateGenome.tags) : [], [templateGenome]);
+    const isSpecialTemplate = React.useMemo(
+        () => templateGenome ? isSpecialGenome(tags, templateGenome.name) : false,
+        [tags, templateGenome],
+    );
     const corpsSpec = React.useMemo(() => (templateGenome?.category === 'corps') ? parseCorpsSpec(templateGenome.spec) : null, [templateGenome]);
+    const corpsTeamPrompt = React.useMemo(
+        () => corpsSpec?.bootContext?.teamDescription?.trim() ?? '',
+        [corpsSpec]
+    );
+    const corpsInitialObjective = React.useMemo(
+        () => corpsSpec?.bootContext?.initialObjective?.trim() ?? '',
+        [corpsSpec]
+    );
+    const corpsPromptLines = React.useMemo(() => splitPromptLines(corpsTeamPrompt), [corpsTeamPrompt]);
+    const corpsPromptTitle = corpsPromptLines[0] ?? '';
+    const corpsPromptBody = corpsPromptLines.slice(corpsPromptTitle ? 1 : 0);
     const standaloneSession = useSession(agentDetail?.sessionId ?? '');
     const storefrontRating = React.useMemo(() => {
         if (typeof feedback?.avgScore === 'number') {
@@ -302,6 +333,14 @@ export default React.memo(function AgentDetailScreen() {
             : '#6b7280';
     const standalonePath = standaloneSession?.metadata?.path;
     const standaloneResolvedModel = standaloneSession?.metadata?.resolvedModel;
+    const standaloneLiveStatus = agentDetail ? getStandaloneAgentStatusVisual(agentDetail, standaloneSession) : null;
+    const standaloneLiveStatusLabel = standaloneLiveStatus
+        ? standaloneLiveStatus.liveState === 'online'
+            ? t('status.online')
+            : standaloneLiveStatus.liveState === 'ended'
+                ? t('status.ended')
+                : t('status.offline')
+        : null;
 
     const detailView = (
         <View style={{ flex: 1, backgroundColor: theme.colors.groupped.background }}>
@@ -331,10 +370,24 @@ export default React.memo(function AgentDetailScreen() {
                                     </Text>
                                 </View>
                             ) : null}
+                            {genome && isSpecialTemplate ? (
+                                <View style={[styles.badge, { backgroundColor: '#0EA5E914' }]}>
+                                    <Text style={[styles.badgeText, { color: '#0EA5E9' }]}>
+                                        SPECIAL
+                                    </Text>
+                                </View>
+                            ) : null}
                             {agentDetail ? (
                                 <View style={[styles.badge, { backgroundColor: `${standaloneStatusColor}18` }]}>
                                     <Text style={[styles.badgeText, { color: standaloneStatusColor }]}>
                                         {agentDetail.status}
+                                    </Text>
+                                </View>
+                            ) : null}
+                            {standaloneLiveStatus && standaloneLiveStatusLabel ? (
+                                <View style={[styles.badge, { backgroundColor: `${standaloneLiveStatus.dotColor}18` }]}>
+                                    <Text style={[styles.badgeText, { color: standaloneLiveStatus.dotColor }]}>
+                                        {standaloneLiveStatusLabel}
                                     </Text>
                                 </View>
                             ) : null}
@@ -641,6 +694,32 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
+                    {corpsTeamPrompt ? (
+                        <ItemGroup title="Team System Prompt">
+                            <View style={[styles.promptShowcaseCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
+                                <Text style={[styles.promptShowcaseEyebrow, { color: theme.colors.textSecondary }]}>
+                                    Shared boot context
+                                </Text>
+                                <Text style={[styles.promptShowcaseTitle, { color: theme.colors.text }]}>
+                                    {corpsPromptTitle || 'Team System Prompt'}
+                                </Text>
+                                {corpsPromptBody.map((line, index) => (
+                                    <Text key={`${line}-${index}`} style={[styles.promptShowcaseLine, { color: theme.colors.text }]}>
+                                        {line}
+                                    </Text>
+                                ))}
+                            </View>
+                            {corpsInitialObjective ? (
+                                <Item
+                                    title={t('newTeam.teamGoalLabel')}
+                                    subtitle={corpsInitialObjective}
+                                    subtitleLines={0}
+                                    copy={corpsInitialObjective}
+                                />
+                            ) : null}
+                        </ItemGroup>
+                    ) : null}
+
                     {/* ── Feedback ── */}
                     {feedback ? (
                         <ItemGroup title={t('agents.feedbackSection')}>
@@ -847,5 +926,30 @@ const styles = StyleSheet.create((theme) => ({
     },
     tagChipText: {
         fontSize: 12,
+    },
+    promptShowcaseCard: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        marginHorizontal: 16,
+        marginVertical: 12,
+    },
+    promptShowcaseEyebrow: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 8,
+    },
+    promptShowcaseTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        lineHeight: 22,
+    },
+    promptShowcaseLine: {
+        fontSize: 13,
+        lineHeight: 19,
+        marginTop: 8,
     },
 }));

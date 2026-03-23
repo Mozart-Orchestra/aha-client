@@ -6,7 +6,7 @@ import {
     type KanbanTeamMember,
 } from '@/sync/kanbanTypes';
 
-import type { CorpsSpec } from './genomeHub';
+import type { CorpsMemberOverlay, CorpsSpec, TeamAuthority } from './genomeHub';
 
 export interface ParsedCorpsGenomeRef {
     namespace: string;
@@ -21,6 +21,8 @@ export interface CorpsMemberPlan {
     ordinal: number;
     required: boolean;
     displayName: string;
+    overlay?: CorpsMemberOverlay;
+    authorities?: TeamAuthority[];
 }
 
 export function parseCorpsGenomeRef(ref: string): ParsedCorpsGenomeRef | null {
@@ -74,6 +76,15 @@ export function expandCorpsMemberPlans(corps: CorpsSpec): CorpsMemberPlan[] {
                 displayName: count > 1
                     ? `${formatRoleDisplay(roleId)} ${ordinal}`
                     : formatRoleDisplay(roleId),
+                overlay: member.overlay
+                    ? {
+                        ...member.overlay,
+                        ...(member.overlay.messaging ? { messaging: { ...member.overlay.messaging } } : {}),
+                        ...(member.overlay.behavior ? { behavior: { ...member.overlay.behavior } } : {}),
+                        ...(member.overlay.authorities ? { authorities: [...member.overlay.authorities] } : {}),
+                    }
+                    : undefined,
+                authorities: member.overlay?.authorities ? [...member.overlay.authorities] : undefined,
             });
         }
     }
@@ -84,7 +95,10 @@ export function expandCorpsMemberPlans(corps: CorpsSpec): CorpsMemberPlan[] {
 export function getDefaultCorpsTeamName(genomeName: string, corps: CorpsSpec): string {
     const bootName = corps.bootContext?.teamDescription?.trim();
     if (bootName) {
-        return bootName;
+        const firstLine = bootName.split('\n').map((line) => line.trim()).find(Boolean);
+        if (firstLine) {
+            return firstLine;
+        }
     }
 
     const description = corps.description?.trim();
@@ -112,6 +126,15 @@ export function buildCorpsSeedBoard({
         members: [...members],
         roles: DEFAULT_TEAM_ROLES.map((role) => JSON.parse(JSON.stringify(role))),
         agreements: { ...DEFAULT_TEAM_AGREEMENTS },
+        bootContext: corps.bootContext
+            ? {
+                ...(corps.bootContext.teamDescription ? { teamDescription: corps.bootContext.teamDescription } : {}),
+                ...(initialObjective ? { initialObjective } : {}),
+                ...(corps.bootContext.sharedContext ? { sharedContext: [...corps.bootContext.sharedContext] } : {}),
+                ...(corps.bootContext.commandChain ? { commandChain: [...corps.bootContext.commandChain] } : {}),
+                ...(corps.bootContext.taskPolicy ? { taskPolicy: { ...corps.bootContext.taskPolicy } } : {}),
+            }
+            : undefined,
     };
 
     if (initialObjective) {

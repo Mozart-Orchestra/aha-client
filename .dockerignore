@@ -1,0 +1,12 @@
+.git
+.aha
+.gstack
+.claude
+node_modules
+dist
+dist-deploy
+dist-web
+.expo
+.env
+.env.*
+*.log

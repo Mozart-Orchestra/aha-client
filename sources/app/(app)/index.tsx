@@ -46,15 +46,15 @@ type LandingCopy = {
 };
 
 const ENGLISH_LANDING_COPY: LandingCopy = {
-    eyebrow: 'Aha Session Control',
+    eyebrow: 'AI-Native Team Workbench',
     trustEncrypted: 'End-to-end encrypted',
     trustLocal: 'Stored only on your device',
-    previewTitle: 'Live sessions',
-    primarySessionTitle: 'shell-alignment-fix',
-    primarySessionSubtitle: 'Reviewing spacing, rail states, and responsive shell behavior',
+    previewTitle: 'Live agent sessions',
+    primarySessionTitle: 'build-dashboard-ui',
+    primarySessionSubtitle: 'Implementing kanban board with real-time sync and multi-agent collaboration',
     primarySessionMeta: 'active now',
-    secondarySessionTitle: 'restore-account-flow',
-    secondarySessionSubtitle: 'Needs approval before shipping the first-run auth experience',
+    secondarySessionTitle: 'deploy-to-production',
+    secondarySessionSubtitle: 'Agent awaiting approval to push changes to the production environment',
     secondarySessionMeta: 'awaiting decision',
     deny: 'Deny',
     approve: 'Approve',
@@ -63,15 +63,15 @@ const ENGLISH_LANDING_COPY: LandingCopy = {
 };
 
 const CHINESE_LANDING_COPY: LandingCopy = {
-    eyebrow: 'Aha 会话控制',
+    eyebrow: 'AI 原生团队工作台',
     trustEncrypted: '端到端加密',
     trustLocal: '仅存储在你的设备上',
-    previewTitle: '实时会话',
-    primarySessionTitle: 'shell-alignment-fix',
-    primarySessionSubtitle: '正在检查三栏间距、导航状态与响应式布局',
+    previewTitle: '实时智能体会话',
+    primarySessionTitle: 'build-dashboard-ui',
+    primarySessionSubtitle: '正在实现看板界面，支持实时同步与多智能体协作',
     primarySessionMeta: '当前活跃',
-    secondarySessionTitle: 'restore-account-flow',
-    secondarySessionSubtitle: '首次登录体验发布前需要确认授权步骤',
+    secondarySessionTitle: 'deploy-to-production',
+    secondarySessionSubtitle: '智能体等待授权，将变更推送至生产环境',
     secondarySessionMeta: '等待决策',
     deny: '拒绝',
     approve: '批准',

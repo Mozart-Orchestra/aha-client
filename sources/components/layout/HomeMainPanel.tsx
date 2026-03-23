@@ -576,10 +576,6 @@ function ExperiencedUserPanel() {
             contentContainerStyle={[styles.scrollContent, { paddingTop: 24 + topInset }]}
             showsVerticalScrollIndicator={false}
         >
-            <HelpCard />
-
-            <WorkspaceStatsCard />
-
             <ActionCard
                 icon="add"
                 title={t('home.createTeamTitle')}

@@ -20,6 +20,23 @@ export function buildMentionChipLabel(agents: TeamMentionSummaryAgent[]): string
     return `@${primaryLabel} +${agents.length - 1}`;
 }
 
+export function buildMentionFlowLabel(
+    senderLabel: string | undefined,
+    agents: TeamMentionSummaryAgent[]
+): string | null {
+    const mentionLabel = buildMentionChipLabel(agents);
+    if (!mentionLabel) {
+        return null;
+    }
+
+    const sender = senderLabel?.trim();
+    if (!sender) {
+        return mentionLabel;
+    }
+
+    return `${sender} -> ${mentionLabel}`;
+}
+
 export function buildMentionChipAccessibilityLabel(agents: TeamMentionSummaryAgent[]): string | null {
     if (agents.length === 0) {
         return null;
@@ -31,4 +48,21 @@ export function buildMentionChipAccessibilityLabel(agents: TeamMentionSummaryAge
     }
 
     return `Mentioned ${primaryLabel} and ${agents.length - 1} more`;
+}
+
+export function buildMentionFlowAccessibilityLabel(
+    senderLabel: string | undefined,
+    agents: TeamMentionSummaryAgent[]
+): string | null {
+    const mentionAccessibility = buildMentionChipAccessibilityLabel(agents);
+    if (!mentionAccessibility) {
+        return null;
+    }
+
+    const sender = senderLabel?.trim();
+    if (!sender) {
+        return mentionAccessibility;
+    }
+
+    return `${sender} mentioned ${mentionAccessibility.replace(/^Mentioned\s+/i, '')}`;
 }

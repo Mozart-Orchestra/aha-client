@@ -17,6 +17,7 @@ import {
     trackTeamViewed,
 } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
 import { useShallow } from 'zustand/react/shallow';
 import { sync } from '@/sync/sync';
@@ -28,6 +29,8 @@ import {
     KanbanBoard,
     KanbanColumn,
     KanbanTask,
+    TaskComment,
+    HumanStatusLock,
     DEFAULT_TEAM_ROLES,
     DEFAULT_TEAM_AGREEMENTS,
     DEFAULT_KANBAN_BOARD
@@ -39,6 +42,9 @@ import { TaskDetailModal } from '@/components/team/TaskDetailModal';
 import { TaskApprovalModal } from '@/components/team/TaskApprovalModal';
 import { NewTaskModal } from '@/components/team/NewTaskModal';
 import { TeamStatusBar } from '@/components/team/TeamStatusBar';
+import { useTaskExportAutoCache } from '@/hooks/useTaskExportAutoCache';
+import { ImportTaskButton } from '@/components/team/ImportTaskButton';
+import { ExportTaskButton } from '@/components/team/ExportTaskButton';
 import { useTaskChatSync } from '@/hooks/useTaskChatSync';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import { getSessionsForTask } from '@/-zen/model/taskSessionLink';
@@ -60,6 +66,7 @@ import { applyDerivedLifecycleTimestamps } from '@/utils/teamLifecycle';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
 import { compareTeamRosterEntries } from '@/utils/teamRoster';
 import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
+import { getServerUrl } from '@/sync/serverConfig';
 
 type TeamStandardTab = 'chat' | 'board' | 'info' | 'evolution';
 
@@ -148,6 +155,33 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 12,
         color: theme.colors.textSecondary,
         fontStyle: 'italic',
+    },
+    taskReporter: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        marginTop: 2,
+    },
+    taskCommentSummary: {
+        fontSize: 11,
+        color: theme.colors.text,
+        marginTop: 6,
+        lineHeight: 16,
+    },
+    taskHumanLockBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 4,
+        marginTop: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        backgroundColor: 'rgba(255, 149, 0, 0.14)',
+    },
+    taskHumanLockText: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#C26A00',
     },
     taskMeta: {
         flexDirection: 'row',
@@ -339,6 +373,103 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.text,
         lineHeight: 18,
     },
+    showcaseCard: {
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        borderRadius: 14,
+        padding: 14,
+        marginTop: 12,
+        backgroundColor: theme.colors.surface,
+    },
+    showcaseEyebrow: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: 8,
+    },
+    showcaseTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: theme.colors.text,
+    },
+    showcaseLead: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        marginTop: 8,
+        lineHeight: 19,
+    },
+    promptLine: {
+        fontSize: 13,
+        color: theme.colors.text,
+        lineHeight: 19,
+        marginTop: 8,
+    },
+    reviewMetricsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginTop: 12,
+    },
+    reviewMetricCard: {
+        minWidth: 120,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.groupped.background,
+    },
+    reviewMetricLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    reviewMetricValue: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginTop: 6,
+    },
+    reviewMetaText: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        marginTop: 10,
+        lineHeight: 18,
+    },
+    reviewItemCard: {
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 10,
+        backgroundColor: theme.colors.surface,
+    },
+    reviewItemHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 8,
+    },
+    reviewItemTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.text,
+        flex: 1,
+    },
+    reviewItemRating: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    reviewItemComment: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        lineHeight: 19,
+        marginTop: 8,
+    },
     emptyState: {
         fontSize: 13,
         color: theme.colors.textSecondary,
@@ -506,9 +637,18 @@ const SHELL_ROLE_COLORS: Record<string, string> = {
     architect: '#34C759',
     reviewer: '#8A7F74',
     observer: '#8A7F74',
+    // Extended roles
+    researcher: '#AF52DE',
+    supervisor: '#FF2D55',
+    'help-agent': '#FF6B6B',
+    'org-manager': '#5AC8FA',
+    'agent-builder': '#FFD60A',
+    'content-strategist': '#30D158',
+    'data-analyst': '#64D2FF',
+    'seo-specialist': '#FF9F0A',
 };
 
-const SHELL_CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#1A1209', '#B89A6F', '#6886A3'];
+const SHELL_CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#E8845A', '#B89A6F', '#6886A3'];
 
 function getRoleAccent(roleId?: string): string {
     if (!roleId) {
@@ -535,6 +675,58 @@ function getMessagePreview(message: TeamMessage): string {
         return 'No recent message';
     }
     return source.length > 42 ? `${source.slice(0, 42)}...` : source;
+}
+
+function splitPromptLines(text: string): string[] {
+    return text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+}
+
+type TeamScorecard = {
+    averageRating?: number;
+    reviewCount?: number;
+    cumulativeCode?: number;
+    cumulativeQuality?: number;
+    sourceScoreTotals?: {
+        user?: number;
+        master?: number;
+        system?: number;
+    };
+    lastReviewedAt?: string | number | null;
+};
+
+type TeamPublicReview = {
+    id?: string;
+    rating?: number;
+    codeScore?: number;
+    qualityScore?: number;
+    source?: string;
+    roleIds?: string[];
+    comment?: string;
+    createdAt?: string | number;
+};
+
+function formatReviewDate(value?: string | number): string {
+    if (value == null) return '';
+    try {
+        return new Date(value).toLocaleDateString();
+    } catch {
+        return '';
+    }
+}
+
+function getHumanStatusLockLabel(lock?: HumanStatusLock | null): string | null {
+    if (!lock) return null;
+    const lockedBy = lock.lockedByDisplayName || lock.lockedBySessionId || 'Human';
+    if (lock.mode === 'manual-status') {
+        return `${lockedBy} manually locked status`;
+    }
+    if (lock.mode === 'editing') {
+        return `${lockedBy} is editing`;
+    }
+    return `${lockedBy} is viewing`;
 }
 
 const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
@@ -589,6 +781,22 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                     const activeAgentName = activeAgentSession
                                         ? getSessionName(activeAgentSession)
                                         : activeLink?.sessionId?.slice(0, 8) ?? null;
+                                    const assigneeSession = task.assigneeId ? sessionLookup.get(task.assigneeId) : null;
+                                    const assigneeName = assigneeSession
+                                        ? getSessionName(assigneeSession)
+                                        : task.assigneeId?.slice(0, 8) ?? null;
+                                    const reporterSession = task.reporterId ? sessionLookup.get(task.reporterId) : null;
+                                    const reporterName = reporterSession
+                                        ? getSessionName(reporterSession)
+                                        : task.reporterId?.slice(0, 8) ?? null;
+                                    const lastComment = task.comments?.length ? task.comments[task.comments.length - 1] : null;
+                                    const lastCommentAuthor = lastComment
+                                        ? (lastComment.authorDisplayName
+                                            || lastComment.authorRole
+                                            || lastComment.authorSessionId?.slice(0, 8)
+                                            || 'Unknown')
+                                        : null;
+                                    const humanLockLabel = getHumanStatusLockLabel(task.humanStatusLock);
 
                                     return (
                                         <Pressable
@@ -598,13 +806,23 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                             onLongPress={() => onMoveTask(task)}
                                         >
                                             <Text style={styles.taskTitle}>{task.title}</Text>
-                                            {task.assigneeId && (() => {
-                                                const session = sessionLookup.get(task.assigneeId);
-                                                const name = session ? getSessionName(session) : task.assigneeId.slice(0, 8);
-                                                return (
-                                                    <Text style={styles.taskAssignee}>@{name}</Text>
-                                                );
-                                            })()}
+                                            {assigneeName ? (
+                                                <Text style={styles.taskAssignee}>Assignee: @{assigneeName}</Text>
+                                            ) : null}
+                                            {reporterName ? (
+                                                <Text style={styles.taskReporter}>Reporter: {reporterName}</Text>
+                                            ) : null}
+                                            {lastComment && lastCommentAuthor ? (
+                                                <Text style={styles.taskCommentSummary} numberOfLines={2}>
+                                                    {lastCommentAuthor}: {lastComment.content}
+                                                </Text>
+                                            ) : null}
+                                            {humanLockLabel ? (
+                                                <View style={styles.taskHumanLockBadge}>
+                                                    <Ionicons name="hand-left-outline" size={12} color="#C26A00" />
+                                                    <Text style={styles.taskHumanLockText}>{humanLockLabel}</Text>
+                                                </View>
+                                            ) : null}
 
                                             {(sessionCount > 0 || task.priority || activeAgentName) && (
                                                 <View style={styles.taskMeta}>
@@ -708,7 +926,7 @@ export default function TeamDashboardScreen() {
     const initialTab: TeamStandardTab = isTeamStandardTab(tabParam) ? tabParam : 'chat';
     const [activeTab, setActiveTab] = React.useState<TeamStandardTab>(initialTab);
     const [isLoading, setIsLoading] = React.useState(false);
-    const [selectedTask, setSelectedTask] = React.useState<KanbanTask | null>(null);
+    const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
     const [showNewTaskModal, setShowNewTaskModal] = React.useState(false);
     const [newTaskStatus, setNewTaskStatus] = React.useState('todo');
@@ -720,6 +938,9 @@ export default function TeamDashboardScreen() {
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
+    const [teamScorecard, setTeamScorecard] = React.useState<TeamScorecard | null>(null);
+    const [teamPublicReviews, setTeamPublicReviews] = React.useState<TeamPublicReview[]>([]);
+    const [teamReviewLoading, setTeamReviewLoading] = React.useState(false);
     const lifecyclePersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
 
@@ -770,6 +991,90 @@ export default function TeamDashboardScreen() {
         const displayName = getDisplayName(profile);
         return displayName || sync.anonID || 'Workspace'; // Fallback for unauthenticated/empty profile states
     }, [profile]);
+    const humanActorSessionId = React.useMemo(() => sync.anonID || `user:${teamId}`, [teamId]);
+    const humanActor = React.useMemo(() => ({
+        sessionId: humanActorSessionId,
+        role: 'user' as const,
+        displayName: myDisplayName || '用户',
+    }), [humanActorSessionId, myDisplayName]);
+    const buildHumanStatusLock = React.useCallback((mode: HumanStatusLock['mode'], reason?: string): HumanStatusLock => ({
+        mode,
+        lockedAt: Date.now(),
+        lockedBySessionId: humanActor.sessionId,
+        lockedByRole: humanActor.role,
+        lockedByDisplayName: humanActor.displayName,
+        ...(reason ? { reason } : {}),
+    }), [humanActor]);
+    const buildManualStatusLockComment = React.useCallback((task: KanbanTask, nextStatus: string, reason?: string): TaskComment => ({
+        id: randomUUID(),
+        authorSessionId: humanActor.sessionId,
+        authorRole: humanActor.role,
+        authorDisplayName: humanActor.displayName,
+        type: 'human-override',
+        content: reason || `${humanActor.displayName} manually changed status from ${task.status} to ${nextStatus}. Agent status changes are now locked until the human clears the lock.`,
+        createdAt: Date.now(),
+        fromStatus: task.status,
+        toStatus: nextStatus,
+    }), [humanActor]);
+    const callTaskHumanStatusLockApi = React.useCallback(async (
+        taskId: string,
+        pathSuffix: '' | '/clear',
+        body: Record<string, unknown>,
+    ) => {
+        if (desktopBridge || !teamId) {
+            return;
+        }
+        const credentials = sync.getCredentials();
+        if (!credentials?.token) {
+            return;
+        }
+
+        const response = await fetch(
+            `${getServerUrl()}/v1/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}/human-lock${pathSuffix}`,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${credentials.token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            },
+        );
+
+        if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            const message = typeof payload?.error === 'string'
+                ? payload.error
+                : `HTTP ${response.status}`;
+            throw new Error(message);
+        }
+    }, [desktopBridge, teamId]);
+    const setRemoteHumanTaskLock = React.useCallback(async (
+        taskId: string,
+        mode: HumanStatusLock['mode'],
+        reason?: string,
+        comment?: string,
+    ) => {
+        await callTaskHumanStatusLockApi(taskId, '', {
+            ...humanActor,
+            kind: 'human',
+            mode,
+            ...(reason ? { reason } : {}),
+            ...(comment ? { comment } : {}),
+        });
+    }, [callTaskHumanStatusLockApi, humanActor]);
+    const clearRemoteHumanTaskLock = React.useCallback(async (
+        taskId: string,
+        mode?: HumanStatusLock['mode'],
+        comment?: string,
+    ) => {
+        await callTaskHumanStatusLockApi(taskId, '/clear', {
+            ...humanActor,
+            kind: 'human',
+            ...(mode ? { mode } : {}),
+            ...(comment ? { comment } : {}),
+        });
+    }, [callTaskHumanStatusLockApi, humanActor]);
 
     React.useEffect(() => {
         if (teamId) {
@@ -788,6 +1093,34 @@ export default function TeamDashboardScreen() {
             },
         } as any);
     }, [roomId, router, teamId]);
+
+    const refreshTeamArtifact = React.useCallback(async () => {
+        if (desktopBridge || !teamId || !isAuthenticated) {
+            return;
+        }
+
+        try {
+            await sync.fetchArtifactWithBody(teamId);
+        } catch (error) {
+            console.error(`Failed to refresh team artifact ${teamId}:`, error);
+        }
+    }, [desktopBridge, isAuthenticated, teamId]);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (desktopBridge || !teamId || !isAuthenticated) {
+                return undefined;
+            }
+
+            void refreshTeamArtifact();
+
+            const interval = setInterval(() => {
+                void refreshTeamArtifact();
+            }, 5000);
+
+            return () => clearInterval(interval);
+        }, [desktopBridge, isAuthenticated, refreshTeamArtifact, teamId]),
+    );
 
     React.useEffect(() => {
         if (desktopBridge) {
@@ -1020,6 +1353,25 @@ export default function TeamDashboardScreen() {
         return board;
     }, [artifact?.body, desktopBoard, desktopBridge, parsedArtifactBoard.board, parsedArtifactBoard.parseError]);
 
+    const selectedTask = React.useMemo(() => {
+        if (!selectedTaskId) {
+            return null;
+        }
+
+        return kanbanData.tasks.find((task) => task.id === selectedTaskId) || null;
+    }, [kanbanData.tasks, selectedTaskId]);
+
+    React.useEffect(() => {
+        if (!selectedTaskId) {
+            return;
+        }
+
+        if (!selectedTask) {
+            setSelectedTaskId(null);
+            setShowTaskDetail(false);
+        }
+    }, [selectedTask, selectedTaskId]);
+
     const sessionLookup = React.useMemo(() => {
         const map = new Map<string, (typeof allSessions)[number]>();
         for (const session of allSessions) {
@@ -1076,6 +1428,7 @@ export default function TeamDashboardScreen() {
                             memberId,
                             sessionTag,
                             specId: member.specId,
+                            customPrompt: member.customPrompt,
                             parentSessionId: member.parentSessionId,
                             executionPlane: member.executionPlane,
                             runtimeType,
@@ -1117,6 +1470,7 @@ export default function TeamDashboardScreen() {
                         ...(member.executionPlane ? { executionPlane: member.executionPlane as 'mainline' | 'bypass' } : {}),
                         env: {
                             AHA_TEAM_MEMBER_ID: memberId,
+                            ...(member.customPrompt ? { AHA_AGENT_PROMPT: member.customPrompt } : {}),
                         },
                     });
 
@@ -1129,6 +1483,7 @@ export default function TeamDashboardScreen() {
                         memberId,
                         sessionTag,
                         specId: member.specId,
+                        customPrompt: member.customPrompt,
                         parentSessionId: member.parentSessionId,
                         executionPlane: member.executionPlane,
                         runtimeType,
@@ -1256,6 +1611,26 @@ export default function TeamDashboardScreen() {
         );
     }, [artifact, desktopBridge, kanbanData, roomId]);
 
+    React.useEffect(() => {
+        if (!showTaskDetail || !selectedTask?.id || selectedTask.humanStatusLock?.mode === 'manual-status') {
+            return;
+        }
+
+        let cancelled = false;
+        setRemoteHumanTaskLock(selectedTask.id, 'viewing', `${humanActor.displayName} is viewing this task in Kanban`).catch((error) => {
+            if (!cancelled) {
+                console.warn('Failed to set remote human viewing lock:', error);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            clearRemoteHumanTaskLock(selectedTask.id, 'viewing').catch((error) => {
+                console.warn('Failed to clear remote human viewing lock:', error);
+            });
+        };
+    }, [clearRemoteHumanTaskLock, humanActor.displayName, selectedTask?.humanStatusLock?.mode, selectedTask?.id, setRemoteHumanTaskLock, showTaskDetail]);
+
     const handleTeamMessageSend = React.useCallback(async (message: TeamMessage) => {
         await sync.sendTeamMessage({
             teamId,
@@ -1374,6 +1749,14 @@ export default function TeamDashboardScreen() {
         createTaskWithSync,
     } = taskChatSync;
 
+    // 🆕 自动缓存任务快照 — 团队解散后可从缓存恢复未完成任务
+    useTaskExportAutoCache({
+        teamId,
+        teamName: artifact?.title || desktopRoom?.name || 'Team',
+        tasks: kanbanData.tasks,
+        columns: kanbanData.columns,
+    });
+
     React.useEffect(() => {
         if (!artifact?.body || !parsedArtifactBoard.board?.team?.members?.length) {
             return;
@@ -1455,6 +1838,11 @@ export default function TeamDashboardScreen() {
         setShowNewTaskModal(true);
     }, []);
 
+    const handleTaskDetailClose = React.useCallback(() => {
+        setShowTaskDetail(false);
+        setSelectedTaskId(null);
+    }, []);
+
     const handleDeleteTask = React.useCallback(async (taskId: string) => {
         const task = kanbanData.tasks.find((entry) => entry.id === taskId);
         if (!task) {
@@ -1505,8 +1893,8 @@ export default function TeamDashboardScreen() {
 
         await sync.sendTeamMessage(message);
         setTeamMessages((previous) => [...previous, message]);
-        setShowTaskDetail(false);
-    }, [artifact, desktopBridge, kanbanData, myDisplayName, teamId]);
+        handleTaskDetailClose();
+    }, [artifact, desktopBridge, handleTaskDetailClose, kanbanData, myDisplayName, teamId]);
 
     const handleMoveTask = React.useCallback(async (task: KanbanTask) => {
         const normalized = normalizeStatus(task.status);
@@ -1520,9 +1908,17 @@ export default function TeamDashboardScreen() {
 
         // 🆕 使用 Chat-Board 同步功能：自动发送通知到聊天
         try {
+            const humanLockReason = `${myDisplayName || '用户'} manually changed status to ${nextStatus}.`;
             await updateTaskWithSync(
                 task.id,
-                { status: nextStatus },
+                {
+                    status: nextStatus,
+                    humanStatusLock: buildHumanStatusLock('manual-status', humanLockReason),
+                    comments: [
+                        ...(task.comments || []),
+                        buildManualStatusLockComment(task, nextStatus, humanLockReason),
+                    ],
+                },
                 myDisplayName || '用户'
             );
 
@@ -1548,10 +1944,64 @@ export default function TeamDashboardScreen() {
             console.error('Failed to sync task update:', error);
             // 即使同步失败，任务状态更新仍然会进行（在 updateTaskWithSync 中）
         }
-    }, [myDisplayName, normalizeStatus, teamId, updateTaskWithSync]);
+    }, [buildHumanStatusLock, buildManualStatusLockComment, myDisplayName, normalizeStatus, teamId, updateTaskWithSync]);
 
     const roleDefinitions = kanbanData.team?.roles?.length ? kanbanData.team.roles : DEFAULT_TEAM_ROLES;
     const agreements = kanbanData.team?.agreements ?? DEFAULT_TEAM_AGREEMENTS;
+    const teamBootDescription = kanbanData.team?.bootContext?.teamDescription?.trim() ?? '';
+    const teamBootObjective = kanbanData.team?.bootContext?.initialObjective?.trim() ?? '';
+    const teamPromptLines = React.useMemo(() => splitPromptLines(teamBootDescription), [teamBootDescription]);
+    const teamPromptTitle = teamPromptLines[0] ?? '';
+    const teamPromptBody = teamPromptLines.slice(teamPromptTitle ? 1 : 0);
+
+    React.useEffect(() => {
+        const credentials = sync.getCredentials();
+        if (!teamId || !credentials?.token || !isAuthenticated) {
+            setTeamScorecard(null);
+            setTeamPublicReviews([]);
+            setTeamReviewLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        const headers = {
+            Authorization: `Bearer ${credentials.token}`,
+            'Content-Type': 'application/json',
+        };
+        const encodedTeamId = encodeURIComponent(teamId);
+
+        async function loadTeamReviews() {
+            setTeamReviewLoading(true);
+            const [scoreResult, reviewsResult] = await Promise.allSettled([
+                fetch(`${getServerUrl()}/v1/teams/${encodedTeamId}/score`, { headers }),
+                fetch(`${getServerUrl()}/v1/teams/${encodedTeamId}/reviews?limit=3`, { headers }),
+            ]);
+
+            if (cancelled) return;
+
+            const nextScore = scoreResult.status === 'fulfilled' && scoreResult.value.ok
+                ? await scoreResult.value.json() as TeamScorecard
+                : null;
+            const nextReviews = reviewsResult.status === 'fulfilled' && reviewsResult.value.ok
+                ? ((await reviewsResult.value.json()) as { reviews?: TeamPublicReview[] }).reviews ?? []
+                : [];
+
+            setTeamScorecard(nextScore);
+            setTeamPublicReviews(nextReviews);
+            setTeamReviewLoading(false);
+        }
+
+        loadTeamReviews().catch(() => {
+            if (cancelled) return;
+            setTeamScorecard(null);
+            setTeamPublicReviews([]);
+            setTeamReviewLoading(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, teamId]);
 
     const roster = React.useMemo(() => {
         const members = kanbanData.team?.members ?? [];
@@ -1625,13 +2075,13 @@ export default function TeamDashboardScreen() {
         const mentionText = `@${String(mentionTarget).replace(/\s+/g, '-')}`;
         const draft = `${mentionText} Let's discuss ${formatTaskReference(task)} (${task.title}) `;
 
-        setShowTaskDetail(false);
+        handleTaskDetailClose();
         selectTab('chat');
         setChatComposerPrefill({
             text: draft,
             token: Date.now(),
         });
-    }, [roster, selectTab]);
+    }, [handleTaskDetailClose, roster, selectTab]);
 
     const timelineEvents = React.useMemo(() => {
         return [...kanbanData.tasks]
@@ -1748,7 +2198,7 @@ export default function TeamDashboardScreen() {
     }, [normalizeStatus]);
 
     const handleOpenTaskDetail = React.useCallback((task: KanbanTask) => {
-        setSelectedTask(task);
+        setSelectedTaskId(task.id);
         setShowTaskDetail(true);
     }, []);
 
@@ -1793,22 +2243,58 @@ export default function TeamDashboardScreen() {
                 ? 'This team room exists, but no board is attached to it yet.'
                 : 'This team doesn\'t have a Kanban board yet. Initialize one to start tracking tasks.';
 
+    // 🆕 批量导入来自缓存快照的任务 (由 ImportTaskButton 触发)
+    const handleTasksImported = React.useCallback(async (tasks: KanbanTask[]) => {
+        if (!artifact) return;
+        const newData: KanbanBoard = {
+            ...kanbanData,
+            tasks: [...kanbanData.tasks, ...tasks],
+        };
+        await sync.updateArtifact(
+            artifact.id,
+            artifact.title,
+            JSON.stringify(newData, null, 2),
+            artifact.sessions,
+            artifact.draft,
+            artifact.type
+        );
+    }, [artifact, kanbanData]);
+
     const kanbanPanel = React.useMemo(() => (
-        <KanbanBoardPanel
-            styles={styles}
-            theme={theme}
-            tasks={kanbanData.tasks}
-            approvedTasks={approvedTasks}
-            columns={kanbanData.columns}
-            taskSessionLinks={taskSessionLinks}
-            sessionLookup={sessionLookup}
-            matchesColumn={matchesColumn}
-            onBoardSignalPress={handleBoardSignalPress}
-            onOpenTask={handleOpenTaskDetail}
-            onMoveTask={handleMoveTask}
-            onAddTask={handleAddTask}
-        />
+        <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 2 }}>
+                <ExportTaskButton
+                    teamId={teamId}
+                    teamName={artifact?.title || desktopRoom?.name || 'Team'}
+                    tasks={kanbanData.tasks}
+                    columns={kanbanData.columns}
+                />
+                <ImportTaskButton
+                    teamId={teamId}
+                    existingTasks={kanbanData.tasks}
+                    targetColumns={kanbanData.columns}
+                    onTasksImported={handleTasksImported}
+                />
+            </View>
+            <KanbanBoardPanel
+                styles={styles}
+                theme={theme}
+                tasks={kanbanData.tasks}
+                approvedTasks={approvedTasks}
+                columns={kanbanData.columns}
+                taskSessionLinks={taskSessionLinks}
+                sessionLookup={sessionLookup}
+                matchesColumn={matchesColumn}
+                onBoardSignalPress={handleBoardSignalPress}
+                onOpenTask={handleOpenTaskDetail}
+                onMoveTask={handleMoveTask}
+                onAddTask={handleAddTask}
+            />
+        </View>
     ), [
+        teamId,
+        artifact?.title,
+        desktopRoom?.name,
         styles,
         theme,
         kanbanData.tasks,
@@ -1821,18 +2307,125 @@ export default function TeamDashboardScreen() {
         handleOpenTaskDetail,
         handleMoveTask,
         handleAddTask,
+        handleTasksImported,
     ]);
 
     const renderInfo = () => (
         <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Team Information</Text>
+                {teamPromptLines.length > 0 ? (
+                    <View style={styles.showcaseCard}>
+                        <Text style={styles.showcaseEyebrow}>Shared team instructions</Text>
+                        <Text style={styles.showcaseTitle}>{teamPromptTitle || 'Team System Prompt'}</Text>
+                        {teamPromptBody.map((line, index) => (
+                            <Text key={`${line}-${index}`} style={styles.promptLine}>
+                                {line}
+                            </Text>
+                        ))}
+                        {teamBootObjective ? (
+                            <Text style={styles.showcaseLead}>
+                                {t('newTeam.teamGoalLabel')}: {teamBootObjective}
+                            </Text>
+                        ) : null}
+                    </View>
+                ) : null}
+                {!teamPromptLines.length && teamBootObjective ? (
+                    <View style={styles.roleCard}>
+                        <Text style={styles.roleTitle}>{t('newTeam.teamGoalLabel')}</Text>
+                        <Text style={styles.roleSummary}>{teamBootObjective}</Text>
+                    </View>
+                ) : null}
                 <View style={styles.roleCard}>
                     <Text style={styles.roleTitle}>Goal</Text>
                     <Text style={styles.roleSummary}>
                         {(kanbanData.team as any)?.goal || (kanbanData.team as any)?.mission || 'No goal set'}
                     </Text>
                 </View>
+
+                {(teamReviewLoading || teamScorecard || teamPublicReviews.length > 0) ? (
+                    <>
+                        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>{t('agents.feedbackSection')}</Text>
+                        {teamReviewLoading ? (
+                            <View style={styles.roleCard}>
+                                <Text style={styles.roleSummary}>Loading public team reviews…</Text>
+                            </View>
+                        ) : null}
+                        {teamScorecard ? (
+                            <View style={styles.showcaseCard}>
+                                <Text style={styles.showcaseEyebrow}>Team reputation</Text>
+                                <Text style={styles.showcaseTitle}>Public team review snapshot</Text>
+                                <View style={styles.reviewMetricsRow}>
+                                    <View style={styles.reviewMetricCard}>
+                                        <Text style={styles.reviewMetricLabel}>Average Rating</Text>
+                                        <Text style={styles.reviewMetricValue}>
+                                            {typeof teamScorecard.averageRating === 'number' ? teamScorecard.averageRating.toFixed(2) : '—'}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.reviewMetricCard}>
+                                        <Text style={styles.reviewMetricLabel}>Reviews</Text>
+                                        <Text style={styles.reviewMetricValue}>{teamScorecard.reviewCount ?? 0}</Text>
+                                    </View>
+                                    <View style={styles.reviewMetricCard}>
+                                        <Text style={styles.reviewMetricLabel}>Code Total</Text>
+                                        <Text style={styles.reviewMetricValue}>{teamScorecard.cumulativeCode ?? '—'}</Text>
+                                    </View>
+                                    <View style={styles.reviewMetricCard}>
+                                        <Text style={styles.reviewMetricLabel}>Quality Total</Text>
+                                        <Text style={styles.reviewMetricValue}>{teamScorecard.cumulativeQuality ?? '—'}</Text>
+                                    </View>
+                                </View>
+                                {teamScorecard.sourceScoreTotals ? (
+                                    <Text style={styles.reviewMetaText}>
+                                        Source totals: user={teamScorecard.sourceScoreTotals.user ?? 0}, master={teamScorecard.sourceScoreTotals.master ?? 0}, system={teamScorecard.sourceScoreTotals.system ?? 0}
+                                    </Text>
+                                ) : null}
+                                {teamScorecard.lastReviewedAt ? (
+                                    <Text style={styles.reviewMetaText}>
+                                        Last reviewed: {formatReviewDate(teamScorecard.lastReviewedAt)}
+                                    </Text>
+                                ) : null}
+                            </View>
+                        ) : null}
+                        {teamPublicReviews.map((review, index) => {
+                            const reviewDate = formatReviewDate(review.createdAt);
+                            const headline = review.comment?.trim() || `Review ${index + 1}`;
+                            const scoreText = typeof review.rating === 'number' ? `★ ${review.rating.toFixed(1)}` : '—';
+                            const secondaryBits = [
+                                review.codeScore != null ? `Code ${review.codeScore}` : null,
+                                review.qualityScore != null ? `Quality ${review.qualityScore}` : null,
+                                review.source ? review.source : null,
+                                reviewDate || null,
+                            ].filter(Boolean).join(' · ');
+                            return (
+                                <View key={review.id ?? `review-${index}`} style={styles.reviewItemCard}>
+                                    <View style={styles.reviewItemHeader}>
+                                        <Text style={styles.reviewItemTitle} numberOfLines={1}>
+                                            {headline}
+                                        </Text>
+                                        <Text
+                                            style={[
+                                                styles.reviewItemRating,
+                                                {
+                                                    color: review.rating && review.rating >= 4
+                                                        ? '#22c55e'
+                                                        : review.rating && review.rating >= 3
+                                                            ? '#f59e0b'
+                                                            : theme.colors.textSecondary,
+                                                },
+                                            ]}
+                                        >
+                                            {scoreText}
+                                        </Text>
+                                    </View>
+                                    {secondaryBits ? (
+                                        <Text style={styles.reviewItemComment}>{secondaryBits}</Text>
+                                    ) : null}
+                                </View>
+                            );
+                        })}
+                    </>
+                ) : null}
 
                 <Text style={[styles.sectionTitle, { marginTop: 24 }]}>System Agents</Text>
                 {systemRoster.length === 0 ? (
@@ -1884,11 +2477,25 @@ export default function TeamDashboardScreen() {
 
     const handleTaskDetailSave = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
         const existingTask = kanbanData.tasks.find((entry) => entry.id === taskId);
-        await updateTaskWithSync(taskId, updates, myDisplayName || '用户');
-
-        if (existingTask && typeof updates.status === 'string') {
+        const nextUpdates: Partial<KanbanTask> = { ...updates };
+        if (existingTask && typeof nextUpdates.status === 'string') {
             const previousStatus = normalizeStatus(existingTask.status);
-            const nextStatus = normalizeStatus(updates.status);
+            const nextStatus = normalizeStatus(nextUpdates.status);
+            if (previousStatus !== nextStatus) {
+                const humanLockReason = `${myDisplayName || '用户'} manually changed status to ${nextStatus}.`;
+                nextUpdates.humanStatusLock = buildHumanStatusLock('manual-status', humanLockReason);
+                nextUpdates.comments = [
+                    ...((updates.comments as TaskComment[] | undefined) || existingTask.comments || []),
+                    buildManualStatusLockComment(existingTask, nextStatus, humanLockReason),
+                ];
+            }
+        }
+
+        await updateTaskWithSync(taskId, nextUpdates, myDisplayName || '用户');
+
+        if (existingTask && typeof nextUpdates.status === 'string') {
+            const previousStatus = normalizeStatus(existingTask.status);
+            const nextStatus = normalizeStatus(nextUpdates.status);
             if (previousStatus !== nextStatus) {
                 trackTaskMoved(taskId, teamId, previousStatus, nextStatus, {
                     source: 'task_detail_modal',
@@ -1911,8 +2518,17 @@ export default function TeamDashboardScreen() {
             }
         }
 
-        setShowTaskDetail(false);
-    }, [kanbanData.tasks, myDisplayName, normalizeStatus, teamId, updateTaskWithSync]);
+        handleTaskDetailClose();
+    }, [buildHumanStatusLock, buildManualStatusLockComment, handleTaskDetailClose, kanbanData.tasks, myDisplayName, normalizeStatus, teamId, updateTaskWithSync]);
+
+    const handleTaskCommentAdd = React.useCallback(async (taskId: string, comment: TaskComment) => {
+        const existingTask = kanbanData.tasks.find((entry) => entry.id === taskId);
+        if (!existingTask) return;
+
+        await handleTaskUpdate(taskId, {
+            comments: [...(existingTask.comments || []), comment],
+        });
+    }, [handleTaskUpdate, kanbanData.tasks]);
 
     const handleNewTaskCreate = React.useCallback(async (taskInput: Partial<KanbanTask>) => {
         await createTaskWithSync(taskInput, myDisplayName || '用户');
@@ -2194,11 +2810,15 @@ export default function TeamDashboardScreen() {
                     contained={true}
                     task={selectedTask}
                     columns={kanbanData.columns}
-                    onClose={() => setShowTaskDetail(false)}
+                    onClose={handleTaskDetailClose}
                     onDiscuss={handleDiscussTask}
                     onDelete={handleDeleteTask}
                     onSave={handleTaskDetailSave}
+                    onAddComment={handleTaskCommentAdd}
                     allSessions={allSessions}
+                    actorSessionId={humanActor.sessionId}
+                    actorRole={humanActor.role}
+                    actorDisplayName={humanActor.displayName}
                 />
                 <NewTaskModal
                     visible={showNewTaskModal}
@@ -2428,11 +3048,15 @@ export default function TeamDashboardScreen() {
                         visible={showTaskDetail}
                         task={selectedTask}
                         columns={kanbanData.columns}
-                        onClose={() => setShowTaskDetail(false)}
+                        onClose={handleTaskDetailClose}
                         onDiscuss={handleDiscussTask}
                         onDelete={handleDeleteTask}
                         onSave={handleTaskDetailSave}
+                        onAddComment={handleTaskCommentAdd}
                         allSessions={allSessions}
+                        actorSessionId={humanActor.sessionId}
+                        actorRole={humanActor.role}
+                        actorDisplayName={humanActor.displayName}
                     />
                     <NewTaskModal
                         visible={showNewTaskModal}

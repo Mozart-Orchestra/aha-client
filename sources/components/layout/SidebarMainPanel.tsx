@@ -116,6 +116,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             id: string;
             name: string;
             dotColor: string;
+            roleKey: string;
             description: string;
             inactive: boolean;
             dead: boolean;
@@ -144,6 +145,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 id: entry.sessionId,
                 name: member?.displayName || (session ? getSessionName(session) : entry.sessionId),
                 dotColor: AGENT_DOT_COLORS[flavor.toLowerCase()] ?? '#007AFF',
+                roleKey: flavor,
                 description: [flavor, runtimeLabel].filter(Boolean).join(' · '),
                 inactive,
                 dead,
@@ -183,7 +185,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
     const roleKeys = React.useMemo(() => {
         return Array.from(new Set(
             agents
-                .map((agent) => agent.description?.trim())
+                .map((agent) => agent.roleKey?.trim())
                 .filter((value): value is string => !!value)
                 .map(normalizeRoleKey)
         ));
@@ -290,8 +292,8 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 inactive: agent.inactive,
                 dead: agent.dead,
                 description: agent.description || undefined,
-                score: roleScores[normalizeRoleKey(agent.description || '')]?.score,
-                scoreCount: roleScores[normalizeRoleKey(agent.description || '')]?.evaluationCount,
+                score: roleScores[normalizeRoleKey(agent.roleKey || '')]?.score,
+                scoreCount: roleScores[normalizeRoleKey(agent.roleKey || '')]?.evaluationCount,
                 activityLabel: agent.activityLabel,
                 activityColor: agent.activityColor,
                 selected: selectedAgentId === agent.id,

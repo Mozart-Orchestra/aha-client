@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
-import { KanbanTask, KanbanColumn } from '@/sync/kanbanTypes';
+import { KanbanTask, KanbanColumn, TaskComment, TaskCommentType } from '@/sync/kanbanTypes';
+import { MarkdownView } from '@/components/markdown/MarkdownView';
 import { trackTaskFeedback } from '@/track';
 
 interface TaskDetailModalProps {
@@ -21,9 +22,13 @@ interface TaskDetailModalProps {
     columns: KanbanColumn[];
     onClose: () => void;
     onSave?: (taskId: string, updates: Partial<KanbanTask>) => Promise<void>;
+    onAddComment?: (taskId: string, comment: TaskComment) => Promise<void>;
     onDelete?: (taskId: string) => Promise<void>;
     onDiscuss?: (task: KanbanTask) => void;
     allSessions?: any[];
+    actorSessionId?: string;
+    actorRole?: string;
+    actorDisplayName?: string;
     /** When true, renders as an absolute overlay within its parent instead of a system Modal. */
     contained?: boolean;
 }
@@ -34,15 +39,131 @@ interface Subtask {
     done: boolean;
 }
 
+const COMMENT_TYPE_OPTIONS: Array<{
+    type: TaskCommentType;
+    label: string;
+    icon: string;
+    placeholder: string;
+}> = [
+    { type: 'note', label: 'Note', icon: 'document-text-outline', placeholder: 'Add context, rationale, or notes...' },
+    { type: 'plan', label: 'Plan', icon: 'bulb-outline', placeholder: 'Post your proposed approach before implementation...' },
+    { type: 'plan-review', label: 'Plan Review', icon: 'git-compare-outline', placeholder: 'Review the proposed plan before execution...' },
+    { type: 'execution-check', label: 'Execution Check', icon: 'checkbox-outline', placeholder: 'Check completed plan items and add verification...' },
+    { type: 'rework-request', label: 'Rework', icon: 'refresh-outline', placeholder: 'Send work back with precise required fixes...' },
+];
+
+const CHECKLIST_LINE_REGEX = /^[-*]\s+\[([ xX])\]\s+(.+)$/;
+
+function getCommentTypeLabel(type?: string): string {
+    switch (type) {
+        case 'plan': return 'Plan';
+        case 'plan-review': return 'Plan Review';
+        case 'execution-check': return 'Execution Check';
+        case 'rework-request': return 'Rework';
+        case 'review-feedback': return 'Review Feedback';
+        case 'status-change': return 'Status Change';
+        case 'handoff': return 'Handoff';
+        case 'blocker': return 'Blocker';
+        case 'decision': return 'Decision';
+        case 'human-override': return 'Human Override';
+        default: return 'Note';
+    }
+}
+
+function extractChecklistItems(content?: string): string[] {
+    if (!content) return [];
+    return content
+        .split('\n')
+        .map((line) => line.trim())
+        .map((line) => line.match(CHECKLIST_LINE_REGEX))
+        .filter((match): match is RegExpMatchArray => Boolean(match))
+        .map((match) => match[2].trim());
+}
+
+function parseCommentBody(content: string): { prose: string; checklist: Array<{ text: string; completed: boolean }> } {
+    const prose: string[] = [];
+    const checklist: Array<{ text: string; completed: boolean }> = [];
+
+    content.split('\n').forEach((line) => {
+        const match = line.trim().match(CHECKLIST_LINE_REGEX);
+        if (match) {
+            checklist.push({
+                text: match[2].trim(),
+                completed: match[1].toLowerCase() === 'x',
+            });
+            return;
+        }
+        prose.push(line);
+    });
+
+    return {
+        prose: prose.join('\n').trim(),
+        checklist,
+    };
+}
+
+function buildCommentTemplate(type: TaskCommentType, planSource?: string): string {
+    const planItems = extractChecklistItems(planSource);
+
+    switch (type) {
+        case 'plan':
+            return [
+                '## Proposed approach',
+                '- Briefly describe the intended solution and scope.',
+                '',
+                '## Checklist',
+                '- [ ] Confirm scope and affected files',
+                '- [ ] Implement the change',
+                '- [ ] Verify with tests / manual checks',
+                '',
+                '## Risks / open questions',
+                '- None yet.',
+            ].join('\n');
+        case 'plan-review':
+            return [
+                '## Plan review',
+                '- What looks good:',
+                '- Blocking concerns:',
+                '- Suggested changes before execution:',
+            ].join('\n');
+        case 'execution-check':
+            return [
+                '## Execution check against plan',
+                ...(planItems.length > 0
+                    ? planItems.map((item) => `- [ ] ${item}`)
+                    : ['- [ ] Planned item 1', '- [ ] Planned item 2']),
+                '',
+                '## Evidence / verification',
+                '- Tests run:',
+                '- Manual checks:',
+            ].join('\n');
+        case 'rework-request':
+            return [
+                '## Rework requested',
+                '- [ ] Item that still needs to be fixed',
+                '- [ ] Extra verification required before merge',
+                '',
+                '## Why this is being sent back',
+                '- Explain the gap against the agreed plan.',
+            ].join('\n');
+        default:
+            return '';
+    }
+}
+
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     visible,
     task,
     columns,
     onClose,
     onSave,
+    onAddComment,
     onDelete,
     onDiscuss,
     allSessions,
+    actorSessionId,
+    actorRole,
+    actorDisplayName,
     contained = false,
 }) => {
     const { theme } = useUnistyles();
@@ -52,12 +173,16 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [feedbackGiven, setFeedbackGiven] = useState<1 | -1 | null>(null);
+    const [commentDraft, setCommentDraft] = useState('');
+    const [selectedCommentType, setSelectedCommentType] = useState<TaskCommentType>('note');
 
     // 当 task 改变时,重置状态
     React.useEffect(() => {
         if (task) {
             setSaveError(null);
             setFeedbackGiven(null);
+            setCommentDraft('');
+            setSelectedCommentType('note');
             setEditedTask({
                 title: task.title,
                 description: task.description || '',
@@ -83,18 +208,94 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         setIsEditing(false);
     }, [task?.id]);
 
+    const getAssigneeName = (assigneeId?: string | null) => {
+        if (!assigneeId) return 'Unassigned';
+        const session = allSessions?.find(s => s.id === assigneeId);
+        return session?.displayName || session?.name || assigneeId;
+    };
+
+    const getPriorityColor = (priority?: string) => {
+        switch (priority) {
+            case 'urgent': return theme.colors.textDestructive;
+            case 'high': return theme.colors.warning;
+            case 'medium': return theme.colors.textLink;
+            case 'low': return theme.colors.success;
+            default: return theme.colors.textSecondary;
+        }
+    };
+
+    const formatDate = (timestamp?: number) => {
+        if (!timestamp) return 'No due date';
+        return new Date(timestamp).toLocaleDateString();
+    };
+
+    const formatCommentDate = (timestamp: number) => {
+        try {
+            return new Date(timestamp).toLocaleString();
+        } catch {
+            return '';
+        }
+    };
+
+    const buildTaskComment = (content: string, type: TaskComment['type'] = 'note'): TaskComment => {
+        return {
+            id: `comment-${Date.now()}`,
+            authorSessionId: actorSessionId || 'unknown-session',
+            authorRole: actorRole || 'user',
+            authorDisplayName: actorDisplayName || 'Unknown',
+            type,
+            content: content.trim(),
+            createdAt: Date.now(),
+        };
+    };
+
+    const commentSuggestedForTransition = !!task && isEditing && (
+        (task.status === 'review' && (editedTask.status || task.status) === 'in-progress')
+        || (task.status === 'done' && (editedTask.status || task.status) === 'in-progress')
+    );
+    const latestPlanComment = [...(task?.comments || [])]
+        .filter((comment) => comment.type === 'plan')
+        .sort((left, right) => right.createdAt - left.createdAt)[0];
+    const hasPlanComment = Boolean(latestPlanComment);
+
     // Early return AFTER all hooks to avoid "Rendered fewer/more hooks" error
     if (!task) return null;
 
+    const humanLockMessage = task.humanStatusLock
+        ? (() => {
+            const lockedBy = task.humanStatusLock.lockedByDisplayName || task.humanStatusLock.lockedBySessionId || 'A human';
+            if (task.humanStatusLock.mode === 'manual-status') {
+                return `${lockedBy} manually locked this task after a status change. Agents should not overwrite it until the lock is cleared.`;
+            }
+            if (task.humanStatusLock.mode === 'editing') {
+                return `${lockedBy} is actively editing this task.`;
+            }
+            return `${lockedBy} is actively viewing this task.`;
+        })()
+        : null;
+
     const handleSave = async () => {
-        if (!onSave || !task) return;
+        if (!onSave) return;
 
         setIsSaving(true);
         setSaveError(null);
         try {
-            await onSave(task.id, editedTask);
+            const updates: Partial<KanbanTask> = { ...editedTask };
+            if (commentDraft.trim()) {
+                const draftType = selectedCommentType === 'note' && commentSuggestedForTransition
+                    ? 'review-feedback'
+                    : selectedCommentType;
+                updates.comments = [...(task.comments || []), buildTaskComment(
+                    commentDraft,
+                    draftType,
+                )];
+            }
+
+            await onSave(task.id, updates);
             setIsEditing(false);
             setSaveError(null);
+            setCommentDraft('');
+            setSelectedCommentType('note');
         } catch (error) {
             console.error('Failed to save task:', error);
             setSaveError(error instanceof Error ? error.message : 'Failed to save task');
@@ -116,27 +317,40 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             dueDate: task.dueDate,
             tags: task.tags || []
         });
+        setCommentDraft('');
+        setSelectedCommentType('note');
     };
 
-    const getAssigneeName = (assigneeId?: string | null) => {
-        if (!assigneeId) return 'Unassigned';
-        const session = allSessions?.find(s => s.id === assigneeId);
-        return session?.displayName || session?.name || assigneeId;
-    };
+    const handleAddComment = async () => {
+        if (!commentDraft.trim()) return;
 
-    const getPriorityColor = (priority?: string) => {
-        switch (priority) {
-            case 'urgent': return theme.colors.textDestructive;
-            case 'high': return theme.colors.warning;
-            case 'medium': return theme.colors.textLink;
-            case 'low': return theme.colors.success;
-            default: return theme.colors.textSecondary;
+        const comment = buildTaskComment(commentDraft, selectedCommentType);
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+            if (onAddComment) {
+                await onAddComment(task.id, comment);
+            } else if (onSave) {
+                await onSave(task.id, {
+                    comments: [...(task.comments || []), comment],
+                });
+            }
+            setCommentDraft('');
+            setSelectedCommentType('note');
+        } catch (error) {
+            console.error('Failed to add task comment:', error);
+            setSaveError(error instanceof Error ? error.message : 'Failed to add task comment');
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const formatDate = (timestamp?: number) => {
-        if (!timestamp) return 'No due date';
-        return new Date(timestamp).toLocaleDateString();
+    const handleInsertCommentTemplate = () => {
+        const template = buildCommentTemplate(selectedCommentType, latestPlanComment?.content);
+        if (!template) {
+            return;
+        }
+        setCommentDraft((previous) => previous.trim().length > 0 ? `${previous.trim()}\n\n${template}` : template);
     };
 
     const subtasksDone = subtasks.filter(s => s.done).length;
@@ -213,6 +427,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         <Text style={stylesheet.errorText}>{saveError}</Text>
                     </View>
                 )}
+                {humanLockMessage ? (
+                    <View style={stylesheet.lockBanner}>
+                        <Ionicons name="hand-left-outline" size={16} color={theme.colors.warning} />
+                        <Text style={stylesheet.lockBannerText}>{humanLockMessage}</Text>
+                    </View>
+                ) : null}
 
                 <ScrollView style={stylesheet.content} showsVerticalScrollIndicator={false}>
                     {/* Title */}
@@ -249,6 +469,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     <Text style={stylesheet.metaLabel}>Assignee</Text>
                                     <Text style={stylesheet.metaValue}>
                                         {getAssigneeName(task.assigneeId)}
+                                    </Text>
+                                </View>
+                                <View style={stylesheet.metaItem}>
+                                    <Text style={stylesheet.metaLabel}>Reporter</Text>
+                                    <Text style={stylesheet.metaValue}>
+                                        {getAssigneeName(task.reporterId)}
                                     </Text>
                                 </View>
                             </View>
@@ -298,9 +524,15 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                         numberOfLines={4}
                                     />
                                 ) : (
-                                    <Text style={stylesheet.description}>
-                                        {task.description || 'No description'}
-                                    </Text>
+                                    task.description ? (
+                                        <View style={stylesheet.markdownBlock}>
+                                            <MarkdownView markdown={task.description} textColor={theme.colors.text} />
+                                        </View>
+                                    ) : (
+                                        <Text style={stylesheet.description}>
+                                            No description
+                                        </Text>
+                                    )
                                 )}
                             </View>
 
@@ -353,11 +585,139 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 </View>
                             )}
 
-                            {/* Activity Feed */}
+                            {/* Comments / Task Memory */}
                             <View style={stylesheet.section}>
-                                <Text style={stylesheet.sectionTitle}>Activity</Text>
-                                <Text style={stylesheet.noActivity}>No recent activity</Text>
-                                {/* TODO: 显示活动历史 */}
+                                <View style={stylesheet.sectionHeader}>
+                                    <Text style={stylesheet.sectionTitle}>Comments</Text>
+                                    <Text style={stylesheet.progress}>{task.comments?.length || 0}</Text>
+                                </View>
+                                {!hasPlanComment && ['todo', 'in-progress', 'review'].includes(task.status) ? (
+                                    <Text style={stylesheet.commentRequiredText}>
+                                        Missing a plan comment. Before execution, add a type=Plan comment with the proposed approach and a checklist.
+                                    </Text>
+                                ) : null}
+                                {task.comments && task.comments.length > 0 ? (
+                                    <View style={stylesheet.commentsList}>
+                                        {[...task.comments]
+                                            .sort((left, right) => left.createdAt - right.createdAt)
+                                            .map((comment) => {
+                                                const parsedBody = parseCommentBody(comment.content);
+                                                const checklistProgress = parsedBody.checklist.length > 0
+                                                    ? `${parsedBody.checklist.filter((item) => item.completed).length}/${parsedBody.checklist.length} checked`
+                                                    : null;
+
+                                                return (
+                                                <View key={comment.id} style={stylesheet.commentCard}>
+                                                    <View style={stylesheet.commentHeader}>
+                                                        <Text style={stylesheet.commentAuthor}>
+                                                            {(comment as any).authorDisplayName || (comment as any).displayName || (comment as any).authorRole || (comment as any).authorSessionId || (comment as any).sessionId || 'Unknown'}
+                                                        </Text>
+                                                        <Text style={stylesheet.commentMeta}>
+                                                            {[comment.authorRole, formatCommentDate(comment.createdAt)].filter(Boolean).join(' · ')}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={stylesheet.commentTypeRow}>
+                                                        <View style={stylesheet.commentTypeBadge}>
+                                                            <Text style={stylesheet.commentTypeText}>{getCommentTypeLabel((comment as any).type)}</Text>
+                                                        </View>
+                                                        {checklistProgress ? (
+                                                            <Text style={stylesheet.commentChecklistProgress}>{checklistProgress}</Text>
+                                                        ) : null}
+                                                    </View>
+                                                    {parsedBody.prose ? (
+                                                        <View style={stylesheet.markdownBlock}>
+                                                            <MarkdownView markdown={parsedBody.prose} textColor={theme.colors.text} />
+                                                        </View>
+                                                    ) : null}
+                                                    {parsedBody.checklist.length > 0 ? (
+                                                        <View style={stylesheet.commentChecklist}>
+                                                            {parsedBody.checklist.map((item, index) => (
+                                                                <View key={`${comment.id}-${index}`} style={stylesheet.commentChecklistItem}>
+                                                                    <Ionicons
+                                                                        name={item.completed ? 'checkbox' : 'square-outline'}
+                                                                        size={16}
+                                                                        color={item.completed ? theme.colors.success : theme.colors.textSecondary}
+                                                                    />
+                                                                    <Text
+                                                                        style={[
+                                                                            stylesheet.commentChecklistText,
+                                                                            item.completed && stylesheet.commentChecklistTextDone,
+                                                                        ]}
+                                                                    >
+                                                                        {item.text}
+                                                                    </Text>
+                                                                </View>
+                                                            ))}
+                                                        </View>
+                                                    ) : null}
+                                                </View>
+                                            )})}
+                                    </View>
+                                ) : (
+                                    <Text style={stylesheet.noActivity}>No comments yet</Text>
+                                )}
+
+                                <View style={stylesheet.commentTypePicker}>
+                                    {COMMENT_TYPE_OPTIONS.map((option) => {
+                                        const isActive = selectedCommentType === option.type;
+                                        return (
+                                            <Pressable
+                                                key={option.type}
+                                                onPress={() => setSelectedCommentType(option.type)}
+                                                style={[
+                                                    stylesheet.commentTypeChip,
+                                                    isActive && stylesheet.commentTypeChipActive,
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={option.icon as any}
+                                                    size={14}
+                                                    color={isActive ? theme.colors.button.primary.tint : theme.colors.textSecondary}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        stylesheet.commentTypeChipText,
+                                                        isActive && stylesheet.commentTypeChipTextActive,
+                                                    ]}
+                                                >
+                                                    {option.label}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+
+                                <TextInput
+                                    style={stylesheet.descriptionInput}
+                                    value={commentDraft}
+                                    onChangeText={setCommentDraft}
+                                    placeholder={COMMENT_TYPE_OPTIONS.find((option) => option.type === selectedCommentType)?.placeholder || 'Add a comment to this task...'}
+                                    multiline
+                                    numberOfLines={3}
+                                />
+                                {selectedCommentType !== 'note' ? (
+                                    <Pressable style={stylesheet.templateButton} onPress={handleInsertCommentTemplate}>
+                                        <Ionicons name="sparkles-outline" size={16} color={theme.colors.textSecondary} />
+                                        <Text style={stylesheet.templateButtonText}>
+                                            Insert {getCommentTypeLabel(selectedCommentType).toLowerCase()} template
+                                        </Text>
+                                    </Pressable>
+                                ) : null}
+                                {commentSuggestedForTransition ? (
+                                    <Text style={stylesheet.commentRequiredText}>
+                                        Suggested: leave a comment here so the next agent inherits the review / rework context.
+                                    </Text>
+                                ) : null}
+                                {!isEditing ? (
+                                    <Pressable
+                                        style={[stylesheet.addSubtaskButton, !commentDraft.trim() && { opacity: 0.5 }]}
+                                        onPress={handleAddComment}
+                                        disabled={!commentDraft.trim() || isSaving}
+                                    >
+                                        <Ionicons name="chatbubble-ellipses-outline" size={16} color={theme.colors.textSecondary} />
+                                        <Text style={stylesheet.addSubtaskText}>Add comment</Text>
+                                    </Pressable>
+                                ) : null}
                             </View>
 
                             {/* Feedback — shown only for done tasks */}
@@ -602,6 +962,9 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.text,
         lineHeight: 20,
     },
+    markdownBlock: {
+        width: '100%',
+    },
     descriptionInput: {
         fontSize: 14,
         color: theme.colors.text,
@@ -615,6 +978,116 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 14,
         color: theme.colors.textSecondary,
         fontStyle: 'italic',
+    },
+    commentsList: {
+        gap: 10,
+        marginBottom: 12,
+    },
+    commentCard: {
+        backgroundColor: theme.colors.groupped.background,
+        borderRadius: 10,
+        padding: 12,
+        gap: 6,
+    },
+    commentHeader: {
+        gap: 2,
+    },
+    commentAuthor: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.text,
+    },
+    commentMeta: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+    },
+    commentTypeBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: `${theme.colors.textLink}15`,
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    commentTypeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    commentTypeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: theme.colors.textLink,
+    },
+    commentChecklistProgress: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+    },
+    commentChecklist: {
+        gap: 6,
+        marginTop: 4,
+    },
+    commentChecklistItem: {
+        flexDirection: 'row',
+        gap: 8,
+        alignItems: 'flex-start',
+    },
+    commentChecklistText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        color: theme.colors.text,
+    },
+    commentChecklistTextDone: {
+        textDecorationLine: 'line-through',
+        color: theme.colors.textSecondary,
+    },
+    commentRequiredText: {
+        fontSize: 12,
+        color: theme.colors.warning,
+        marginTop: 8,
+    },
+    commentTypePicker: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 12,
+        marginBottom: 8,
+    },
+    commentTypeChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        borderRadius: 999,
+        backgroundColor: theme.colors.groupped.background,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    commentTypeChipActive: {
+        backgroundColor: `${theme.colors.textLink}12`,
+        borderColor: `${theme.colors.textLink}45`,
+    },
+    commentTypeChipText: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        fontWeight: '500',
+    },
+    commentTypeChipTextActive: {
+        color: theme.colors.textLink,
+        fontWeight: '600',
+    },
+    templateButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 8,
+        paddingVertical: 8,
+    },
+    templateButtonText: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
     },
     subtaskRow: {
         flexDirection: 'row',
@@ -708,5 +1181,21 @@ const stylesheet = StyleSheet.create((theme) => ({
     errorText: {
         fontSize: 12,
         color: theme.colors.textDestructive,
+    },
+    lockBanner: {
+        flexDirection: 'row',
+        gap: 8,
+        alignItems: 'flex-start',
+        marginHorizontal: 16,
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 10,
+        backgroundColor: `${theme.colors.warning}14`,
+    },
+    lockBannerText: {
+        flex: 1,
+        fontSize: 12,
+        lineHeight: 18,
+        color: theme.colors.text,
     },
 }));

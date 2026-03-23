@@ -12,6 +12,7 @@ import { useAllSessions, storage, useAllMachines, useSetting } from '@/sync/stor
 import { Ionicons } from '@expo/vector-icons';
 import { DEFAULT_KANBAN_BOARD, KanbanTeamMember, KanbanBoard, DEFAULT_TEAM_AGREEMENTS, DEFAULT_TEAM_ROLES, KanbanTeamRole } from '@/sync/kanbanTypes';
 import { getRecentPathForMachine, updateRecentMachinePaths, getKnownPathsForMachine } from '@/utils/machinePaths';
+import { findWorkspacePathProblem } from '@/utils/workspacePathGuard';
 import { getLocalizedTeamRoles } from '@/team-config/i18n';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
@@ -20,6 +21,7 @@ import { goBackOrReturn } from '@/utils/returnNavigation';
 import { fetchGenomeByName } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
 import { isMachineOnline } from '@/utils/machineUtils';
+import { getConcatenatedPathErrorMessage } from '@/utils/workingDirectory';
 
 // Use localized team roles instead of hardcoded ones
 const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
@@ -733,6 +735,7 @@ export default function NewTeamScreen() {
         try {
             setIsSaving(true);
             const resolvedCwd = cwd.trim();
+            const cwdProblem = resolvedCwd ? findWorkspacePathProblem(resolvedCwd) : null;
             const resolvedAgentBinary = creationMode === 'manual' ? agentBinary.trim() : '';
             const isPromptMode = creationMode === 'prompt';
             const machineIdForSpawn = isPromptMode ? promptPrimaryMachineId : selectedMachineId;
@@ -754,6 +757,14 @@ export default function NewTeamScreen() {
                     isPromptMode
                         ? 'Please provide a working directory for the team prompt.'
                         : 'Please provide a working directory for the auto-spawned agents.'
+                );
+                return;
+            }
+
+            if (cwdProblem) {
+                await Modal.alert(
+                    t('common.error'),
+                    `Working directory is invalid.\n\n${cwdProblem}\n\nPlease choose exactly one path.`,
                 );
                 return;
             }
@@ -795,6 +806,12 @@ export default function NewTeamScreen() {
                     return `  - ${roleLabel}: ${getMachineDisplayName(machine)} (${machine.active ? 'online' : 'offline'}${machine.metadata?.platform ? `, ${machine.metadata.platform}` : ''})`;
                 }),
             ].join('\n') : '';
+
+            const cwdValidationError = resolvedCwd ? getConcatenatedPathErrorMessage(resolvedCwd) : null;
+            if (cwdValidationError) {
+                await Modal.alert(t('common.error'), cwdValidationError);
+                return;
+            }
 
             if (hasRequestedSpawns && !desktopBridge) {
                 if (!machineIdForSpawn) {
@@ -1155,7 +1172,7 @@ export default function NewTeamScreen() {
                 }
 
                 const createdTeam = await sync.registerTeam({
-                    id: room.id,
+                    id: roomIdForNavigation ?? undefined,
                     name: title.trim(),
                     ...(target.trim() ? { description: target.trim() } : {}),
                     board: JSON.parse(initialBody) as KanbanBoard,

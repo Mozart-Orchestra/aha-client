@@ -15,13 +15,28 @@ const sampleCorps: CorpsSpec = {
     version: 1,
     description: 'Full-stack development team',
     members: [
-        { genome: '@official/master', roleAlias: 'master', count: 1, required: true },
+        {
+            genome: '@official/master',
+            roleAlias: 'master',
+            count: 1,
+            required: true,
+            overlay: {
+                authorities: ['user.reply', 'task.create', 'task.assign'],
+                promptSuffix: 'You are the only public entrypoint.',
+            },
+        },
         { genome: '@official/implementer', count: 2, required: true },
         { genome: '@official/qa-engineer', required: false },
     ],
     bootContext: {
         teamDescription: 'Delivery Squad',
         initialObjective: 'Ship the sprint backlog',
+        sharedContext: ['Chat is not a task system.'],
+        commandChain: ['user', 'master', 'builder'],
+        taskPolicy: {
+            boardIsSourceOfTruth: true,
+            requireTaskForExecution: true,
+        },
     },
 };
 
@@ -46,10 +61,21 @@ describe('corpsDeployment', () => {
             expect.objectContaining({ roleId: 'implementer', ordinal: 2, displayName: 'Implementer 2' }),
             expect.objectContaining({ roleId: 'qa-engineer', ordinal: 1, displayName: 'Qa Engineer' }),
         ]);
+        expect(expandCorpsMemberPlans(sampleCorps)[0].authorities).toEqual(['user.reply', 'task.create', 'task.assign']);
     });
 
     it('prefers boot context name when deriving default team names', () => {
         expect(getDefaultCorpsTeamName('Fallback Name', sampleCorps)).toBe('Delivery Squad');
+    });
+
+    it('uses the first non-empty line when boot context stores a multi-line team prompt', () => {
+        expect(getDefaultCorpsTeamName('Fallback Name', {
+            ...sampleCorps,
+            bootContext: {
+                teamDescription: 'Edict Full Court\n- taizi is the only user entrypoint',
+                initialObjective: 'Ship the sprint backlog',
+            },
+        })).toBe('Edict Full Court');
     });
 
     it('builds a team board with seeded members and objective task', () => {
@@ -68,6 +94,14 @@ describe('corpsDeployment', () => {
         });
 
         expect(board.team?.members).toHaveLength(1);
+        expect(board.team?.bootContext?.teamDescription).toBe('Delivery Squad');
+        expect(board.team?.bootContext?.initialObjective).toBe('Ship the sprint backlog');
+        expect(board.team?.bootContext?.sharedContext).toEqual(['Chat is not a task system.']);
+        expect(board.team?.bootContext?.commandChain).toEqual(['user', 'master', 'builder']);
+        expect(board.team?.bootContext?.taskPolicy).toEqual({
+            boardIsSourceOfTruth: true,
+            requireTaskForExecution: true,
+        });
         expect(board.tasks).toEqual([
             expect.objectContaining({
                 id: 'team-goal',

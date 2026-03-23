@@ -256,6 +256,7 @@ ${context.message.content}
 
 ${context.isMentioned ? `
 ⚠️  You were mentioned in this message.
+👤 Sender: ${context.message.fromDisplayName || context.message.fromSessionId || 'unknown'}
 💡 Your role: ${context.myRole}
 ${context.shouldRespond ? '📌 Response expected based on team protocol' : ''}
 ` : ''}
