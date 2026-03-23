@@ -13,6 +13,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native-unistyles';
 
+import * as Clipboard from 'expo-clipboard';
+
 import { useAuth } from '@/auth/AuthContext';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
@@ -21,6 +23,7 @@ import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
 import { PreviewSessionCard } from '@/components/session/PreviewSessionCard';
 import { encodeBase64 } from '@/encryption/base64';
+import { Modal } from '@/modal';
 import { useAllSessions } from '@/sync/storage';
 import { isSessionActive } from '@/utils/sessionUtils';
 import { getCurrentLanguage, t } from '@/text';
@@ -85,7 +88,7 @@ const ENGLISH_LANDING_COPY: LandingCopy = {
     teamAgent4: 'DevOps',
     teamAgent4Task: 'CI/CD pipeline & deployment',
     teamAgent4Machine: 'GPU Cloud',
-    cliCommand: 'npx aha teams spawn saas-mvp',
+    cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
 };
 
 const CHINESE_LANDING_COPY: LandingCopy = {
@@ -115,7 +118,7 @@ const CHINESE_LANDING_COPY: LandingCopy = {
     teamAgent4: 'DevOps',
     teamAgent4Task: 'CI/CD 流水线 & 部署',
     teamAgent4Machine: 'GPU 云',
-    cliCommand: 'npx aha teams spawn saas-mvp',
+    cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
 };
 
 const styles = StyleSheet.create(() => ({
@@ -493,6 +496,16 @@ function NotAuthenticated() {
         router.push('/server');
     }, [router]);
 
+    const handleCopyCliCommand = React.useCallback(async () => {
+        await Clipboard.setStringAsync(copy.cliCommand);
+        Modal.alert(
+            getCurrentLanguage() === 'zh-Hans' ? '已复制' : 'Copied',
+            getCurrentLanguage() === 'zh-Hans'
+                ? '命令已复制到剪贴板，请打开终端粘贴运行'
+                : 'Command copied to clipboard. Paste it in your terminal to get started.',
+        );
+    }, [copy.cliCommand]);
+
     const previewPanel = (
         <View style={styles.landingPreviewPanel}>
             <View style={styles.landingPreviewHeader}>
@@ -562,9 +575,9 @@ function NotAuthenticated() {
 
                             <View style={styles.landingActionsRow}>
                                 <LandingButton
-                                    icon="terminal-outline"
-                                    title={t('welcome.loginWithMobileApp')}
-                                    onPress={handleRestore}
+                                    icon="copy-outline"
+                                    title={copy.cliCommand}
+                                    onPress={handleCopyCliCommand}
                                     tone="primary"
                                 />
                                 <LandingButton
@@ -627,11 +640,11 @@ function NotAuthenticated() {
 
                 <View style={styles.landingMobileActions}>
                     <LandingButton
-                        icon={Platform.OS === 'android' || Platform.OS === 'ios' ? undefined : 'terminal-outline'}
+                        icon={Platform.OS === 'android' || Platform.OS === 'ios' ? undefined : 'copy-outline'}
                         title={Platform.OS === 'android' || Platform.OS === 'ios'
                             ? t('welcome.createAccount')
-                            : t('welcome.loginWithMobileApp')}
-                        onPress={Platform.OS === 'android' || Platform.OS === 'ios' ? handleCreateAccount : handleRestore}
+                            : copy.cliCommand}
+                        onPress={Platform.OS === 'android' || Platform.OS === 'ios' ? handleCreateAccount : handleCopyCliCommand}
                         tone="primary"
                     />
                     <LandingButton
