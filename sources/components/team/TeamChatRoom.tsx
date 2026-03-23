@@ -796,6 +796,7 @@ const MessageBubbleInner = ({
     const [expanded, setExpanded] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
     const [imageLoading, setImageLoading] = React.useState(true);
+    const imageHasLoadedRef = React.useRef(false);
     const [showFullImage, setShowFullImage] = React.useState(false);
     const [showAssociations, setShowAssociations] = React.useState(false);
     const singlePressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -950,8 +951,15 @@ const MessageBubbleInner = ({
                         source={{ uri: imageUri }}
                         style={[styles.messageImage, { width: displayWidth, height: displayHeight }]}
                         resizeMode="cover"
-                        onLoadStart={() => setImageLoading(true)}
-                        onLoadEnd={() => setImageLoading(false)}
+                        onLoadStart={() => {
+                            if (!imageHasLoadedRef.current) {
+                                setImageLoading(true);
+                            }
+                        }}
+                        onLoadEnd={() => {
+                            imageHasLoadedRef.current = true;
+                            setImageLoading(false);
+                        }}
                     />
                     {imageLoading && (
                         <View style={[styles.imageLoading, { width: displayWidth, height: displayHeight }]}>
@@ -1827,12 +1835,15 @@ export default function TeamChatRoom({
         setInputSelection({ start: result.cursorPosition, end: result.cursorPosition });
     }, [mentionSuggestions, inputText, inputSelection]);
 
+    const memberDirectoryRef = React.useRef(memberDirectory);
+    memberDirectoryRef.current = memberDirectory;
+
     const resolveAgentIdentity = React.useCallback((
         sessionId: string,
         fallbackRole?: string,
         fallbackName?: string,
     ): TeamChatAgentIdentity => {
-        const knownAgent = memberDirectory[sessionId];
+        const knownAgent = memberDirectoryRef.current[sessionId];
         if (knownAgent) {
             return knownAgent;
         }
@@ -1844,7 +1855,7 @@ export default function TeamChatRoom({
             roleLabel: fallbackRole || 'Agent',
             isOnline: false,
         };
-    }, [memberDirectory]);
+    }, []);
 
     const lastResponseBySession = React.useMemo<Record<string, number>>(() => {
         const map: Record<string, number> = {};

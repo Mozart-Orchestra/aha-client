@@ -445,7 +445,7 @@ export function AgentInfoPanel({ visible, sessionId, specId: specIdProp, onClose
     const agentDisplayName = resolveDisplayName(rawDisplayName, roleId, sessionId);
     const roleLabel = getRoleLabel(roleId);
 
-    const isOnline = session?.presence === 'online';
+    const isOnline = !!session?.active;
 
     const handleViewMarketplace = React.useCallback(() => {
         if (genome?.id) {
