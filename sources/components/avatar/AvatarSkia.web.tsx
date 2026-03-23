@@ -96,9 +96,9 @@ export const AvatarSkia = React.memo((props: AvatarProps) => {
                 style={{ display: 'block' }}
             >
                 <g clipPath={square ? undefined : `url(#avatar-clip-${id})`}>
-                    {rects.map((rect, index) => (
+                    {rects.map((rect) => (
                         <rect
-                            key={index}
+                            key={`${rect.x}-${rect.y}`}
                             x={rect.x}
                             y={rect.y}
                             width={cellSize}

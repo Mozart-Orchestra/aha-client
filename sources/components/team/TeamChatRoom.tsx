@@ -37,7 +37,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Modal } from '@/modal';
 import { pushSessionRoute } from '@/utils/returnNavigation';
-import { buildMentionChipAccessibilityLabel, buildMentionChipLabel } from '@/utils/teamMentionSummary';
+import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
@@ -518,6 +518,10 @@ const getAvatarContent = (roleId?: string, displayName?: string) => {
         scribe: 'observer',
         qa: 'qa-engineer',
         reviewer: 'observer',
+        'agent-builder': 'agent-builder',
+        'org-manager': 'org-manager',
+        supervisor: 'supervisor',
+        'help-agent': 'help-agent',
     } as const)[roleId] ?? roleId;
 
     if (normalizedRole === 'orchestrator') return '👑';
@@ -526,6 +530,10 @@ const getAvatarContent = (roleId?: string, displayName?: string) => {
     if (normalizedRole === 'researcher') return '🔎';
     if (normalizedRole === 'qa-engineer') return '🧪';
     if (normalizedRole === 'observer') return '👁️';
+    if (normalizedRole === 'agent-builder') return '🧬';
+    if (normalizedRole === 'org-manager') return '🏛️';
+    if (normalizedRole === 'supervisor') return '🔭';
+    if (normalizedRole === 'help-agent') return '🛟';
 
     // Fallback to initials
     const name = displayName || normalizedRole || '?';
@@ -552,27 +560,31 @@ const getRoleVisual = (roleId?: string, displayName?: string): RoleVisual => {
         qa: 'qa-engineer',
         reviewer: 'observer',
         user: 'user',
+        'agent-builder': 'agent-builder',
+        'org-manager': 'org-manager',
+        supervisor: 'supervisor',
+        'help-agent': 'help-agent',
     } as const;
     const normalizedRole = roleId ? (roleMap[roleId as keyof typeof roleMap] ?? roleId) : 'user';
 
     if (normalizedRole === 'orchestrator') {
         return {
             avatarIcon: 'sparkles-outline',
-            avatarBackground: '#6886A3',
+            avatarBackground: '#C8860A',  // warm gold — the crown role
             badgeLabel: 'MASTER',
-            badgeBackground: '#5F7D9920',
-            badgeTextColor: '#5F7D99',
-            dotColor: '#6886A3',
+            badgeBackground: '#C8860A20',
+            badgeTextColor: '#B27006',
+            dotColor: '#C8860A',
         };
     }
 
     if (normalizedRole === 'implementer') {
         return {
             avatarIcon: 'hammer-outline',
-            avatarBackground: '#B89A6F',
+            avatarBackground: '#E05C2A',  // vibrant orange-red — builder energy
             badgeLabel: 'IMPLEMENTER',
-            badgeBackground: '#B89A6F20',
-            badgeTextColor: '#8F6D3E',
+            badgeBackground: '#E05C2A20',
+            badgeTextColor: '#C04820',
             dotColor: '#34C759',
         };
     }
@@ -580,47 +592,91 @@ const getRoleVisual = (roleId?: string, displayName?: string): RoleVisual => {
     if (normalizedRole === 'architect') {
         return {
             avatarIcon: 'git-branch-outline',
-            avatarBackground: '#8F99C1',
+            avatarBackground: '#4A6FD4',  // bright blue — system design
             badgeLabel: 'ARCHITECT',
-            badgeBackground: '#8F99C120',
-            badgeTextColor: '#6673A6',
-            dotColor: '#8F99C1',
+            badgeBackground: '#4A6FD420',
+            badgeTextColor: '#3A5BC0',
+            dotColor: '#4A6FD4',
         };
     }
 
     if (normalizedRole === 'qa-engineer') {
         return {
             avatarIcon: 'flask-outline',
-            avatarBackground: '#7C78C8',
+            avatarBackground: '#9B3DCA',  // vibrant purple — scientific testing
             badgeLabel: 'QA',
-            badgeBackground: '#7C78C820',
-            badgeTextColor: '#5856D6',
-            dotColor: '#5856D6',
+            badgeBackground: '#9B3DCA20',
+            badgeTextColor: '#7B2DAA',
+            dotColor: '#9B3DCA',
         };
     }
 
     if (normalizedRole === 'observer' || normalizedRole === 'researcher') {
         return {
             avatarIcon: 'eye-outline',
-            avatarBackground: '#7C95A9',
+            avatarBackground: '#0EA5A0',  // bright teal — observation
             badgeLabel: normalizedRole === 'researcher' ? 'RESEARCH' : 'REVIEW',
-            badgeBackground: '#7C95A920',
-            badgeTextColor: '#617487',
-            dotColor: '#7C95A9',
+            badgeBackground: '#0EA5A020',
+            badgeTextColor: '#0A8580',
+            dotColor: '#0EA5A0',
+        };
+    }
+
+    if (normalizedRole === 'agent-builder') {
+        return {
+            avatarLabel: '🧬',
+            avatarBackground: '#2DA44E',  // GitHub green — genome creation
+            badgeLabel: 'BUILDER',
+            badgeBackground: '#2DA44E20',
+            badgeTextColor: '#1A8A38',
+            dotColor: '#2DA44E',
+        };
+    }
+
+    if (normalizedRole === 'org-manager') {
+        return {
+            avatarLabel: '🏛️',
+            avatarBackground: '#1D6FA4',  // institutional blue — governance
+            badgeLabel: 'ORG',
+            badgeBackground: '#1D6FA420',
+            badgeTextColor: '#145A88',
+            dotColor: '#1D6FA4',
+        };
+    }
+
+    if (normalizedRole === 'supervisor') {
+        return {
+            avatarLabel: '🔭',
+            avatarBackground: '#6D5ACF',  // indigo — monitoring & oversight
+            badgeLabel: 'SUPERVISOR',
+            badgeBackground: '#6D5ACF20',
+            badgeTextColor: '#5444B5',
+            dotColor: '#6D5ACF',
+        };
+    }
+
+    if (normalizedRole === 'help-agent') {
+        return {
+            avatarLabel: '🛟',
+            avatarBackground: '#D4821A',  // warm amber — rescue & repair
+            badgeLabel: 'HELP',
+            badgeBackground: '#D4821A20',
+            badgeTextColor: '#B06812',
+            dotColor: '#D4821A',
         };
     }
 
     if (normalizedRole === 'user') {
         return {
             avatarIcon: 'person-outline',
-            avatarBackground: '#1A1209',
-            dotColor: '#1A1209',
+            avatarBackground: '#4A7FAE',  // softer blue for user
+            dotColor: '#4A7FAE',
         };
     }
 
     return {
         avatarLabel: getAvatarContent(normalizedRole, displayName),
-        avatarBackground: '#31485D',
+        avatarBackground: '#5C7A8F',  // lighter default (was very dark #31485D)
         dotColor: '#34C759',
     };
 };
@@ -724,17 +780,17 @@ interface MessageBubbleProps {
     resolveAgentIdentity: (sessionId: string, fallbackRole?: string, fallbackName?: string) => TeamChatAgentIdentity;
     variant: TeamChatRoomVariant;
     // 🆕 Task references support
-    taskChatSync?: ReturnType<typeof useTaskChatSync>;
+    getTasksForMessage?: (messageId: string) => KanbanTask[];
 }
 
-const MessageBubble = ({
+const MessageBubbleInner = ({
     message,
     isMyMessage,
     styles,
     onAvatarPress,
     resolveAgentIdentity,
     variant,
-    taskChatSync,
+    getTasksForMessage,
 }: MessageBubbleProps) => {
     const { theme } = useUnistyles();
     const [expanded, setExpanded] = React.useState(false);
@@ -748,7 +804,14 @@ const MessageBubble = ({
     const roleVisual = React.useMemo(() => {
         return getRoleVisual(message.fromRole, message.fromDisplayName);
     }, [message.fromDisplayName, message.fromRole]);
-    const senderLabel = message.fromDisplayName || message.fromSessionId?.substring(0, 8) || 'User';
+    const originAgent = React.useMemo(() => {
+        if (!message.fromSessionId) {
+            return null;
+        }
+        return resolveAgentIdentity(message.fromSessionId, message.fromRole, message.fromDisplayName);
+    }, [message.fromDisplayName, message.fromRole, message.fromSessionId, resolveAgentIdentity]);
+    const senderLabel = originAgent?.displayName || message.fromDisplayName || message.fromSessionId?.substring(0, 8) || 'User';
+    const senderRoleLabel = originAgent?.roleLabel || (message.fromRole && message.fromRole !== 'user' ? message.fromRole : null);
     const timeLabel = React.useMemo(() => {
         return new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }, [message.timestamp]);
@@ -760,6 +823,13 @@ const MessageBubble = ({
         height?: number;
         mimeType?: string;
     } | undefined;
+    const imageUri = React.useMemo(() => {
+        if (!imageData?.base64) {
+            return null;
+        }
+
+        return `data:${imageData.mimeType || 'image/jpeg'};base64,${imageData.base64}`;
+    }, [imageData?.base64, imageData?.mimeType]);
 
     // 🆕 复制消息内容
     const handleCopyMessage = React.useCallback(async () => {
@@ -775,13 +845,13 @@ const MessageBubble = ({
     // 🆕 查找关联的任务，使用 sticky ref 防止任务短暂消失（时有时无）
     const lastRelatedTaskRef = React.useRef<any>(null);
     const relatedTask = React.useMemo(() => {
-        if (!taskChatSync || !message.metadata?.taskId) return null;
-        const tasksForMessage = taskChatSync.getTasksForMessage(message.id);
+        if (!getTasksForMessage || !message.metadata?.taskId) return null;
+        const tasksForMessage = getTasksForMessage(message.id);
         const found = tasksForMessage.find(t => t.id === message.metadata?.taskId) ?? null;
         // Keep last known task so the card doesn't flash away during brief sync gaps
         if (found !== null) lastRelatedTaskRef.current = found;
         return lastRelatedTaskRef.current;
-    }, [taskChatSync, message.id, message.metadata?.taskId]);
+    }, [getTasksForMessage, message.id, message.metadata?.taskId]);
 
     // Determine if we should show short or long content
     // If shortContent exists, use it as the summary.
@@ -802,12 +872,12 @@ const MessageBubble = ({
     const mentionChipAccessibilityLabel = React.useMemo(() => {
         return buildMentionChipAccessibilityLabel(mentionedAgents);
     }, [mentionedAgents]);
-    const originAgent = React.useMemo(() => {
-        if (!message.fromSessionId) {
-            return null;
-        }
-        return resolveAgentIdentity(message.fromSessionId, message.fromRole, message.fromDisplayName);
-    }, [message.fromDisplayName, message.fromRole, message.fromSessionId, resolveAgentIdentity]);
+    const mentionFlowLabel = React.useMemo(() => {
+        return buildMentionFlowLabel(senderLabel, mentionedAgents);
+    }, [mentionedAgents, senderLabel]);
+    const mentionFlowAccessibilityLabel = React.useMemo(() => {
+        return buildMentionFlowAccessibilityLabel(senderLabel, mentionedAgents);
+    }, [mentionedAgents, senderLabel]);
     const hasAssociations = !!originAgent || mentionedAgents.length > 0;
 
     // Get short text for collapsed view
@@ -863,7 +933,7 @@ const MessageBubble = ({
     const renderContent = () => {
         // 🆕 Render image if present
         const renderImage = () => {
-            if (!imageData?.base64) return null;
+            if (!imageUri) return null;
 
             const aspectRatio = (imageData.width && imageData.height)
                 ? imageData.width / imageData.height
@@ -877,7 +947,7 @@ const MessageBubble = ({
                     style={styles.imageContainer}
                 >
                     <Image
-                        source={{ uri: `data:${imageData.mimeType || 'image/jpeg'};base64,${imageData.base64}` }}
+                        source={{ uri: imageUri }}
                         style={[styles.messageImage, { width: displayWidth, height: displayHeight }]}
                         resizeMode="cover"
                         onLoadStart={() => setImageLoading(true)}
@@ -916,8 +986,7 @@ const MessageBubble = ({
         }
     };
 
-    // 🆕 Check if user is online (placeholder - needs real implementation)
-    const isOnline = message.fromSessionId ? Math.random() > 0.5 : false;
+    const isOnline = originAgent?.isOnline ?? false;
 
     const renderAvatarGlyph = () => {
         if (roleVisual.avatarIcon) {
@@ -1068,7 +1137,7 @@ const MessageBubble = ({
                         borderColor: chipBorder,
                     },
                 ]}
-                accessibilityLabel={mentionChipAccessibilityLabel || undefined}
+                accessibilityLabel={mentionFlowAccessibilityLabel || mentionChipAccessibilityLabel || undefined}
             >
                 <Ionicons name="at-outline" size={12} color={chipTextColor} />
                 <Text
@@ -1078,7 +1147,7 @@ const MessageBubble = ({
                     ]}
                     numberOfLines={1}
                 >
-                    {mentionChipLabel}
+                    {mentionFlowLabel || mentionChipLabel}
                 </Text>
             </View>
         );
@@ -1088,7 +1157,7 @@ const MessageBubble = ({
         <View style={{ marginBottom: 2 }}>
             {!isMyMessage && !isEdzlf && (
                 <Text style={styles.senderName}>
-                    {senderLabel}
+                    {senderRoleLabel ? `${senderLabel} · ${senderRoleLabel}` : senderLabel}
                 </Text>
             )}
 
@@ -1258,7 +1327,7 @@ const MessageBubble = ({
                         onPress={() => setShowFullImage(false)}
                     >
                         <Image
-                            source={{ uri: `data:${imageData.mimeType || 'image/jpeg'};base64,${imageData.base64}` }}
+                            source={{ uri: imageUri }}
                             style={{
                                 width: Dimensions.get('window').width - 32,
                                 height: Dimensions.get('window').height * 0.7,
@@ -1284,6 +1353,16 @@ const MessageBubble = ({
         </View>
     );
 };
+
+const MessageBubble = React.memo(MessageBubbleInner, (prevProps, nextProps) => {
+    return prevProps.message === nextProps.message
+        && prevProps.isMyMessage === nextProps.isMyMessage
+        && prevProps.styles === nextProps.styles
+        && prevProps.onAvatarPress === nextProps.onAvatarPress
+        && prevProps.resolveAgentIdentity === nextProps.resolveAgentIdentity
+        && prevProps.variant === nextProps.variant
+        && prevProps.getTasksForMessage === nextProps.getTasksForMessage;
+});
 
 interface TeamChatRoomProps {
     teamId: string;
@@ -1587,6 +1666,50 @@ export default function TeamChatRoom({
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }, []);
 
+    const handleClearSelectedImage = React.useCallback(() => {
+        setSelectedImage(null);
+    }, []);
+
+    const selectedImagePreview = React.useMemo(() => {
+        if (!selectedImage) {
+            return null;
+        }
+
+        return (
+            <View style={styles.imagePreviewContainer}>
+                <Image
+                    source={{ uri: selectedImage.uri }}
+                    style={styles.imagePreview}
+                    resizeMode="cover"
+                />
+                <View style={styles.imagePreviewInfo}>
+                    <Text style={styles.imagePreviewText}>
+                        {selectedImage.width} × {selectedImage.height}
+                    </Text>
+                    <Text style={styles.imagePreviewSize}>
+                        {formatFileSize(selectedImage.fileSize)}
+                    </Text>
+                    {uploadProgress > 0 && uploadProgress < 100 && (
+                        <View style={styles.uploadProgress}>
+                            <View style={[styles.uploadProgressBar, { width: `${uploadProgress}%` }]} />
+                        </View>
+                    )}
+                </View>
+                <Pressable
+                    style={styles.removeImageButton}
+                    onPress={handleClearSelectedImage}
+                    disabled={isSending}
+                >
+                    <Ionicons
+                        name="close-circle"
+                        size={24}
+                        color={isSending ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
+                    />
+                </Pressable>
+            </View>
+        );
+    }, [selectedImage, uploadProgress, isSending, styles, formatFileSize, handleClearSelectedImage, theme.colors.textSecondary]);
+
     const formatRelativeTime = React.useCallback((timestamp?: number) => {
         if (!timestamp) return 'No activity';
         const diff = Date.now() - timestamp;
@@ -1732,7 +1855,7 @@ export default function TeamChatRoom({
         return map;
     }, [messages]);
 
-    const handleAvatarPress = (sessionId: string) => {
+    const handleAvatarPress = React.useCallback((sessionId: string) => {
         const agent = resolveAgentIdentity(sessionId);
         pushSessionRoute(router, {
             id: sessionId,
@@ -1741,7 +1864,7 @@ export default function TeamChatRoom({
             roleName: agent.roleLabel,
             returnTo,
         });
-    };
+    }, [resolveAgentIdentity, returnTo, router, teamId, teamName]);
 
     const renderStatusHeader = () => {
         if (isEdzlf) {
@@ -2082,7 +2205,7 @@ export default function TeamChatRoom({
                     type: 'chat',
                     fromSessionId: undefined,
                     fromRole: 'user',
-                    fromDisplayName: 'User',
+                    fromDisplayName: myDisplayName || 'User',
                     metadata: {
                         image: {
                             base64: selectedImage.base64,
@@ -2357,7 +2480,7 @@ export default function TeamChatRoom({
                     type: 'chat',
                     mentions: mentions.length > 0 ? mentions : undefined,
                     fromRole: 'user',
-                    fromDisplayName: 'User',
+                    fromDisplayName: myDisplayName || 'User',
                     timestamp: messageTimestamp,
                     metadata: messageMetadata
                 };
@@ -2380,7 +2503,7 @@ export default function TeamChatRoom({
                 mentions: mentions.length > 0 ? mentions : undefined,
                 fromSessionId: undefined,  // User message, not from a team member session
                 fromRole: 'user',           // Always 'user' for messages from the user
-                fromDisplayName: 'User',    // Can be improved to use actual user name
+                fromDisplayName: myDisplayName || 'User',
                 metadata: messageMetadata   // 🆕 包含任务链接信息
             };
 
@@ -2393,7 +2516,7 @@ export default function TeamChatRoom({
                 type: 'chat',
                 ...(mentions.length > 0 ? { mentions } : {}),
                 fromRole: 'user',
-                fromDisplayName: 'User',
+                fromDisplayName: myDisplayName || 'User',
                 timestamp: Date.now(),
                 ...(messageMetadata ? { metadata: messageMetadata } : {}),
             };
@@ -2581,7 +2704,7 @@ export default function TeamChatRoom({
                                 onAvatarPress={handleAvatarPress}
                                 resolveAgentIdentity={resolveAgentIdentity}
                                 variant={variant}
-                                taskChatSync={taskChatSync}
+                                getTasksForMessage={taskChatSync?.getTasksForMessage}
                             />
                         );
                     })
@@ -2624,39 +2747,7 @@ export default function TeamChatRoom({
             )}
 
             {/* 🆕 Image preview before sending */}
-            {selectedImage && (
-                <View style={styles.imagePreviewContainer}>
-                    <Image
-                        source={{ uri: selectedImage.uri }}
-                        style={styles.imagePreview}
-                        resizeMode="cover"
-                    />
-                    <View style={styles.imagePreviewInfo}>
-                        <Text style={styles.imagePreviewText}>
-                            {selectedImage.width} × {selectedImage.height}
-                        </Text>
-                        <Text style={styles.imagePreviewSize}>
-                            {formatFileSize(selectedImage.fileSize)}
-                        </Text>
-                        {uploadProgress > 0 && uploadProgress < 100 && (
-                            <View style={styles.uploadProgress}>
-                                <View style={[styles.uploadProgressBar, { width: `${uploadProgress}%` }]} />
-                            </View>
-                        )}
-                    </View>
-                    <Pressable
-                        style={styles.removeImageButton}
-                        onPress={() => setSelectedImage(null)}
-                        disabled={isSending}
-                    >
-                        <Ionicons
-                            name="close-circle"
-                            size={24}
-                            color={isSending ? theme.colors.textSecondary + '50' : theme.colors.textSecondary}
-                        />
-                    </Pressable>
-                </View>
-            )}
+            {selectedImagePreview}
 
             {/* 🆕 Compressing indicator */}
             {isCompressing && (

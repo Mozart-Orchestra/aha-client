@@ -58,8 +58,8 @@ export const AvatarSkia = React.memo((props: AvatarProps) => {
     const { id, square, size = 48, monochrome } = props;
     
     const defaultColors = monochrome ? grayscaleColors : colors;
-    const pixelColors = generateColors(id, defaultColors, monochrome);
-    
+    const pixelColors = React.useMemo(() => generateColors(id, defaultColors, monochrome), [id, defaultColors, monochrome]);
+
     // Calculate cell size based on the avatar size
     const cellSize = size / GRID_SIZE;
     
@@ -95,9 +95,9 @@ export const AvatarSkia = React.memo((props: AvatarProps) => {
     return (
         <Canvas style={{ width: size, height: size }}>
             <Group clip={clipPath}>
-                {rects.map((rect, index) => (
+                {rects.map((rect) => (
                     <Rect
-                        key={index}
+                        key={`${rect.x}-${rect.y}`}
                         x={rect.x}
                         y={rect.y}
                         width={cellSize}
