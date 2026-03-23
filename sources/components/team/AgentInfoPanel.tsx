@@ -1,0 +1,627 @@
+/**
+ * AgentInfoPanel — compact bottom-sheet that shows Genome details for a
+ * session-based agent in team context.
+ *
+ * Usage (minimal):
+ *   <AgentInfoPanel
+ *     visible={panelVisible}
+ *     sessionId={sessionId}
+ *     onClose={() => setPanelVisible(false)}
+ *   />
+ *
+ * Usage (with pre-resolved specId to skip the kanban-board lookup):
+ *   <AgentInfoPanel
+ *     visible={panelVisible}
+ *     sessionId={sessionId}
+ *     specId={specId}
+ *     onClose={() => setPanelVisible(false)}
+ *   />
+ */
+import React from 'react';
+import {
+    Animated,
+    Modal,
+    Pressable,
+    ScrollView,
+    Text,
+    View,
+} from 'react-native';
+import { useUnistyles } from 'react-native-unistyles';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useSession, useArtifact } from '@/sync/storage';
+import { type KanbanBoard } from '@/sync/kanbanTypes';
+import {
+    fetchGenomeById,
+    parseSpec,
+    parseFeedback,
+    parseTags,
+    type GenomeRecord,
+    type GenomeSpec,
+} from '@/utils/genomeHub';
+import { AgentAvatar } from '@/components/team/AgentAvatar';
+import { getRoleLabel, resolveDisplayName } from '@/utils/roleVisualUtils';
+
+// ─── Warm-gold accent tokens (no Unistyles equivalent) ───────────────────────
+const WG = {
+    accent: '#b26a00',
+    accentStrong: '#d48a08',
+    accentBg: '#7b4e13',
+    overlay: 'rgba(0,0,0,0.72)',
+} as const;
+
+// ─── Public types ─────────────────────────────────────────────────────────────
+
+export interface AgentInfoPanelProps {
+    /** Whether the panel is visible */
+    visible: boolean;
+    /**
+     * Session ID — used to resolve roleId, displayName, and specId from the
+     * kanban board if specId is not passed directly.
+     */
+    sessionId: string;
+    /**
+     * Genome UUID — if known, skips the kanban-board lookup.
+     * Otherwise the panel auto-resolves it from the board member entry.
+     */
+    specId?: string | null;
+    /** Called when the panel should be dismissed */
+    onClose: () => void;
+}
+
+// ─── Internal helpers ─────────────────────────────────────────────────────────
+
+interface MemberInfo {
+    roleId: string;
+    displayName: string | undefined;
+    specId: string | undefined;
+}
+
+/**
+ * Resolves the team-member record for a given sessionId from the kanban board
+ * stored in the team's artifact body.
+ */
+function useMemberInfo(sessionId: string): MemberInfo | null {
+    const session = useSession(sessionId);
+    const teamId = session?.metadata?.teamId ?? '';
+    const artifact = useArtifact(teamId);
+
+    return React.useMemo(() => {
+        if (!artifact?.body) return null;
+        try {
+            const board = JSON.parse(artifact.body) as KanbanBoard;
+            const member = board.team?.members?.find(m => m.sessionId === sessionId);
+            if (!member) return null;
+            return {
+                roleId: member.roleId,
+                displayName: member.displayName,
+                specId: member.specId,
+            };
+        } catch {
+            return null;
+        }
+    }, [artifact?.body, sessionId]);
+}
+
+/** Fetches genome data; returns {genome, spec, loading}. */
+function useGenomeData(specId: string | null | undefined): {
+    genome: GenomeRecord | null;
+    spec: GenomeSpec | null;
+    loading: boolean;
+} {
+    const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
+    const [loading, setLoading] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!specId) {
+            setGenome(null);
+            return;
+        }
+        let cancelled = false;
+        setLoading(true);
+        fetchGenomeById(specId)
+            .then(g => {
+                if (!cancelled) {
+                    setGenome(g);
+                    setLoading(false);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setGenome(null);
+                    setLoading(false);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [specId]);
+
+    const spec = React.useMemo(
+        () => (genome?.spec ? parseSpec(genome.spec) : null),
+        [genome?.spec],
+    );
+
+    return { genome, spec, loading };
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function ScoreBar({ score }: { score: number }) {
+    const { theme } = useUnistyles();
+    const clampedScore = Math.min(100, Math.max(0, score));
+    const fillColor =
+        clampedScore >= 80 ? theme.colors.success :
+        clampedScore >= 55 ? WG.accentStrong :
+        theme.colors.warningCritical;
+
+    return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{
+                flex: 1,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: theme.colors.divider,
+                overflow: 'hidden',
+            }}>
+                <View style={{
+                    width: `${clampedScore}%`,
+                    height: '100%',
+                    borderRadius: 3,
+                    backgroundColor: fillColor,
+                }} />
+            </View>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: fillColor, minWidth: 36, textAlign: 'right' }}>
+                {clampedScore.toFixed(0)}/100
+            </Text>
+        </View>
+    );
+}
+
+function TagPill({ tag }: { tag: string }) {
+    const { theme } = useUnistyles();
+    return (
+        <View style={{
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: theme.colors.divider,
+            paddingHorizontal: 10,
+            paddingVertical: 3,
+            backgroundColor: theme.colors.groupped.background,
+        }}>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' }}>{tag}</Text>
+        </View>
+    );
+}
+
+function SectionLabel({ label }: { label: string }) {
+    const { theme } = useUnistyles();
+    return (
+        <Text style={{
+            fontSize: 11,
+            color: theme.colors.textSecondary,
+            fontWeight: '700',
+            letterSpacing: 0.8,
+            textTransform: 'uppercase',
+            marginBottom: 6,
+        }}>
+            {label}
+        </Text>
+    );
+}
+
+function Divider() {
+    const { theme } = useUnistyles();
+    return <View style={{ height: 1, backgroundColor: theme.colors.divider, marginVertical: 14 }} />;
+}
+
+/** The genome details section — loaded state. */
+function GenomeDetails({
+    genome,
+    spec,
+    onViewMarketplace,
+}: {
+    genome: GenomeRecord;
+    spec: GenomeSpec | null;
+    onViewMarketplace: () => void;
+}) {
+    const { theme } = useUnistyles();
+    const displayName = spec?.displayName ?? genome.name;
+    const namespace = genome.namespace ?? '@public';
+    const version = genome.version ?? 1;
+    const description = spec?.description ?? genome.description;
+    const feedback = parseFeedback(genome.feedbackData ?? null);
+    const tags = parseTags(genome.tags ?? null);
+    const responsibilities = spec?.responsibilities ?? [];
+
+    return (
+        <>
+            {/* Identity row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Ionicons name="person-circle-outline" size={18} color="#AF52DE" />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.text, flex: 1 }} numberOfLines={1}>
+                    {displayName}
+                </Text>
+                {genome.status === 'official' && (
+                    <View style={{ backgroundColor: '#AF52DE22', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 10, color: '#AF52DE', fontWeight: '700' }}>OFFICIAL</Text>
+                    </View>
+                )}
+                {genome.status === 'verified' && (
+                    <Ionicons name="checkmark-circle" size={15} color={theme.colors.success} />
+                )}
+            </View>
+            <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 12, marginLeft: 26 }}>
+                {namespace}  ·  v{version}
+            </Text>
+
+            {/* Description */}
+            {description ? (
+                <>
+                    <SectionLabel label="Description" />
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 18, marginBottom: 12 }} numberOfLines={4}>
+                        {description}
+                    </Text>
+                </>
+            ) : null}
+
+            {/* Score */}
+            {feedback?.avgScore != null && (
+                <>
+                    <Divider />
+                    <SectionLabel label="Supervisor Score" />
+                    <ScoreBar score={feedback.avgScore} />
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                        {Object.entries({
+                            delivery: feedback.dimensions?.delivery,
+                            integrity: feedback.dimensions?.integrity,
+                            efficiency: feedback.dimensions?.efficiency,
+                        }).filter(([, v]) => v != null).map(([k, v]) => (
+                            <View key={k} style={{ flex: 1, backgroundColor: theme.colors.groupped.background, borderRadius: 8, padding: 6, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 10, color: theme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{k}</Text>
+                                <Text style={{ fontSize: 13, color: theme.colors.text, fontWeight: '700' }}>{(v as number).toFixed(0)}</Text>
+                            </View>
+                        ))}
+                    </View>
+                </>
+            )}
+
+            {/* Tags */}
+            {tags.length > 0 && (
+                <>
+                    <Divider />
+                    <SectionLabel label="Tags" />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {tags.slice(0, 8).map((tag, i) => (
+                            <TagPill key={i} tag={tag} />
+                        ))}
+                        {tags.length > 8 && (
+                            <TagPill tag={`+${tags.length - 8}`} />
+                        )}
+                    </View>
+                </>
+            )}
+
+            {/* Responsibilities */}
+            {responsibilities.length > 0 && (
+                <>
+                    <Divider />
+                    <SectionLabel label="Responsibilities" />
+                    {responsibilities.slice(0, 4).map((r, i) => (
+                        <View key={i} style={{ flexDirection: 'row', marginBottom: 4 }}>
+                            <Text style={{ color: WG.accent, fontSize: 13, marginRight: 6, lineHeight: 18 }}>•</Text>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 13, flex: 1, lineHeight: 18 }}>{r}</Text>
+                        </View>
+                    ))}
+                    {responsibilities.length > 4 && (
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                            +{responsibilities.length - 4} more…
+                        </Text>
+                    )}
+                </>
+            )}
+
+            {/* Spawn/download stats */}
+            {(genome.spawnCount > 0 || genome.starCount > 0) && (
+                <>
+                    <Divider />
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
+                        {genome.spawnCount > 0 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="flash-outline" size={13} color={theme.colors.textSecondary} />
+                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{genome.spawnCount} spawns</Text>
+                            </View>
+                        )}
+                        {genome.starCount > 0 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="star-outline" size={13} color={theme.colors.textSecondary} />
+                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{genome.starCount} stars</Text>
+                            </View>
+                        )}
+                    </View>
+                </>
+            )}
+
+            {/* View in Marketplace CTA */}
+            <View style={{ marginTop: 20 }}>
+                <Pressable
+                    onPress={onViewMarketplace}
+                    style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        paddingVertical: 11,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: WG.accentBg,
+                        backgroundColor: pressed ? WG.accentBg : 'transparent',
+                        // @ts-ignore — web transition
+                        transition: 'background-color 0.15s ease',
+                    })}
+                    accessibilityRole="button"
+                    accessibilityLabel="View genome in Marketplace"
+                >
+                    <Ionicons name="open-outline" size={16} color={WG.accent} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: WG.accent }}>View in Marketplace</Text>
+                </Pressable>
+            </View>
+        </>
+    );
+}
+
+/** Placeholder when no specId is available or genome couldn't be loaded. */
+function GenomePlaceholder({ reason }: { reason: 'no-spec' | 'not-found' }) {
+    const { theme } = useUnistyles();
+    return (
+        <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <Ionicons
+                name={reason === 'no-spec' ? 'help-circle-outline' : 'alert-circle-outline'}
+                size={36}
+                color={theme.colors.textSecondary}
+            />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary, marginTop: 10 }}>
+                {reason === 'no-spec' ? 'No genome assigned' : 'Genome not found'}
+            </Text>
+            <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4, textAlign: 'center', paddingHorizontal: 16 }}>
+                {reason === 'no-spec'
+                    ? 'This agent was spawned without a genome spec in the marketplace.'
+                    : 'The genome may have been removed or is private.'}
+            </Text>
+        </View>
+    );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export function AgentInfoPanel({ visible, sessionId, specId: specIdProp, onClose }: AgentInfoPanelProps) {
+    const router = useRouter();
+    const { theme } = useUnistyles();
+    const session = useSession(sessionId);
+    const memberInfo = useMemberInfo(sessionId);
+
+    // Resolve specId: prop takes priority, otherwise fall back to kanban member
+    const resolvedSpecId = specIdProp ?? memberInfo?.specId ?? null;
+    const { genome, spec, loading } = useGenomeData(resolvedSpecId);
+
+    // Slide-up animation
+    const slideAnim = React.useRef(new Animated.Value(500)).current;
+    const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+    React.useEffect(() => {
+        if (visible) {
+            Animated.parallel([
+                Animated.spring(slideAnim, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                    tension: 65,
+                    friction: 11,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 180,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        } else {
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: 500,
+                    duration: 200,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 180,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [visible, slideAnim, fadeAnim]);
+
+    // Display name + role label from member info or session metadata
+    const roleId = memberInfo?.roleId ?? (session?.metadata as any)?.roleId;
+    const rawDisplayName = memberInfo?.displayName;
+    const agentDisplayName = resolveDisplayName(rawDisplayName, roleId, sessionId);
+    const roleLabel = getRoleLabel(roleId);
+
+    const isOnline = session?.presence === 'online';
+
+    const handleViewMarketplace = React.useCallback(() => {
+        if (genome?.id) {
+            onClose();
+            router.push(`/agents/${genome.id}` as any);
+        }
+    }, [genome?.id, onClose, router]);
+
+    return (
+        <Modal
+            visible={visible}
+            transparent
+            animationType="none"
+            statusBarTranslucent
+            onRequestClose={onClose}
+        >
+            {/* Scrim */}
+            <Animated.View
+                style={{ flex: 1, backgroundColor: WG.overlay, opacity: fadeAnim }}
+                // @ts-ignore — web pointer events
+                pointerEvents={visible ? 'auto' : 'none'}
+            >
+                <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close panel" />
+            </Animated.View>
+
+            {/* Sheet */}
+            <Animated.View
+                style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: theme.colors.surface,
+                    borderTopLeftRadius: 20,
+                    borderTopRightRadius: 20,
+                    borderTopWidth: 1,
+                    borderTopColor: theme.colors.divider,
+                    maxHeight: '85%',
+                    transform: [{ translateY: slideAnim }],
+                }}
+            >
+                {/* Drag handle */}
+                <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
+                    <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.divider }} />
+                </View>
+
+                {/* Header row: close button */}
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 4 }}>
+                    <Pressable
+                        onPress={onClose}
+                        hitSlop={12}
+                        style={({ pressed }) => ({
+                            padding: 4,
+                            borderRadius: 8,
+                            backgroundColor: pressed ? theme.colors.surfaceHigh : 'transparent',
+                        })}
+                        accessibilityRole="button"
+                        accessibilityLabel="Close"
+                    >
+                        <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                    </Pressable>
+                </View>
+
+                <ScrollView
+                    style={{ paddingHorizontal: 20 }}
+                    contentContainerStyle={{ paddingBottom: 32 }}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Agent identity header */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                        <AgentAvatar
+                            sessionId={sessionId}
+                            roleId={roleId}
+                            displayName={agentDisplayName}
+                            size="lg"
+                            isOnline={isOnline}
+                            disablePress
+                        />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.text }} numberOfLines={1}>
+                                {agentDisplayName}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                                <View style={{
+                                    width: 7,
+                                    height: 7,
+                                    borderRadius: 3.5,
+                                    backgroundColor: isOnline ? theme.colors.success : theme.colors.surfaceHighest,
+                                }} />
+                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                                    {isOnline ? 'Online' : 'Offline'}{roleLabel ? `  ·  ${roleLabel}` : ''}
+                                </Text>
+                            </View>
+                            <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 2, fontFamily: 'monospace' }} numberOfLines={1}>
+                                {sessionId.slice(0, 8)}…{sessionId.slice(-8)}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Divider */}
+                    <View style={{ height: 1, backgroundColor: theme.colors.divider, marginBottom: 20 }} />
+
+                    {/* Genome section */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: WG.accent, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                            Agent Genome
+                        </Text>
+                        {loading && (
+                            <Ionicons name="hourglass-outline" size={12} color={theme.colors.textSecondary} />
+                        )}
+                    </View>
+
+                    {loading ? (
+                        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>Loading genome…</Text>
+                        </View>
+                    ) : !resolvedSpecId ? (
+                        <GenomePlaceholder reason="no-spec" />
+                    ) : !genome ? (
+                        <GenomePlaceholder reason="not-found" />
+                    ) : (
+                        <GenomeDetails
+                            genome={genome}
+                            spec={spec}
+                            onViewMarketplace={handleViewMarketplace}
+                        />
+                    )}
+                </ScrollView>
+            </Animated.View>
+        </Modal>
+    );
+}
+
+/**
+ * Convenience hook + button for adding an ℹ️ info button to any component
+ * that needs to trigger an AgentInfoPanel.
+ *
+ * Usage:
+ *   const { InfoButton, InfoPanelElement } = useAgentInfoButton({ sessionId });
+ *   return (
+ *     <View style={{ flexDirection: 'row' }}>
+ *       {InfoButton}
+ *       {InfoPanelElement}
+ *     </View>
+ *   );
+ */
+export function useAgentInfoButton({ sessionId, specId }: { sessionId: string; specId?: string | null }) {
+    const [visible, setVisible] = React.useState(false);
+    const { theme } = useUnistyles();
+
+    const InfoButton = (
+        <Pressable
+            onPress={() => setVisible(true)}
+            hitSlop={10}
+            style={({ pressed }) => ({
+                padding: 5,
+                borderRadius: 8,
+                backgroundColor: pressed ? `${WG.accent}22` : 'transparent',
+                // @ts-ignore — web transition
+                transition: 'background-color 0.15s ease',
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="View agent genome info"
+        >
+            <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} />
+        </Pressable>
+    );
+
+    const InfoPanelElement = (
+        <AgentInfoPanel
+            visible={visible}
+            sessionId={sessionId}
+            specId={specId}
+            onClose={() => setVisible(false)}
+        />
+    );
+
+    return { InfoButton, InfoPanelElement, setVisible };
+}
