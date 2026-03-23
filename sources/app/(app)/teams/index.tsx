@@ -634,6 +634,9 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 12,
         marginTop: 16,
         marginBottom: 4,
+        borderWidth: 1,
+        borderColor: '#b26a00',
+        backgroundColor: 'rgba(178, 106, 0, 0.08)',
     },
     soloAgentsIcon: {
         width: 32,
@@ -642,6 +645,39 @@ const stylesheet = StyleSheet.create((theme) => ({
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
+    },
+    desktopSoloCard: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        marginHorizontal: 18,
+        marginTop: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#b26a00',
+        backgroundColor: 'rgba(178, 106, 0, 0.07)',
+        padding: 14,
+        shadowColor: '#b26a00',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 2,
+    },
+    desktopSoloIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 14,
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        backgroundColor: '#b26a00',
+        marginRight: 12,
+    },
+    desktopSoloBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: '#b26a00',
+        backgroundColor: 'rgba(178, 106, 0, 0.15)',
     },
 }));
 
@@ -695,6 +731,10 @@ export default function TeamsScreen() {
 
     const openNewTeam = React.useCallback(() => {
         router.push('/teams/new');
+    }, [router]);
+
+    const openSoloAgents = React.useCallback(() => {
+        router.push('/teams/solo' as any);
     }, [router]);
 
     const toggleTeamSelection = React.useCallback((teamId: string) => {
@@ -878,16 +918,6 @@ export default function TeamsScreen() {
         return new Date(timestamp).toLocaleDateString();
     }, []);
 
-    const formatCompactTokens = React.useCallback((tokens: number) => {
-        if (tokens >= 1_000_000) {
-            return `${(tokens / 1_000_000).toFixed(1)}M tok`;
-        }
-        if (tokens >= 1_000) {
-            return tokens >= 10_000 ? `${Math.round(tokens / 1_000)}K tok` : `${(tokens / 1_000).toFixed(1)}K tok`;
-        }
-        return `${tokens.toLocaleString()} tok`;
-    }, []);
-
     const overviewChips = React.useMemo(() => {
         if (!workspaceOverview) {
             return [
@@ -899,10 +929,9 @@ export default function TeamsScreen() {
         return [
             { id: 'teams', label: `${workspaceOverview.teamCount} total` },
             { id: 'selected', label: `${selectedTeams.size} selected` },
-            { id: 'tokens', label: formatCompactTokens(workspaceOverview.teamTotalTokens) },
             { id: 'completed', label: `${workspaceOverview.completedTasksTotal} done` },
         ];
-    }, [formatCompactTokens, selectedTeams.size, teams.length, workspaceOverview]);
+    }, [selectedTeams.size, teams.length, workspaceOverview]);
 
     const soloAgentsCard = React.useMemo(() => {
         if (isSelectionMode) return null;
@@ -1280,6 +1309,29 @@ export default function TeamsScreen() {
                 </View>
 
                 <View style={styles.desktopPanelBody}>
+                    {/* Solo Agents — pinned at top with warm-gold accent */}
+                    {!isSelectionMode && (
+                        <Pressable
+                            style={styles.desktopSoloCard}
+                            onPress={openSoloAgents}
+                        >
+                            <View style={styles.desktopSoloIcon}>
+                                <Ionicons name="person" size={18} color="#FFFFFF" />
+                            </View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={{ fontSize: 15, fontWeight: '700', color: '#b26a00' }} numberOfLines={1}>
+                                    {t('teams.soloAgents')}
+                                </Text>
+                                <Text style={{ fontSize: 12, color: '#7E93A3', marginTop: 2 }}>
+                                    {t('teams.soloAgentsCount', { count: standaloneAgents.length })}
+                                </Text>
+                            </View>
+                            <View style={styles.desktopSoloBadge}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#b26a00', letterSpacing: 0.5 }}>SOLO</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color="#b26a00" style={{ marginLeft: 8 }} />
+                        </Pressable>
+                    )}
                     <FlatList
                         data={teams}
                         renderItem={renderDesktopTeamItem}
@@ -1349,10 +1401,12 @@ export default function TeamsScreen() {
         isBatchProcessing,
         isSelectionMode,
         openNewTeam,
+        openSoloAgents,
         renderDesktopTeamItem,
         safeArea.bottom,
         selectedTeams,
         selectAllTeams,
+        standaloneAgents.length,
         styles,
         teams.length,
         theme.colors.text,

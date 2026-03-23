@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, Animated, Platform } from 'react-native';
+import { View, Text, Animated, Platform, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/constants/Typography';
@@ -7,7 +7,7 @@ import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
 import { Avatar } from '@/components/avatar/Avatar';
-import { useSession, useIsDataReady } from '@/sync/storage';
+import { useSession, useIsDataReady, useArtifact } from '@/sync/storage';
 import { getSessionName, useSessionStatus, formatOSPlatform, formatPathRelativeToHome, getSessionAvatarId } from '@/utils/sessionUtils';
 import * as Clipboard from 'expo-clipboard';
 import { Modal } from '@/modal';
@@ -22,6 +22,10 @@ import { useHappyAction } from '@/hooks/useHappyAction';
 import { HappyError } from '@/utils/errors';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
+import { fetchGenomeById, parseSpec, type GenomeSpec, type GenomeRecord } from '@/utils/genomeHub';
+import { type KanbanBoard } from '@/sync/kanbanTypes';
+import { listAgents } from '@/sync/apiAgents';
+import { sync } from '@/sync/sync';
 
 // Animated status dot component
 function formatTokensCompact(tokens: number): string {
@@ -67,6 +71,217 @@ function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: 
     );
 }
 
+// ─── Genome Info Panel ───────────────────────────────────────────────────────
+
+function useGenomeForSession(session: Session): { genome: GenomeRecord | null; spec: GenomeSpec | null; loading: boolean } {
+    const teamId = session.metadata?.teamId ?? '';
+    const artifact = useArtifact(teamId);
+    const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
+    const [loading, setLoading] = React.useState(false);
+
+    // Path 1: team kanban board member specId
+    const boardSpecId = React.useMemo(() => {
+        if (!artifact?.body) return null;
+        try {
+            const board = JSON.parse(artifact.body) as KanbanBoard;
+            const member = board.team?.members?.find(m => m.sessionId === session.id);
+            return member?.specId ?? null;
+        } catch {
+            return null;
+        }
+    }, [artifact?.body, session.id]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+
+        const resolveSpecId = async (): Promise<string | null> => {
+            // Path 1: team kanban board member specId
+            if (boardSpecId) return boardSpecId;
+
+            // Path 2: session.metadata.genomeId (set by daemon for standalone agents)
+            const metaGenomeId = (session.metadata as any)?.genomeId as string | undefined;
+            if (metaGenomeId) return metaGenomeId;
+
+            // Path 3: listAgents fallback — find standalone agent by sessionId
+            const creds = sync.getCredentials();
+            if (!creds) return null;
+            try {
+                const { agents } = await listAgents(creds, { type: 'standalone', limit: 100 });
+                const match = agents.find(a => a.sessionId === session.id);
+                return match?.genomeId ?? null;
+            } catch {
+                return null;
+            }
+        };
+
+        setLoading(true);
+        resolveSpecId().then(specId => {
+            if (cancelled) return;
+            if (!specId) {
+                setGenome(null);
+                setLoading(false);
+                return;
+            }
+            return fetchGenomeById(specId).then(g => {
+                if (!cancelled) {
+                    setGenome(g);
+                    setLoading(false);
+                }
+            }).catch(() => {
+                if (!cancelled) {
+                    setGenome(null);
+                    setLoading(false);
+                }
+            });
+        }).catch(() => {
+            if (!cancelled) {
+                setGenome(null);
+                setLoading(false);
+            }
+        });
+
+        return () => { cancelled = true; };
+    }, [boardSpecId, session.id, session.metadata]);
+
+    const spec = React.useMemo(() => {
+        if (!genome?.spec) return null;
+        return parseSpec(genome.spec);
+    }, [genome]);
+
+    return { genome, spec, loading };
+}
+
+function ExpandableText({ text, maxChars = 200, style }: { text: string; maxChars?: number; style?: object }) {
+    const [expanded, setExpanded] = React.useState(false);
+    const { theme } = useUnistyles();
+    const needsTruncation = text.length > maxChars;
+
+    return (
+        <View>
+            <Text style={[{ color: theme.colors.textSecondary, fontSize: 13, lineHeight: 18, ...Typography.default() }, style]}>
+                {needsTruncation && !expanded ? `${text.slice(0, maxChars)}…` : text}
+            </Text>
+            {needsTruncation && (
+                <TouchableOpacity onPress={() => setExpanded(e => !e)} style={{ marginTop: 4 }}>
+                    <Text style={{ color: '#007AFF', fontSize: 13, ...Typography.default() }}>
+                        {expanded ? 'Show less' : 'Show more'}
+                    </Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+}
+
+function GenomeInfoPanel({ session }: { session: Session }) {
+    const { theme } = useUnistyles();
+    const router = useRouter();
+    const { genome, spec, loading } = useGenomeForSession(session);
+
+    const genomeId = genome?.id;
+    const displayName = spec?.displayName ?? genome?.name ?? '—';
+    const namespace = genome?.namespace ?? spec?.namespace ?? '—';
+    const version = genome?.version ?? spec?.version;
+    const avgScore = (genome as any)?.avgScore as number | undefined;
+
+    return (
+        <ItemGroup title="Agent Genome">
+            {loading ? (
+                <Item
+                    title="Loading genome…"
+                    icon={<Ionicons name="hourglass-outline" size={29} color={theme.colors.textSecondary} />}
+                    showChevron={false}
+                />
+            ) : !genome ? (
+                <Item
+                    title="No genome assigned"
+                    subtitle="This agent was spawned without a genome spec"
+                    icon={<Ionicons name="help-circle-outline" size={29} color={theme.colors.textSecondary} />}
+                    showChevron={false}
+                />
+            ) : (
+                <>
+                    {/* Identity */}
+                    <Item
+                        title={displayName}
+                        subtitle={`${namespace}  •  v${version ?? '?'}`}
+                        icon={<Ionicons name="person-circle-outline" size={29} color="#AF52DE" />}
+                        showChevron={!!genomeId}
+                        onPress={genomeId ? () => router.push(`/agents/${genomeId}`) : undefined}
+                    />
+
+                    {/* Supervisor score */}
+                    {typeof avgScore === 'number' && (
+                        <Item
+                            title="Supervisor Score"
+                            detail={`${avgScore.toFixed(0)} / 100`}
+                            icon={<Ionicons name="star-outline" size={29} color={avgScore >= 75 ? '#30D158' : avgScore >= 50 ? '#FF9500' : '#FF3B30'} />}
+                            showChevron={false}
+                        />
+                    )}
+
+                    {/* Responsibilities */}
+                    {spec?.responsibilities && spec.responsibilities.length > 0 && (
+                        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
+                                Responsibilities
+                            </Text>
+                            {spec.responsibilities.slice(0, 5).map((r, i) => (
+                                <View key={i} style={{ flexDirection: 'row', marginBottom: 3 }}>
+                                    <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginRight: 6, ...Typography.default() }}>•</Text>
+                                    <Text style={{ color: theme.colors.text, fontSize: 13, flex: 1, lineHeight: 18, ...Typography.default() }}>{r}</Text>
+                                </View>
+                            ))}
+                            {spec.responsibilities.length > 5 && (
+                                <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 2, ...Typography.default() }}>
+                                    +{spec.responsibilities.length - 5} more…
+                                </Text>
+                            )}
+                        </View>
+                    )}
+
+                    {/* System Prompt (collapsed by default) */}
+                    {spec?.systemPrompt && (
+                        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
+                                System Prompt
+                            </Text>
+                            <ExpandableText text={spec.systemPrompt} maxChars={300} />
+                        </View>
+                    )}
+
+                    {/* Allowed Tools */}
+                    {spec?.allowedTools && spec.allowedTools.length > 0 && (
+                        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
+                                Allowed Tools ({spec.allowedTools.length})
+                            </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                {spec.allowedTools.map((tool, i) => (
+                                    <View key={i} style={{ backgroundColor: theme.colors.surface, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontFamily: 'monospace', ...Typography.default() }}>{tool}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* View full genome button */}
+                    {genomeId && (
+                        <Item
+                            title="View Full Genome"
+                            subtitle="Open genome detail page"
+                            icon={<Ionicons name="open-outline" size={29} color="#007AFF" />}
+                            onPress={() => router.push(`/agents/${genomeId}`)}
+                        />
+                    )}
+                </>
+            )}
+        </ItemGroup>
+    );
+}
+
+// ─── Main Session Info ────────────────────────────────────────────────────────
+
 function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?: string }) {
     const { theme } = useUnistyles();
     const router = useRouter();
@@ -76,7 +291,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
     const handleExitSessionInfo = useCallback(() => {
         goBackOrReturn(router, returnTo, `/session/${session.id}`);
     }, [returnTo, router, session.id]);
-    
+
     // Check if CLI version is outdated
     const isCliOutdated = session.metadata?.version && !isVersionSupported(session.metadata.version, MINIMUM_CLI_VERSION);
 
@@ -275,6 +490,9 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                     />
                 </ItemGroup>
 
+                {/* Genome Info Panel — shown for team sessions with specId */}
+                <GenomeInfoPanel session={session} />
+
                 {/* Token Usage */}
                 {session.latestUsage && (
                     <ItemGroup title={t('sessionInfo.usageSection')}>
@@ -460,7 +678,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                                     showChevron={false}
                                 />
                                 <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
-                                    <CodeView 
+                                    <CodeView
                                         code={JSON.stringify(session.agentState, null, 2)}
                                         language="json"
                                     />
@@ -475,7 +693,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                                     showChevron={false}
                                 />
                                 <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
-                                    <CodeView 
+                                    <CodeView
                                         code={JSON.stringify(session.metadata, null, 2)}
                                         language="json"
                                     />
@@ -490,7 +708,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                                     showChevron={false}
                                 />
                                 <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
-                                    <CodeView 
+                                    <CodeView
                                         code={JSON.stringify({
                                             isConnected: sessionStatus.isConnected,
                                             statusText: sessionStatus.statusText,
@@ -510,7 +728,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                             showChevron={false}
                         />
                         <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
-                            <CodeView 
+                            <CodeView
                                 code={JSON.stringify(session, null, 2)}
                                 language="json"
                             />

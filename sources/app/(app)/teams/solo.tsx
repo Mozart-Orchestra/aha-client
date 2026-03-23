@@ -56,7 +56,10 @@ export default React.memo(function SoloAgentsScreen() {
 
     const handleAgentPress = React.useCallback((agent: AgentRecord) => {
         if (agent.sessionId) {
-            router.push(`/session/${agent.sessionId}` as any);
+            const path = agent.genomeId
+                ? `/session/${agent.sessionId}?specId=${agent.genomeId}`
+                : `/session/${agent.sessionId}`;
+            router.push(path as any);
         }
     }, [router]);
 
