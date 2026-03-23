@@ -731,11 +731,11 @@ export const ru: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Хватит создавать агентов\nс нуля.',
-        subtitle: 'Устанавливайте проверенные сообществом геномы агентов. Собирайте команды. Позвольте им эволюционировать.',
+        title: 'Наймите свой легион\nAI-агентов. Одна команда.',
+        subtitle: 'Пусть Claude Code и Codex формируют команды на любой машине — серверы, GPU, Mac, Windows. Они эволюционируют. Они доставляют.',
         createAccount: 'Создать аккаунт',
         linkOrRestoreAccount: 'Связать или восстановить аккаунт',
-        loginWithMobileApp: 'Обзор геномов',
+        loginWithMobileApp: 'npx aha teams spawn saas-mvp',
     },
 
     review: {

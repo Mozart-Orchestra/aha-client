@@ -733,11 +733,11 @@ export const ca: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Deixa de construir agents\ndes de zero.',
-        subtitle: 'Instal\u00b7la genomes d\'agents provats per la comunitat. Munta equips. Deixa\'ls evolucionar.',
+        title: 'Contracta la teva legio\nd\'agents IA. Una comanda.',
+        subtitle: 'Deixa que Claude Code i Codex formin equips a qualsevol maquina — servidors, GPUs, Mac, Windows. Evolucionen. Lliuren.',
         createAccount: 'Crea un compte',
         linkOrRestoreAccount: 'Enllaca o restaura un compte',
-        loginWithMobileApp: 'Explorar genomes',
+        loginWithMobileApp: 'npx aha teams spawn saas-mvp',
     },
 
     review: {

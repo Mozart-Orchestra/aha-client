@@ -753,11 +753,11 @@ export const zhHans: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: '别从零开始造 Agent。\n一行命令，直接用。',
-        subtitle: '安装社区验证的 Agent Genome，组建团队，让它们自主进化。',
+        title: '一行命令，雇佣你的\nAI Agent 军团。',
+        subtitle: '让 Claude Code 和 Codex 跨任意机器组队 — 服务器、GPU、Mac、Windows。它们进化，它们交付。',
         createAccount: '创建账户',
         linkOrRestoreAccount: '链接或恢复账户',
-        loginWithMobileApp: '探索 Genome',
+        loginWithMobileApp: 'npx aha teams spawn saas-mvp',
     },
 
     review: {

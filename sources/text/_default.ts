@@ -787,11 +787,11 @@ export const en = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Stop building agents\nfrom scratch.',
-        subtitle: 'Install battle-tested agent genomes from the community. Assemble teams. Let them evolve.',
+        title: 'Hire your AI agent\nlegion. One command.',
+        subtitle: 'Let Claude Code and Codex form teams across any machine — servers, GPUs, Macs, Windows. They evolve. They ship.',
         createAccount: 'Create account',
         linkOrRestoreAccount: 'Link or restore account',
-        loginWithMobileApp: 'Explore genomes',
+        loginWithMobileApp: 'npx aha teams spawn saas-mvp',
     },
 
     review: {

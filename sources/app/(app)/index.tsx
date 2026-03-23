@@ -43,40 +43,79 @@ type LandingCopy = {
     approve: string;
     openServer: string;
     brand: string;
+    teamAgent1: string;
+    teamAgent1Task: string;
+    teamAgent1Machine: string;
+    teamAgent2: string;
+    teamAgent2Task: string;
+    teamAgent2Machine: string;
+    teamAgent3: string;
+    teamAgent3Task: string;
+    teamAgent3Machine: string;
+    teamAgent4: string;
+    teamAgent4Task: string;
+    teamAgent4Machine: string;
+    cliCommand: string;
 };
 
 const ENGLISH_LANDING_COPY: LandingCopy = {
-    eyebrow: 'npm for AI Agents',
+    eyebrow: 'Claude Code + Codex Orchestration',
     trustEncrypted: 'End-to-end encrypted',
-    trustLocal: 'Agents evolve over time',
-    previewTitle: 'Live agent sessions',
-    primarySessionTitle: 'refactor-auth-module',
-    primarySessionSubtitle: 'Architect agent coordinating with Builder and QA — 3 agents evolving together',
-    primarySessionMeta: 'evolving',
-    secondarySessionTitle: 'deploy-to-production',
-    secondarySessionSubtitle: 'Agent awaiting approval to push changes to the production environment',
-    secondarySessionMeta: 'awaiting decision',
+    trustLocal: 'Any machine, anywhere',
+    previewTitle: 'Team: aha-saas-mvp',
+    primarySessionTitle: 'Architect',
+    primarySessionSubtitle: 'Designing system architecture and distributing tasks to the team',
+    primarySessionMeta: 'leading',
+    secondarySessionTitle: 'Builder',
+    secondarySessionSubtitle: 'Implementing authentication module based on Architect\'s design',
+    secondarySessionMeta: 'coding',
     deny: 'Deny',
     approve: 'Approve',
     openServer: 'Open server settings',
     brand: 'Aha',
+    teamAgent1: 'Architect',
+    teamAgent1Task: 'System design & task distribution',
+    teamAgent1Machine: 'Mac Studio',
+    teamAgent2: 'Builder',
+    teamAgent2Task: 'Auth module + API endpoints',
+    teamAgent2Machine: 'Linux Server',
+    teamAgent3: 'QA',
+    teamAgent3Task: 'E2E tests & integration tests',
+    teamAgent3Machine: 'Windows PC',
+    teamAgent4: 'DevOps',
+    teamAgent4Task: 'CI/CD pipeline & deployment',
+    teamAgent4Machine: 'GPU Cloud',
+    cliCommand: 'npx aha teams spawn saas-mvp',
 };
 
 const CHINESE_LANDING_COPY: LandingCopy = {
-    eyebrow: 'AI Agent 的 npm',
+    eyebrow: 'Claude Code + Codex 编排',
     trustEncrypted: '端到端加密',
-    trustLocal: 'Agent 持续进化',
-    previewTitle: '实时智能体会话',
-    primarySessionTitle: 'refactor-auth-module',
-    primarySessionSubtitle: '架构师 Agent 协调 Builder 和 QA — 3 个 Agent 协同进化',
-    primarySessionMeta: '进化中',
-    secondarySessionTitle: 'deploy-to-production',
-    secondarySessionSubtitle: '智能体等待授权，将变更推送至生产环境',
-    secondarySessionMeta: '等待决策',
+    trustLocal: '任意机器，随处运行',
+    previewTitle: '团队: aha-saas-mvp',
+    primarySessionTitle: '架构师',
+    primarySessionSubtitle: '设计系统架构，向团队分发任务',
+    primarySessionMeta: '领导中',
+    secondarySessionTitle: 'Builder',
+    secondarySessionSubtitle: '根据架构师的设计实现认证模块',
+    secondarySessionMeta: '编码中',
     deny: '拒绝',
     approve: '批准',
     openServer: '打开服务设置',
     brand: 'Aha',
+    teamAgent1: '架构师',
+    teamAgent1Task: '系统设计 & 任务分发',
+    teamAgent1Machine: 'Mac Studio',
+    teamAgent2: 'Builder',
+    teamAgent2Task: '认证模块 + API 接口',
+    teamAgent2Machine: 'Linux 服务器',
+    teamAgent3: 'QA',
+    teamAgent3Task: 'E2E 测试 & 集成测试',
+    teamAgent3Machine: 'Windows PC',
+    teamAgent4: 'DevOps',
+    teamAgent4Task: 'CI/CD 流水线 & 部署',
+    teamAgent4Machine: 'GPU 云',
+    cliCommand: 'npx aha teams spawn saas-mvp',
 };
 
 const styles = StyleSheet.create(() => ({
@@ -459,33 +498,28 @@ function NotAuthenticated() {
             <View style={styles.landingPreviewHeader}>
                 <Text style={styles.landingPreviewTitle}>{copy.previewTitle}</Text>
                 <View style={styles.landingPreviewBadge}>
-                    <Text style={styles.landingPreviewBadgeText}>{previewCountLabel}</Text>
+                    <Text style={styles.landingPreviewBadgeText}>4 agents</Text>
                 </View>
             </View>
-            <PreviewSessionCard
-                accentColor="#FFB547"
-                backgroundColor="#FFFBF5"
-                borderColor="#FDB75A"
-                title={copy.primarySessionTitle}
-                subtitle={copy.primarySessionSubtitle}
-                meta={copy.primarySessionMeta}
-                sessionId={previewSessions[0]?.id}
-            />
-            <PreviewSessionCard
-                accentColor="#EF6A61"
-                backgroundColor="#FFF5F5"
-                borderColor="#F18B86"
-                title={copy.secondarySessionTitle}
-                subtitle={copy.secondarySessionSubtitle}
-                meta={copy.secondarySessionMeta}
-                sessionId={previewSessions[1]?.id}
-            >
-                <View style={styles.landingPreviewActions}>
-                    <LandingButton title={copy.deny} onPress={() => {}} tone="danger" />
-                    <LandingButton title={copy.approve} onPress={() => {}} tone="primary" />
+            {[
+                { name: copy.teamAgent1, task: copy.teamAgent1Task, machine: copy.teamAgent1Machine, color: '#FFB547', bg: '#FFFBF5', border: '#FDB75A', status: copy.primarySessionMeta },
+                { name: copy.teamAgent2, task: copy.teamAgent2Task, machine: copy.teamAgent2Machine, color: '#4A9EFF', bg: '#F5F9FF', border: '#7BB8FF', status: copy.secondarySessionMeta },
+                { name: copy.teamAgent3, task: copy.teamAgent3Task, machine: copy.teamAgent3Machine, color: '#2BC866', bg: '#F2FBF5', border: '#6DD99A', status: 'testing' },
+                { name: copy.teamAgent4, task: copy.teamAgent4Task, machine: copy.teamAgent4Machine, color: '#A78BFA', bg: '#F8F5FF', border: '#C4B5FD', status: 'deploying' },
+            ].map((agent, i) => (
+                <View key={i} style={{ marginTop: i === 0 ? 0 : 8, borderRadius: 14, borderWidth: 1, borderColor: agent.border, backgroundColor: agent.bg, padding: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: agent.color }} />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#1A1209', flex: 1 }}>{agent.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="hardware-chip-outline" size={11} color="#9C8F83" />
+                            <Text style={{ fontSize: 10, color: '#9C8F83' }}>{agent.machine}</Text>
+                        </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8A7F74', marginTop: 4 }}>{agent.task}</Text>
+                    <Text style={{ fontSize: 10, color: agent.color, marginTop: 4, fontWeight: '600' }}>{agent.status}</Text>
                 </View>
-            </PreviewSessionCard>
-            <View style={styles.landingPreviewSpacer} />
+            ))}
         </View>
     );
 
@@ -528,7 +562,7 @@ function NotAuthenticated() {
 
                             <View style={styles.landingActionsRow}>
                                 <LandingButton
-                                    icon="phone-portrait-outline"
+                                    icon="terminal-outline"
                                     title={t('welcome.loginWithMobileApp')}
                                     onPress={handleRestore}
                                     tone="primary"
@@ -542,7 +576,7 @@ function NotAuthenticated() {
 
                             <View style={styles.landingTrustRow}>
                                 <TrustItem icon="lock-closed-outline" label={copy.trustEncrypted} />
-                                <TrustItem icon="phone-portrait-outline" label={copy.trustLocal} />
+                                <TrustItem icon="globe-outline" label={copy.trustLocal} />
                             </View>
                         </View>
 
@@ -593,7 +627,7 @@ function NotAuthenticated() {
 
                 <View style={styles.landingMobileActions}>
                     <LandingButton
-                        icon={Platform.OS === 'android' || Platform.OS === 'ios' ? undefined : 'phone-portrait-outline'}
+                        icon={Platform.OS === 'android' || Platform.OS === 'ios' ? undefined : 'terminal-outline'}
                         title={Platform.OS === 'android' || Platform.OS === 'ios'
                             ? t('welcome.createAccount')
                             : t('welcome.loginWithMobileApp')}
@@ -609,7 +643,7 @@ function NotAuthenticated() {
 
                 <View style={styles.landingTrustRow}>
                     <TrustItem icon="lock-closed-outline" label={copy.trustEncrypted} />
-                    <TrustItem icon="phone-portrait-outline" label={copy.trustLocal} />
+                    <TrustItem icon="globe-outline" label={copy.trustLocal} />
                 </View>
 
                 <View style={styles.landingMobilePreview}>
