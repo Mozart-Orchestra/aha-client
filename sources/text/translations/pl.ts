@@ -195,6 +195,24 @@ export const pl: TranslationStructure = {
         compactSessionViewDescription: 'Pokazuj aktywne sesje w bardziej zwartym układzie',
     },
 
+    channels: {
+        connectionStatus: 'Stan połączenia',
+        connected: 'Połączono',
+        connectWeixin: 'Połącz WeChat',
+        connectWeixinSubtitle: 'Uruchom polecenie w terminalu, aby zeskanować kod QR',
+        checkStatus: 'Sprawdź status',
+        disconnectConfirm: 'Odłączyć WeChat? Przestaniesz otrzymywać wiadomości od Agenta.',
+        cliFooter: 'Dotknij dowolnego elementu, aby skopiować polecenie, a następnie uruchom je w terminalu.',
+        pushPolicyTitle: 'Polityka powiadomień',
+        pushPolicyFooter: 'Określa, które wiadomości Agenta są przekazywane do WeChat.',
+        policyAll: 'Wszystkie wiadomości',
+        policyImportant: 'Tylko ważne',
+        usageGuide: 'Instrukcja użycia',
+        guide1: 'Odpowiedz bezpośrednio → wyślij do mastera',
+        guide2: '@nazwaRoli aby wskazać konkretnego Agenta',
+        guide3: '#nazwaZespołu aby wskazać konkretny Team',
+    },
+
     settingsFeatures: {
         // Features settings screen
         experiments: 'Eksperymenty',

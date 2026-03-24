@@ -166,6 +166,24 @@ export const ru: TranslationStructure = {
         compactSessionViewDescription: 'Отображать активные сессии в более компактном виде',
     },
 
+    channels: {
+        connectionStatus: 'Статус подключения',
+        connected: 'Подключено',
+        connectWeixin: 'Подключить WeChat',
+        connectWeixinSubtitle: 'Запустите команду в терминале и отсканируйте QR-код',
+        checkStatus: 'Проверить статус',
+        disconnectConfirm: 'Отключить WeChat? Вы перестанете получать сообщения от Agent.',
+        cliFooter: 'Нажмите на любой пункт, чтобы скопировать команду, затем выполните её в терминале.',
+        pushPolicyTitle: 'Политика отправки',
+        pushPolicyFooter: 'Определяет, какие сообщения Agent пересылаются в WeChat.',
+        policyAll: 'Все сообщения',
+        policyImportant: 'Только важные',
+        usageGuide: 'Руководство по использованию',
+        guide1: 'Ответить напрямую → отправить master',
+        guide2: '@имяРоли для обращения к конкретному Agent',
+        guide3: '#имяTeam для обращения к конкретному Team',
+    },
+
     settingsFeatures: {
         // Features settings screen
         experiments: 'Эксперименты',
