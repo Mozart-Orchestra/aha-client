@@ -585,6 +585,12 @@ function NotAuthenticated() {
                                     onPress={handleCreateAccount}
                                     tone="secondary"
                                 />
+                                <LandingButton
+                                    icon="key-outline"
+                                    title={t('welcome.linkOrRestoreAccount')}
+                                    onPress={handleRestore}
+                                    tone="ghost"
+                                />
                             </View>
 
                             <View style={styles.landingTrustRow}>
@@ -652,6 +658,14 @@ function NotAuthenticated() {
                         onPress={secondaryAction}
                         tone="secondary"
                     />
+                    {Platform.OS === 'web' ? (
+                        <LandingButton
+                            icon="key-outline"
+                            title={t('welcome.linkOrRestoreAccount')}
+                            onPress={handleRestore}
+                            tone="ghost"
+                        />
+                    ) : null}
                 </View>
 
                 <View style={styles.landingTrustRow}>
