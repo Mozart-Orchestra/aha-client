@@ -184,6 +184,24 @@ export const ca: TranslationStructure = {
         compactSessionViewDescription: 'Mostra les sessions actives en un disseny més compacte',
     },
 
+    channels: {
+        connectionStatus: 'Estat de la connexió',
+        connected: 'Connectat',
+        connectWeixin: 'Connecta WeChat',
+        connectWeixinSubtitle: 'Executa l’ordre al terminal per escanejar el codi QR',
+        checkStatus: 'Comprova l’estat',
+        disconnectConfirm: 'Vols desconnectar WeChat? Deixaràs de rebre missatges de l’Agent.',
+        cliFooter: 'Toca qualsevol element per copiar l’ordre i després executa-la al terminal.',
+        pushPolicyTitle: 'Política d’enviament',
+        pushPolicyFooter: 'Controla quins missatges de l’Agent es reenviaran a WeChat.',
+        policyAll: 'Tots els missatges',
+        policyImportant: 'Només els importants',
+        usageGuide: 'Guia d’ús',
+        guide1: 'Respon directament → envia al master',
+        guide2: '@nomDelRol per adreçar-te a un Agent específic',
+        guide3: '#nomDelTeam per adreçar-te a un Team específic',
+    },
+
     settingsFeatures: {
         // Features settings screen
         experiments: 'Experiments',

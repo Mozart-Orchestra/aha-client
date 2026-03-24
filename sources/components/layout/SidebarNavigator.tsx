@@ -101,7 +101,7 @@ export const SidebarNavigator = React.memo(() => {
 
 const styles = StyleSheet.create({
     routingOverlay: {
-        position: 'fixed',
+        position: 'absolute',
         top: -20000,
         left: -20000,
         width: 1,

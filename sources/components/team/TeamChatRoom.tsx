@@ -831,6 +831,13 @@ const MessageBubbleInner = ({
 
         return `data:${imageData.mimeType || 'image/jpeg'};base64,${imageData.base64}`;
     }, [imageData?.base64, imageData?.mimeType]);
+    const imageSource = React.useMemo(() => {
+        if (!imageUri) {
+            return undefined;
+        }
+
+        return { uri: imageUri };
+    }, [imageUri]);
 
     // 🆕 复制消息内容
     const handleCopyMessage = React.useCallback(async () => {
@@ -934,7 +941,7 @@ const MessageBubbleInner = ({
     const renderContent = () => {
         // 🆕 Render image if present
         const renderImage = () => {
-            if (!imageUri) return null;
+            if (!imageSource || !imageData) return null;
 
             const aspectRatio = (imageData.width && imageData.height)
                 ? imageData.width / imageData.height
@@ -948,7 +955,7 @@ const MessageBubbleInner = ({
                     style={styles.imageContainer}
                 >
                     <Image
-                        source={{ uri: imageUri }}
+                        source={imageSource}
                         style={[styles.messageImage, { width: displayWidth, height: displayHeight }]}
                         resizeMode="cover"
                         onLoadStart={() => {
@@ -1318,7 +1325,7 @@ const MessageBubbleInner = ({
             </View>
 
             {/* 🆕 Full-screen image viewer modal */}
-            {imageData?.base64 && (
+            {imageData?.base64 && imageSource && (
                 <RNModal
                     visible={showFullImage}
                     transparent={true}
@@ -1335,7 +1342,7 @@ const MessageBubbleInner = ({
                         onPress={() => setShowFullImage(false)}
                     >
                         <Image
-                            source={{ uri: imageUri }}
+                            source={imageSource}
                             style={{
                                 width: Dimensions.get('window').width - 32,
                                 height: Dimensions.get('window').height * 0.7,

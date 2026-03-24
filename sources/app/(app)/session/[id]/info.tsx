@@ -258,7 +258,7 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                                 {spec.allowedTools.map((tool, i) => (
                                     <View key={i} style={{ backgroundColor: theme.colors.surface, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontFamily: 'monospace', ...Typography.default() }}>{tool}</Text>
+                                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12, ...Typography.default(), fontFamily: 'monospace' }}>{tool}</Text>
                                     </View>
                                 ))}
                             </View>
