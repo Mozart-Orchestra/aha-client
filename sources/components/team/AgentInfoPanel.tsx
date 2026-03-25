@@ -178,18 +178,83 @@ function ScoreBar({ score }: { score: number }) {
     );
 }
 
-function TagPill({ tag }: { tag: string }) {
+function FactPill({ label, value }: { label: string; value: string }) {
     const { theme } = useUnistyles();
     return (
         <View style={{
-            borderRadius: 999,
+            minWidth: 110,
+            maxWidth: '100%',
+            borderRadius: 10,
             borderWidth: 1,
             borderColor: theme.colors.divider,
             paddingHorizontal: 10,
-            paddingVertical: 3,
+            paddingVertical: 8,
             backgroundColor: theme.colors.groupped.background,
         }}>
-            <Text style={{ fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' }}>{tag}</Text>
+            <Text style={{
+                fontSize: 10,
+                color: theme.colors.textSecondary,
+                fontWeight: '700',
+                letterSpacing: 0.4,
+                textTransform: 'uppercase',
+                marginBottom: 2,
+            }}>
+                {label}
+            </Text>
+            <Text style={{ fontSize: 12, color: theme.colors.text, fontWeight: '600' }}>
+                {value}
+            </Text>
+        </View>
+    );
+}
+
+function TagPill({
+    tag,
+    tone = 'default',
+    monospace = false,
+}: {
+    tag: string;
+    tone?: 'default' | 'authority' | 'code';
+    monospace?: boolean;
+}) {
+    const { theme } = useUnistyles();
+    const palette = tone === 'authority'
+        ? {
+            borderColor: '#AF52DE44',
+            backgroundColor: '#AF52DE22',
+            textColor: '#AF52DE',
+            borderRadius: 999,
+        }
+        : tone === 'code'
+            ? {
+                borderColor: theme.colors.divider,
+                backgroundColor: theme.colors.surface,
+                textColor: theme.colors.textSecondary,
+                borderRadius: 6,
+            }
+            : {
+                borderColor: theme.colors.divider,
+                backgroundColor: theme.colors.groupped.background,
+                textColor: theme.colors.textSecondary,
+                borderRadius: 999,
+            };
+    return (
+        <View style={{
+            borderRadius: palette.borderRadius,
+            borderWidth: 1,
+            borderColor: palette.borderColor,
+            paddingHorizontal: 10,
+            paddingVertical: 3,
+            backgroundColor: palette.backgroundColor,
+        }}>
+            <Text style={{
+                fontSize: 11,
+                color: palette.textColor,
+                fontWeight: '600',
+                ...(monospace ? { fontFamily: 'monospace' } : {}),
+            }}>
+                {tag}
+            </Text>
         </View>
     );
 }
@@ -233,6 +298,47 @@ function GenomeDetails({
     const feedback = parseFeedback(genome.feedbackData ?? null);
     const tags = parseTags(genome.tags ?? null);
     const responsibilities = spec?.responsibilities ?? [];
+    const facts = [
+        spec?.runtimeType ? { label: 'Runtime', value: spec.runtimeType } : null,
+        spec?.modelId || spec?.preferredModel ? { label: 'Model', value: spec?.modelId ?? spec?.preferredModel ?? '—' } : null,
+        spec?.modelProvider ? { label: 'Provider', value: spec.modelProvider } : null,
+        spec?.fallbackModelId ? { label: 'Fallback', value: spec.fallbackModelId } : null,
+        spec?.executionPlane ? { label: 'Plane', value: spec.executionPlane } : null,
+        namespace ? { label: 'Source', value: namespace } : null,
+        spec?.permissionMode ? { label: 'Permission', value: spec.permissionMode } : null,
+        spec?.maxTurns != null ? { label: 'Max Turns', value: String(spec.maxTurns) } : null,
+    ].filter(Boolean) as Array<{ label: string; value: string }>;
+    const authorities = spec?.authorities ?? [];
+    const protocol = spec?.protocol ?? [];
+    const skills = spec?.skills ?? [];
+    const mcpServers = spec?.mcpServers ?? [];
+    const messagingFacts = [
+        spec?.messaging?.listenFrom
+            ? {
+                label: 'Listen From',
+                value: Array.isArray(spec.messaging.listenFrom) ? spec.messaging.listenFrom.join(', ') : 'All',
+            }
+            : null,
+        spec?.messaging?.receiveUserMessages != null
+            ? { label: 'User Messages', value: spec.messaging.receiveUserMessages ? 'Allowed' : 'Blocked' }
+            : null,
+        spec?.messaging?.replyMode ? { label: 'Reply Mode', value: spec.messaging.replyMode } : null,
+    ].filter(Boolean) as Array<{ label: string; value: string }>;
+    const behaviorFacts = [
+        spec?.behavior?.onIdle ? { label: 'On Idle', value: spec.behavior.onIdle } : null,
+        spec?.behavior?.onBlocked ? { label: 'On Blocked', value: spec.behavior.onBlocked } : null,
+        spec?.behavior?.canSpawnAgents != null
+            ? { label: 'Can Spawn', value: spec.behavior.canSpawnAgents ? 'Yes' : 'No' }
+            : null,
+        spec?.behavior?.requireExplicitAssignment != null
+            ? { label: 'Assignment', value: spec.behavior.requireExplicitAssignment ? 'Required' : 'Auto' }
+            : null,
+    ].filter(Boolean) as Array<{ label: string; value: string }>;
+    const hookEntries = [
+        ...(spec?.hooks?.preToolUse ?? []).map(h => `⬆ ${h.matcher} → ${h.description ?? h.command}`),
+        ...(spec?.hooks?.postToolUse ?? []).map(h => `⬇ ${h.matcher} → ${h.description ?? h.command}`),
+        ...(spec?.hooks?.stop ?? []).map(h => `■ stop → ${h.description ?? h.command}`),
+    ];
 
     return (
         <>
@@ -264,6 +370,19 @@ function GenomeDetails({
                     </Text>
                 </>
             ) : null}
+
+            {/* Configuration facts */}
+            {facts.length > 0 && (
+                <>
+                    <Divider />
+                    <SectionLabel label="Configuration" />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {facts.map((fact, i) => (
+                            <FactPill key={`${fact.label}-${i}`} label={fact.label} value={fact.value} />
+                        ))}
+                    </View>
+                </>
+            )}
 
             {/* Score */}
             {feedback?.avgScore != null && (
@@ -318,6 +437,111 @@ function GenomeDetails({
                             +{responsibilities.length - 4} more…
                         </Text>
                     )}
+                </>
+            )}
+
+            {/* Messaging & behavior */}
+            {(messagingFacts.length > 0 || behaviorFacts.length > 0) && (
+                <>
+                    <Divider />
+                    {messagingFacts.length > 0 && (
+                        <>
+                            <SectionLabel label="Messaging" />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                {messagingFacts.map((fact, i) => (
+                                    <FactPill key={`messaging-${fact.label}-${i}`} label={fact.label} value={fact.value} />
+                                ))}
+                            </View>
+                        </>
+                    )}
+                    {behaviorFacts.length > 0 && (
+                        <>
+                            <View style={{ height: messagingFacts.length > 0 ? 12 : 0 }} />
+                            <SectionLabel label="Behavior" />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                {behaviorFacts.map((fact, i) => (
+                                    <FactPill key={`behavior-${fact.label}-${i}`} label={fact.label} value={fact.value} />
+                                ))}
+                            </View>
+                        </>
+                    )}
+                </>
+            )}
+
+            {/* Authorities */}
+            {authorities.length > 0 && (
+                <>
+                    <Divider />
+                    <SectionLabel label="Authorities" />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {authorities.map((authority, i) => (
+                            <TagPill key={i} tag={authority} tone="authority" />
+                        ))}
+                    </View>
+                </>
+            )}
+
+            {/* Protocol */}
+            {protocol.length > 0 && (
+                <>
+                    <Divider />
+                    <SectionLabel label={`Protocol (${protocol.length} steps)`} />
+                    {protocol.slice(0, 6).map((step, i) => (
+                        <View key={i} style={{ flexDirection: 'row', marginBottom: 4 }}>
+                            <Text style={{ color: WG.accent, fontSize: 12, marginRight: 6, minWidth: 18 }}>
+                                {i + 1}.
+                            </Text>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, flex: 1, lineHeight: 17 }}>
+                                {step}
+                            </Text>
+                        </View>
+                    ))}
+                    {protocol.length > 6 && (
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                            +{protocol.length - 6} more steps…
+                        </Text>
+                    )}
+                </>
+            )}
+
+            {/* Skills / MCP */}
+            {(skills.length > 0 || mcpServers.length > 0) && (
+                <>
+                    <Divider />
+                    {skills.length > 0 && (
+                        <>
+                            <SectionLabel label={`Skills (${skills.length})`} />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                {skills.map((skill, i) => (
+                                    <TagPill key={i} tag={skill} tone="code" monospace />
+                                ))}
+                            </View>
+                        </>
+                    )}
+                    {mcpServers.length > 0 && (
+                        <>
+                            <View style={{ height: skills.length > 0 ? 12 : 0 }} />
+                            <SectionLabel label={`MCP Servers (${mcpServers.length})`} />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                {mcpServers.map((server, i) => (
+                                    <TagPill key={i} tag={server} tone="code" monospace />
+                                ))}
+                            </View>
+                        </>
+                    )}
+                </>
+            )}
+
+            {/* Hooks */}
+            {hookEntries.length > 0 && (
+                <>
+                    <Divider />
+                    <SectionLabel label="Hooks" />
+                    {hookEntries.map((entry, i) => (
+                        <Text key={i} style={{ fontSize: 11, color: theme.colors.textSecondary, marginBottom: 3, lineHeight: 16 }}>
+                            {entry}
+                        </Text>
+                    ))}
                 </>
             )}
 
