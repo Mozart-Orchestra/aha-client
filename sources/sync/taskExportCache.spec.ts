@@ -109,6 +109,16 @@ describe('toExportedTask', () => {
             description: 'Detailed desc',
             priority: 'high',
             tags: ['backend', 'urgent'],
+            comments: [{
+                id: 'comment-1',
+                authorSessionId: 'session-1',
+                authorRole: 'builder',
+                authorDisplayName: 'Builder One',
+                type: 'note',
+                content: 'Important implementation detail',
+                createdAt: 1234,
+                mentions: ['session-2'],
+            }],
             checklists: [{
                 id: 'cl-1',
                 title: 'Steps',
@@ -122,6 +132,8 @@ describe('toExportedTask', () => {
         expect(exported.description).toBe('Detailed desc');
         expect(exported.priority).toBe('high');
         expect(exported.tags).toEqual(['backend', 'urgent']);
+        expect(exported.comments?.[0].content).toBe('Important implementation detail');
+        expect(exported.comments?.[0].mentions).toEqual(['session-2']);
         expect(exported.checklists?.[0].items[0].text).toBe('Step 1');
         expect(exported.originalTeamId).toBe('team-b');
         expect(exported.originalTaskId).toBe('task-1');
@@ -257,6 +269,32 @@ describe('analyseImport', () => {
         expect(result.conflicts[0].existing.title).toBe('Original');
     });
 
+    it('marks tasks as conflicts when comments differ for the same id', () => {
+        const existing = makeTask({
+            comments: [{
+                id: 'comment-1',
+                authorSessionId: 'session-1',
+                type: 'note',
+                content: 'Old comment',
+                createdAt: 100,
+            }],
+        });
+        const incoming = [toExportedTask(makeTask({
+            comments: [{
+                id: 'comment-1',
+                authorSessionId: 'session-1',
+                type: 'note',
+                content: 'Newer comment',
+                createdAt: 100,
+            }],
+        }), 'src')];
+
+        const result = analyseImport(incoming, [existing]);
+        expect(result.imported).toHaveLength(0);
+        expect(result.skipped).toHaveLength(0);
+        expect(result.conflicts).toHaveLength(1);
+    });
+
     it('handles a mix of imported, skipped, and conflicted tasks', () => {
         const tasks = [
             makeTask({ id: 'new-task', title: 'New' }),
@@ -281,7 +319,18 @@ describe('analyseImport', () => {
 
 describe('toKanbanTask', () => {
     it('reconstructs a KanbanTask from an ExportedTask', () => {
-        const original = makeTask({ description: 'desc', priority: 'low', tags: ['x'] });
+        const original = makeTask({
+            description: 'desc',
+            priority: 'low',
+            tags: ['x'],
+            comments: [{
+                id: 'comment-1',
+                authorSessionId: 'session-1',
+                type: 'decision',
+                content: 'Ship it',
+                createdAt: 4567,
+            }],
+        });
         const exported = toExportedTask(original, 'team-z');
         const restored = toKanbanTask(exported);
 
@@ -290,6 +339,7 @@ describe('toKanbanTask', () => {
         expect(restored.description).toBe('desc');
         expect(restored.priority).toBe('low');
         expect(restored.tags).toEqual(['x']);
+        expect(restored.comments).toEqual(original.comments);
         expect(restored.source).toBe('user');
     });
 
@@ -360,12 +410,21 @@ describe('exportTasksToJson', () => {
     });
 
     it('serialises a valid TaskExportSnapshot into the blob', () => {
-        exportTasksToJson('team-1', 'My Team', [makeTask()], COLUMNS);
+        exportTasksToJson('team-1', 'My Team', [makeTask({
+            comments: [{
+                id: 'comment-1',
+                authorSessionId: 'session-1',
+                type: 'note',
+                content: 'Carry me into export',
+                createdAt: 999,
+            }],
+        })], COLUMNS);
         const parsed = JSON.parse(capturedBlobParts[0]);
         expect(parsed.formatVersion).toBe(EXPORT_CACHE_VERSION);
         expect(parsed.teamId).toBe('team-1');
         expect(parsed.teamName).toBe('My Team');
         expect(Array.isArray(parsed.tasks)).toBe(true);
+        expect(parsed.tasks[0].comments[0].content).toBe('Carry me into export');
     });
 
     it('excludes deleted tasks from the downloaded file', () => {

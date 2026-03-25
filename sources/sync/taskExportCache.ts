@@ -1,4 +1,4 @@
-import type { KanbanTask, KanbanColumn } from './kanbanTypes';
+import type { KanbanTask, KanbanColumn, TaskComment } from './kanbanTypes';
 
 // ─── Storage helpers ──────────────────────────────────────────────────────────
 // Thin wrappers over localStorage so tests can inject a mock via
@@ -33,12 +33,22 @@ function storageKeys(): string[] {
 export const EXPORT_CACHE_VERSION = 'v1' as const;
 export const EXPORT_CACHE_KEY_PREFIX = `aha:task-export:${EXPORT_CACHE_VERSION}:`;
 
+function cloneTaskComments(comments?: TaskComment[]): TaskComment[] | undefined {
+    if (!comments?.length) return undefined;
+
+    return comments.map(comment => ({
+        ...comment,
+        ...(comment.mentions !== undefined && { mentions: [...comment.mentions] }),
+    }));
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /**
  * Portable task record stored in the export snapshot.
  * Strips execution-specific fields (sessionIds, humanStatusLock, executionLinks,
- * approvalStatus, etc.) that are meaningless in a different team context.
+ * approvalStatus, etc.) that are meaningless in a different team context while
+ * preserving user-authored task history such as comments.
  */
 export interface ExportedTask {
     // Identity
@@ -74,6 +84,9 @@ export interface ExportedTask {
             completed: boolean;
         }>;
     }>;
+
+    // Task discussion history
+    comments?: TaskComment[];
 
     // Provenance — preserved for dedup / conflict detection on import
     originalTeamId: string;
@@ -162,6 +175,7 @@ export function toExportedTask(task: KanbanTask, teamId: string): ExportedTask {
                 })),
             })),
         }),
+        ...(task.comments?.length && { comments: cloneTaskComments(task.comments) }),
         originalTeamId: teamId,
         originalTaskId: task.id,
     };
@@ -263,7 +277,7 @@ export function clearAllTaskExportSnapshots(): void {
  *
  * Rules:
  * - **skipped**: `task.id` already exists in `existingTasks` AND content is identical
- * - **conflict**: `task.id` already exists but content differs (title/description/status)
+ * - **conflict**: `task.id` already exists but content differs
  * - **imported**: `task.id` is new — safe to add
  */
 export function analyseImport(
@@ -287,10 +301,13 @@ export function analyseImport(
             continue;
         }
 
+        const sameComments =
+            JSON.stringify(existing.comments ?? []) === JSON.stringify(inTask.comments ?? []);
         const sameContent =
             existing.title === inTask.title &&
             existing.description === inTask.description &&
-            existing.status === inTask.status;
+            existing.status === inTask.status &&
+            sameComments;
 
         if (sameContent) {
             result.skipped.push(inTask);
@@ -401,6 +418,7 @@ export function toKanbanTask(
                 })),
             })),
         }),
+        ...(exported.comments?.length && { comments: cloneTaskComments(exported.comments) }),
         source: 'user' as const,
         ...overrides,
     };
