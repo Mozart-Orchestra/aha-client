@@ -33,7 +33,11 @@ export default React.memo(() => {
 
     useEscapeAction(isDesktopShell, handleExitSession);
 
-    const { InfoButton, InfoPanelElement } = useAgentInfoButton({ sessionId, specId });
+    const { InfoButton, InfoPanelElement } = useAgentInfoButton({
+        sessionId,
+        specId,
+        variant: isDesktopShell ? 'popover' : 'sheet',
+    });
 
     const sessionContent = (
         <View style={{ flex: 1, minHeight: 0 }}>

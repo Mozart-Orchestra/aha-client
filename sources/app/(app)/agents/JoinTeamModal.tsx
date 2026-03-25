@@ -26,6 +26,9 @@ function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
 interface Props {
     genome: GenomeRecord;
     onClose: () => void;
+    teamId?: string;
+    teamName?: string;
+    onJoined?: () => void;
 }
 
 type Step = 'team' | 'machine';
@@ -35,7 +38,13 @@ type Step = 'team' | 'machine';
  * Step 1: Select team + optional custom context
  * Step 2: Select machine + working directory → spawn
  */
-export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose }: Props) {
+export const JoinTeamModal = React.memo(function JoinTeamModal({
+    genome,
+    onClose,
+    teamId,
+    teamName,
+    onJoined,
+}: Props) {
     const { theme } = useUnistyles();
     const allArtifacts = useArtifacts();
     const allMachines = useAllMachines();
@@ -53,9 +62,10 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
     const roleTranslations = getTranslationSection('teamRoles') as Record<string, { title?: string; summary?: string }>;
     const roleTitle = roleTranslations[roleId]?.title || roleId;
     const roleSummary = roleTranslations[roleId]?.summary || '';
+    const lockedTeamId = teamId ?? null;
 
     const [step, setStep] = React.useState<Step>('team');
-    const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
+    const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(lockedTeamId);
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
         () => machines.find(isMachineOnline)?.id ?? null,
     );
@@ -73,6 +83,11 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
         () => getKnownPathsForMachine(selectedMachineId, recentPaths),
         [selectedMachineId],
     );
+    const selectedTeam = React.useMemo(() => {
+        if (!selectedTeamId) return null;
+        return teams.find((team) => team.id === selectedTeamId) ?? null;
+    }, [selectedTeamId, teams]);
+    const selectedTeamLabel = selectedTeam?.title || teamName || t('teams.untitledTeam');
 
     const selectedMachine = machines.find((m) => m.id === selectedMachineId) ?? null;
     const canSpawn = !!selectedMachineId && !!cwd.trim() && selectedMachine && isMachineOnline(selectedMachine);
@@ -120,6 +135,7 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
 
             const updatedPaths = updateRecentMachinePaths(recentPaths, selectedMachineId, cwd.trim());
             sync.applySettings({ recentMachinePaths: updatedPaths });
+            onJoined?.();
             onClose();
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -128,7 +144,7 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
         } finally {
             setSpawning(false);
         }
-    }, [customPrompt, cwd, genome, onClose, recentPaths, roleId, runtimeType, selectedMachineId, selectedTeamId, spec?.displayName]);
+    }, [customPrompt, cwd, genome, onClose, onJoined, recentPaths, roleId, runtimeType, selectedMachineId, selectedTeamId, spec?.displayName]);
 
     return (
         <Modal
@@ -158,7 +174,32 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({ genome, onClose
                                 <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
                                     {t('agents.selectTeam')}
                                 </Text>
-                                {teams.length === 0 ? (
+                                {lockedTeamId ? (
+                                    <View style={styles.teamList}>
+                                        <View
+                                            style={[
+                                                styles.teamRow,
+                                                {
+                                                    borderColor: theme.colors.button.primary.background,
+                                                    backgroundColor: theme.colors.groupped.background,
+                                                },
+                                            ]}
+                                        >
+                                            <View style={[styles.radioOuter, { borderColor: theme.colors.button.primary.background }]}>
+                                                <View style={[styles.radioInner, { backgroundColor: theme.colors.button.primary.background }]} />
+                                            </View>
+                                            <View style={{ flex: 1, minWidth: 0 }}>
+                                                <Text style={[styles.teamName, { color: theme.colors.text }]} numberOfLines={1}>
+                                                    {selectedTeamLabel}
+                                                </Text>
+                                                <Text style={[styles.hint, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
+                                                    Current team
+                                                </Text>
+                                            </View>
+                                            <Ionicons name="lock-closed" size={14} color={theme.colors.textSecondary} />
+                                        </View>
+                                    </View>
+                                ) : teams.length === 0 ? (
                                     <Text style={[styles.hint, { color: theme.colors.textSecondary }]}>
                                         No teams found. Create a team first.
                                     </Text>

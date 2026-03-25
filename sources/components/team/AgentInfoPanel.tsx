@@ -39,8 +39,9 @@ import {
     type GenomeRecord,
     type GenomeSpec,
 } from '@/utils/genomeHub';
-import { AgentAvatar } from '@/components/team/AgentAvatar';
+import { Avatar } from '@/components/avatar/Avatar';
 import { getRoleLabel, resolveDisplayName } from '@/utils/roleVisualUtils';
+import { getSessionAvatarId } from '@/utils/sessionUtils';
 
 // ─── Warm-gold accent tokens (no Unistyles equivalent) ───────────────────────
 const WG = {
@@ -75,6 +76,8 @@ interface MemberInfo {
     roleId: string;
     displayName: string | undefined;
     specId: string | undefined;
+    runtimeType: string | undefined;
+    executionPlane: string | undefined;
 }
 
 /**
@@ -96,6 +99,8 @@ function useMemberInfo(sessionId: string): MemberInfo | null {
                 roleId: member.roleId,
                 displayName: member.displayName,
                 specId: member.specId,
+                runtimeType: member.runtimeType,
+                executionPlane: member.executionPlane,
             };
         } catch {
             return null;
@@ -278,6 +283,28 @@ function SectionLabel({ label }: { label: string }) {
 function Divider() {
     const { theme } = useUnistyles();
     return <View style={{ height: 1, backgroundColor: theme.colors.divider, marginVertical: 14 }} />;
+}
+
+function FactPill({ label, value }: { label: string; value: string }) {
+    const { theme } = useUnistyles();
+    return (
+        <View style={{
+            paddingHorizontal: 10,
+            paddingVertical: 7,
+            borderRadius: 12,
+            backgroundColor: theme.colors.groupped.background,
+            borderWidth: 1,
+            borderColor: theme.colors.divider,
+            minWidth: 92,
+        }}>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                {label}
+            </Text>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.text, marginTop: 3 }} numberOfLines={2}>
+                {value}
+            </Text>
+        </View>
+    );
 }
 
 /** The genome details section — loaded state. */
@@ -618,17 +645,231 @@ function GenomePlaceholder({ reason }: { reason: 'no-spec' | 'not-found' }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AgentInfoPanel({ visible, sessionId, specId: specIdProp, onClose }: AgentInfoPanelProps) {
-    const router = useRouter();
-    const { theme } = useUnistyles();
+function useResolvedAgentInfo(sessionId: string, specIdProp?: string | null) {
     const session = useSession(sessionId);
     const memberInfo = useMemberInfo(sessionId);
 
-    // Resolve specId: prop takes priority, otherwise fall back to kanban member
     const resolvedSpecId = specIdProp ?? memberInfo?.specId ?? null;
     const { genome, spec, loading } = useGenomeData(resolvedSpecId);
+    const roleId = memberInfo?.roleId ?? (session?.metadata as any)?.roleId;
+    const rawDisplayName = memberInfo?.displayName;
+    const agentDisplayName = resolveDisplayName(rawDisplayName, roleId, sessionId);
+    const roleLabel = getRoleLabel(roleId);
+    const isOnline = !!session?.active;
+    const runtimeLabel = spec?.runtimeType ?? memberInfo?.runtimeType ?? session?.metadata?.flavor ?? undefined;
+    const modelLabel = spec?.preferredModel ?? spec?.modelId ?? session?.metadata?.resolvedModel ?? undefined;
+    const fallbackModel = spec?.fallbackModelId ?? session?.metadata?.fallbackModel ?? undefined;
+    const providerLabel = spec?.modelProvider ?? undefined;
+    const executionPlane = spec?.executionPlane ?? memberInfo?.executionPlane ?? session?.metadata?.executionPlane ?? undefined;
+    const sourceLabel = genome?.namespace ?? spec?.namespace ?? undefined;
+    const avatarId = resolvedSpecId ?? (session ? getSessionAvatarId(session) : sessionId);
 
-    // Slide-up animation
+    return {
+        session,
+        genome,
+        spec,
+        loading,
+        resolvedSpecId,
+        roleId,
+        agentDisplayName,
+        roleLabel,
+        isOnline,
+        runtimeLabel,
+        modelLabel,
+        fallbackModel,
+        providerLabel,
+        executionPlane,
+        sourceLabel,
+        avatarId,
+    };
+}
+
+function AgentInfoCardContent({
+    sessionId,
+    specId,
+    onClose,
+}: {
+    sessionId: string;
+    specId?: string | null;
+    onClose: () => void;
+}) {
+    const router = useRouter();
+    const { theme } = useUnistyles();
+    const {
+        genome,
+        spec,
+        loading,
+        resolvedSpecId,
+        roleId,
+        agentDisplayName,
+        roleLabel,
+        isOnline,
+        runtimeLabel,
+        modelLabel,
+        fallbackModel,
+        providerLabel,
+        executionPlane,
+        sourceLabel,
+        avatarId,
+    } = useResolvedAgentInfo(sessionId, specId);
+
+    const handleViewMarketplace = React.useCallback(() => {
+        if (genome?.id) {
+            onClose();
+            router.push(`/agents/${genome.id}` as any);
+        }
+    }, [genome?.id, onClose, router]);
+
+    const facts = [
+        runtimeLabel ? { label: 'Runtime', value: runtimeLabel.toUpperCase() } : null,
+        modelLabel ? { label: 'Model', value: modelLabel } : null,
+        providerLabel ? { label: 'Provider', value: providerLabel } : null,
+        fallbackModel ? { label: 'Fallback', value: fallbackModel } : null,
+        executionPlane ? { label: 'Plane', value: executionPlane } : null,
+        sourceLabel ? { label: 'Source', value: sourceLabel } : null,
+    ].filter((item): item is { label: string; value: string } => !!item);
+
+    return (
+        <>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+                <View>
+                    <Avatar id={avatarId} size={56} flavor={runtimeLabel ?? undefined} />
+                    <View style={{
+                        position: 'absolute',
+                        bottom: -1,
+                        right: -1,
+                        width: 14,
+                        height: 14,
+                        borderRadius: 7,
+                        backgroundColor: isOnline ? theme.colors.success : theme.colors.surfaceHighest,
+                        borderWidth: 2,
+                        borderColor: theme.colors.surface,
+                    }} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.text }} numberOfLines={1}>
+                        {agentDisplayName}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 3 }} numberOfLines={1}>
+                        {isOnline ? 'Online' : 'Offline'}{roleLabel ? `  ·  ${roleLabel}` : ''}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 2, fontFamily: 'monospace' }} numberOfLines={1}>
+                        {sessionId.slice(0, 8)}…{sessionId.slice(-8)}
+                    </Text>
+                </View>
+            </View>
+
+            {roleId || facts.length > 0 ? (
+                <>
+                    <SectionLabel label="Model Card" />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {facts.map((fact) => (
+                            <FactPill key={`${fact.label}:${fact.value}`} label={fact.label} value={fact.value} />
+                        ))}
+                    </View>
+                    <Divider />
+                </>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: WG.accent, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                    Agent Genome
+                </Text>
+                {loading && (
+                    <Ionicons name="hourglass-outline" size={12} color={theme.colors.textSecondary} />
+                )}
+            </View>
+
+            {loading ? (
+                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>Loading genome…</Text>
+                </View>
+            ) : !resolvedSpecId ? (
+                <GenomePlaceholder reason="no-spec" />
+            ) : !genome ? (
+                <GenomePlaceholder reason="not-found" />
+            ) : (
+                <GenomeDetails
+                    genome={genome}
+                    spec={spec}
+                    onViewMarketplace={handleViewMarketplace}
+                />
+            )}
+        </>
+    );
+}
+
+function AgentInfoPopover({
+    visible,
+    sessionId,
+    specId,
+    onClose,
+}: AgentInfoPanelProps) {
+    const { theme } = useUnistyles();
+
+    if (!visible) return null;
+
+    return (
+        <>
+            <Pressable
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 119 }}
+                onPress={onClose}
+                accessibilityLabel="Close model card"
+            />
+            <View
+                style={{
+                    position: 'absolute',
+                    top: 52,
+                    right: 8,
+                    width: 392,
+                    maxWidth: 'calc(100% - 16px)' as any,
+                    maxHeight: '78%',
+                    zIndex: 120,
+                }}
+            >
+                <View
+                    style={{
+                        backgroundColor: theme.colors.surface,
+                        borderRadius: 22,
+                        borderWidth: 1,
+                        borderColor: theme.colors.divider,
+                        shadowColor: '#000000',
+                        shadowOffset: { width: 0, height: 14 },
+                        shadowOpacity: 0.18,
+                        shadowRadius: 28,
+                        elevation: 14,
+                        overflow: 'hidden',
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 12, paddingTop: 12 }}>
+                        <Pressable
+                            onPress={onClose}
+                            hitSlop={10}
+                            style={({ pressed }) => ({
+                                padding: 4,
+                                borderRadius: 8,
+                                backgroundColor: pressed ? theme.colors.surfaceHigh : 'transparent',
+                            })}
+                        >
+                            <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
+                        </Pressable>
+                    </View>
+                    <ScrollView
+                        style={{ paddingHorizontal: 18 }}
+                        contentContainerStyle={{ paddingBottom: 22 }}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <AgentInfoCardContent sessionId={sessionId} specId={specId} onClose={onClose} />
+                    </ScrollView>
+                </View>
+            </View>
+        </>
+    );
+}
+
+export function AgentInfoPanel({ visible, sessionId, specId: specIdProp, onClose }: AgentInfoPanelProps) {
+    const { theme } = useUnistyles();
+
     const slideAnim = React.useRef(new Animated.Value(500)).current;
     const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -662,21 +903,6 @@ export function AgentInfoPanel({ visible, sessionId, specId: specIdProp, onClose
             ]).start();
         }
     }, [visible, slideAnim, fadeAnim]);
-
-    // Display name + role label from member info or session metadata
-    const roleId = memberInfo?.roleId ?? (session?.metadata as any)?.roleId;
-    const rawDisplayName = memberInfo?.displayName;
-    const agentDisplayName = resolveDisplayName(rawDisplayName, roleId, sessionId);
-    const roleLabel = getRoleLabel(roleId);
-
-    const isOnline = !!session?.active;
-
-    const handleViewMarketplace = React.useCallback(() => {
-        if (genome?.id) {
-            onClose();
-            router.push(`/agents/${genome.id}` as any);
-        }
-    }, [genome?.id, onClose, router]);
 
     return (
         <Modal
@@ -738,65 +964,7 @@ export function AgentInfoPanel({ visible, sessionId, specId: specIdProp, onClose
                     contentContainerStyle={{ paddingBottom: 32 }}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Agent identity header */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                        <AgentAvatar
-                            sessionId={sessionId}
-                            roleId={roleId}
-                            displayName={agentDisplayName}
-                            size="lg"
-                            isOnline={isOnline}
-                            disablePress
-                        />
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.text }} numberOfLines={1}>
-                                {agentDisplayName}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                                <View style={{
-                                    width: 7,
-                                    height: 7,
-                                    borderRadius: 3.5,
-                                    backgroundColor: isOnline ? theme.colors.success : theme.colors.surfaceHighest,
-                                }} />
-                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                                    {isOnline ? 'Online' : 'Offline'}{roleLabel ? `  ·  ${roleLabel}` : ''}
-                                </Text>
-                            </View>
-                            <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 2, fontFamily: 'monospace' }} numberOfLines={1}>
-                                {sessionId.slice(0, 8)}…{sessionId.slice(-8)}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Divider */}
-                    <View style={{ height: 1, backgroundColor: theme.colors.divider, marginBottom: 20 }} />
-
-                    {/* Genome section */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: WG.accent, letterSpacing: 0.8, textTransform: 'uppercase' }}>
-                            Agent Genome
-                        </Text>
-                        {loading && (
-                            <Ionicons name="hourglass-outline" size={12} color={theme.colors.textSecondary} />
-                        )}
-                    </View>
-
-                    {loading ? (
-                        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-                            <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>Loading genome…</Text>
-                        </View>
-                    ) : !resolvedSpecId ? (
-                        <GenomePlaceholder reason="no-spec" />
-                    ) : !genome ? (
-                        <GenomePlaceholder reason="not-found" />
-                    ) : (
-                        <GenomeDetails
-                            genome={genome}
-                            spec={spec}
-                            onViewMarketplace={handleViewMarketplace}
-                        />
-                    )}
+                    <AgentInfoCardContent sessionId={sessionId} specId={specIdProp} onClose={onClose} />
                 </ScrollView>
             </Animated.View>
         </Modal>
@@ -816,13 +984,21 @@ export function AgentInfoPanel({ visible, sessionId, specId: specIdProp, onClose
  *     </View>
  *   );
  */
-export function useAgentInfoButton({ sessionId, specId }: { sessionId: string; specId?: string | null }) {
+export function useAgentInfoButton({
+    sessionId,
+    specId,
+    variant = 'sheet',
+}: {
+    sessionId: string;
+    specId?: string | null;
+    variant?: 'sheet' | 'popover';
+}) {
     const [visible, setVisible] = React.useState(false);
     const { theme } = useUnistyles();
 
     const InfoButton = (
         <Pressable
-            onPress={() => setVisible(true)}
+            onPress={() => setVisible((previous) => !previous)}
             hitSlop={10}
             style={({ pressed }) => ({
                 padding: 5,
@@ -838,14 +1014,22 @@ export function useAgentInfoButton({ sessionId, specId }: { sessionId: string; s
         </Pressable>
     );
 
-    const InfoPanelElement = (
-        <AgentInfoPanel
-            visible={visible}
-            sessionId={sessionId}
-            specId={specId}
-            onClose={() => setVisible(false)}
-        />
-    );
+    const InfoPanelElement = variant === 'popover'
+        ? (
+            <AgentInfoPopover
+                visible={visible}
+                sessionId={sessionId}
+                specId={specId}
+                onClose={() => setVisible(false)}
+            />
+        ) : (
+            <AgentInfoPanel
+                visible={visible}
+                sessionId={sessionId}
+                specId={specId}
+                onClose={() => setVisible(false)}
+            />
+        );
 
     return { InfoButton, InfoPanelElement, setVisible };
 }

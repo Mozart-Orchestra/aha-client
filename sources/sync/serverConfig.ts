@@ -15,10 +15,9 @@ function getRuntimeServerUrl(): string | null {
 
     if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return 'http://localhost:3005';
-        }
-        // 局域网 IP（开发场景）：用页面同一主机 + 默认端口
+
+        // Avoid forcing web localhost builds onto a local API server. Web dev can
+        // still opt into localhost explicitly via env or the server settings UI.
         if (isPrivateIp(hostname)) {
             return `http://${hostname}:3005`;
         }

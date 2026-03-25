@@ -39,6 +39,8 @@ import { TaskDetailModal } from '@/components/team/TaskDetailModal';
 import { TaskApprovalModal } from '@/components/team/TaskApprovalModal';
 import { NewTaskModal } from '@/components/team/NewTaskModal';
 import { TeamStatusBar } from '@/components/team/TeamStatusBar';
+import { TeamAgentsPopover } from '@/components/team/TeamAgentsPopover';
+import { TeamAgentLibraryModal } from '@/components/team/TeamAgentLibraryModal';
 import { useTaskExportAutoCache } from '@/hooks/useTaskExportAutoCache';
 import { ImportTaskButton } from '@/components/team/ImportTaskButton';
 import { ExportTaskButton } from '@/components/team/ExportTaskButton';
@@ -132,6 +134,8 @@ export default function TeamDashboardScreen() {
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const [showMenu, setShowMenu] = React.useState(false);
+    const [showAgentsPopover, setShowAgentsPopover] = React.useState(false);
+    const [showAgentLibrary, setShowAgentLibrary] = React.useState(false);
     const [showWorkspaceDrawer, setShowWorkspaceDrawer] = React.useState(false);
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
@@ -721,6 +725,51 @@ export default function TeamDashboardScreen() {
         }
     }, [teamId]);
 
+    const handleDeleteSessionMember = React.useCallback(async (sessionId: string, displayName: string) => {
+        const session = sessionLookup.get(sessionId);
+        const confirmed = await Modal.confirm(
+            'Delete session',
+            session?.active
+                ? `Archive and permanently delete ${displayName}'s session? This also removes the agent from the team.`
+                : `Permanently delete ${displayName}'s session and remove the agent from the team?`,
+            {
+                confirmText: 'Delete session',
+                cancelText: t('common.cancel'),
+                destructive: true,
+            }
+        );
+        if (!confirmed) return;
+
+        try {
+            if (session?.active) {
+                const archiveResult = await sync.batchArchiveSessions([sessionId]);
+                const archivedSession = archiveResult.results.find((result) => result.sessionId === sessionId);
+                if (archivedSession && !archivedSession.success) {
+                    throw new Error(archivedSession.error || 'Failed to archive session before delete');
+                }
+            }
+
+            const deleteResult = await sync.batchDeleteSessions([sessionId]);
+            const deletedSession = deleteResult.results.find((result) => result.sessionId === sessionId);
+            if (deletedSession && !deletedSession.success) {
+                throw new Error(deletedSession.error || 'Failed to delete session');
+            }
+
+            try {
+                await sync.removeTeamMember(teamId, sessionId);
+            } catch (removeError) {
+                console.error('Session deleted, but failed to remove team member:', removeError);
+                Modal.alert(
+                    t('common.error'),
+                    'Session was deleted, but removing the stale team member entry failed. Refresh the team and try again.'
+                );
+            }
+        } catch (error) {
+            console.error('Failed to delete session member:', error);
+            Modal.alert(t('common.error'), error instanceof Error ? error.message : 'Failed to delete session');
+        }
+    }, [sessionLookup, teamId]);
+
     const handleAgentLongPress = React.useCallback((sessionId: string, displayName: string) => {
         Modal.alert(
             displayName,
@@ -735,10 +784,15 @@ export default function TeamDashboardScreen() {
                     style: 'destructive',
                     onPress: () => handleRemoveTeamMember(sessionId, displayName),
                 },
+                {
+                    text: 'Delete session',
+                    style: 'destructive',
+                    onPress: () => handleDeleteSessionMember(sessionId, displayName),
+                },
                 { text: t('common.cancel'), style: 'cancel' },
             ]
         );
-    }, [handleRenameSessionMember, handleRemoveTeamMember]);
+    }, [handleDeleteSessionMember, handleRenameSessionMember, handleRemoveTeamMember]);
 
     const handleTaskUpdate = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
         if (desktopBridge && roomId) {
@@ -1492,8 +1546,74 @@ export default function TeamDashboardScreen() {
         />
     );
 
-    const desktopMainPanel = (
+    const renderAgentsButton = (compact: boolean = false) => (
+        <Pressable
+            onPress={() => {
+                setShowWorkspaceDrawer(false);
+                setShowMenu(false);
+                setShowAgentsPopover((previous) => !previous);
+            }}
+            style={[
+                styles.agentsButton,
+                {
+                    backgroundColor: theme.colors.groupped.background,
+                    borderColor: theme.colors.divider,
+                },
+            ]}
+        >
+            <Ionicons name="sparkles-outline" size={compact ? 16 : 15} color={theme.colors.text} />
+            <Text style={[styles.agentsButtonText, { color: theme.colors.text }]}>Agents</Text>
+            <Text style={[styles.agentsButtonText, { color: theme.colors.textSecondary }]}>
+                {agentRoster.length}
+            </Text>
+        </Pressable>
+    );
+
+    const floatingAgentsPanel = showAgentsPopover ? (
         <>
+            <Pressable
+                style={styles.floatingPanelBackdrop}
+                onPress={() => setShowAgentsPopover(false)}
+            />
+            <View
+                style={[
+                    styles.floatingPanelAnchor,
+                    { top: isDesktopShell ? 58 : 96 },
+                ]}
+            >
+                <TeamAgentsPopover
+                    items={agentRoster.map((entry) => ({
+                        sessionId: entry.member.sessionId,
+                        specId: entry.member.specId ?? null,
+                        displayName: entry.member.displayName || entry.session?.metadata?.name || entry.role?.title || entry.member.sessionId,
+                        roleLabel: entry.role?.title || entry.member.roleId || entry.session?.metadata?.role || undefined,
+                        runtimeType: entry.member.runtimeType || entry.session?.metadata?.flavor || null,
+                        modelLabel: entry.session?.metadata?.resolvedModel || null,
+                        sessionPath: entry.session?.metadata?.path || null,
+                        activeTaskTitle: entry.activeTask?.title || null,
+                        isOnline: !!entry.session?.active,
+                    }))}
+                    onAddAgent={handleOpenAgentLibrary}
+                    onOpenSession={handleOpenAgentRosterSession}
+                    onRenameSession={(sessionId, displayName) => {
+                        setShowAgentsPopover(false);
+                        handleRenameSessionMember(sessionId, displayName);
+                    }}
+                    onRemoveAgent={(sessionId, displayName) => {
+                        setShowAgentsPopover(false);
+                        handleRemoveTeamMember(sessionId, displayName);
+                    }}
+                    onDeleteSession={(sessionId, displayName) => {
+                        setShowAgentsPopover(false);
+                        handleDeleteSessionMember(sessionId, displayName);
+                    }}
+                />
+            </View>
+        </>
+    ) : null;
+
+    const desktopMainPanel = (
+        <View style={{ flex: 1 }}>
             <View
                 style={[
                     styles.desktopPanelHeader,
@@ -1543,13 +1663,20 @@ export default function TeamDashboardScreen() {
                         })}
                     </View>
                     <View style={{ flex: 1 }} />
-                    <Pressable
-                        onPress={() => setShowMenu((previous) => !previous)}
-                    >
-                        <Ionicons name="ellipsis-horizontal" size={20} color="#98A8B5" />
-                    </Pressable>
+                    <View style={styles.headerActionRow}>
+                        {renderAgentsButton()}
+                        <Pressable
+                            onPress={() => {
+                                setShowAgentsPopover(false);
+                                setShowMenu((previous) => !previous);
+                            }}
+                        >
+                            <Ionicons name="ellipsis-horizontal" size={20} color="#98A8B5" />
+                        </Pressable>
+                    </View>
                 </View>
             </View>
+            {floatingAgentsPanel}
             {showMenu ? (
                 <>
                     <Pressable
@@ -1640,7 +1767,7 @@ export default function TeamDashboardScreen() {
                     onCreate={handleNewTaskCreate}
                 />
             </View>
-        </>
+        </View>
     );
 
     const desktopShell = (
@@ -1675,7 +1802,10 @@ export default function TeamDashboardScreen() {
                     headerTitle: (desktopBridge ? desktopRoom?.name : artifact?.title) || 'Team Dashboard',
                     headerRight: () => (
                         <Pressable
-                            onPress={() => setShowMenu(!showMenu)}
+                            onPress={() => {
+                                setShowAgentsPopover(false);
+                                setShowMenu(!showMenu);
+                            }}
                             hitSlop={10}
                             style={{ padding: 8 }}
                         >
@@ -1698,6 +1828,7 @@ export default function TeamDashboardScreen() {
                 desktopShell
             ) : (
                 <View style={styles.container}>
+                    {floatingAgentsPanel}
                     <View style={styles.header}>
                         <View style={styles.mobileHeaderTopRow}>
                             <Pressable
@@ -1705,6 +1836,7 @@ export default function TeamDashboardScreen() {
                                 onPress={() => {
                                     setShowWorkspaceDrawer((previous) => !previous);
                                     setShowMenu(false);
+                                    setShowAgentsPopover(false);
                                 }}
                             >
                                 <Ionicons name="layers-outline" size={18} color={theme.colors.text} />
@@ -1713,7 +1845,7 @@ export default function TeamDashboardScreen() {
                                         {artifact?.title || desktopRoom?.name || 'Workspace'}
                                     </Text>
                                     <Text style={styles.mobileWorkspaceSubtitle} numberOfLines={1}>
-                                        {onlineCount} online · {roster.length} agents · {allTeams.length} teams
+                                        {onlineCount} online · {agentRoster.length} agents · {allTeams.length} teams
                                     </Text>
                                 </View>
                                 <Ionicons
@@ -1722,15 +1854,19 @@ export default function TeamDashboardScreen() {
                                     color={theme.colors.textSecondary}
                                 />
                             </Pressable>
-                            <Pressable
-                                style={styles.mobileHeaderIconButton}
-                                onPress={() => {
-                                    setShowMenu(!showMenu);
-                                    setShowWorkspaceDrawer(false);
-                                }}
-                            >
-                                <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.text} />
-                            </Pressable>
+                            <View style={styles.headerActionRow}>
+                                {renderAgentsButton(true)}
+                                <Pressable
+                                    style={styles.mobileHeaderIconButton}
+                                    onPress={() => {
+                                        setShowMenu(!showMenu);
+                                        setShowWorkspaceDrawer(false);
+                                        setShowAgentsPopover(false);
+                                    }}
+                                >
+                                    <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.text} />
+                                </Pressable>
+                            </View>
                         </View>
                         <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
                             {STANDARD_SHELL_TABS.map((tab) => (
@@ -1791,6 +1927,12 @@ export default function TeamDashboardScreen() {
             )}
 
             {!isDesktopShell && showWorkspaceDrawer && mobileWorkspaceDrawer}
+            <TeamAgentLibraryModal
+                visible={showAgentLibrary}
+                teamId={teamId}
+                teamName={teamDisplayName}
+                onClose={() => setShowAgentLibrary(false)}
+            />
 
             {/* 🆕 任务详情弹窗 (mobile only — desktop uses contained modal inside main panel) */}
             {!isDesktopShell && (
