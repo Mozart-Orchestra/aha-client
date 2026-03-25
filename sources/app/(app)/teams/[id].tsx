@@ -915,6 +915,12 @@ export default function TeamDashboardScreen() {
         const sessions = storage.getState().sessions;
         return _sessionIds.map(id => sessions[id]).filter((s): s is NonNullable<typeof s> => s != null);
     }, [_sessionIds]);
+    const hasLocalTeamSessions = React.useMemo(() => {
+        return allSessions.some((session) =>
+            session.metadata?.teamId === teamId
+            || session.metadata?.sessionTag?.startsWith(`team:${teamId}:`)
+        );
+    }, [allSessions, teamId]);
     const allMachines = useAllMachines();
     const profile = useProfile();
     const { isAuthenticated } = useAuth();
@@ -941,8 +947,11 @@ export default function TeamDashboardScreen() {
     const [teamScorecard, setTeamScorecard] = React.useState<TeamScorecard | null>(null);
     const [teamPublicReviews, setTeamPublicReviews] = React.useState<TeamPublicReview[]>([]);
     const [teamReviewLoading, setTeamReviewLoading] = React.useState(false);
+    const [autoInitAttempted, setAutoInitAttempted] = React.useState(false);
     const lifecyclePersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
+    const unavailableTeamMissesRef = React.useRef(0);
+    const unavailableTeamRedirectedRef = React.useRef(false);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const parsedArtifactBoard = React.useMemo<{
@@ -1094,17 +1103,38 @@ export default function TeamDashboardScreen() {
         } as any);
     }, [roomId, router, teamId]);
 
+    const redirectUnavailableTeam = React.useCallback(() => {
+        if (desktopBridge || unavailableTeamRedirectedRef.current) {
+            return;
+        }
+
+        unavailableTeamRedirectedRef.current = true;
+        console.warn(`Redirecting away from unavailable team ${teamId}`);
+        router.replace('/teams');
+    }, [desktopBridge, router, teamId]);
+
     const refreshTeamArtifact = React.useCallback(async () => {
         if (desktopBridge || !teamId || !isAuthenticated) {
             return;
         }
 
         try {
-            await sync.fetchArtifactWithBody(teamId);
+            const refreshedArtifact = await sync.fetchArtifactWithBody(teamId);
+            if (refreshedArtifact) {
+                unavailableTeamMissesRef.current = 0;
+                return;
+            }
+
+            if (autoInitAttempted && !hasLocalTeamSessions) {
+                unavailableTeamMissesRef.current += 1;
+                if (unavailableTeamMissesRef.current >= 2) {
+                    redirectUnavailableTeam();
+                }
+            }
         } catch (error) {
             console.error(`Failed to refresh team artifact ${teamId}:`, error);
         }
-    }, [desktopBridge, isAuthenticated, teamId]);
+    }, [autoInitAttempted, desktopBridge, hasLocalTeamSessions, isAuthenticated, redirectUnavailableTeam, teamId]);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -1134,7 +1164,6 @@ export default function TeamDashboardScreen() {
     }, [artifact, isLoading, desktopBridge]);
 
     // Auto-initialize Board if artifact doesn't exist (CLI-created teams)
-    const [autoInitAttempted, setAutoInitAttempted] = React.useState(false);
     React.useEffect(() => {
         // Wait for data to be ready before auto-initializing
         if (desktopBridge || isLoading || autoInitAttempted || !isDataReady || !isAuthenticated) {
@@ -1174,16 +1203,24 @@ export default function TeamDashboardScreen() {
                     ).then(() => {
                         console.log(`✅ Board auto-initialized for team ${teamId}`);
                         return sync.fetchArtifactWithBody(teamId);
+                    }).then((createdArtifact) => {
+                        if (createdArtifact) {
+                            unavailableTeamMissesRef.current = 0;
+                        }
                     });
                 })
                 .catch((error) => {
                     console.error('Failed to ensure Board exists:', error);
+                    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+                    if (message.includes('already exists') || message.includes('failed to create artifact: 409')) {
+                        redirectUnavailableTeam();
+                    }
                 })
                 .finally(() => {
                     setIsLoading(false);
                 });
         }
-    }, [artifact, teamId, desktopBridge, isLoading, autoInitAttempted, isAuthenticated, isDataReady]);
+    }, [artifact, teamId, desktopBridge, isLoading, autoInitAttempted, isAuthenticated, isDataReady, redirectUnavailableTeam]);
 
     // Helper to get session IDs from artifact body
     const getSessionIds = React.useCallback((): string[] => {
@@ -1332,11 +1369,16 @@ export default function TeamDashboardScreen() {
             await sync.fetchArtifactWithBody(teamId);
         } catch (error) {
             console.error('Failed to initialize team artifact:', error);
+            const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+            if (message.includes('already exists') || message.includes('failed to create artifact: 409')) {
+                redirectUnavailableTeam();
+                return;
+            }
             Modal.alert('Error', 'Failed to initialize team board. Please try again.');
         } finally {
             setIsLoading(false);
         }
-    }, [teamId]);
+    }, [redirectUnavailableTeam, teamId]);
 
     const kanbanData: KanbanBoard = React.useMemo(() => {
         const board = resolveStickyKanbanBoard({

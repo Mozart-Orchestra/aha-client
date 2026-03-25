@@ -3,6 +3,7 @@ WORKDIR /app
 
 COPY package.json yarn.lock ./
 COPY patches ./patches
+COPY sources/team-config ./sources/team-config
 RUN yarn install --frozen-lockfile --ignore-engines
 
 FROM deps AS builder
