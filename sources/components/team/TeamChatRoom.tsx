@@ -40,6 +40,7 @@ import { Modal } from '@/modal';
 import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
@@ -48,6 +49,24 @@ const stylesheet = StyleSheet.create((theme) => ({
     container: {
         flex: 1,
         backgroundColor: theme.colors.groupped.background,
+    },
+    reconnectingBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginHorizontal: 16,
+        marginTop: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        backgroundColor: theme.colors.warning + '18',
+        borderWidth: 1,
+        borderColor: theme.colors.warning + '40',
+    },
+    reconnectingBannerText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.warning,
     },
     messageList: {
         flex: 1,
@@ -1432,6 +1451,7 @@ export default function TeamChatRoom({
     }, []);
     const router = useRouter();
     const isEdzlf = variant === 'edzlf';
+    const connectionStatus = useConnectionStatus();
 
     // 🆕 使用外部 messages（如果提供），否则使用内部状态
     const [internalMessages, setInternalMessages] = React.useState<TeamMessage[]>([]);
@@ -2640,6 +2660,13 @@ export default function TeamChatRoom({
         return null;
     }, [members, fallbackMachineId]);
 
+    const reconnectingBanner = connectionStatus.isReconnecting ? (
+        <View style={styles.reconnectingBanner}>
+            <ActivityIndicator size="small" color={theme.colors.warning} />
+            <Text style={styles.reconnectingBannerText}>重连中...</Text>
+        </View>
+    ) : null;
+
     if (isLoading) {
         return (
             <KeyboardAvoidingView
@@ -2649,6 +2676,7 @@ export default function TeamChatRoom({
             >
                 {renderStatusHeader()}
                 {renderStatusList()}
+                {reconnectingBanner}
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <ActivityIndicator size="small" color={theme.colors.textSecondary} />
                 </View>
@@ -2664,6 +2692,7 @@ export default function TeamChatRoom({
         >
             {renderStatusHeader()}
             {renderStatusList()}
+            {reconnectingBanner}
             <ScrollView
                 ref={scrollViewRef}
                 style={styles.messageList}
