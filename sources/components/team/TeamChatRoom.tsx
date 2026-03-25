@@ -23,6 +23,7 @@ import {
   parseCommand,
   executeCreateTask,
   executeUpdateTask,
+  executeAssignTask,
   executeCompleteTask,
   getCommandHelp,
   type TaskCommandResult,
@@ -2584,11 +2585,7 @@ export default function TeamChatRoom({
                 return await executeUpdateTask(command.params);
 
             case 'assignTask':
-                // TODO: 实现分配逻辑
-                return {
-                    success: false,
-                    message: '⚠️ Task assignment feature coming soon'
-                };
+                return await executeAssignTask(command.params);
 
             case 'completeTask':
                 return await executeCompleteTask(command.params.taskId);
