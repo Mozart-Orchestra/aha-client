@@ -37,6 +37,7 @@ import {
 } from '@/sync/kanbanTypes';
 import { useDesktopBridge } from '@/desktop/useDesktopBridge';
 import { getDisplayName } from '@/sync/profile';
+import { AgentRoster } from '@/components/team/AgentRoster';
 import TeamChatRoom from '@/components/team/TeamChatRoom';
 import { TaskDetailModal } from '@/components/team/TaskDetailModal';
 import { TaskApprovalModal } from '@/components/team/TaskApprovalModal';
@@ -60,7 +61,6 @@ import { getSessionName, getAgentPresenceVisual } from '@/utils/sessionUtils';
 import { buildTeamReturnPath, getSingleRouteParam, pushSessionRoute } from '@/utils/returnNavigation';
 import { randomUUID } from '@/utils/uuid';
 import { t } from '@/text';
-import { formatTaskReference } from '@/utils/taskChatSync';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
 import { compareTeamRosterEntries } from '@/utils/teamRoster';
 import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
@@ -79,6 +79,8 @@ import {
 import { KanbanBoardPanel } from '@/components/team/KanbanBoardPanel';
 import { useTeamReviews } from '@/hooks/useTeamReviews';
 import { useTeamLifecyclePersist } from '@/hooks/useTeamLifecyclePersist';
+import { useTaskChatBridge } from '@/hooks/useTaskChatBridge';
+import { useArtifactAutoInit } from '@/hooks/useArtifactAutoInit';
 
 type TeamStandardTab = 'chat' | 'board' | 'info' | 'evolution';
 
@@ -131,7 +133,6 @@ export default function TeamDashboardScreen() {
     const [showTaskDetail, setShowTaskDetail] = React.useState(false);
     const [showNewTaskModal, setShowNewTaskModal] = React.useState(false);
     const [newTaskStatus, setNewTaskStatus] = React.useState('todo');
-    const [chatComposerPrefill, setChatComposerPrefill] = React.useState<{ text: string; token: number } | null>(null);
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const [showMenu, setShowMenu] = React.useState(false);
@@ -139,10 +140,7 @@ export default function TeamDashboardScreen() {
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
-    const [autoInitAttempted, setAutoInitAttempted] = React.useState(false);
     const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
-    const unavailableTeamMissesRef = React.useRef(0);
-    const unavailableTeamRedirectedRef = React.useRef(false);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const parsedArtifactBoard = React.useMemo<{
@@ -298,124 +296,17 @@ export default function TeamDashboardScreen() {
         } as any);
     }, [roomId, router, teamId]);
 
-    const redirectUnavailableTeam = React.useCallback(() => {
-        if (desktopBridge || unavailableTeamRedirectedRef.current) {
-            return;
-        }
-
-        unavailableTeamRedirectedRef.current = true;
-        console.warn(`Redirecting away from unavailable team ${teamId}`);
-        router.replace('/teams');
-    }, [desktopBridge, router, teamId]);
-
-    const refreshTeamArtifact = React.useCallback(async () => {
-        if (desktopBridge || !teamId || !isAuthenticated) {
-            return;
-        }
-
-        try {
-            const refreshedArtifact = await sync.fetchArtifactWithBody(teamId);
-            if (refreshedArtifact) {
-                unavailableTeamMissesRef.current = 0;
-                return;
-            }
-
-            if (autoInitAttempted && !hasLocalTeamSessions) {
-                unavailableTeamMissesRef.current += 1;
-                if (unavailableTeamMissesRef.current >= 2) {
-                    redirectUnavailableTeam();
-                }
-            }
-        } catch (error) {
-            console.error(`Failed to refresh team artifact ${teamId}:`, error);
-        }
-    }, [autoInitAttempted, desktopBridge, hasLocalTeamSessions, isAuthenticated, redirectUnavailableTeam, teamId]);
-
-    useFocusEffect(
-        React.useCallback(() => {
-            if (desktopBridge || !teamId || !isAuthenticated) {
-                return undefined;
-            }
-
-            void refreshTeamArtifact();
-
-            const interval = setInterval(() => {
-                void refreshTeamArtifact();
-            }, 5000);
-
-            return () => clearInterval(interval);
-        }, [desktopBridge, isAuthenticated, refreshTeamArtifact, teamId]),
-    );
-
-    React.useEffect(() => {
-        if (desktopBridge) {
-            return;
-        }
-        if (artifact && artifact.body === undefined && !isLoading) {
-            setIsLoading(true);
-            sync.fetchArtifactWithBody(artifact.id)
-                .finally(() => setIsLoading(false));
-        }
-    }, [artifact, isLoading, desktopBridge]);
-
-    // Auto-initialize Board if artifact doesn't exist (CLI-created teams)
-    React.useEffect(() => {
-        // Wait for data to be ready before auto-initializing
-        if (desktopBridge || isLoading || autoInitAttempted || !isDataReady || !isAuthenticated) {
-            return;
-        }
-        // If artifact is null (data loaded but artifact doesn't exist), auto-initialize
-        if (artifact === null) {
-            setAutoInitAttempted(true);
-            setIsLoading(true);
-            console.log(`🔍 Checking server for existing Board for team ${teamId}...`);
-
-            sync.fetchArtifactWithBody(teamId)
-                .then((existingArtifact) => {
-                    if (existingArtifact) {
-                        console.log(`✅ Found existing Board for team ${teamId} on server`);
-                        return;
-                    }
-
-                    console.log(`🔧 Auto-initializing Board for team ${teamId}...`);
-                    const initialBoard: KanbanBoard = {
-                        ...DEFAULT_KANBAN_BOARD,
-                        tasks: [],
-                        team: {
-                            roles: DEFAULT_TEAM_ROLES,
-                            agreements: DEFAULT_TEAM_AGREEMENTS,
-                            members: []
-                        }
-                    };
-
-                    return sync.createArtifact(
-                        'Team',
-                        JSON.stringify(initialBoard, null, 2),
-                        [],
-                        false,
-                        'team',
-                        teamId
-                    ).then(() => {
-                        console.log(`✅ Board auto-initialized for team ${teamId}`);
-                        return sync.fetchArtifactWithBody(teamId);
-                    }).then((createdArtifact) => {
-                        if (createdArtifact) {
-                            unavailableTeamMissesRef.current = 0;
-                        }
-                    });
-                })
-                .catch((error) => {
-                    console.error('Failed to ensure Board exists:', error);
-                    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-                    if (message.includes('already exists') || message.includes('failed to create artifact: 409')) {
-                        redirectUnavailableTeam();
-                    }
-                })
-                .finally(() => {
-                    setIsLoading(false);
-                });
-        }
-    }, [artifact, teamId, desktopBridge, isLoading, autoInitAttempted, isAuthenticated, isDataReady, redirectUnavailableTeam]);
+    const { autoInitAttempted, redirectUnavailableTeam } = useArtifactAutoInit({
+        teamId,
+        artifact,
+        isAuthenticated,
+        desktopBridge,
+        hasLocalTeamSessions,
+        isDataReady,
+        isLoading,
+        setIsLoading,
+        router,
+    });
 
     // Helper to get session IDs from artifact body
     const getSessionIds = React.useCallback((): string[] => {
@@ -1184,30 +1075,22 @@ export default function TeamDashboardScreen() {
         });
     }, [roster]);
 
-    // 🆕 Discuss 按钮处理函数：切换到 Chat 并预填 @mention 草稿
-    const handleDiscussTask = React.useCallback((task: KanbanTask) => {
-        const assigneeEntry = task.assigneeId
-            ? roster.find((entry) => entry.member.sessionId === task.assigneeId)
-            : null;
-        const masterEntry = roster.find((entry) => {
-            const roleId = entry.role?.id || entry.member.roleId || entry.session?.metadata?.role;
-            return roleId === 'master';
-        });
+    /** Sessions map for AgentRoster — maps sessionId → { active, activeAt } */
+    const agentRosterSessions = React.useMemo(() => {
+        const map = new Map<string, { active: boolean; activeAt: number }>();
+        for (const entry of roster) {
+            if (entry.session) {
+                map.set(entry.member.sessionId, entry.session);
+            }
+        }
+        return map;
+    }, [roster]);
 
-        const mentionTarget = assigneeEntry
-            ? (assigneeEntry.role?.id || assigneeEntry.member.roleId || assigneeEntry.member.displayName || 'master')
-            : (masterEntry?.role?.id || masterEntry?.member.roleId || 'master');
-
-        const mentionText = `@${String(mentionTarget).replace(/\s+/g, '-')}`;
-        const draft = `${mentionText} Let's discuss ${formatTaskReference(task)} (${task.title}) `;
-
-        handleTaskDetailClose();
-        selectTab('chat');
-        setChatComposerPrefill({
-            text: draft,
-            token: Date.now(),
-        });
-    }, [handleTaskDetailClose, roster, selectTab]);
+    const { handleDiscussTask, chatComposerPrefill } = useTaskChatBridge(
+        roster,
+        handleTaskDetailClose,
+        selectTab,
+    );
 
     const timelineEvents = React.useMemo(() => {
         return [...kanbanData.tasks]
@@ -1438,6 +1321,11 @@ export default function TeamDashboardScreen() {
 
     const renderInfo = () => (
         <ScrollView contentContainerStyle={styles.scrollContent}>
+            <AgentRoster
+                members={roster.map((entry) => entry.member)}
+                sessions={agentRosterSessions}
+                onAgentPress={(sessionId) => setSelectedAgentId(sessionId)}
+            />
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Team Information</Text>
                 {teamPromptLines.length > 0 ? (
