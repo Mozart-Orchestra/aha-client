@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import { useSessionUsage } from '@/sync/storage';
 
@@ -36,6 +36,7 @@ export function PreviewSessionCard({
     sessionId,
     children,
 }: PreviewSessionCardProps) {
+    const { theme } = useUnistyles();
     const latestUsage = useSessionUsage(sessionId ?? '');
     const totalTokens = latestUsage
         ? latestUsage.inputTokens + latestUsage.outputTokens
@@ -54,7 +55,7 @@ export function PreviewSessionCard({
                 <Text style={styles.meta}>{meta}</Text>
                 {totalTokens > 0 ? (
                     <View style={styles.metaChip}>
-                        <Ionicons name="flash-outline" size={11} color="#8A7F74" />
+                        <Ionicons name="flash-outline" size={11} color={theme.colors.textSecondary} />
                         <Text style={styles.metaChipText}>{formatCompactNumber(totalTokens)} tok</Text>
                     </View>
                 ) : null}
@@ -64,7 +65,7 @@ export function PreviewSessionCard({
     );
 }
 
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create((theme) => ({
     card: {
         borderRadius: 14,
         borderWidth: 1.5,
@@ -90,13 +91,13 @@ const styles = StyleSheet.create(() => ({
     title: {
         fontSize: 13,
         fontWeight: '700',
-        color: '#1A1209',
+        color: theme.colors.text,
     },
     subtitle: {
         marginTop: 4,
         fontSize: 12,
         lineHeight: 18,
-        color: '#8A7F74',
+        color: theme.colors.textSecondary,
     },
     metaRow: {
         marginTop: 10,
@@ -109,7 +110,7 @@ const styles = StyleSheet.create(() => ({
         flex: 1,
         minWidth: 0,
         fontSize: 11,
-        color: '#A09487',
+        color: theme.colors.textSecondary,
     },
     metaChip: {
         flexDirection: 'row',
@@ -118,13 +119,13 @@ const styles = StyleSheet.create(() => ({
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 999,
-        backgroundColor: '#FFFFFFB3',
+        backgroundColor: theme.colors.surfaceHigh,
         borderWidth: 1,
-        borderColor: '#F0E5D9',
+        borderColor: theme.colors.divider,
     },
     metaChipText: {
         fontSize: 11,
         fontWeight: '500',
-        color: '#8A7F74',
+        color: theme.colors.textSecondary,
     },
 }));

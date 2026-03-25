@@ -30,7 +30,7 @@ import { FloatingIslandSidebar } from '../layout/FloatingIslandSidebar';
 import { AgentInfoPanel } from './AgentInfoPanel';
 import { ThreeColumnShellVariant } from '../layout/ThreeColumnShell';
 
-const CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#1A1209', '#B89A6F', '#6886A3'];
+const CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#6B7280', '#B89A6F', '#6886A3'];
 
 function formatListTime(timestamp: number): string {
     const now = new Date();
@@ -87,7 +87,7 @@ export const TeamSessionSidebarPanel = React.memo(({
                 const member = teamMemberMap.get(sessionId);
                 const presence = session
                     ? getAgentPresenceVisual(session)
-                    : { dotColor: '#8A7F74', inactive: true, dead: false };
+                    : { dotColor: '#9CA3AF', inactive: true, dead: false };
                 const role = member?.roleId ?? session?.metadata?.role ?? session?.metadata?.flavor ?? '';
                 const runtimeLabel = member?.runtimeType ? member.runtimeType : undefined;
                 const description = [role, runtimeLabel].filter(Boolean).join(' · ');

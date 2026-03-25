@@ -92,12 +92,13 @@ function getGenomeStatusLabel(status: GenomeRecord['status']): string {
     return t('agents.draft');
 }
 
-function getGenomeStatusColor(status: GenomeRecord['status']) {
+function getGenomeStatusColor(status: GenomeRecord['status'], fallbackTextColor?: string) {
     if (status === 'official') return { text: '#007AFF', background: '#007AFF18' };
     if (status === 'verified') return { text: '#22c55e', background: '#22c55e18' };
     if (status === 'unverified') return { text: '#f59e0b', background: '#f59e0b18' };
     if (status === 'archived') return { text: '#6b7280', background: '#6b728018' };
-    return { text: '#8A7F74', background: '#8A7F7418' };
+    const text = fallbackTextColor ?? '#8A7F74';
+    return { text, background: `${text}18` };
 }
 
 function isSpecialGenome(tags: string[], genomeName: string): boolean {
@@ -215,7 +216,7 @@ function GenomeCard({
                 {isSpecial ? (
                     <View style={[stylesheet.metaBadge, { backgroundColor: '#0EA5E914' }]}>
                         <Text style={[stylesheet.metaBadgeText, { color: '#0EA5E9' }]}>
-                            SPECIAL
+                            {t('agents.specialBadge')}
                         </Text>
                     </View>
                 ) : null}
@@ -273,9 +274,9 @@ function CorpsCard({
     const { theme } = useUnistyles();
     const corps = parseCorpsSpec(genome.spec);
     const memberCount = corps?.members?.length ?? 0;
-    const status = getGenomeStatusColor(genome.status);
+    const status = getGenomeStatusColor(genome.status, theme.colors.textSecondary);
     const memberPreview = corps?.members?.slice(0, 3) ?? [];
-    const whatItDoes = genome.description || `${memberCount} agents ready to deploy together`;
+    const whatItDoes = genome.description || t('agents.corpsDefaultDescription', { count: memberCount });
 
     return (
         <Pressable onPress={onPress} style={[stylesheet.card, stylesheet.corpsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
@@ -332,7 +333,7 @@ function CorpsCard({
                     {t('agents.spawnCount', { count: genome.spawnCount })}
                 </Text>
                 <Text style={[stylesheet.metricText, { color: theme.colors.textSecondary }]}>
-                    {genome.starCount} saves
+                    {t('agents.savesCount', { count: genome.starCount })}
                 </Text>
                 <View style={{ flex: 1 }} />
                 {onRunStandalone ? (

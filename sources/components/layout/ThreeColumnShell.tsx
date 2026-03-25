@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 // Absolute fill helper — avoids StyleSheet.absoluteFill import issues across platforms
 const ABS_FILL: React.ComponentProps<typeof View>['style'] = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 };
@@ -107,7 +107,7 @@ const VARIANT_TOKENS: Record<ThreeColumnShellVariant, ThreeColumnShellTokens> = 
     },
 };
 
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create((theme) => ({
     canvas: {
         flex: 1,
         width: '100%',
@@ -135,7 +135,7 @@ const styles = StyleSheet.create(() => ({
         overflow: 'hidden',
         padding: 8,
         borderWidth: 1,
-        shadowColor: '#6E8293',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 10, height: 14 },
         shadowOpacity: 0.12,
         shadowRadius: 28,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create(() => ({
         overflow: 'hidden',
         padding: 7,
         borderWidth: 1,
-        shadowColor: '#6E8293',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 8, height: 12 },
         shadowOpacity: 0.1,
         shadowRadius: 22,
@@ -181,7 +181,7 @@ const styles = StyleSheet.create(() => ({
         borderRadius: 24,
         overflow: 'hidden',
         borderWidth: 1,
-        shadowColor: '#7A8C9B',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 6, height: 14 },
         shadowOpacity: 0.1,
         shadowRadius: 28,
@@ -199,7 +199,7 @@ const styles = StyleSheet.create(() => ({
         borderRadius: 24,
         overflow: Platform.OS === 'web' ? ('auto' as any) : 'hidden',
         borderWidth: 1,
-        shadowColor: '#7A8C9B',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 8, height: 14 },
         shadowOpacity: 0.1,
         shadowRadius: 30,
@@ -209,8 +209,24 @@ const styles = StyleSheet.create(() => ({
     },
 }));
 
-export function getThreeColumnShellTokens(variant: ThreeColumnShellVariant = 'default'): ThreeColumnShellTokens {
-    return VARIANT_TOKENS[variant];
+export function getThreeColumnShellTokens(variant: ThreeColumnShellVariant = 'default', theme?: { colors: { text: string; textSecondary: string; divider: string; surface: string; surfaceHigh: string; shadow: { color: string } } }): ThreeColumnShellTokens {
+    const base = VARIANT_TOKENS[variant];
+    if (!theme) return base;
+    return {
+        ...base,
+        panelTitle: theme.colors.text,
+        panelEyebrow: theme.colors.textSecondary,
+        panelTextSecondary: theme.colors.textSecondary,
+        panelBorder: theme.colors.divider,
+        panelDivider: theme.colors.divider,
+        chipBackground: theme.colors.surfaceHigh,
+        chipBorder: theme.colors.divider,
+        chipText: theme.colors.textSecondary,
+        actionBorder: theme.colors.divider,
+        cardBorder: theme.colors.divider,
+        cardMutedBackground: theme.colors.surfaceHigh,
+        emptyIcon: theme.colors.textSecondary,
+    };
 }
 
 interface ThreeColumnShellProps {
@@ -238,7 +254,8 @@ export function ThreeColumnShell({
     safeAreaTop = 0,
     safeAreaBottom = 0,
 }: ThreeColumnShellProps) {
-    const tokens = getThreeColumnShellTokens(variant);
+    const { theme } = useUnistyles();
+    const tokens = getThreeColumnShellTokens(variant, theme);
 
     return (
         <LinearGradient
