@@ -1,9 +1,7 @@
 import React from 'react';
 import {
-    ActivityIndicator,
     Platform,
     Pressable,
-    ScrollView,
     View,
     useWindowDimensions,
 } from 'react-native';
@@ -36,7 +34,6 @@ import {
 } from '@/sync/kanbanTypes';
 import { useDesktopBridge } from '@/desktop/useDesktopBridge';
 import { getDisplayName } from '@/sync/profile';
-import { AgentRoster } from '@/components/team/AgentRoster';
 import TeamChatRoom from '@/components/team/TeamChatRoom';
 import { TaskDetailModal } from '@/components/team/TaskDetailModal';
 import { TaskApprovalModal } from '@/components/team/TaskApprovalModal';
@@ -53,11 +50,9 @@ import { getCurrentAuth } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/AuthContext';
 import { taskNeedsApproval } from '@/utils/taskHelpers';
 import { EvolutionSection } from '@/components/settings/EvolutionSection';
-import { FloatingIslandSidebar } from '@/components/layout/FloatingIslandSidebar';
 import { getThreeColumnShellTokens } from '@/components/layout/ThreeColumnShell';
 import { SidebarView } from '@/components/layout/SidebarView';
-import { getSessionName, getAgentPresenceVisual } from '@/utils/sessionUtils';
-import { buildTeamReturnPath, getSingleRouteParam, pushSessionRoute } from '@/utils/returnNavigation';
+import { buildTeamReturnPath, getSingleRouteParam } from '@/utils/returnNavigation';
 import { randomUUID } from '@/utils/uuid';
 import { t } from '@/text';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
@@ -71,9 +66,6 @@ import {
     formatShellTime,
     getMessagePreview,
     splitPromptLines,
-    formatReviewDate,
-    type TeamScorecard,
-    type TeamPublicReview,
 } from '@/utils/teamUtils';
 import { KanbanBoardPanel } from '@/components/team/KanbanBoardPanel';
 import { useTeamReviews } from '@/hooks/useTeamReviews';
@@ -1554,7 +1546,23 @@ export default function TeamDashboardScreen() {
                     <>
                         {activeTab === 'chat' && renderChat()}
                         {activeTab === 'board' && kanbanPanel}
-                        {activeTab === 'info' && renderInfo()}
+                        {activeTab === 'info' && (
+                            <TeamInfoSection
+                                roster={roster}
+                                agentRosterSessions={agentRosterSessions}
+                                setSelectedAgentId={setSelectedAgentId}
+                                teamPromptLines={teamPromptLines}
+                                teamPromptTitle={teamPromptTitle}
+                                teamPromptBody={teamPromptBody}
+                                teamBootObjective={teamBootObjective}
+                                kanbanData={kanbanData}
+                                teamReviewLoading={teamReviewLoading}
+                                teamScorecard={teamScorecard}
+                                teamPublicReviews={teamPublicReviews}
+                                systemRoster={systemRoster}
+                                agreements={agreements}
+                            />
+                        )}
                         {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
                     </>
                 )}
@@ -1709,7 +1717,23 @@ export default function TeamDashboardScreen() {
                         <>
                             {activeTab === 'chat' && renderChat()}
                             {activeTab === 'board' && kanbanPanel}
-                            {activeTab === 'info' && renderInfo()}
+                            {activeTab === 'info' && (
+                                <TeamInfoSection
+                                    roster={roster}
+                                    agentRosterSessions={agentRosterSessions}
+                                    setSelectedAgentId={setSelectedAgentId}
+                                    teamPromptLines={teamPromptLines}
+                                    teamPromptTitle={teamPromptTitle}
+                                    teamPromptBody={teamPromptBody}
+                                    teamBootObjective={teamBootObjective}
+                                    kanbanData={kanbanData}
+                                    teamReviewLoading={teamReviewLoading}
+                                    teamScorecard={teamScorecard}
+                                    teamPublicReviews={teamPublicReviews}
+                                    systemRoster={systemRoster}
+                                    agreements={agreements}
+                                />
+                            )}
                             {activeTab === 'evolution' && <EvolutionSection teamId={teamId} />}
                         </>
                     )}
