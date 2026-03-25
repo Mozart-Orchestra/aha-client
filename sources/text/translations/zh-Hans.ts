@@ -204,6 +204,13 @@ export const zhHans: TranslationStructure = {
         guide3: '#team名 指定 Team',
     },
 
+    channelsList: {
+        title: '渠道',
+        connectedTitle: '已连接渠道',
+        connectedFooter: '正在桥接 Agent 消息的渠道。',
+        availableTitle: '可用渠道',
+    },
+
     settingsFeatures: {
         // Features settings screen
         experiments: '实验功能',
@@ -1565,6 +1572,9 @@ export const zhHans: TranslationStructure = {
         tagsHint: '标签决定这个 Agent 在搜索里的可发现性。使用小写并以逗号分隔。',
         chatLiveLabel: 'Builder 运行中',
         chatPreviewUpdating: '右侧面板会随着 builder 细化草稿而自动更新。',
+        specialBadge: '特殊',
+        savesCount: ({ count }: { count: number }) => `${count} 次收藏`,
+        corpsDefaultDescription: ({ count }: { count: number }) => `${count} 个代理可一键部署`,
     },
 
     favorites: {
@@ -1667,9 +1677,51 @@ export const zhHans: TranslationStructure = {
         soloAgentsEmptyHint: '从市场运行代理',
         soloAgentsTitle: '独立代理',
         soloAgentsNewAgent: '新建代理',
+        loadingTeams: '正在加载团队...',
+        newTeamButton: '新建团队',
+        soloBadge: '独立',
+        chipTotal: ({ count }: { count: number }) => `${count} 个总计`,
+        chipSelected: ({ count }: { count: number }) => `${count} 个已选`,
+        chipDone: ({ count }: { count: number }) => `${count} 个完成`,
     },
 
     zen: {
         noTasksYet: '暂无任务，点击 + 添加。',
+    },
+
+    landing: {
+        eyebrow: 'Claude Code + Codex 编排',
+        trustEncrypted: '端到端加密',
+        trustLocal: '任意机器，随处运行',
+        previewTitle: '团队: aha-saas-mvp',
+        primarySessionTitle: '架构师',
+        primarySessionSubtitle: '设计系统架构，向团队分发任务',
+        primarySessionMeta: '领导中',
+        secondarySessionTitle: 'Builder',
+        secondarySessionSubtitle: '根据架构师的设计实现认证模块',
+        secondarySessionMeta: '编码中',
+        deny: '拒绝',
+        approve: '批准',
+        openServer: '打开服务设置',
+        brand: 'Aha',
+        teamAgent1: '架构师',
+        teamAgent1Task: '系统设计 & 任务分发',
+        teamAgent1Machine: 'Mac Studio',
+        teamAgent2: 'Builder',
+        teamAgent2Task: '认证模块 + API 接口',
+        teamAgent2Machine: 'Linux 服务器',
+        teamAgent3: 'QA',
+        teamAgent3Task: 'E2E 测试 & 集成测试',
+        teamAgent3Machine: 'Windows PC',
+        teamAgent4: 'DevOps',
+        teamAgent4Task: 'CI/CD 流水线 & 部署',
+        teamAgent4Machine: 'GPU 云',
+        cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
+        activeCount: ({ count }: { count: number }) => `${count} 个活跃`,
+        cliCopiedTitle: '已复制',
+        cliCopiedMessage: '命令已复制到剪贴板，请打开终端粘贴运行。',
+        previewAgentCount: ({ count }: { count: number }) => `${count} 个代理`,
+        agentStatusTesting: '测试中',
+        agentStatusDeploying: '部署中',
     },
 } as const;

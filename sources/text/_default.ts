@@ -202,6 +202,13 @@ export const en = {
         guide3: '#teamName to target a specific Team',
     },
 
+    channelsList: {
+        title: 'Channels',
+        connectedTitle: 'Connected Channels',
+        connectedFooter: 'Channels actively bridging Agent messages.',
+        availableTitle: 'Available Channels',
+    },
+
     settingsFeatures: {
         experiments: 'Experiments',
         experimentsDescription: 'Enable experimental features that are still in development. These features may be unstable or change without notice.',
@@ -1607,6 +1614,9 @@ export const en = {
         // Chat full-height mode hints
         chatLiveLabel: 'Builder is running',
         chatPreviewUpdating: 'Right panel updates automatically as the builder refines the draft.',
+        specialBadge: 'SPECIAL',
+        savesCount: ({ count }: { count: number }) => `${count} saves`,
+        corpsDefaultDescription: ({ count }: { count: number }) => `${count} agents ready to deploy together`,
     },
 
     favorites: {
@@ -1673,10 +1683,52 @@ export const en = {
         soloAgentsEmptyHint: 'Run an agent from the marketplace',
         soloAgentsTitle: 'Solo Agents',
         soloAgentsNewAgent: 'New Agent',
+        loadingTeams: 'Loading teams...',
+        newTeamButton: 'New Team',
+        soloBadge: 'SOLO',
+        chipTotal: ({ count }: { count: number }) => `${count} total`,
+        chipSelected: ({ count }: { count: number }) => `${count} selected`,
+        chipDone: ({ count }: { count: number }) => `${count} done`,
     },
 
     zen: {
         noTasksYet: 'No tasks yet. Tap + to add one.',
+    },
+
+    landing: {
+        eyebrow: 'Claude Code + Codex Orchestration',
+        trustEncrypted: 'End-to-end encrypted',
+        trustLocal: 'Any machine, anywhere',
+        previewTitle: 'Team: aha-saas-mvp',
+        primarySessionTitle: 'Architect',
+        primarySessionSubtitle: 'Designing system architecture and distributing tasks to the team',
+        primarySessionMeta: 'leading',
+        secondarySessionTitle: 'Builder',
+        secondarySessionSubtitle: 'Implementing authentication module based on Architect\'s design',
+        secondarySessionMeta: 'coding',
+        deny: 'Deny',
+        approve: 'Approve',
+        openServer: 'Open server settings',
+        brand: 'Aha',
+        teamAgent1: 'Architect',
+        teamAgent1Task: 'System design & task distribution',
+        teamAgent1Machine: 'Mac Studio',
+        teamAgent2: 'Builder',
+        teamAgent2Task: 'Auth module + API endpoints',
+        teamAgent2Machine: 'Linux Server',
+        teamAgent3: 'QA',
+        teamAgent3Task: 'E2E tests & integration tests',
+        teamAgent3Machine: 'Windows PC',
+        teamAgent4: 'DevOps',
+        teamAgent4Task: 'CI/CD pipeline & deployment',
+        teamAgent4Machine: 'GPU Cloud',
+        cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
+        activeCount: ({ count }: { count: number }) => `${count} active`,
+        cliCopiedTitle: 'Copied',
+        cliCopiedMessage: 'Command copied to clipboard. Paste it in your terminal to get started.',
+        previewAgentCount: ({ count }: { count: number }) => `${count} agents`,
+        agentStatusTesting: 'testing',
+        agentStatusDeploying: 'deploying',
     },
 } as const;
 
