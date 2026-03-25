@@ -125,6 +125,17 @@ export class ApiSocket {
         this.updateStatus('disconnected');
     }
 
+    /**
+     * Manual reconnect — tears down the current socket and starts fresh.
+     * Safe to call even when already disconnected.
+     */
+    reconnect() {
+        if (this.config && this.encryption) {
+            this.disconnect();
+            this.connect();
+        }
+    }
+
     //
     // Listener Management
     //
