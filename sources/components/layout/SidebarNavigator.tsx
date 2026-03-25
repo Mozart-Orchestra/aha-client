@@ -41,6 +41,7 @@ export const SidebarNavigator = React.memo(() => {
         drawerType: 'front' as const,
         swipeEnabled: false,
         drawerStyle: { width: 0, display: 'none' as const },
+        overlayColor: 'transparent',
     }), []);
 
     const permanentDrawerOptions = React.useMemo(() => ({
@@ -65,6 +66,16 @@ export const SidebarNavigator = React.memo(() => {
     );
 
     // --- Desktop embedded: single persistent shell, Drawer only for routing ---
+    // Ref to set `inert` on web — prevents the hidden Drawer's position:fixed
+    // scrim from capturing focus/pointer events outside overflow:hidden bounds.
+    const overlayRef = React.useRef<View>(null);
+    React.useEffect(() => {
+        if (isEmbedded && Platform.OS === 'web' && overlayRef.current) {
+            const node = overlayRef.current as unknown as HTMLElement;
+            node.setAttribute('inert', '');
+        }
+    }, [isEmbedded]);
+
     if (isEmbedded) {
         return (
             <>
@@ -80,7 +91,7 @@ export const SidebarNavigator = React.memo(() => {
                   * pointer events from the persistent shell above.
                   */}
                 <DesktopShellContext.Provider value={desktopCtxValue}>
-                    <View style={styles.routingOverlay} pointerEvents="none">
+                    <View ref={overlayRef} style={styles.routingOverlay} pointerEvents="none">
                         <Drawer screenOptions={hiddenDrawerOptions} />
                     </View>
                 </DesktopShellContext.Provider>
