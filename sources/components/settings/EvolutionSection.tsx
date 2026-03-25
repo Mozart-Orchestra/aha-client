@@ -165,7 +165,7 @@ const REPAIR_SIGNAL_COLORS: Record<RepairSignal['type'], string> = {
     context_overflow: '#8b5cf6',
     need_collaborator: '#0ea5e9',
     error: '#ef4444',
-    custom: '#8A7F74',
+    custom: '#9CA3AF',
 };
 
 interface GenomeCardProps {

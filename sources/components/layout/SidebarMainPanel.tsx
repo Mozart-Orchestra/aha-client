@@ -29,10 +29,10 @@ const AGENT_DOT_COLORS: Record<string, string> = {
     qa: '#5856D6',
     architect: '#34C759',
     builder: '#FF9500',
-    reviewer: '#8A7F74',
+    reviewer: '#9CA3AF',
 };
 
-const CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#1A1209', '#B89A6F', '#6886A3'];
+const CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#6B7280', '#B89A6F', '#6886A3'];
 
 type RoleScore = {
     score: number;

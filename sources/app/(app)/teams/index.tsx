@@ -237,8 +237,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 32,
         padding: 8,
         borderWidth: 1,
-        borderColor: '#D3DEE7',
-        shadowColor: '#6E8293',
+        borderColor: theme.colors.divider,
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 10, height: 14 },
         shadowOpacity: 0.12,
         shadowRadius: 28,
@@ -265,7 +265,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: '#31485D',
         borderWidth: 1,
         borderColor: '#3C5468',
-        shadowColor: '#0F1A22',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 12,
@@ -280,8 +280,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 22,
         padding: 7,
         borderWidth: 1,
-        borderColor: '#D3DEE7',
-        shadowColor: '#6E8293',
+        borderColor: theme.colors.divider,
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 8, height: 12 },
         shadowOpacity: 0.1,
         shadowRadius: 22,
@@ -300,8 +300,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 24,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: '#D9E4EA',
-        shadowColor: '#7A8C9B',
+        borderColor: theme.colors.divider,
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 6, height: 14 },
         shadowOpacity: 0.1,
         shadowRadius: 28,
@@ -313,8 +313,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 24,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: '#D9E4EA',
-        shadowColor: '#7A8C9B',
+        borderColor: theme.colors.divider,
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 8, height: 14 },
         shadowOpacity: 0.1,
         shadowRadius: 30,
@@ -326,7 +326,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 18,
         paddingVertical: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#DEE8EE',
+        borderBottomColor: theme.colors.divider,
     },
     desktopHeaderRow: {
         flexDirection: 'row',
@@ -341,10 +341,10 @@ const stylesheet = StyleSheet.create((theme) => ({
         justifyContent: 'center',
         backgroundColor: '#31485D',
         borderWidth: 1,
-        borderColor: '#DCE7EE',
+        borderColor: theme.colors.divider,
     },
     desktopHeaderLeadingSoft: {
-        backgroundColor: '#E6EEF3',
+        backgroundColor: theme.colors.surfaceHigh,
     },
     desktopHeaderInfo: {
         flex: 1,
@@ -353,7 +353,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     desktopEyebrow: {
         fontSize: 11,
         fontWeight: '700',
-        color: '#8C9CAA',
+        color: theme.colors.textSecondary,
         textTransform: 'uppercase',
         letterSpacing: 0.7,
         marginBottom: 6,
@@ -361,11 +361,11 @@ const stylesheet = StyleSheet.create((theme) => ({
     desktopTitle: {
         fontSize: 17,
         fontWeight: '700',
-        color: '#243746',
+        color: theme.colors.text,
     },
     desktopSubtitle: {
         fontSize: 12,
-        color: '#7E93A3',
+        color: theme.colors.textSecondary,
         marginTop: 4,
     },
     desktopCountRow: {
@@ -379,13 +379,13 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingVertical: 6,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: '#D9E4EA',
-        backgroundColor: '#EEF5F8',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHigh,
     },
     desktopCountChipText: {
         fontSize: 11,
         fontWeight: '600',
-        color: '#617487',
+        color: theme.colors.textSecondary,
     },
     desktopHeaderActions: {
         flexDirection: 'row',
@@ -397,8 +397,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingVertical: 8,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: '#D9E4EA',
-        backgroundColor: 'rgba(255,255,255,0.74)',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
     },
     desktopHeaderActionPrimary: {
         backgroundColor: '#31485D',
@@ -433,15 +433,15 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontWeight: '700',
         letterSpacing: 0.8,
         textTransform: 'uppercase',
-        color: '#8C9CAA',
+        color: theme.colors.textSecondary,
         marginBottom: 10,
         marginTop: 4,
     },
     desktopProjectGroup: {
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: '#DEE8EE',
-        backgroundColor: 'rgba(235,243,247,0.72)',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHigh,
         paddingHorizontal: 12,
         paddingVertical: 10,
         marginBottom: 10,
@@ -449,11 +449,11 @@ const stylesheet = StyleSheet.create((theme) => ({
     desktopProjectTitle: {
         fontSize: 13,
         fontWeight: '700',
-        color: '#243746',
+        color: theme.colors.text,
     },
     desktopProjectMeta: {
         fontSize: 11,
-        color: '#7E93A3',
+        color: theme.colors.textSecondary,
         marginTop: 4,
     },
     desktopSessionCard: {
@@ -462,19 +462,19 @@ const stylesheet = StyleSheet.create((theme) => ({
         gap: 12,
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: '#DCE7EE',
-        backgroundColor: 'rgba(255,255,255,0.92)',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
         padding: 14,
         marginBottom: 10,
-        shadowColor: '#7A8C9B',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 0, height: 7 },
         shadowOpacity: 0.07,
         shadowRadius: 16,
         elevation: 2,
     },
     desktopSessionCardOffline: {
-        backgroundColor: '#F4F8FB',
-        borderColor: '#E1E9EE',
+        backgroundColor: theme.colors.surfaceHigh,
+        borderColor: theme.colors.divider,
     },
     desktopSessionContent: {
         flex: 1,
@@ -490,12 +490,12 @@ const stylesheet = StyleSheet.create((theme) => ({
         flex: 1,
         fontSize: 14,
         fontWeight: '700',
-        color: '#243746',
+        color: theme.colors.text,
     },
     desktopSessionSubtitle: {
         fontSize: 12,
         lineHeight: 18,
-        color: '#7E93A3',
+        color: theme.colors.textSecondary,
     },
     desktopSessionStatusRow: {
         flexDirection: 'row',
@@ -506,19 +506,19 @@ const stylesheet = StyleSheet.create((theme) => ({
     desktopStatusText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#617487',
+        color: theme.colors.textSecondary,
     },
     desktopBadge: {
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 999,
-        backgroundColor: '#ECF3F7',
+        backgroundColor: theme.colors.surfaceHigh,
         alignSelf: 'flex-start',
     },
     desktopBadgeText: {
         fontSize: 10,
         fontWeight: '700',
-        color: '#617487',
+        color: theme.colors.textSecondary,
     },
     desktopTeamsListContent: {
         padding: 18,
@@ -527,11 +527,11 @@ const stylesheet = StyleSheet.create((theme) => ({
     desktopTeamCard: {
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#DCE7EE',
-        backgroundColor: 'rgba(255,255,255,0.94)',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
         padding: 16,
         marginBottom: 12,
-        shadowColor: '#7A8C9B',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 0, height: 7 },
         shadowOpacity: 0.08,
         shadowRadius: 18,
@@ -539,7 +539,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     desktopTeamCardSelected: {
         borderColor: '#31485D',
-        backgroundColor: '#EAF1F5',
+        backgroundColor: theme.colors.surfaceHigh,
     },
     desktopTeamRow: {
         flexDirection: 'row',
@@ -566,12 +566,12 @@ const stylesheet = StyleSheet.create((theme) => ({
     desktopTeamTitle: {
         fontSize: 15,
         fontWeight: '700',
-        color: '#243746',
+        color: theme.colors.text,
     },
     desktopTeamMetaText: {
         fontSize: 12,
         lineHeight: 18,
-        color: '#7E93A3',
+        color: theme.colors.textSecondary,
         marginTop: 4,
     },
     desktopMetaRow: {
@@ -585,13 +585,13 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingVertical: 6,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: '#DFE9EE',
-        backgroundColor: '#F2F7FA',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHigh,
     },
     desktopMetaPillText: {
         fontSize: 11,
         fontWeight: '600',
-        color: '#617487',
+        color: theme.colors.textSecondary,
     },
     desktopIconButton: {
         width: 36,
@@ -600,8 +600,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#DCE7EE',
-        backgroundColor: '#F8FBFD',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHigh,
     },
     desktopEmptyState: {
         flex: 1,
@@ -616,8 +616,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         right: 0,
         bottom: 0,
         borderTopWidth: 1,
-        borderTopColor: '#DEE8EE',
-        backgroundColor: 'rgba(239,245,248,0.96)',
+        borderTopColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHigh,
         paddingHorizontal: 18,
         paddingVertical: 16,
         flexDirection: 'row',
@@ -690,7 +690,7 @@ export default function TeamsScreen() {
     const { width } = useWindowDimensions();
     const allArtifacts = useArtifacts();
     const isDesktopShell = Platform.OS === 'web' && width >= 1180;
-    const desktopTheme = getThreeColumnShellTokens('default');
+    const desktopTheme = getThreeColumnShellTokens('default', theme);
 
     const teams = React.useMemo(() => {
         return allArtifacts.filter((artifact) => artifact.type === 'team');
@@ -921,15 +921,15 @@ export default function TeamsScreen() {
     const overviewChips = React.useMemo(() => {
         if (!workspaceOverview) {
             return [
-                { id: 'teams', label: `${teams.length} total` },
-                { id: 'selected', label: `${selectedTeams.size} selected` },
+                { id: 'teams', label: t('teams.chipTotal', { count: teams.length }) },
+                { id: 'selected', label: t('teams.chipSelected', { count: selectedTeams.size }) },
             ];
         }
 
         return [
-            { id: 'teams', label: `${workspaceOverview.teamCount} total` },
-            { id: 'selected', label: `${selectedTeams.size} selected` },
-            { id: 'completed', label: `${workspaceOverview.completedTasksTotal} done` },
+            { id: 'teams', label: t('teams.chipTotal', { count: workspaceOverview.teamCount }) },
+            { id: 'selected', label: t('teams.chipSelected', { count: selectedTeams.size }) },
+            { id: 'completed', label: t('teams.chipDone', { count: workspaceOverview.completedTasksTotal }) },
         ];
     }, [selectedTeams.size, teams.length, workspaceOverview]);
 
@@ -1003,7 +1003,7 @@ export default function TeamsScreen() {
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" />
                     <Text style={[styles.emptyDescription, { marginTop: 16 }]}>
-                        Loading teams...
+                        {t('teams.loadingTeams')}
                     </Text>
                 </View>
             );
@@ -1225,7 +1225,7 @@ export default function TeamsScreen() {
                                         onPress={exitSelectionMode}
                                     >
                                         <Text style={[styles.desktopHeaderActionText, { color: desktopTheme.actionText }]}>
-                                            Cancel
+                                            {t('common.cancel')}
                                         </Text>
                                     </Pressable>
                                     <Pressable
@@ -1241,7 +1241,7 @@ export default function TeamsScreen() {
                                         disabled={teams.length === 0}
                                     >
                                         <Text style={[styles.desktopHeaderActionText, { color: desktopTheme.actionText }]}>
-                                            Select All
+                                            {t('teams.selectAll')}
                                         </Text>
                                     </Pressable>
                                 </>
@@ -1260,7 +1260,7 @@ export default function TeamsScreen() {
                                         disabled={teams.length === 0}
                                     >
                                         <Text style={[styles.desktopHeaderActionText, { color: desktopTheme.actionText }]}>
-                                            Edit
+                                            {t('teams.editButton')}
                                         </Text>
                                     </Pressable>
                                     <Pressable
@@ -1281,7 +1281,7 @@ export default function TeamsScreen() {
                                                 { color: desktopTheme.primaryActionText },
                                             ]}
                                         >
-                                            New Team
+                                            {t('teams.newTeamButton')}
                                         </Text>
                                     </Pressable>
                                 </>
@@ -1322,12 +1322,12 @@ export default function TeamsScreen() {
                                 <Text style={{ fontSize: 15, fontWeight: '700', color: '#b26a00' }} numberOfLines={1}>
                                     {t('teams.soloAgents')}
                                 </Text>
-                                <Text style={{ fontSize: 12, color: '#7E93A3', marginTop: 2 }}>
+                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>
                                     {t('teams.soloAgentsCount', { count: standaloneAgents.length })}
                                 </Text>
                             </View>
                             <View style={styles.desktopSoloBadge}>
-                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#b26a00', letterSpacing: 0.5 }}>SOLO</Text>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#b26a00', letterSpacing: 0.5 }}>{t('teams.soloBadge')}</Text>
                             </View>
                             <Ionicons name="chevron-forward" size={16} color="#b26a00" style={{ marginLeft: 8 }} />
                         </Pressable>
@@ -1352,7 +1352,7 @@ export default function TeamsScreen() {
                             ]}
                         >
                             <Text style={styles.selectionInfo}>
-                                {selectedTeams.size} team(s) selected
+                                {t('teams.selectedCount', { count: selectedTeams.size })}
                             </Text>
                             <View style={styles.desktopBatchActions}>
                                 <Pressable
@@ -1468,7 +1468,7 @@ export default function TeamsScreen() {
                     {isSelectionMode && (
                         <View style={[styles.batchActionBar, { paddingBottom: safeArea.bottom + 12 }]}>
                             <Text style={styles.selectionInfo}>
-                                {selectedTeams.size} team(s) selected
+                                {t('teams.selectedCount', { count: selectedTeams.size })}
                             </Text>
                             <View style={{ flexDirection: 'row', gap: 12 }}>
                                 <Pressable
