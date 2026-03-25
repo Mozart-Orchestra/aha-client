@@ -183,6 +183,11 @@ const stylesheet = StyleSheet.create((theme) => ({
     myCopiedIndicator: {
         color: 'rgba(255,255,255,0.9)',
     },
+    copyButton: {
+        padding: 4,
+        borderRadius: 4,
+        opacity: 0.6,
+    },
     associationPanel: {
         marginTop: 10,
         gap: 8,
@@ -1214,9 +1219,13 @@ const MessageBubbleInner = ({
                                 <View style={{ flex: 1 }}>
                                     {renderContent()}
                                 </View>
-                                {copied ? (
-                                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' }}>Copied</Text>
-                                ) : null}
+                                <Pressable onPress={handleCopyMessage} style={styles.copyButton} hitSlop={8}>
+                                    <Ionicons
+                                        name={copied ? 'checkmark' : 'copy-outline'}
+                                        size={14}
+                                        color={copied ? (theme.colors.success || '#10B981') : theme.colors.textSecondary}
+                                    />
+                                </Pressable>
                             </Pressable>
                             {renderAssociations()}
                         </View>
@@ -1287,18 +1296,32 @@ const MessageBubbleInner = ({
                                         <Text style={[styles.messageTime, isMyMessage && styles.myMessageTime]}>
                                             {timeLabel}
                                         </Text>
-                                        {copied && (
-                                            <Text style={[styles.copiedIndicator, isMyMessage && styles.myCopiedIndicator]}>
-                                                Copied
-                                            </Text>
-                                        )}
+                                        <Pressable onPress={handleCopyMessage} style={styles.copyButton} hitSlop={8}>
+                                            <Ionicons
+                                                name={copied ? 'checkmark' : 'copy-outline'}
+                                                size={14}
+                                                color={copied
+                                                    ? (theme.colors.success || '#10B981')
+                                                    : isMyMessage ? 'rgba(255,255,255,0.7)' : theme.colors.textSecondary
+                                                }
+                                            />
+                                        </Pressable>
                                     </View>
                                 )}
-                                {isEdzlf && copied ? (
-                                    <Text style={{ fontSize: 11, color: isMyMessage ? '#E7EFF6' : theme.colors.textSecondary, fontWeight: '600' }}>
-                                        Copied
-                                    </Text>
-                                ) : null}
+                                {isEdzlf && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Pressable onPress={handleCopyMessage} style={styles.copyButton} hitSlop={8}>
+                                            <Ionicons
+                                                name={copied ? 'checkmark' : 'copy-outline'}
+                                                size={14}
+                                                color={copied
+                                                    ? (theme.colors.success || '#10B981')
+                                                    : isMyMessage ? '#E7EFF6' : theme.colors.textSecondary
+                                                }
+                                            />
+                                        </Pressable>
+                                    </View>
+                                )}
                             </View>
                         </Pressable>
                     )}

@@ -29,8 +29,10 @@ import {
     mapOwnedPrivateGenomesToRecords,
     selectMarketplaceGenomes,
     sortGenomesForDisplay,
+    sortGenomesByScore,
     type AgentMarketplaceCategory,
     type MarketplacePageTab,
+    type MarketplaceSortMode,
     type MarketplaceSourceTab,
 } from '@/utils/agentMarketplace';
 import { useHappyAction } from '@/hooks/useHappyAction';
@@ -360,6 +362,7 @@ export default React.memo(function AgentsScreen() {
     const [sourceFilter, setSourceFilter] = React.useState<AgentSourceFilter>('market');
     const [query, setQuery] = React.useState('');
     const [category, setCategory] = React.useState<AgentCategory>('all');
+    const [sortMode, setSortMode] = React.useState<MarketplaceSortMode>('default');
     const [publicGenomes, setPublicGenomes] = React.useState<GenomeRecord[]>([]);
     const [privateGenomes, setPrivateGenomes] = React.useState<GenomeRecord[]>([]);
     const [serverFavoriteGenomes, setServerFavoriteGenomes] = React.useState<GenomeRecord[]>([]);
@@ -558,8 +561,10 @@ export default React.memo(function AgentsScreen() {
         query: debouncedQuery,
     }), [category, debouncedQuery, favoriteGenomeIds, marketplaceSource, privateGenomes, publicGenomes, tab]);
     const displayedGenomes = React.useMemo(
-        () => sortGenomesForDisplay(selectedGenomes, favoriteGenomeIds),
-        [favoriteGenomeIds, selectedGenomes]
+        () => sortMode === 'rank'
+            ? sortGenomesByScore(selectedGenomes)
+            : sortGenomesForDisplay(selectedGenomes, favoriteGenomeIds),
+        [favoriteGenomeIds, selectedGenomes, sortMode]
     );
     const favoriteGenomes = React.useMemo(
         () => displayedGenomes.filter((genome) => isFavoriteGenomeId(genome.id, favoriteGenomeIds)).slice(0, 8),
@@ -739,6 +744,35 @@ export default React.memo(function AgentsScreen() {
                         })}
                     </ScrollView>
                 ) : <View style={{ height: 12 }} />}
+                {!isCorpsTab && !showDeployedList && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 8 }}>
+                        <Pressable
+                            onPress={() => setSortMode((prev) => prev === 'default' ? 'rank' : 'default')}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 999,
+                                backgroundColor: sortMode === 'rank' ? theme.colors.button.primary.background : theme.colors.surfaceHigh,
+                            }}
+                        >
+                            <Ionicons
+                                name="trophy-outline"
+                                size={14}
+                                color={sortMode === 'rank' ? theme.colors.button.primary.tint : theme.colors.textSecondary}
+                            />
+                            <Text style={{
+                                fontSize: 12,
+                                fontWeight: '600',
+                                color: sortMode === 'rank' ? theme.colors.button.primary.tint : theme.colors.textSecondary,
+                            }}>
+                                Rank
+                            </Text>
+                        </Pressable>
+                    </View>
+                )}
             </View>
 
             {/* Content — Deployed Instances */}

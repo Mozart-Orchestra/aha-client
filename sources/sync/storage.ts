@@ -434,7 +434,13 @@ export const storage = create<StorageState>()((set, get) => {
                     }
 
                     // Process new AgentState through reducer
-                    const reducerResult = reducer(existingSessionMessages.reducerState, [], newSession.agentState);
+                    let reducerResult;
+                    try {
+                        reducerResult = reducer(existingSessionMessages.reducerState, [], newSession.agentState);
+                    } catch (e) {
+                        console.error(`[STORAGE] Reducer crashed for session ${session.id}:`, e);
+                        continue;
+                    }
                     const processedMessages = reducerResult.messages;
 
                     // Always update the session messages, even if no new messages were created
@@ -518,7 +524,13 @@ export const storage = create<StorageState>()((set, get) => {
                 const normalizedMessages = messages;
 
                 // Run reducer with agentState
-                const reducerResult = reducer(existingSession.reducerState, normalizedMessages, agentState);
+                let reducerResult;
+                try {
+                    reducerResult = reducer(existingSession.reducerState, normalizedMessages, agentState);
+                } catch (e) {
+                    console.error(`[STORAGE] Reducer crashed for session messages:`, e);
+                    return state;
+                }
                 const processedMessages = reducerResult.messages;
                 for (let message of processedMessages) {
                     changed.add(message.id);

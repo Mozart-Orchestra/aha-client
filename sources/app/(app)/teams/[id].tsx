@@ -67,6 +67,9 @@ import { getActiveTaskForSession } from '@/utils/teamActiveTask';
 import { compareTeamRosterEntries } from '@/utils/teamRoster';
 import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
 import { getServerUrl } from '@/sync/serverConfig';
+import { AddAgentToTeamModal } from '@/components/team/AddAgentToTeamModal';
+import { AgentInfoPanel } from '@/components/team/AgentInfoPanel';
+import { getRoleVisual } from '@/utils/roleVisualUtils';
 
 type TeamStandardTab = 'chat' | 'board' | 'info' | 'evolution';
 
@@ -934,6 +937,8 @@ export default function TeamDashboardScreen() {
     const [showApprovalModal, setShowApprovalModal] = React.useState(false); // 🆕
     const [teamMessages, setTeamMessages] = React.useState<TeamMessage[]>([]);
     const [showMenu, setShowMenu] = React.useState(false);
+    const [showAddAgentModal, setShowAddAgentModal] = React.useState(false);
+    const [infoSessionId, setInfoSessionId] = React.useState<string | null>(null);
     const [showWorkspaceDrawer, setShowWorkspaceDrawer] = React.useState(false);
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
@@ -2586,9 +2591,11 @@ export default function TeamDashboardScreen() {
                     : { dotColor: '#8A7F74', inactive: true, dead: false };
                 const runtimeLabel = entry.member.runtimeType ? entry.member.runtimeType : undefined;
                 const roleLabel = entry.role?.title || entry.member.roleId || entry.session?.metadata?.role || '';
+                const displayName = entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId;
+                const roleVisual = getRoleVisual(entry.member.roleId, entry.member.displayName);
                 return {
                     id: entry.member.sessionId,
-                    name: entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId,
+                    name: displayName,
                     dotColor: presence.dotColor,
                     inactive: presence.inactive,
                     dead: presence.dead,
@@ -2596,6 +2603,8 @@ export default function TeamDashboardScreen() {
                     selected: selectedAgentId === entry.member.sessionId,
                     activeTaskTitle: entry.activeTask?.title,
                     activeTaskStartedAt: entry.activeTask?.startedAt,
+                    avatarLabel: (displayName || '?').slice(0, 1),
+                    avatarColor: roleVisual.avatarBackground,
                     count: selectedAgentId === entry.member.sessionId
                         ? entry.tasks.length
                         : entry.tasks.length > 0 ? entry.tasks.length : undefined,
@@ -2611,8 +2620,13 @@ export default function TeamDashboardScreen() {
                     });
                 },
                 onLongPress: () => {
-                    const displayName = entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId;
                     handleAgentLongPress(entry.member.sessionId, displayName);
+                },
+                onDelete: () => {
+                    handleRemoveTeamMember(entry.member.sessionId, displayName);
+                },
+                onInfo: () => {
+                    setInfoSessionId(entry.member.sessionId);
                 },
                 };
             })}
@@ -2749,6 +2763,13 @@ export default function TeamDashboardScreen() {
                     </View>
                     <View style={{ flex: 1 }} />
                     <Pressable
+                        onPress={() => setShowAddAgentModal(true)}
+                        style={{ marginRight: 12 }}
+                        hitSlop={8}
+                    >
+                        <Ionicons name="add-outline" size={22} color="#98A8B5" />
+                    </Pressable>
+                    <Pressable
                         onPress={() => setShowMenu((previous) => !previous)}
                     >
                         <Ionicons name="ellipsis-horizontal" size={20} color="#98A8B5" />
@@ -2828,6 +2849,19 @@ export default function TeamDashboardScreen() {
                     onClose={() => setShowNewTaskModal(false)}
                     onCreate={handleNewTaskCreate}
                 />
+                {showAddAgentModal && (
+                    <AddAgentToTeamModal
+                        teamId={teamId}
+                        onClose={() => setShowAddAgentModal(false)}
+                    />
+                )}
+                {infoSessionId ? (
+                    <AgentInfoPanel
+                        visible={!!infoSessionId}
+                        sessionId={infoSessionId}
+                        onClose={() => setInfoSessionId(null)}
+                    />
+                ) : null}
             </View>
         </>
     );
@@ -2989,6 +3023,12 @@ export default function TeamDashboardScreen() {
                             </Pressable>
                             <Pressable
                                 style={styles.mobileHeaderIconButton}
+                                onPress={() => setShowAddAgentModal(true)}
+                            >
+                                <Ionicons name="add-outline" size={22} color={theme.colors.text} />
+                            </Pressable>
+                            <Pressable
+                                style={styles.mobileHeaderIconButton}
                                 onPress={() => {
                                     setShowMenu(!showMenu);
                                     setShowWorkspaceDrawer(false);
@@ -3065,6 +3105,19 @@ export default function TeamDashboardScreen() {
                         onClose={() => setShowNewTaskModal(false)}
                         onCreate={handleNewTaskCreate}
                     />
+                    {showAddAgentModal && (
+                        <AddAgentToTeamModal
+                            teamId={teamId}
+                            onClose={() => setShowAddAgentModal(false)}
+                        />
+                    )}
+                    {infoSessionId ? (
+                        <AgentInfoPanel
+                            visible={!!infoSessionId}
+                            sessionId={infoSessionId}
+                            onClose={() => setInfoSessionId(null)}
+                        />
+                    ) : null}
                 </>
             )}
 

@@ -7,6 +7,7 @@ import { QRCode } from '@/components/qr';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
+import { SidebarView } from '@/components/layout/SidebarView';
 import { Modal } from '@/modal';
 import { getCurrentLanguage, t } from '@/text';
 import { getServerUrl } from '@/sync/serverConfig';
@@ -259,7 +260,7 @@ export default React.memo(function WeixinChannelScreen() {
                 ? '请用微信 iOS 8.0.70+，在 我 -> 设置 -> 插件 -> ClawBot 中扫码。'
                 : 'Use WeChat iOS 8.0.70+ and scan with Me -> Settings -> Plugins -> ClawBot.');
 
-    return (
+    const mainPanel = (
         <ItemList style={{ paddingTop: 0 }}>
             <ItemGroup
                 title={t('settings.channelsWeixin')}
@@ -368,4 +369,6 @@ export default React.memo(function WeixinChannelScreen() {
             </ItemGroup>
         </ItemList>
     );
+
+    return <SidebarView mainPanel={mainPanel} />;
 });
