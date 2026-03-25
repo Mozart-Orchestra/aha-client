@@ -98,18 +98,6 @@ export default function RootLayout() {
                 }}
             />
             <Stack.Screen
-                name="settings/appearance"
-                options={{
-                    headerTitle: t('settings.appearance'),
-                }}
-            />
-            <Stack.Screen
-                name="settings/features"
-                options={{
-                    headerTitle: t('settings.features'),
-                }}
-            />
-            <Stack.Screen
                 name="terminal/connect"
                 options={{
                     headerTitle: t('navigation.connectTerminal'),
@@ -344,6 +332,20 @@ export default function RootLayout() {
                 name="teams/[id]"
                 options={{
                     headerShown: false,
+                }}
+            />
+            <Stack.Screen
+                name="channels/index"
+                options={{
+                    headerShown: false,
+                }}
+            />
+            <Stack.Screen
+                name="channels/weixin"
+                options={{
+                    headerShown: true,
+                    headerTitle: t('settings.channelsWeixin'),
+                    headerBackTitle: t('common.back'),
                 }}
             />
         </Stack>

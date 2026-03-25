@@ -134,37 +134,6 @@ export const SettingsView = React.memo(function SettingsView() {
                 />
             </ItemGroup>
 
-            <ItemGroup>
-                <Item
-                    title={t('settings.appearance')}
-                    subtitle={t('settings.appearanceSubtitle')}
-                    icon={<Ionicons name="color-palette-outline" size={29} color="#5856D6" />}
-                    onPress={() => router.push('/settings/appearance')}
-                />
-                <Item
-                    title={t('settings.featuresTitle')}
-                    subtitle={t('settings.featuresSubtitle')}
-                    icon={<Ionicons name="flask-outline" size={29} color="#34C759" />}
-                    onPress={() => router.push('/settings/features')}
-                />
-                <Item
-                    title={t('settings.voiceAssistant')}
-                    subtitle={t('settings.voiceAssistantSubtitle')}
-                    icon={<Ionicons name="mic-outline" size={29} color="#FF9500" />}
-                    onPress={() => router.push('/settings/voice')}
-                />
-            </ItemGroup>
-
-            <ItemGroup title={t('settings.channels')}>
-                <Item
-                    title={t('settings.channelsWeixin')}
-                    subtitle={t('settings.channelsWeixinSubtitle')}
-                    icon={<Ionicons name="chatbubbles-outline" size={29} color="#09B83E" />}
-                    onPress={() => router.push('/settings/channels/weixin')}
-                    showChevron
-                />
-            </ItemGroup>
-
             {/* Developer */}
             {(__DEV__ || devModeEnabled) && (
                 <ItemGroup title={t('settings.developer')}>

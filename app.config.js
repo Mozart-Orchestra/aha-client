@@ -163,7 +163,7 @@ export default {
         },
         experiments: {
             typedRoutes: true,
-            baseUrl: "/webappv3"
+            baseUrl: process.env.BASE_PATH || ""
         },
         extra: {
             router: {
