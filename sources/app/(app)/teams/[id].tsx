@@ -17,7 +17,6 @@ import {
     trackTeamViewed,
 } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
 import { useShallow } from 'zustand/react/shallow';
 import { sync } from '@/sync/sync';
@@ -81,6 +80,10 @@ import { useTeamReviews } from '@/hooks/useTeamReviews';
 import { useTeamLifecyclePersist } from '@/hooks/useTeamLifecyclePersist';
 import { useTaskChatBridge } from '@/hooks/useTaskChatBridge';
 import { useArtifactAutoInit } from '@/hooks/useArtifactAutoInit';
+import { TeamInfoSection } from '@/components/team/TeamInfoSection';
+import { WorkspaceSidebar } from '@/components/team/WorkspaceSidebar';
+import { BoardFallbackView } from '@/components/team/BoardFallbackView';
+import { MobileTeamMenu } from '@/components/team/MobileTeamMenu';
 
 type TeamStandardTab = 'chat' | 'board' | 'info' | 'evolution';
 
@@ -1319,176 +1322,6 @@ export default function TeamDashboardScreen() {
         handleTasksImported,
     ]);
 
-    const renderInfo = () => (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-            <AgentRoster
-                members={roster.map((entry) => entry.member)}
-                sessions={agentRosterSessions}
-                onAgentPress={(sessionId) => setSelectedAgentId(sessionId)}
-            />
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Team Information</Text>
-                {teamPromptLines.length > 0 ? (
-                    <View style={styles.showcaseCard}>
-                        <Text style={styles.showcaseEyebrow}>Shared team instructions</Text>
-                        <Text style={styles.showcaseTitle}>{teamPromptTitle || 'Team System Prompt'}</Text>
-                        {teamPromptBody.map((line, index) => (
-                            <Text key={`${line}-${index}`} style={styles.promptLine}>
-                                {line}
-                            </Text>
-                        ))}
-                        {teamBootObjective ? (
-                            <Text style={styles.showcaseLead}>
-                                {t('newTeam.teamGoalLabel')}: {teamBootObjective}
-                            </Text>
-                        ) : null}
-                    </View>
-                ) : null}
-                {!teamPromptLines.length && teamBootObjective ? (
-                    <View style={styles.roleCard}>
-                        <Text style={styles.roleTitle}>{t('newTeam.teamGoalLabel')}</Text>
-                        <Text style={styles.roleSummary}>{teamBootObjective}</Text>
-                    </View>
-                ) : null}
-                <View style={styles.roleCard}>
-                    <Text style={styles.roleTitle}>Goal</Text>
-                    <Text style={styles.roleSummary}>
-                        {(kanbanData.team as any)?.goal || (kanbanData.team as any)?.mission || 'No goal set'}
-                    </Text>
-                </View>
-
-                {(teamReviewLoading || teamScorecard || teamPublicReviews.length > 0) ? (
-                    <>
-                        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>{t('agents.feedbackSection')}</Text>
-                        {teamReviewLoading ? (
-                            <View style={styles.roleCard}>
-                                <Text style={styles.roleSummary}>Loading public team reviews…</Text>
-                            </View>
-                        ) : null}
-                        {teamScorecard ? (
-                            <View style={styles.showcaseCard}>
-                                <Text style={styles.showcaseEyebrow}>Team reputation</Text>
-                                <Text style={styles.showcaseTitle}>Public team review snapshot</Text>
-                                <View style={styles.reviewMetricsRow}>
-                                    <View style={styles.reviewMetricCard}>
-                                        <Text style={styles.reviewMetricLabel}>Average Rating</Text>
-                                        <Text style={styles.reviewMetricValue}>
-                                            {typeof teamScorecard.averageRating === 'number' ? teamScorecard.averageRating.toFixed(2) : '—'}
-                                        </Text>
-                                    </View>
-                                    <View style={styles.reviewMetricCard}>
-                                        <Text style={styles.reviewMetricLabel}>Reviews</Text>
-                                        <Text style={styles.reviewMetricValue}>{teamScorecard.reviewCount ?? 0}</Text>
-                                    </View>
-                                    <View style={styles.reviewMetricCard}>
-                                        <Text style={styles.reviewMetricLabel}>Code Total</Text>
-                                        <Text style={styles.reviewMetricValue}>{teamScorecard.cumulativeCode ?? '—'}</Text>
-                                    </View>
-                                    <View style={styles.reviewMetricCard}>
-                                        <Text style={styles.reviewMetricLabel}>Quality Total</Text>
-                                        <Text style={styles.reviewMetricValue}>{teamScorecard.cumulativeQuality ?? '—'}</Text>
-                                    </View>
-                                </View>
-                                {teamScorecard.sourceScoreTotals ? (
-                                    <Text style={styles.reviewMetaText}>
-                                        Source totals: user={teamScorecard.sourceScoreTotals.user ?? 0}, master={teamScorecard.sourceScoreTotals.master ?? 0}, system={teamScorecard.sourceScoreTotals.system ?? 0}
-                                    </Text>
-                                ) : null}
-                                {teamScorecard.lastReviewedAt ? (
-                                    <Text style={styles.reviewMetaText}>
-                                        Last reviewed: {formatReviewDate(teamScorecard.lastReviewedAt)}
-                                    </Text>
-                                ) : null}
-                            </View>
-                        ) : null}
-                        {teamPublicReviews.map((review, index) => {
-                            const reviewDate = formatReviewDate(review.createdAt);
-                            const headline = review.comment?.trim() || `Review ${index + 1}`;
-                            const scoreText = typeof review.rating === 'number' ? `★ ${review.rating.toFixed(1)}` : '—';
-                            const secondaryBits = [
-                                review.codeScore != null ? `Code ${review.codeScore}` : null,
-                                review.qualityScore != null ? `Quality ${review.qualityScore}` : null,
-                                review.source ? review.source : null,
-                                reviewDate || null,
-                            ].filter(Boolean).join(' · ');
-                            return (
-                                <View key={review.id ?? `review-${index}`} style={styles.reviewItemCard}>
-                                    <View style={styles.reviewItemHeader}>
-                                        <Text style={styles.reviewItemTitle} numberOfLines={1}>
-                                            {headline}
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.reviewItemRating,
-                                                {
-                                                    color: review.rating && review.rating >= 4
-                                                        ? '#22c55e'
-                                                        : review.rating && review.rating >= 3
-                                                            ? '#f59e0b'
-                                                            : theme.colors.textSecondary,
-                                                },
-                                            ]}
-                                        >
-                                            {scoreText}
-                                        </Text>
-                                    </View>
-                                    {secondaryBits ? (
-                                        <Text style={styles.reviewItemComment}>{secondaryBits}</Text>
-                                    ) : null}
-                                </View>
-                            );
-                        })}
-                    </>
-                ) : null}
-
-                <Text style={[styles.sectionTitle, { marginTop: 24 }]}>System Agents</Text>
-                {systemRoster.length === 0 ? (
-                    <View style={styles.roleCard}>
-                        <Text style={styles.roleTitle}>Supervisor</Text>
-                        <Text style={styles.roleSummary}>
-                            No supervisor has registered to this team yet. Once the daemon spawns a bypass supervisor,
-                            it will appear here and in Evolution for health monitoring.
-                        </Text>
-                    </View>
-                ) : (
-                    systemRoster.map((entry) => {
-                        const roleId = entry.member.roleId || entry.session?.metadata?.role || 'system-agent';
-                        const displayName = entry.member.displayName || entry.session?.metadata?.name || roleId;
-                        const executionPlane = entry.member.executionPlane || entry.session?.metadata?.executionPlane || 'bypass';
-                        const runtime = entry.member.runtimeType || entry.session?.metadata?.flavor || 'claude';
-
-                        return (
-                            <View key={entry.member.sessionId} style={styles.roleCard}>
-                                <Text style={styles.roleTitle}>{displayName}</Text>
-                                <Text style={styles.roleSummary}>
-                                    {roleId} · {executionPlane} · {runtime}
-                                </Text>
-                            </View>
-                        );
-                    })
-                )}
-
-                <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Agreements</Text>
-                <View style={styles.roleCard}>
-                    <Text style={styles.roleTitle}>Status Updates</Text>
-                    <Text style={styles.roleSummary}>{agreements.statusUpdates}</Text>
-                </View>
-                <View style={styles.roleCard}>
-                    <Text style={styles.roleTitle}>Handoffs</Text>
-                    <Text style={styles.roleSummary}>{agreements.handoffs}</Text>
-                </View>
-                <View style={styles.roleCard}>
-                    <Text style={styles.roleTitle}>Escalation</Text>
-                    <Text style={styles.roleSummary}>{agreements.escalation}</Text>
-                </View>
-                <View style={styles.roleCard}>
-                    <Text style={styles.roleTitle}>Definition of Done</Text>
-                    <Text style={styles.roleSummary}>{agreements.definitionOfDone}</Text>
-                </View>
-            </View>
-        </ScrollView>
-    );
-
     const handleTaskDetailSave = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
         const existingTask = kanbanData.tasks.find((entry) => entry.id === taskId);
         const nextUpdates: Partial<KanbanTask> = { ...updates };
@@ -1585,130 +1418,36 @@ export default function TeamDashboardScreen() {
     };
 
     const workspaceSidebar = (
-        <FloatingIslandSidebar
-            variant={shellVariant}
-            header={{
-                title: myDisplayName,
-                subtitle: `${myRoleTitle} · Online`,
-                iconLabel: myDisplayName.slice(0, 1).toUpperCase(),
-                iconGradientColors: ['#314658', '#1E2D3C'],
-                trailingIcon: 'chevron-down',
-            }}
-            agentItems={roster.map((entry) => {
-                const presence = entry.session
-                    ? getAgentPresenceVisual(entry.session)
-                    : { dotColor: '#8A7F74', inactive: true, dead: false };
-                const runtimeLabel = entry.member.runtimeType ? entry.member.runtimeType : undefined;
-                const roleLabel = entry.role?.title || entry.member.roleId || entry.session?.metadata?.role || '';
-                return {
-                    id: entry.member.sessionId,
-                    name: entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId,
-                    dotColor: presence.dotColor,
-                    inactive: presence.inactive,
-                    dead: presence.dead,
-                    description: [roleLabel, runtimeLabel].filter(Boolean).join(' · '),
-                    selected: selectedAgentId === entry.member.sessionId,
-                    activeTaskTitle: entry.activeTask?.title,
-                    activeTaskStartedAt: entry.activeTask?.startedAt,
-                    count: selectedAgentId === entry.member.sessionId
-                        ? entry.tasks.length
-                        : entry.tasks.length > 0 ? entry.tasks.length : undefined,
-                onPress: () => {
-                    setShowWorkspaceDrawer(false);
-                    setSelectedAgentId(entry.member.sessionId);
-                    pushSessionRoute(router, {
-                        id: entry.member.sessionId,
-                        teamId,
-                        teamName: artifact?.title || desktopRoom?.name || 'Team',
-                        roleName: entry.session?.metadata?.role || entry.role?.id || '',
-                        returnTo: teamReturnTo,
-                    });
-                },
-                onLongPress: () => {
-                    const displayName = entry.role?.title || entry.member.displayName || entry.session?.metadata?.name || entry.member.sessionId;
-                    handleAgentLongPress(entry.member.sessionId, displayName);
-                },
-                };
-            })}
-            statusItems={[
-                {
-                    id: 'decision',
-                    icon: 'radio-button-on',
-                    label: 'Needs Decision',
-                    color: '#FF3B30',
-                    backgroundColor: '#FF3B300D',
-                    count: statusSummary.decision,
-                },
-                {
-                    id: 'working',
-                    icon: 'pulse',
-                    label: 'Working',
-                    color: '#FF9500',
-                    backgroundColor: '#FF950012',
-                    count: statusSummary.working,
-                },
-                {
-                    id: 'review',
-                    icon: 'people',
-                    label: 'Team Review',
-                    color: '#8A7F74',
-                    backgroundColor: '#00000000',
-                    count: statusSummary.review,
-                },
-            ]}
-            conversationItems={allTeams.map((team, index) => ({
-                id: team.id,
-                name: team.title || 'Team',
-                lastMessage: '',
-                time: '',
-                avatarColor: SHELL_CONVERSATION_COLORS[index % SHELL_CONVERSATION_COLORS.length],
-                avatarLabel: (team.title || 'T').slice(0, 1).toUpperCase(),
-                selected: team.id === teamId,
-                onPress: () => {
-                    setShowWorkspaceDrawer(false);
-                    router.push({
-                        pathname: '/teams/[id]',
-                        params: { id: team.id },
-                    } as any);
-                },
-            }))}
-            conversationSectionLabel="Teams"
-            conversationEmptyText="No teams yet"
+        <WorkspaceSidebar
+            myDisplayName={myDisplayName}
+            myRoleTitle={myRoleTitle}
+            roster={roster}
+            selectedAgentId={selectedAgentId}
+            setSelectedAgentId={setSelectedAgentId}
+            setShowWorkspaceDrawer={setShowWorkspaceDrawer}
+            artifact={artifact}
+            desktopRoom={desktopRoom}
+            teamReturnTo={teamReturnTo}
+            teamId={teamId}
+            handleAgentLongPress={handleAgentLongPress}
+            statusSummary={statusSummary}
+            allTeams={allTeams}
         />
     );
 
     const boardFallbackPanel = (
-        <View style={styles.loadingContainer}>
-            {((isMissingDesktopRoom && !desktopRoom && !collaborationState) || isLoading) ? (
-                <ActivityIndicator size="large" />
-            ) : (
-                <View style={{ alignItems: 'center', padding: 20 }}>
-                    <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
-                    <Text style={[styles.title, { marginTop: 16, textAlign: 'center' }]}>
-                        {boardFallbackTitle}
-                    </Text>
-                    <Text style={[styles.subtitle, { marginTop: 8, textAlign: 'center', maxWidth: 300 }]}>
-                        {boardFallbackDescription}
-                    </Text>
-                    {!desktopBridge && !isArtifactParseError && !isAuthMissing ? (
-                        <Pressable
-                            style={{
-                                marginTop: 20,
-                                backgroundColor: theme.colors.button.primary.background,
-                                paddingHorizontal: 24,
-                                paddingVertical: 12,
-                                borderRadius: 8
-                            }}
-                            onPress={handleInitializeArtifact}
-                        >
-                            <Text style={{ color: theme.colors.button.primary.tint, fontWeight: '600' }}>
-                                Initialize Board
-                            </Text>
-                        </Pressable>
-                    ) : null}
-                </View>
-            )}
-        </View>
+        <BoardFallbackView
+            isMissingDesktopRoom={isMissingDesktopRoom}
+            desktopRoom={desktopRoom}
+            collaborationState={collaborationState}
+            isLoading={isLoading}
+            boardFallbackTitle={boardFallbackTitle}
+            boardFallbackDescription={boardFallbackDescription}
+            desktopBridge={desktopBridge}
+            isArtifactParseError={isArtifactParseError}
+            isAuthMissing={isAuthMissing}
+            onInitialize={handleInitializeArtifact}
+        />
     );
 
     const desktopMainPanel = (
@@ -1888,90 +1627,14 @@ export default function TeamDashboardScreen() {
                 }}
             />
             {!isDesktopShell && showMenu && (
-                <>
-                    <Pressable
-                        style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            zIndex: 999,
-                        }}
-                        onPress={() => setShowMenu(false)}
-                    />
-                    <View style={{
-                        position: 'absolute',
-                        top: 50,
-                        right: 8,
-                        backgroundColor: theme.colors.surface,
-                        borderRadius: 12,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 12,
-                        elevation: 8,
-                        minWidth: 180,
-                        borderWidth: 1,
-                        borderColor: theme.colors.divider,
-                        zIndex: 1000,
-                    }}>
-                        <Pressable
-                            onPress={handleRenameTeam}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                padding: 14,
-                                borderBottomWidth: 1,
-                                borderBottomColor: theme.colors.divider,
-                            }}
-                        >
-                            <Ionicons name="pencil-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
-                            <Text style={{ fontSize: 15, color: theme.colors.text }}>Rename</Text>
-                        </Pressable>
-                        <Pressable
-                            onPress={handleRecoverTeam}
-                            disabled={isRecoveringTeam}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                padding: 14,
-                                borderBottomWidth: 1,
-                                borderBottomColor: theme.colors.divider,
-                                opacity: isRecoveringTeam ? 0.6 : 1,
-                            }}
-                        >
-                            <Ionicons name="refresh-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
-                            <Text style={{ fontSize: 15, color: theme.colors.text }}>
-                                {isRecoveringTeam ? 'Recovering…' : 'Recover'}
-                            </Text>
-                        </Pressable>
-                        <Pressable
-                            onPress={handleArchiveTeam}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                padding: 14,
-                                borderBottomWidth: 1,
-                                borderBottomColor: theme.colors.divider,
-                            }}
-                        >
-                            <Ionicons name="archive-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
-                            <Text style={{ fontSize: 15, color: theme.colors.text }}>Archive</Text>
-                        </Pressable>
-                        <Pressable
-                            onPress={handleDeleteTeam}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                padding: 14,
-                            }}
-                        >
-                            <Ionicons name="trash-outline" size={18} color={theme.colors.textDestructive} style={{ marginRight: 12 }} />
-                            <Text style={{ fontSize: 15, color: theme.colors.textDestructive }}>Delete</Text>
-                        </Pressable>
-                    </View>
-                </>
+                <MobileTeamMenu
+                    onClose={() => setShowMenu(false)}
+                    onRename={handleRenameTeam}
+                    onRecover={handleRecoverTeam}
+                    isRecovering={isRecoveringTeam}
+                    onArchive={handleArchiveTeam}
+                    onDelete={handleDeleteTeam}
+                />
             )}
             {isDesktopShell ? (
                 desktopShell
