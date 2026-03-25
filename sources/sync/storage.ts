@@ -439,7 +439,7 @@ export const storage = create<StorageState>()((set, get) => {
                         reducerResult = reducer(existingSessionMessages.reducerState, [], newSession.agentState);
                     } catch (e) {
                         console.error(`[STORAGE] Reducer crashed for session ${session.id}:`, e);
-                        continue;
+                        return;
                     }
                     const processedMessages = reducerResult.messages;
 
