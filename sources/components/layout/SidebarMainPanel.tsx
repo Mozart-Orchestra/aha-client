@@ -17,6 +17,10 @@ import { buildSidebarAgentRosterEntries, selectSidebarAgentSessions } from '@/ut
 import { getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { fetchGenomeByName, parseFeedback } from '@/utils/genomeHub';
+import {
+    normalizeRoleKey,
+    resolveSidebarAgentIdentity,
+} from '@/utils/sidebarAgentIdentity';
 
 import { t } from '@/text';
 
@@ -38,10 +42,6 @@ type RoleScore = {
     score: number;
     evaluationCount: number;
 };
-
-function normalizeRoleKey(value: string): string {
-    return value.trim().toLowerCase();
-}
 
 function buildRoleCandidates(value: string): string[] {
     const normalized = normalizeRoleKey(value);
@@ -134,8 +134,19 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
         rosterEntries.forEach((entry) => {
             const session = entry.session;
             const member = entry.member;
-            const flavor = member?.roleId ?? session?.metadata?.flavor ?? session?.metadata?.role ?? '';
-            const runtimeLabel = member?.runtimeType ? member.runtimeType : undefined;
+            const identity = resolveSidebarAgentIdentity({
+                memberRoleId: member?.roleId,
+                sessionRole: session?.metadata?.role,
+                sessionFlavor: session?.metadata?.flavor,
+                runtimeType: member?.runtimeType,
+            });
+            const descriptionParts = [identity.displayRole];
+            if (
+                identity.runtimeLabel
+                && normalizeRoleKey(identity.runtimeLabel) !== normalizeRoleKey(identity.displayRole)
+            ) {
+                descriptionParts.push(identity.runtimeLabel);
+            }
             const inactive = session ? !session.active : true;
             const dead = !!session && inactive && session.activeAt > 0 && (Date.now() - session.activeAt > DEAD_THRESHOLD_MS);
             const activity = session ? activityMetrics.get(session.id) : undefined;
@@ -144,9 +155,9 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             result.push({
                 id: entry.sessionId,
                 name: member?.displayName || (session ? getSessionName(session) : entry.sessionId),
-                dotColor: AGENT_DOT_COLORS[flavor.toLowerCase()] ?? '#007AFF',
-                roleKey: flavor,
-                description: [flavor, runtimeLabel].filter(Boolean).join(' · '),
+                dotColor: AGENT_DOT_COLORS[normalizeRoleKey(identity.displayRole)] ?? '#007AFF',
+                roleKey: identity.roleKey,
+                description: descriptionParts.filter(Boolean).join(' · '),
                 inactive,
                 dead,
                 session,
