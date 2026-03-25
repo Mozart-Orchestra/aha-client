@@ -571,7 +571,7 @@ const AgentRow = React.memo(function AgentRow({
             >
                 {item.selected ? (
                     <LinearGradient
-                        colors={['#F8FCFD', '#EEF5F8']}
+                        colors={[tokens.cardMutedBackground, tokens.cardBackground]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
                         style={[
@@ -594,7 +594,7 @@ const AgentRow = React.memo(function AgentRow({
                             style={[
                                 styles.agentName,
                                 item.selected ? styles.rowTextSelected : null,
-                                { color: item.selected ? tokens.panelTitle : '#2D4154' },
+                                { color: item.selected ? tokens.panelTitle : theme.colors.text },
                             ]}
                         >
                             {item.name}
@@ -622,17 +622,17 @@ const AgentRow = React.memo(function AgentRow({
                     ) : null}
                     <View style={styles.agentMetaWrap}>
                         {item.description ? (
-                            <View style={[styles.agentMetaChip, { backgroundColor: '#EAF1F5' }]}>
-                                <Ionicons name="sparkles-outline" size={11} color="#516575" />
-                                <Text style={[styles.agentMetaText, { color: '#516575' }]}>
+                            <View style={[styles.agentMetaChip, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                <Ionicons name="sparkles-outline" size={11} color={theme.colors.textSecondary} />
+                                <Text style={[styles.agentMetaText, { color: theme.colors.textSecondary }]}>
                                     {item.description}
                                 </Text>
                             </View>
                         ) : null}
                         {item.inactive ? (
-                            <View style={[styles.agentMetaChip, { backgroundColor: '#F2F4F6' }]}>
+                            <View style={[styles.agentMetaChip, { backgroundColor: tokens.chipBackground }]}>
                                 <Ionicons name="pause-circle-outline" size={11} color="#8A9BAA" />
-                                <Text style={[styles.agentMetaText, { color: '#8A9BAA' }]}>
+                                <Text style={[styles.agentMetaText, { color: tokens.panelTextSecondary }]}>
                                     {t('status.offline')}
                                 </Text>
                             </View>
@@ -732,6 +732,7 @@ function StatusRow({
     item: FloatingIslandStatusItem;
     maxCount: number;
 }) {
+    const { theme } = useUnistyles();
     const barWidth = item.count !== undefined ? getBarPercent(item.count, maxCount) : '0%';
 
     return (
@@ -742,7 +743,7 @@ function StatusRow({
             ]}
         >
             <Ionicons name={item.icon} size={16} color={item.color} />
-            <Text style={[styles.rowText, { color: '#1A1209' }]}>{item.label}</Text>
+            <Text style={[styles.rowText, { color: theme.colors.text }]}>{item.label}</Text>
             <View style={styles.rowSpacer} />
             {item.count !== undefined ? (
                 <View style={styles.statusCountWrap}>
@@ -812,7 +813,7 @@ const ConversationRow = React.memo(function ConversationRow({
         >
             {item.selected ? (
                 <LinearGradient
-                    colors={['#F8FCFD', '#EEF5F8']}
+                    colors={[tokens.cardMutedBackground, tokens.cardBackground]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 0, y: 1 }}
                     style={[
@@ -836,7 +837,7 @@ const ConversationRow = React.memo(function ConversationRow({
                     style={[
                         styles.convName,
                         item.selected ? styles.convNameSelected : null,
-                        { color: item.selected ? tokens.panelTitle : '#1A1209' },
+                        { color: item.selected ? tokens.panelTitle : tokens.panelTitle },
                     ]}
                 >
                     {item.name}
@@ -845,15 +846,15 @@ const ConversationRow = React.memo(function ConversationRow({
                     numberOfLines={1}
                     style={[
                         styles.convMsg,
-                        { color: item.selected ? '#93A4B1' : '#8A7F74' },
+                        { color: tokens.panelTextSecondary },
                     ]}
                 >
                     {item.lastMessage}
                 </Text>
             </View>
-            <Text style={[styles.convTime, { color: '#9AA8B4' }]}>{item.time}</Text>
+            <Text style={[styles.convTime, { color: tokens.panelTextSecondary }]}>{item.time}</Text>
             {item.unreadCount ? (
-                <View style={[styles.unreadBadge, { backgroundColor: '#7C95A9' }]}>
+                <View style={[styles.unreadBadge, { backgroundColor: tokens.panelTextSecondary }]}>
                     <Text style={styles.unreadText}>{item.unreadCount}</Text>
                 </View>
             ) : null}
@@ -875,7 +876,8 @@ export function FloatingIslandSidebar({
     agentEmptyText = t('sidebar.noActiveAgents'),
     conversationEmptyText = t('sidebar.noConversationsYet'),
 }: FloatingIslandSidebarProps) {
-    const tokens = getThreeColumnShellTokens(variant);
+    const { theme } = useUnistyles();
+    const tokens = getThreeColumnShellTokens(variant, theme);
     const maxStatusCount = React.useMemo(
         () => statusItems.reduce((max, item) => Math.max(max, item.count ?? 0), 0),
         [statusItems]
@@ -910,7 +912,7 @@ export function FloatingIslandSidebar({
                         colors={header.iconGradientColors as [string, string]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
-                        style={[styles.headerAvatar, { borderColor: '#DCE7EE' }]}
+                        style={[styles.headerAvatar, { borderColor: tokens.panelDivider }]}
                     >
                         {header.iconLabel ? (
                             <Text style={[styles.convAvatarText, { color: header.iconForeground || '#FFFFFF' }]}>
@@ -930,7 +932,7 @@ export function FloatingIslandSidebar({
                             styles.headerAvatar,
                             {
                                 backgroundColor: header.iconBackground || tokens.avatarBackground,
-                                borderColor: '#DCE7EE',
+                                borderColor: tokens.panelDivider,
                             },
                         ]}
                     >
@@ -951,12 +953,12 @@ export function FloatingIslandSidebar({
                     <Text numberOfLines={1} style={[styles.headerName, { color: tokens.panelTitle }]}>
                         {header.title}
                     </Text>
-                    <Text numberOfLines={1} style={[styles.headerRole, { color: '#93A4B1' }]}>
+                    <Text numberOfLines={1} style={[styles.headerRole, { color: tokens.panelTextSecondary }]}>
                         {header.subtitle}
                     </Text>
                 </View>
                 {header.trailingIcon ? (
-                    <Ionicons name={header.trailingIcon} size={14} color="#8A7F74" />
+                    <Ionicons name={header.trailingIcon} size={14} color={tokens.panelTextSecondary} />
                 ) : null}
             </View>
 
@@ -965,9 +967,9 @@ export function FloatingIslandSidebar({
             <View style={styles.monitoringSection}>
                 <View style={styles.sectionFixed}>
                     <View style={styles.sectionLabelRow}>
-                        <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>Status</Text>
+                        <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>Status</Text>
                         {statusItems.reduce((sum, item) => sum + (item.count || 0), 0) > 0 ? (
-                            <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
+                            <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
                                 <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
                                     {statusItems.reduce((sum, item) => sum + (item.count || 0), 0)}
                                 </Text>
@@ -983,16 +985,16 @@ export function FloatingIslandSidebar({
 
                 <View style={styles.sectionExpanded}>
                     <View style={styles.sectionLabelRow}>
-                        <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{agentSectionLabel}</Text>
+                        <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>{agentSectionLabel}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
+                            <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
                                 <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
                                     {agentItems.length}
                                 </Text>
                             </View>
                             {agentHeaderAction ? (
                                 <Pressable onPress={agentHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
-                                    <Ionicons name="add" size={16} color="#8C9CAA" />
+                                    <Ionicons name="add" size={16} color={tokens.panelEyebrow} />
                                 </Pressable>
                             ) : null}
                         </View>
@@ -1003,8 +1005,8 @@ export function FloatingIslandSidebar({
                             style={[
                                 styles.sectionActionButton,
                                 {
-                                    borderColor: '#DCE7EE',
-                                    backgroundColor: '#F7FBFD',
+                                    borderColor: tokens.panelDivider,
+                                    backgroundColor: tokens.chipBackground,
                                 },
                             ]}
                         >
@@ -1020,7 +1022,7 @@ export function FloatingIslandSidebar({
                                 {activeAgentItems.length > 0 ? (
                                     <>
                                         <View style={styles.subsectionLabelRow}>
-                                            <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>
+                                            <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>
                                                 {t('status.online')}
                                             </Text>
                                             <View style={[styles.sectionCountBadge, { backgroundColor: '#EAF8EF' }]}>
@@ -1042,11 +1044,11 @@ export function FloatingIslandSidebar({
                                         {offlineAgentItems.length > 0 ? (
                                             <>
                                                 <View style={styles.subsectionLabelRow}>
-                                                    <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>
+                                                    <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>
                                                         {t('status.offline')}
                                                     </Text>
-                                                    <View style={[styles.sectionCountBadge, { backgroundColor: '#F2F4F6' }]}>
-                                                        <Text style={[styles.sectionCountText, { color: '#8A9BAA' }]}>
+                                                    <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
+                                                        <Text style={[styles.sectionCountText, { color: tokens.panelTextSecondary }]}>
                                                             {offlineAgentItems.length}
                                                         </Text>
                                                     </View>
@@ -1062,11 +1064,11 @@ export function FloatingIslandSidebar({
                                                     <View style={[styles.subsectionDivider, { backgroundColor: tokens.panelDivider }]} />
                                                 ) : null}
                                                 <View style={styles.subsectionLabelRow}>
-                                                    <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>
+                                                    <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>
                                                         {t('status.ended')}
                                                     </Text>
-                                                    <View style={[styles.sectionCountBadge, { backgroundColor: '#F2F4F6' }]}>
-                                                        <Text style={[styles.sectionCountText, { color: '#8A9BAA' }]}>
+                                                    <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
+                                                        <Text style={[styles.sectionCountText, { color: tokens.panelTextSecondary }]}>
                                                             {deadAgentItems.length}
                                                         </Text>
                                                     </View>
@@ -1080,7 +1082,7 @@ export function FloatingIslandSidebar({
                                 ) : null}
                             </>
                         ) : (
-                            <Text style={[styles.emptyText, { color: '#93A4B1' }]}>{agentEmptyText}</Text>
+                            <Text style={[styles.emptyText, { color: tokens.panelTextSecondary }]}>{agentEmptyText}</Text>
                         )}
                     </ScrollView>
                 </View>
@@ -1090,16 +1092,16 @@ export function FloatingIslandSidebar({
 
             <View style={styles.workspaceSection}>
                 <View style={styles.sectionLabelRow}>
-                    <Text style={[styles.sectionLabel, { color: '#8C9CAA' }]}>{conversationSectionLabel}</Text>
+                    <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>{conversationSectionLabel}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={[styles.sectionCountBadge, { backgroundColor: '#EEF5F8' }]}>
+                        <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
                             <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
                                 {conversationItems.length}
                             </Text>
                         </View>
                         {conversationHeaderAction ? (
                             <Pressable onPress={conversationHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
-                                <Ionicons name="add" size={16} color="#8C9CAA" />
+                                <Ionicons name="add" size={16} color={tokens.panelEyebrow} />
                             </Pressable>
                         ) : null}
                     </View>
@@ -1110,7 +1112,7 @@ export function FloatingIslandSidebar({
                             <ConversationRow key={item.id} item={item} tokens={tokens} />
                         ))
                     ) : (
-                        <Text style={[styles.emptyText, { color: '#93A4B1' }]}>{conversationEmptyText}</Text>
+                        <Text style={[styles.emptyText, { color: tokens.panelTextSecondary }]}>{conversationEmptyText}</Text>
                     )}
                 </ScrollView>
             </View>

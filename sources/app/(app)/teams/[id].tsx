@@ -927,7 +927,7 @@ export default function TeamDashboardScreen() {
     const isDataReady = useIsDataReady();
     const isDesktopShell = Platform.OS === 'web' && width >= 1180;
     const shellVariant = 'default' as const;
-    const shellTheme = getThreeColumnShellTokens(shellVariant);
+    const shellTheme = getThreeColumnShellTokens(shellVariant, theme);
     const tabParam = getSingleRouteParam(tab);
     const initialTab: TeamStandardTab = isTeamStandardTab(tabParam) ? tabParam : 'chat';
     const [activeTab, setActiveTab] = React.useState<TeamStandardTab>(initialTab);

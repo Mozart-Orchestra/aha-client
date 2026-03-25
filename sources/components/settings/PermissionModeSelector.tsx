@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, Pressable, Platform } from 'react-native';
+import { useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/constants/Typography';
 import { hapticsLight } from '@/utils/haptics';
@@ -57,6 +58,7 @@ export const PermissionModeSelector: React.FC<PermissionModeSelectorProps> = ({
     onModeChange,
     disabled = false
 }) => {
+    const { theme } = useUnistyles();
     const currentConfig = modeConfig[mode];
 
     const handleTap = () => {
@@ -91,7 +93,7 @@ export const PermissionModeSelector: React.FC<PermissionModeSelectorProps> = ({
             <Ionicons
                 name={'hammer-outline'}
                 size={16}
-                color={'black'}
+                color={theme.colors.text}
                 style={{ marginRight: 4 }}
             />
             {/* <Text style={{

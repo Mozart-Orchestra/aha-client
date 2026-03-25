@@ -1023,8 +1023,8 @@ const MessageBubbleInner = ({
         if (isMyMessage) {
             return (
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginBottom: 4 }}>
-                    <Text style={{ fontSize: 10, color: '#9A8E82' }}>{timeLabel}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A7F74' }}>{senderLabel}</Text>
+                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{timeLabel}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary }}>{senderLabel}</Text>
                 </View>
             );
         }
@@ -1139,9 +1139,9 @@ const MessageBubbleInner = ({
             return null;
         }
 
-        const chipBackground = isMyMessage ? 'rgba(255,255,255,0.16)' : '#EEF4F7';
+        const chipBackground = isMyMessage ? 'rgba(255,255,255,0.16)' : theme.colors.surfaceHigh;
         const chipBorder = isMyMessage ? 'rgba(255,255,255,0.18)' : '#D9E4EA';
-        const chipTextColor = isMyMessage ? '#FFFFFF' : '#486276';
+        const chipTextColor = isMyMessage ? '#FFFFFF' : theme.colors.textSecondary;
 
         return (
             <View
@@ -1185,7 +1185,7 @@ const MessageBubbleInner = ({
                         isMyMessage && styles.myAvatarContainer,
                         isEdzlf && {
                             backgroundColor: roleVisual.avatarBackground,
-                            borderColor: isMyMessage ? '#1A1209' : '#FFFFFF',
+                            borderColor: isMyMessage ? theme.colors.text : theme.colors.surface,
                             borderWidth: isMyMessage ? 0 : 1,
                             shadowOpacity: 0,
                             elevation: 0,
@@ -1222,7 +1222,7 @@ const MessageBubbleInner = ({
                                     {renderContent()}
                                 </View>
                                 {copied ? (
-                                    <Text style={{ fontSize: 11, color: '#7E93A3', fontWeight: '600' }}>Copied</Text>
+                                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' }}>Copied</Text>
                                 ) : null}
                             </Pressable>
                             {renderAssociations()}
@@ -1262,7 +1262,7 @@ const MessageBubbleInner = ({
                             ) : null}
                             {isEdzlf && !isMyMessage ? (
                                 <LinearGradient
-                                    colors={['#FFFFFF', '#EEF4F7']}
+                                    colors={[theme.colors.surface, theme.colors.surfaceHigh]}
                                     start={{ x: 0.5, y: 0 }}
                                     end={{ x: 0.5, y: 1 }}
                                     style={[
@@ -1302,7 +1302,7 @@ const MessageBubbleInner = ({
                                     </View>
                                 )}
                                 {isEdzlf && copied ? (
-                                    <Text style={{ fontSize: 11, color: isMyMessage ? '#E7EFF6' : '#7E93A3', fontWeight: '600' }}>
+                                    <Text style={{ fontSize: 11, color: isMyMessage ? '#E7EFF6' : theme.colors.textSecondary, fontWeight: '600' }}>
                                         Copied
                                     </Text>
                                 ) : null}
@@ -1898,10 +1898,10 @@ export default function TeamChatRoom({
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#233648' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.text }}>
                             {activeMembers.length} Online
                         </Text>
-                        <Text style={{ fontSize: 12, color: '#7E93A3' }}>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
                             / {members.length} Total
                         </Text>
                     </View>
@@ -1919,7 +1919,7 @@ export default function TeamChatRoom({
                             borderColor: '#D9E4EA',
                         }}
                     >
-                        <Ionicons name={showStatus ? "chevron-up" : "chevron-down"} size={15} color="#7E93A3" />
+                        <Ionicons name={showStatus ? "chevron-up" : "chevron-down"} size={15} color={theme.colors.textSecondary} />
                     </Pressable>
                 </View>
             );
@@ -2022,7 +2022,7 @@ export default function TeamChatRoom({
                                                 width: 28,
                                                 height: 28,
                                                 borderRadius: 14,
-                                                backgroundColor: '#EEF4F7',
+                                                backgroundColor: theme.colors.surfaceHigh,
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 borderWidth: 1,
@@ -2033,10 +2033,10 @@ export default function TeamChatRoom({
                                                 </Text>
                                             </View>
                                             <View>
-                                                <Text style={{ fontSize: 13, fontWeight: '500', color: '#233648' }}>
+                                                <Text style={{ fontSize: 13, fontWeight: '500', color: theme.colors.text }}>
                                                     {m.member.displayName || m.member.sessionId.substring(0, 8)}
                                                 </Text>
-                                                <Text style={{ fontSize: 11, color: '#7E93A3' }}>
+                                                <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
                                                     {m.role?.title || m.member.roleId || 'Unknown Role'}
                                                 </Text>
                                             </View>
@@ -2045,7 +2045,7 @@ export default function TeamChatRoom({
                                             <Text style={{ fontSize: 11, color: isOnline ? theme.colors.success : theme.colors.textSecondary, fontWeight: isOnline ? '600' : '400' }}>
                                                 {isOnline ? 'Online' : 'Offline'}
                                             </Text>
-                                            <Text style={{ fontSize: 10, color: '#7E93A3', marginTop: 2 }}>
+                                            <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginTop: 2 }}>
                                                 Active: {lastResponseLabel}
                                             </Text>
                                         </View>
