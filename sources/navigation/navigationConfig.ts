@@ -139,6 +139,7 @@ export function isEmbeddedDesktopRoute(pathname: string): boolean {
         || /^\/teams\/[^/]+$/.test(pathname)
         || pathname === '/channels'
         || pathname === '/channels/weixin'
+        || pathname === '/settings'
         || pathname === '/restore'
         || pathname.startsWith('/restore/')
         || pathname.startsWith('/session/')
