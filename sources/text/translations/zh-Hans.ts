@@ -211,6 +211,14 @@ export const zhHans: TranslationStructure = {
         availableTitle: '可用渠道',
     },
 
+    addAgent: {
+        title: '添加 Agent 到团队',
+        searchPlaceholder: '搜索 Agent...',
+        sortedByRank: '按评分排名',
+        noResults: '未找到 Agent，请尝试其他搜索。',
+        spawn: '添加到团队',
+    },
+
     settingsFeatures: {
         // Features settings screen
         experiments: '实验功能',

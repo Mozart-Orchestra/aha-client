@@ -279,6 +279,8 @@ class Sync {
 
     // Deduplication for syncSessionToTeam: prevents re-calling addTeamMember on every agentState update
     private syncedSessionTeams = new Set<string>();
+    // Reentrancy guard for fetchArtifactsList to prevent mutual recursion with updateArtifact
+    private _isFetchingArtifactsList = false;
 
     constructor() {
         this.sessionsSync = new InvalidateSync(this.fetchSessions);
@@ -924,6 +926,13 @@ class Sync {
             return;
         }
 
+        // Reentrancy guard: prevent mutual recursion with updateArtifact → fetchArtifactsList → migration → updateArtifact
+        if (this._isFetchingArtifactsList) {
+            log.log('📦 fetchArtifactsList: Already in progress, skipping to prevent recursion');
+            return;
+        }
+        this._isFetchingArtifactsList = true;
+
         try {
             log.log('📦 fetchArtifactsList: Fetching artifacts from server');
             const artifacts = await fetchArtifacts(this.credentials);
@@ -1079,12 +1088,32 @@ class Sync {
 
             storage.getState().applyArtifacts(decryptedArtifacts);
             log.log('📦 fetchArtifactsList: Artifacts applied to storage');
-            // Clear deduplication cache so membership is revalidated after a full sync
+            // Rebuild deduplication cache from fetched artifacts instead of clearing.
+            // Clearing would allow syncSessionToTeam to re-add already-synced members,
+            // creating a feedback loop: addTeamMember → broadcast → fetchArtifactsList → clear → addTeamMember again.
             this.syncedSessionTeams.clear();
+            for (const artifact of decryptedArtifacts) {
+                if (artifact.type === 'team' && artifact.body) {
+                    try {
+                        const board = JSON.parse(artifact.body);
+                        if (board.team && Array.isArray(board.team.members)) {
+                            for (const member of board.team.members) {
+                                if (member.sessionId) {
+                                    this.syncedSessionTeams.add(`${artifact.id}:${member.sessionId}`);
+                                }
+                            }
+                        }
+                    } catch {
+                        // Ignore parse errors during dedup rebuild
+                    }
+                }
+            }
         } catch (error) {
             log.log(`📦 fetchArtifactsList: Error fetching artifacts: ${error}`);
             console.error('Failed to fetch artifacts:', error);
             throw error;
+        } finally {
+            this._isFetchingArtifactsList = false;
         }
     }
 

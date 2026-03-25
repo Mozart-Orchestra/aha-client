@@ -209,6 +209,14 @@ export const en = {
         availableTitle: 'Available Channels',
     },
 
+    addAgent: {
+        title: 'Add Agent to Team',
+        searchPlaceholder: 'Search agents...',
+        sortedByRank: 'Sorted by Score (Rank)',
+        noResults: 'No agents found. Try a different search.',
+        spawn: 'Add to Team',
+    },
+
     settingsFeatures: {
         experiments: 'Experiments',
         experimentsDescription: 'Enable experimental features that are still in development. These features may be unstable or change without notice.',

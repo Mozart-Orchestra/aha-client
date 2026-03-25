@@ -1138,7 +1138,14 @@ function processUsageData(state: ReducerState, usage: UsageData, timestamp: numb
 }
 
 
-function convertReducerMessageToMessage(reducerMsg: ReducerMessage, state: ReducerState): Message | null {
+function convertReducerMessageToMessage(reducerMsg: ReducerMessage, state: ReducerState, visited: Set<string> = new Set()): Message | null {
+    // Cycle guard: prevent infinite recursion on circular sidechain references
+    const msgKey = reducerMsg.realID ?? reducerMsg.id;
+    if (visited.has(msgKey)) {
+        return null;
+    }
+    visited.add(msgKey);
+
     if (reducerMsg.role === 'user' && reducerMsg.text !== null) {
         return {
             id: reducerMsg.id,
@@ -1163,7 +1170,7 @@ function convertReducerMessageToMessage(reducerMsg: ReducerMessage, state: Reduc
         let childMessages: Message[] = [];
         let children = reducerMsg.realID ? state.sidechains.get(reducerMsg.realID) || [] : [];
         for (let child of children) {
-            let childMessage = convertReducerMessageToMessage(child, state);
+            let childMessage = convertReducerMessageToMessage(child, state, visited);
             if (childMessage) {
                 childMessages.push(childMessage);
             }

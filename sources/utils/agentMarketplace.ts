@@ -2,10 +2,11 @@ import type { AuthCredentials } from '@/auth/tokenStorage';
 import type { Genome as PrivateGenome } from '@/sync/apiEvolution';
 
 import { isFavoriteGenomeId } from './favoriteGenomes';
-import { fetchGenomeById, parseSpec, parseTags, type GenomeRecord } from './genomeHub';
+import { fetchGenomeById, parseFeedback, parseSpec, parseTags, type GenomeRecord } from './genomeHub';
 
 export type MarketplacePageTab = 'agents' | 'corps';
 export type MarketplaceSourceTab = 'market' | 'favorites' | 'mine';
+export type MarketplaceSortMode = 'default' | 'rank';
 
 export const AGENT_MARKETPLACE_CATEGORIES = ['all', 'coordination', 'support', 'execution'] as const;
 export type AgentMarketplaceCategory = typeof AGENT_MARKETPLACE_CATEGORIES[number];
@@ -72,6 +73,25 @@ export function sortGenomesForDisplay(genomes: GenomeRecord[], favoriteGenomeIds
             return statusDelta;
         }
 
+        return right.updatedAt.localeCompare(left.updatedAt);
+    });
+}
+
+export function getGenomeScore(genome: GenomeRecord): number {
+    const feedback = parseFeedback(genome.feedbackData);
+    if (feedback?.avgScore) {
+        return feedback.avgScore;
+    }
+    const spec = parseSpec(genome.spec);
+    return spec?.resume?.performanceRating ?? 0;
+}
+
+export function sortGenomesByScore(genomes: GenomeRecord[]): GenomeRecord[] {
+    return [...genomes].sort((left, right) => {
+        const scoreDelta = getGenomeScore(right) - getGenomeScore(left);
+        if (scoreDelta !== 0) {
+            return scoreDelta;
+        }
         return right.updatedAt.localeCompare(left.updatedAt);
     });
 }

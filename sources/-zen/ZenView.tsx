@@ -201,8 +201,7 @@ export const ZenView = React.memo(() => {
             };
 
             // Add task to team board
-            teamData.tasks = teamData.tasks || [];
-            teamData.tasks.push(newTask);
+            teamData.tasks = [...(teamData.tasks || []), newTask];
 
             // Update artifact
             await sync.updateArtifact(

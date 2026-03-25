@@ -51,9 +51,13 @@ interface FloatingIslandAgentItem {
     activityColor?: string;
     activeTaskTitle?: string;
     activeTaskStartedAt?: number;
+    avatarLabel?: string;
+    avatarColor?: string;
     onPress?: () => void;
     onDoublePress?: () => void;
     onLongPress?: () => void;
+    onDelete?: () => void;
+    onInfo?: () => void;
 }
 
 interface FloatingIslandStatusItem {
@@ -415,6 +419,27 @@ const styles = StyleSheet.create(() => ({
         fontSize: 11,
         fontWeight: '700',
     },
+    agentAvatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    agentAvatarText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    agentActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    agentActionButton: {
+        padding: 4,
+        borderRadius: 6,
+    },
 }));
 
 function formatCompactNumber(value: number): string {
@@ -505,6 +530,10 @@ function areAgentRowPropsEqual(
         && previous.item.activityColor === next.item.activityColor
         && previous.item.activeTaskTitle === next.item.activeTaskTitle
         && previous.item.activeTaskStartedAt === next.item.activeTaskStartedAt
+        && previous.item.avatarLabel === next.item.avatarLabel
+        && previous.item.avatarColor === next.item.avatarColor
+        && previous.item.onDelete === next.item.onDelete
+        && previous.item.onInfo === next.item.onInfo
     );
 }
 
@@ -580,13 +609,21 @@ const AgentRow = React.memo(function AgentRow({
                         ]}
                     />
                 ) : null}
-                <Pressable
-                    onPress={handleDotPress}
-                    hitSlop={10}
-                    style={styles.dotPressable}
-                >
-                    <View style={[styles.rowDot, { backgroundColor: item.dotColor }]} />
-                </Pressable>
+                {item.avatarLabel ? (
+                    <View style={[styles.agentAvatar, { backgroundColor: item.avatarColor || item.dotColor }]}>
+                        <Text style={styles.agentAvatarText}>
+                            {item.avatarLabel.slice(0, 1).toUpperCase()}
+                        </Text>
+                    </View>
+                ) : (
+                    <Pressable
+                        onPress={handleDotPress}
+                        hitSlop={10}
+                        style={styles.dotPressable}
+                    >
+                        <View style={[styles.rowDot, { backgroundColor: item.dotColor }]} />
+                    </Pressable>
+                )}
                 <View style={styles.agentBody}>
                     <View style={styles.agentHeaderRow}>
                         <Text
@@ -608,6 +645,26 @@ const AgentRow = React.memo(function AgentRow({
                                 </Text>
                             </View>
                         ) : null}
+                        <View style={styles.agentActionRow}>
+                            {item.onInfo ? (
+                                <Pressable
+                                    onPress={item.onInfo}
+                                    hitSlop={6}
+                                    style={styles.agentActionButton}
+                                >
+                                    <Ionicons name="information-circle-outline" size={16} color={theme.colors.textSecondary} />
+                                </Pressable>
+                            ) : null}
+                            {item.onDelete ? (
+                                <Pressable
+                                    onPress={item.onDelete}
+                                    hitSlop={6}
+                                    style={styles.agentActionButton}
+                                >
+                                    <Ionicons name="trash-outline" size={14} color={theme.colors.textSecondary} />
+                                </Pressable>
+                            ) : null}
+                        </View>
                     </View>
                     {item.activeTaskTitle ? (
                         <View style={[styles.agentTaskChip, { backgroundColor: '#FFF4E5' }]}>
