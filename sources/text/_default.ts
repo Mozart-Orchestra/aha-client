@@ -1682,6 +1682,9 @@ export const en = {
         soloAgentsEmptyHint: 'Run an agent from the marketplace',
         soloAgentsTitle: 'Solo Agents',
         soloAgentsNewAgent: 'New Agent',
+        // New-team initialization prompt
+        orgManagerInitializing: 'org-manager is initializing your team',
+        orgManagerInitializingSubtitle: 'Setting up agents and workspace. This usually takes a few seconds.',
     },
 
     zen: {

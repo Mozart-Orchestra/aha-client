@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, TextInput, Pressable, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal as RNModal, Dimensions } from 'react-native';
+import { View, ScrollView, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal as RNModal, Dimensions } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +41,8 @@ import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { resolveTeamChatComposerKeyAction } from './teamChatComposer';
+import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages } from './teamChatRoomList';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
@@ -1436,13 +1438,13 @@ export default function TeamChatRoom({
 }: TeamChatRoomProps) {
     const { theme } = useUnistyles();
     const styles = stylesheet;
-    const scrollViewRef = React.useRef<ScrollView>(null);
+    const messageListRef = React.useRef<FlatList<TeamMessage>>(null);
     const isNearBottomRef = React.useRef(true);  // Track if user is near bottom for auto-scroll
     const hasInitialScrolled = React.useRef(false);  // Ensure we scroll to bottom on first layout
 
     // Reliable scroll-to-end helper — uses rAF on web for accurate post-paint timing
     const scrollToEnd = React.useCallback((animated: boolean) => {
-        const doScroll = () => scrollViewRef.current?.scrollToEnd({ animated });
+        const doScroll = () => messageListRef.current?.scrollToEnd({ animated });
         if (Platform.OS === 'web') {
             requestAnimationFrame(() => requestAnimationFrame(doScroll));
         } else {
@@ -2141,12 +2143,7 @@ export default function TeamChatRoom({
 
     // Deduplicate and sort
     const uniqueMessages = React.useMemo(() => {
-        const seen = new Set();
-        return messages.filter(m => {
-            if (seen.has(m.id)) return false;
-            seen.add(m.id);
-            return true;
-        }).sort((a, b) => a.timestamp - b.timestamp);
+        return dedupeAndSortTeamMessages(messages);
     }, [messages]);
 
     const loadMessages = React.useCallback(async () => {
@@ -2154,11 +2151,7 @@ export default function TeamChatRoom({
             setIsLoading(true);
             const result = await sync.getTeamMessages(teamId);
 
-            setMessages(prev => {
-                const combined = [...prev, ...result.messages];
-                const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
-                return unique.sort((a, b) => a.timestamp - b.timestamp);
-            });
+            setMessages(prev => mergeTeamMessages(prev, result.messages));
 
             setTimeout(() => {
                 scrollToEnd(false);
@@ -2183,16 +2176,17 @@ export default function TeamChatRoom({
         const subscribe = async () => {
             try {
                 const unsubscribe = await sync.subscribeToTeamMessages(teamId, (message) => {
+                    const shouldAutoScroll = isNearBottomRef.current;
                     setMessages(prev => {
                         if (messageIdsRef.current.has(message.id)) {
                             return prev;
                         }
                         messageIdsRef.current.add(message.id);
-                        const next = [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
-                        // Cap React state at 500 to prevent unbounded heap growth
-                        return next.length > 500 ? next.slice(-500) : next;
+                        return appendTeamMessage(prev, message);
                     });
-                    scrollToEnd(true);
+                    if (shouldAutoScroll) {
+                        scrollToEnd(true);
+                    }
                 });
 
                 if (!isActive) {
@@ -2560,7 +2554,7 @@ export default function TeamChatRoom({
                 ...(messageMetadata ? { metadata: messageMetadata } : {}),
             };
             messageIdsRef.current.add(messageId);
-            setMessages(prev => [...prev, optimisticMsg].sort((a, b) => a.timestamp - b.timestamp));
+            setMessages(prev => appendTeamMessage(prev, optimisticMsg));
             isNearBottomRef.current = true;
             scrollToEnd(true);
             setInputText('');
@@ -2667,6 +2661,38 @@ export default function TeamChatRoom({
         </View>
     ) : null;
 
+    const renderMessageItem = React.useCallback(({ item: message }: { item: TeamMessage }) => {
+        if (message.type === 'system') {
+            return (
+                <View style={styles.systemMessage}>
+                    <Ionicons name="information-circle-outline" size={12} color={theme.colors.textSecondary} />
+                    <Text style={styles.systemMessageText}>{message.content}</Text>
+                </View>
+            );
+        }
+
+        return (
+            <MessageBubble
+                message={message}
+                isMyMessage={message.fromRole === 'user' && (!message.fromSessionId || message.fromSessionId === mySessionId)}
+                styles={styles}
+                onAvatarPress={handleAvatarPress}
+                resolveAgentIdentity={resolveAgentIdentity}
+                variant={variant}
+                getTasksForMessage={taskChatSync?.getTasksForMessage}
+            />
+        );
+    }, [handleAvatarPress, mySessionId, resolveAgentIdentity, styles, taskChatSync?.getTasksForMessage, theme.colors.textSecondary, variant]);
+
+    const renderEmptyState = React.useCallback(() => (
+        <View style={styles.emptyState}>
+            <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.textSecondary} />
+            <Text style={styles.emptyStateText}>
+                Start the conversation
+            </Text>
+        </View>
+    ), [styles.emptyState, styles.emptyStateText, theme.colors.textSecondary]);
+
     if (isLoading) {
         return (
             <KeyboardAvoidingView
@@ -2693,19 +2719,27 @@ export default function TeamChatRoom({
             {renderStatusHeader()}
             {renderStatusList()}
             {reconnectingBanner}
-            <ScrollView
-                ref={scrollViewRef}
+            <FlatList
+                ref={messageListRef}
                 style={styles.messageList}
+                data={uniqueMessages}
+                keyExtractor={(message) => message.id}
+                renderItem={renderMessageItem}
+                ListEmptyComponent={renderEmptyState}
                 contentContainerStyle={[
                     styles.messageListContent,
                     isEdzlf && { paddingHorizontal: 26, paddingTop: 22, paddingBottom: 24 },
-                    uniqueMessages.length === 0 && { flex: 1 }
+                    uniqueMessages.length === 0 && { flexGrow: 1 }
                 ]}
+                initialNumToRender={20}
+                maxToRenderPerBatch={20}
+                windowSize={10}
+                removeClippedSubviews={Platform.OS !== 'web'}
+                keyboardShouldPersistTaps="handled"
                 // Track user scroll position to determine if near bottom
                 onScroll={(event) => {
                     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-                    const paddingToBottom = 100;  // Threshold for "near bottom"
-                    isNearBottomRef.current = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+                    isNearBottomRef.current = isNearBottom(layoutMeasurement.height, contentOffset.y, contentSize.height);
                 }}
                 scrollEventThrottle={16}
                 // Only auto-scroll when user is near bottom (respecting user intent)
@@ -2721,39 +2755,7 @@ export default function TeamChatRoom({
                         scrollToEnd(false);
                     }
                 }}
-            >
-                {uniqueMessages.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.textSecondary} />
-                        <Text style={styles.emptyStateText}>
-                            Start the conversation
-                        </Text>
-                    </View>
-                ) : (
-                    uniqueMessages.map(message => {
-                        if (message.type === 'system') {
-                            return (
-                                <View key={message.id} style={styles.systemMessage}>
-                                    <Ionicons name="information-circle-outline" size={12} color={theme.colors.textSecondary} />
-                                    <Text style={styles.systemMessageText}>{message.content}</Text>
-                                </View>
-                            );
-                        }
-                        return (
-                            <MessageBubble
-                                key={message.id}
-                                message={message}
-                                isMyMessage={message.fromRole === 'user' && (!message.fromSessionId || message.fromSessionId === mySessionId)}
-                                styles={styles}
-                                onAvatarPress={handleAvatarPress}
-                                resolveAgentIdentity={resolveAgentIdentity}
-                                variant={variant}
-                                getTasksForMessage={taskChatSync?.getTasksForMessage}
-                            />
-                        );
-                    })
-                )}
-            </ScrollView>
+            />
 
             {/* 🆕 历史消息选择器 */}
             {showHistory && myMessageHistory.length > 0 && (
@@ -2869,22 +2871,34 @@ export default function TeamChatRoom({
                                 setTimeout(() => setClipboardHasImage(false), 200);
                             }}
                             onKeyPress={(e) => {
-                                if (mentionSuggestions.length > 0) {
-                                    if (e.nativeEvent.key === 'ArrowUp') {
-                                        e.preventDefault?.();
-                                        mentionMoveUp();
-                                        return;
-                                    }
-                                    if (e.nativeEvent.key === 'ArrowDown') {
-                                        e.preventDefault?.();
-                                        mentionMoveDown();
-                                        return;
-                                    }
-                                    if (e.nativeEvent.key === 'Enter' && mentionSelectedIndex >= 0) {
-                                        e.preventDefault?.();
-                                        handleMentionSelect(mentionSelectedIndex);
-                                        return;
-                                    }
+                                const action = resolveTeamChatComposerKeyAction({
+                                    key: e.nativeEvent.key,
+                                    shiftKey: Boolean((e.nativeEvent as { shiftKey?: boolean }).shiftKey),
+                                    mentionSuggestionsCount: mentionSuggestions.length,
+                                    mentionSelectedIndex,
+                                    hasSendableContent: Boolean(inputText.trim() || selectedImage),
+                                    isWeb: Platform.OS === 'web',
+                                });
+
+                                if (action === 'mention-up') {
+                                    e.preventDefault?.();
+                                    mentionMoveUp();
+                                    return;
+                                }
+                                if (action === 'mention-down') {
+                                    e.preventDefault?.();
+                                    mentionMoveDown();
+                                    return;
+                                }
+                                if (action === 'mention-select') {
+                                    e.preventDefault?.();
+                                    handleMentionSelect(mentionSelectedIndex);
+                                    return;
+                                }
+                                if (action === 'send') {
+                                    e.preventDefault?.();
+                                    void handleSend();
+                                    return;
                                 }
                             }}
                         />

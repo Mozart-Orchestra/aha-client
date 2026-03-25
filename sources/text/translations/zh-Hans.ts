@@ -1676,6 +1676,9 @@ export const zhHans: TranslationStructure = {
         soloAgentsEmptyHint: '从市场运行代理',
         soloAgentsTitle: '独立代理',
         soloAgentsNewAgent: '新建代理',
+        // New-team initialization prompt
+        orgManagerInitializing: 'org-manager 正在初始化团队',
+        orgManagerInitializingSubtitle: '正在配置代理和工作区，通常需要几秒钟。',
     },
 
     zen: {
