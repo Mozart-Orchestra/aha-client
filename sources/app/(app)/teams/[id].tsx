@@ -138,6 +138,8 @@ export default function TeamDashboardScreen() {
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
     const [bypassAgents, setBypassAgents] = React.useState<BypassAgent[]>([]);
     const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
+    const unavailableTeamMissesRef = React.useRef(0);
+    const unavailableTeamRedirectedRef = React.useRef(false);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
     const parsedArtifactBoard = React.useMemo<{
