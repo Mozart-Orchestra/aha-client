@@ -463,6 +463,16 @@ describe('Task Import/Export — End-to-End Integration', () => {
             status: 'open',
             priority: 'high',
             tags: ['backend', 'urgent'],
+            comments: [{
+                id: 'comment-1',
+                authorSessionId: 'session-abc',
+                authorRole: 'builder',
+                authorDisplayName: 'Builder',
+                type: 'note',
+                content: 'Carry discussion history',
+                createdAt: 123,
+                mentions: ['reviewer-1'],
+            }],
             // Execution-specific — must be stripped from the snapshot
             assigneeId: 'session-abc',
             approvalStatus: 'pending',
@@ -492,6 +502,7 @@ describe('Task Import/Export — End-to-End Integration', () => {
         expect(t.description).toBe('Some description');
         expect(t.priority).toBe('high');
         expect(t.tags).toEqual(['backend', 'urgent']);
+        expect(t.comments).toEqual(richTask.comments);
         expect(t.source).toBe('user');
 
         // Execution-specific fields must be absent

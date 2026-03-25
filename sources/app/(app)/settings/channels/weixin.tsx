@@ -1,9 +1,10 @@
 import React from 'react';
-import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
+import { Modal } from '@/modal';
 import { t } from '@/text';
 import { useUnistyles } from 'react-native-unistyles';
 
@@ -17,9 +18,10 @@ import { useUnistyles } from 'react-native-unistyles';
 export default React.memo(function WeixinChannelScreen() {
     const { theme } = useUnistyles();
 
-    const copyCommand = (cmd: string) => {
-        Clipboard.setString(cmd)
-    }
+    const copyCommand = React.useCallback(async (cmd: string, label: string) => {
+        await Clipboard.setStringAsync(cmd);
+        Modal.alert(t('common.copied'), t('items.copiedToClipboard', { label }));
+    }, []);
 
     return (
         <ItemList style={{ paddingTop: 0 }}>
@@ -33,19 +35,19 @@ export default React.memo(function WeixinChannelScreen() {
                     title={t('channels.connectWeixin')}
                     subtitle="aha channels weixin login"
                     icon={<Ionicons name="qr-code-outline" size={29} color="#09B83E" />}
-                    onPress={() => copyCommand('aha channels weixin login')}
+                    onPress={() => void copyCommand('aha channels weixin login', t('channels.connectWeixin'))}
                 />
                 <Item
                     title={t('channels.checkStatus')}
                     subtitle="aha channels status"
                     icon={<Ionicons name="radio-outline" size={29} color="#007AFF" />}
-                    onPress={() => copyCommand('aha channels status')}
+                    onPress={() => void copyCommand('aha channels status', t('channels.checkStatus'))}
                 />
                 <Item
                     title={t('common.disconnect')}
                     subtitle="aha channels weixin disconnect"
                     icon={<Ionicons name="close-circle-outline" size={29} color="#FF3B30" />}
-                    onPress={() => copyCommand('aha channels weixin disconnect')}
+                    onPress={() => void copyCommand('aha channels weixin disconnect', t('common.disconnect'))}
                 />
             </ItemGroup>
 
@@ -55,13 +57,13 @@ export default React.memo(function WeixinChannelScreen() {
                     title={t('channels.policyAll')}
                     subtitle="aha channels weixin policy all"
                     icon={<Ionicons name="notifications-outline" size={29} color={theme.colors.textSecondary} />}
-                    onPress={() => copyCommand('aha channels weixin policy all')}
+                    onPress={() => void copyCommand('aha channels weixin policy all', t('channels.policyAll'))}
                 />
                 <Item
                     title={t('channels.policyImportant')}
                     subtitle="aha channels weixin policy important"
                     icon={<Ionicons name="notifications-off-outline" size={29} color={theme.colors.textSecondary} />}
-                    onPress={() => copyCommand('aha channels weixin policy important')}
+                    onPress={() => void copyCommand('aha channels weixin policy important', t('channels.policyImportant'))}
                 />
             </ItemGroup>
 
