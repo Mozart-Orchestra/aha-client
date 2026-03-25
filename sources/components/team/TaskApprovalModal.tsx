@@ -166,14 +166,14 @@ export const TaskApprovalModal: React.FC<TaskApprovalModalProps> = ({
                 rejectionReason
             );
 
-            // Remove rejected task from the list
-            teamData.tasks = teamData.tasks.filter((t: KanbanTask) => t.id !== task.id);
+            // Remove rejected task from the list (immutable)
+            const updatedTeamData = { ...teamData, tasks: teamData.tasks.filter((t: KanbanTask) => t.id !== task.id) };
 
             // Update artifact
             await sync.updateArtifact(
                 teamId,
                 artifact.title,
-                JSON.stringify(teamData, null, 2),
+                JSON.stringify(updatedTeamData, null, 2),
                 artifact.sessions,
                 artifact.draft,
                 artifact.type

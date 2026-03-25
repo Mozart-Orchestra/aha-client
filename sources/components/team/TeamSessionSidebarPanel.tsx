@@ -23,9 +23,11 @@ import {
 } from '@/utils/teamRoster';
 import { pushSessionRoute } from '@/utils/returnNavigation';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
+import { getRoleVisual } from '@/utils/roleVisualUtils';
 import type { KanbanTask } from '@/sync/kanbanTypes';
 
 import { FloatingIslandSidebar } from '../layout/FloatingIslandSidebar';
+import { AgentInfoPanel } from './AgentInfoPanel';
 import { ThreeColumnShellVariant } from '../layout/ThreeColumnShell';
 
 const CONVERSATION_COLORS = ['#7AA585', '#8F99C1', '#1A1209', '#B89A6F', '#6886A3'];
@@ -56,6 +58,7 @@ export const TeamSessionSidebarPanel = React.memo(({
     const teamArtifact = useArtifact(teamId);
     const allSessions = useAllSessions();
     const allArtifacts = useArtifacts();
+    const [infoSessionId, setInfoSessionId] = React.useState<string | null>(null);
 
     const teamTasks = React.useMemo<KanbanTask[]>(() => {
         if (!teamArtifact?.body) {
@@ -88,10 +91,12 @@ export const TeamSessionSidebarPanel = React.memo(({
                 const role = member?.roleId ?? session?.metadata?.role ?? session?.metadata?.flavor ?? '';
                 const runtimeLabel = member?.runtimeType ? member.runtimeType : undefined;
                 const description = [role, runtimeLabel].filter(Boolean).join(' · ');
+                const displayName = member?.displayName || (session ? getSessionName(session) : sessionId);
+                const roleVisual = getRoleVisual(role, member?.displayName);
 
                 return {
                     id: sessionId,
-                    name: member?.displayName || (session ? getSessionName(session) : sessionId),
+                    name: displayName,
                     dotColor: presence.dotColor,
                     inactive: presence.inactive,
                     dead: presence.dead,
@@ -99,6 +104,9 @@ export const TeamSessionSidebarPanel = React.memo(({
                     description,
                     activeTask: getActiveTaskForSession(teamTasks, sessionId),
                     sortIndex: index,
+                    avatarLabel: (displayName || '?').slice(0, 1),
+                    avatarColor: roleVisual.avatarBackground,
+                    specId: member?.specId,
                 };
             })
             .sort((left, right) => compareTeamRosterEntries(
@@ -125,6 +133,7 @@ export const TeamSessionSidebarPanel = React.memo(({
     const teamTitle = teamArtifact?.title || 'Team';
 
     return (
+        <>
         <FloatingIslandSidebar
             variant={variant}
             header={{
@@ -144,6 +153,8 @@ export const TeamSessionSidebarPanel = React.memo(({
                 selected: agent.id === currentSessionId,
                 activeTaskTitle: agent.activeTask?.title,
                 activeTaskStartedAt: agent.activeTask?.startedAt,
+                avatarLabel: agent.avatarLabel,
+                avatarColor: agent.avatarColor,
                 onPress: () => {
                     pushSessionRoute(router, {
                         id: agent.id,
@@ -152,6 +163,9 @@ export const TeamSessionSidebarPanel = React.memo(({
                         roleName: agent.role,
                         returnTo,
                     });
+                },
+                onInfo: () => {
+                    setInfoSessionId(agent.id);
                 },
             }))}
             agentSectionLabel="Agents"
@@ -179,5 +193,13 @@ export const TeamSessionSidebarPanel = React.memo(({
             conversationSectionLabel="Teams"
             conversationEmptyText="No teams yet"
         />
+        {infoSessionId ? (
+            <AgentInfoPanel
+                visible={!!infoSessionId}
+                sessionId={infoSessionId}
+                onClose={() => setInfoSessionId(null)}
+            />
+        ) : null}
+        </>
     );
 });
