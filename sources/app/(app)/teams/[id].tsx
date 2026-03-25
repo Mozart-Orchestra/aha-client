@@ -61,7 +61,6 @@ import { buildTeamReturnPath, getSingleRouteParam, pushSessionRoute } from '@/ut
 import { randomUUID } from '@/utils/uuid';
 import { t } from '@/text';
 import { formatTaskReference } from '@/utils/taskChatSync';
-import { applyDerivedLifecycleTimestamps } from '@/utils/teamLifecycle';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
 import { compareTeamRosterEntries } from '@/utils/teamRoster';
 import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
@@ -78,6 +77,8 @@ import {
     type TeamPublicReview,
 } from '@/utils/teamUtils';
 import { KanbanBoardPanel } from '@/components/team/KanbanBoardPanel';
+import { useTeamReviews } from '@/hooks/useTeamReviews';
+import { useTeamLifecyclePersist } from '@/hooks/useTeamLifecyclePersist';
 
 type TeamStandardTab = 'chat' | 'board' | 'info' | 'evolution';
 
@@ -138,11 +139,7 @@ export default function TeamDashboardScreen() {
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
-    const [teamScorecard, setTeamScorecard] = React.useState<TeamScorecard | null>(null);
-    const [teamPublicReviews, setTeamPublicReviews] = React.useState<TeamPublicReview[]>([]);
-    const [teamReviewLoading, setTeamReviewLoading] = React.useState(false);
     const [autoInitAttempted, setAutoInitAttempted] = React.useState(false);
-    const lifecyclePersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
     const unavailableTeamMissesRef = React.useRef(0);
     const unavailableTeamRedirectedRef = React.useRef(false);
@@ -168,6 +165,10 @@ export default function TeamDashboardScreen() {
             };
         }
     }, [artifact?.body]);
+
+    const { teamScorecard, teamPublicReviews, teamReviewLoading } = useTeamReviews(teamId, isAuthenticated);
+    useTeamLifecyclePersist(artifact, parsedArtifactBoard.board, teamMessages, allSessions);
+
     const artifactRoomId = React.useMemo(() => {
         return parsedArtifactBoard.board?.roomId;
     }, [parsedArtifactBoard.board]);
@@ -993,68 +994,6 @@ export default function TeamDashboardScreen() {
         columns: kanbanData.columns,
     });
 
-    React.useEffect(() => {
-        if (!artifact?.body || !parsedArtifactBoard.board?.team?.members?.length) {
-            return;
-        }
-
-        const processStartedBySessionId = new Map<string, number>();
-        for (const session of allSessions) {
-            const processStartedAt = session.metadata?.processStartedAt;
-            if (typeof processStartedAt === 'number') {
-                processStartedBySessionId.set(session.id, processStartedAt);
-            }
-        }
-
-        const { members: nextMembers, changed } = applyDerivedLifecycleTimestamps(
-            parsedArtifactBoard.board.team.members,
-            teamMessages,
-            processStartedBySessionId,
-        );
-
-        if (!changed) {
-            return;
-        }
-
-        const nextBoard: KanbanBoard = {
-            ...parsedArtifactBoard.board,
-            team: {
-                ...parsedArtifactBoard.board.team,
-                members: nextMembers,
-            },
-        };
-
-        if (lifecyclePersistTimerRef.current) {
-            clearTimeout(lifecyclePersistTimerRef.current);
-        }
-
-        lifecyclePersistTimerRef.current = setTimeout(() => {
-            sync.updateArtifact(
-                artifact.id,
-                artifact.title,
-                JSON.stringify(nextBoard, null, 2),
-                artifact.sessions,
-                artifact.draft,
-                artifact.type,
-            ).catch((error) => {
-                console.error('Failed to persist derived team lifecycle timestamps:', error);
-            }).finally(() => {
-                lifecyclePersistTimerRef.current = null;
-            });
-        }, 250);
-
-        return () => {
-            if (lifecyclePersistTimerRef.current) {
-                clearTimeout(lifecyclePersistTimerRef.current);
-                lifecyclePersistTimerRef.current = null;
-            }
-        };
-    }, [
-        artifact?.id,
-        parsedArtifactBoard.board,
-        teamMessages,
-    ]);
-
     const normalizeStatus = React.useCallback((status: string): string => {
         const statusMap: Record<string, string> = {
             'in_progress': 'in-progress',
@@ -1189,55 +1128,6 @@ export default function TeamDashboardScreen() {
     const teamPromptLines = React.useMemo(() => splitPromptLines(teamBootDescription), [teamBootDescription]);
     const teamPromptTitle = teamPromptLines[0] ?? '';
     const teamPromptBody = teamPromptLines.slice(teamPromptTitle ? 1 : 0);
-
-    React.useEffect(() => {
-        const credentials = sync.getCredentials();
-        if (!teamId || !credentials?.token || !isAuthenticated) {
-            setTeamScorecard(null);
-            setTeamPublicReviews([]);
-            setTeamReviewLoading(false);
-            return;
-        }
-
-        let cancelled = false;
-        const headers = {
-            Authorization: `Bearer ${credentials.token}`,
-            'Content-Type': 'application/json',
-        };
-        const encodedTeamId = encodeURIComponent(teamId);
-
-        async function loadTeamReviews() {
-            setTeamReviewLoading(true);
-            const [scoreResult, reviewsResult] = await Promise.allSettled([
-                fetch(`${getServerUrl()}/v1/teams/${encodedTeamId}/score`, { headers }),
-                fetch(`${getServerUrl()}/v1/teams/${encodedTeamId}/reviews?limit=3`, { headers }),
-            ]);
-
-            if (cancelled) return;
-
-            const nextScore = scoreResult.status === 'fulfilled' && scoreResult.value.ok
-                ? await scoreResult.value.json() as TeamScorecard
-                : null;
-            const nextReviews = reviewsResult.status === 'fulfilled' && reviewsResult.value.ok
-                ? ((await reviewsResult.value.json()) as { reviews?: TeamPublicReview[] }).reviews ?? []
-                : [];
-
-            setTeamScorecard(nextScore);
-            setTeamPublicReviews(nextReviews);
-            setTeamReviewLoading(false);
-        }
-
-        loadTeamReviews().catch(() => {
-            if (cancelled) return;
-            setTeamScorecard(null);
-            setTeamPublicReviews([]);
-            setTeamReviewLoading(false);
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [isAuthenticated, teamId]);
 
     const roster = React.useMemo(() => {
         const members = kanbanData.team?.members ?? [];
