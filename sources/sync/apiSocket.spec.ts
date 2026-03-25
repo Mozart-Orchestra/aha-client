@@ -150,4 +150,29 @@ describe('ApiSocket reconnect', () => {
         expect(mockState.io.mock.calls[0][1].transports).toEqual(['websocket', 'polling']);
         expect(mockState.io.mock.calls[1][1].transports).toEqual(['polling']);
     });
+
+    it('should reconnect with a new token when updateToken changes credentials', () => {
+        const { apiSocket, socket } = createSocket();
+
+        apiSocket.updateToken('token-456');
+
+        expect(socket.disconnect).toHaveBeenCalledTimes(1);
+        expect(mockState.io).toHaveBeenCalledTimes(2);
+        expect(mockState.io.mock.calls[1][1].auth.token).toBe('token-456');
+    });
+
+    it('should dispatch registered message handlers and stop after offMessage', () => {
+        const { apiSocket, socket } = createSocket();
+        const handler = vi.fn();
+
+        apiSocket.onMessage('update', handler);
+
+        socket.trigger('update', { id: 'evt-1' });
+        expect(handler).toHaveBeenCalledWith({ id: 'evt-1' });
+
+        apiSocket.offMessage('update', handler);
+        socket.trigger('update', { id: 'evt-2' });
+
+        expect(handler).toHaveBeenCalledTimes(1);
+    });
 });
