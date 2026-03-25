@@ -11,7 +11,7 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import * as Clipboard from 'expo-clipboard';
 
@@ -26,109 +26,19 @@ import { encodeBase64 } from '@/encryption/base64';
 import { Modal } from '@/modal';
 import { useAllSessions } from '@/sync/storage';
 import { isSessionActive } from '@/utils/sessionUtils';
-import { getCurrentLanguage, t } from '@/text';
+import { t } from '@/text';
 import { trackAccountCreated, trackAccountRestored } from '@/track';
 
 const DESKTOP_BREAKPOINT = 1180;
 
-type LandingCopy = {
-    eyebrow: string;
-    trustEncrypted: string;
-    trustLocal: string;
-    previewTitle: string;
-    primarySessionTitle: string;
-    primarySessionSubtitle: string;
-    primarySessionMeta: string;
-    secondarySessionTitle: string;
-    secondarySessionSubtitle: string;
-    secondarySessionMeta: string;
-    deny: string;
-    approve: string;
-    openServer: string;
-    brand: string;
-    teamAgent1: string;
-    teamAgent1Task: string;
-    teamAgent1Machine: string;
-    teamAgent2: string;
-    teamAgent2Task: string;
-    teamAgent2Machine: string;
-    teamAgent3: string;
-    teamAgent3Task: string;
-    teamAgent3Machine: string;
-    teamAgent4: string;
-    teamAgent4Task: string;
-    teamAgent4Machine: string;
-    cliCommand: string;
-};
-
-const ENGLISH_LANDING_COPY: LandingCopy = {
-    eyebrow: 'Claude Code + Codex Orchestration',
-    trustEncrypted: 'End-to-end encrypted',
-    trustLocal: 'Any machine, anywhere',
-    previewTitle: 'Team: aha-saas-mvp',
-    primarySessionTitle: 'Architect',
-    primarySessionSubtitle: 'Designing system architecture and distributing tasks to the team',
-    primarySessionMeta: 'leading',
-    secondarySessionTitle: 'Builder',
-    secondarySessionSubtitle: 'Implementing authentication module based on Architect\'s design',
-    secondarySessionMeta: 'coding',
-    deny: 'Deny',
-    approve: 'Approve',
-    openServer: 'Open server settings',
-    brand: 'Aha',
-    teamAgent1: 'Architect',
-    teamAgent1Task: 'System design & task distribution',
-    teamAgent1Machine: 'Mac Studio',
-    teamAgent2: 'Builder',
-    teamAgent2Task: 'Auth module + API endpoints',
-    teamAgent2Machine: 'Linux Server',
-    teamAgent3: 'QA',
-    teamAgent3Task: 'E2E tests & integration tests',
-    teamAgent3Machine: 'Windows PC',
-    teamAgent4: 'DevOps',
-    teamAgent4Task: 'CI/CD pipeline & deployment',
-    teamAgent4Machine: 'GPU Cloud',
-    cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
-};
-
-const CHINESE_LANDING_COPY: LandingCopy = {
-    eyebrow: 'Claude Code + Codex 编排',
-    trustEncrypted: '端到端加密',
-    trustLocal: '任意机器，随处运行',
-    previewTitle: '团队: aha-saas-mvp',
-    primarySessionTitle: '架构师',
-    primarySessionSubtitle: '设计系统架构，向团队分发任务',
-    primarySessionMeta: '领导中',
-    secondarySessionTitle: 'Builder',
-    secondarySessionSubtitle: '根据架构师的设计实现认证模块',
-    secondarySessionMeta: '编码中',
-    deny: '拒绝',
-    approve: '批准',
-    openServer: '打开服务设置',
-    brand: 'Aha',
-    teamAgent1: '架构师',
-    teamAgent1Task: '系统设计 & 任务分发',
-    teamAgent1Machine: 'Mac Studio',
-    teamAgent2: 'Builder',
-    teamAgent2Task: '认证模块 + API 接口',
-    teamAgent2Machine: 'Linux 服务器',
-    teamAgent3: 'QA',
-    teamAgent3Task: 'E2E 测试 & 集成测试',
-    teamAgent3Machine: 'Windows PC',
-    teamAgent4: 'DevOps',
-    teamAgent4Task: 'CI/CD 流水线 & 部署',
-    teamAgent4Machine: 'GPU 云',
-    cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
-};
-
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create((theme) => ({
     shellContent: {
         flex: 1,
         minHeight: 0,
     },
     landingScreen: {
         flex: 1,
-        backgroundColor: '#FCFBF8',
+        backgroundColor: theme.colors.groupped.background,
     },
     landingDesktopOuter: {
         flex: 1,
@@ -152,7 +62,7 @@ const styles = StyleSheet.create(() => ({
     landingDesktopBrandText: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#1A1209',
+        color: theme.colors.text,
     },
     landingIconShell: {
         width: 36,
@@ -161,12 +71,12 @@ const styles = StyleSheet.create(() => ({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#E8E4DF',
-        backgroundColor: '#FFFFFF',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
     },
     landingIconShellDark: {
-        backgroundColor: '#1A1209',
-        borderColor: '#1A1209',
+        backgroundColor: theme.colors.text,
+        borderColor: theme.colors.text,
     },
     landingDesktopMain: {
         flex: 1,
@@ -188,11 +98,11 @@ const styles = StyleSheet.create(() => ({
         alignSelf: 'flex-start',
         gap: 8,
         borderWidth: 1,
-        borderColor: '#E8E4DF',
+        borderColor: theme.colors.divider,
         borderRadius: 999,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        backgroundColor: '#FAF8F5',
+        backgroundColor: theme.colors.surfaceHigh,
     },
     landingEyebrowDot: {
         width: 6,
@@ -203,7 +113,7 @@ const styles = StyleSheet.create(() => ({
     landingEyebrowText: {
         fontSize: 11,
         fontWeight: '700',
-        color: '#8A7F74',
+        color: theme.colors.textSecondary,
         letterSpacing: 0.2,
     },
     landingTitle: {
@@ -211,14 +121,14 @@ const styles = StyleSheet.create(() => ({
         fontSize: 56,
         lineHeight: 60,
         fontWeight: '800',
-        color: '#1A1209',
+        color: theme.colors.text,
     },
     landingSubtitle: {
         marginTop: 20,
         maxWidth: 470,
         fontSize: 18,
         lineHeight: 29,
-        color: '#8A7F74',
+        color: theme.colors.textSecondary,
     },
     landingActionsRow: {
         flexDirection: 'row',
@@ -238,23 +148,23 @@ const styles = StyleSheet.create(() => ({
         borderWidth: 1,
     },
     landingButtonPrimary: {
-        backgroundColor: '#1A1209',
-        borderColor: '#1A1209',
+        backgroundColor: theme.colors.text,
+        borderColor: theme.colors.text,
     },
     landingButtonSecondary: {
-        backgroundColor: '#FFFFFF',
-        borderColor: '#E8E4DF',
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.divider,
     },
     landingButtonGhost: {
-        backgroundColor: '#FFFFFF',
-        borderColor: '#E8E4DF',
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.divider,
         minHeight: 36,
         paddingHorizontal: 14,
         paddingVertical: 8,
     },
     landingButtonDanger: {
-        backgroundColor: '#FFF5F5',
-        borderColor: '#F2D5D5',
+        backgroundColor: theme.colors.box.error.background,
+        borderColor: theme.colors.box.error.border,
         minHeight: 36,
         paddingHorizontal: 14,
         paddingVertical: 8,
@@ -262,12 +172,12 @@ const styles = StyleSheet.create(() => ({
     landingButtonPrimaryText: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#FAF8F5',
+        color: theme.colors.surface,
     },
     landingButtonSecondaryText: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#1A1209',
+        color: theme.colors.text,
     },
     landingTrustRow: {
         flexDirection: 'row',
@@ -282,7 +192,7 @@ const styles = StyleSheet.create(() => ({
     },
     landingTrustText: {
         fontSize: 12,
-        color: '#9C8F83',
+        color: theme.colors.textSecondary,
     },
     landingPreviewPanel: {
         width: '100%',
@@ -290,13 +200,13 @@ const styles = StyleSheet.create(() => ({
         minHeight: 560,
         borderRadius: 24,
         borderWidth: 1,
-        borderColor: '#ECE6DE',
-        backgroundColor: '#FFFFFF',
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
         paddingHorizontal: 24,
         paddingVertical: 28,
-        shadowColor: '#1A1209',
+        shadowColor: theme.colors.shadow.color,
         shadowOffset: { width: 0, height: 18 },
-        shadowOpacity: 0.08,
+        shadowOpacity: theme.colors.shadow.opacity,
         shadowRadius: 36,
         elevation: 8,
     },
@@ -310,7 +220,7 @@ const styles = StyleSheet.create(() => ({
     landingPreviewTitle: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#8A7F74',
+        color: theme.colors.textSecondary,
     },
     landingPreviewBadge: {
         borderRadius: 999,
@@ -334,7 +244,7 @@ const styles = StyleSheet.create(() => ({
     },
     landingMobileScroll: {
         flex: 1,
-        backgroundColor: '#FCFBF8',
+        backgroundColor: theme.colors.groupped.background,
     },
     landingMobileContent: {
         flexGrow: 1,
@@ -355,7 +265,7 @@ const styles = StyleSheet.create(() => ({
     landingMobileBrandText: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#1A1209',
+        color: theme.colors.text,
     },
     landingMobileBody: {
         width: '100%',
@@ -367,13 +277,13 @@ const styles = StyleSheet.create(() => ({
         fontSize: 38,
         lineHeight: 42,
         fontWeight: '800',
-        color: '#1A1209',
+        color: theme.colors.text,
     },
     landingMobileSubtitle: {
         marginTop: 18,
         fontSize: 16,
         lineHeight: 25,
-        color: '#8A7F74',
+        color: theme.colors.textSecondary,
     },
     landingMobileActions: {
         marginTop: 24,
@@ -396,6 +306,7 @@ function LandingButton({
     onPress: () => void;
     tone: 'primary' | 'secondary' | 'ghost' | 'danger';
 }) {
+    const { theme } = useUnistyles();
     const buttonStyle = tone === 'primary'
         ? styles.landingButtonPrimary
         : tone === 'secondary'
@@ -406,7 +317,7 @@ function LandingButton({
     const textStyle = tone === 'primary'
         ? styles.landingButtonPrimaryText
         : styles.landingButtonSecondaryText;
-    const iconColor = tone === 'primary' ? '#FAF8F5' : tone === 'danger' ? '#D84848' : '#1A1209';
+    const iconColor = tone === 'primary' ? theme.colors.surface : tone === 'danger' ? theme.colors.textDestructive : theme.colors.text;
 
     return (
         <Pressable style={[styles.landingButton, buttonStyle]} onPress={onPress}>
@@ -423,9 +334,10 @@ function TrustItem({
     icon: keyof typeof Ionicons.glyphMap;
     label: string;
 }) {
+    const { theme } = useUnistyles();
     return (
         <View style={styles.landingTrustItem}>
-            <Ionicons name={icon} size={14} color="#B2A596" />
+            <Ionicons name={icon} size={14} color={theme.colors.textSecondary} />
             <Text style={styles.landingTrustText}>{label}</Text>
         </View>
     );
@@ -457,18 +369,16 @@ function NotAuthenticated() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
+    const { theme } = useUnistyles();
     const previewSessions = useAllSessions();
     const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
-    const copy = getCurrentLanguage() === 'zh-Hans' ? CHINESE_LANDING_COPY : ENGLISH_LANDING_COPY;
     const liveSessionCount = React.useMemo(() => (
         previewSessions.filter((session) => (
             isSessionActive(session) || session.presence === 'online' || session.thinking
         )).length
     ), [previewSessions]);
     const previewCountLabel = React.useMemo(() => {
-        return getCurrentLanguage() === 'zh-Hans'
-            ? `${liveSessionCount} 个活跃`
-            : `${liveSessionCount} active`;
+        return t('landing.activeCount', { count: liveSessionCount });
     }, [liveSessionCount]);
 
     const handleCreateAccount = React.useCallback(async () => {
@@ -497,39 +407,37 @@ function NotAuthenticated() {
     }, [router]);
 
     const handleCopyCliCommand = React.useCallback(async () => {
-        await Clipboard.setStringAsync(copy.cliCommand);
+        await Clipboard.setStringAsync(t('landing.cliCommand'));
         Modal.alert(
-            getCurrentLanguage() === 'zh-Hans' ? '已复制' : 'Copied',
-            getCurrentLanguage() === 'zh-Hans'
-                ? '命令已复制到剪贴板，请打开终端粘贴运行'
-                : 'Command copied to clipboard. Paste it in your terminal to get started.',
+            t('landing.cliCopiedTitle'),
+            t('landing.cliCopiedMessage'),
         );
-    }, [copy.cliCommand]);
+    }, []);
 
     const previewPanel = (
         <View style={styles.landingPreviewPanel}>
             <View style={styles.landingPreviewHeader}>
-                <Text style={styles.landingPreviewTitle}>{copy.previewTitle}</Text>
+                <Text style={styles.landingPreviewTitle}>{t('landing.previewTitle')}</Text>
                 <View style={styles.landingPreviewBadge}>
-                    <Text style={styles.landingPreviewBadgeText}>4 agents</Text>
+                    <Text style={styles.landingPreviewBadgeText}>{t('landing.previewAgentCount', { count: 4 })}</Text>
                 </View>
             </View>
             {[
-                { name: copy.teamAgent1, task: copy.teamAgent1Task, machine: copy.teamAgent1Machine, color: '#FFB547', bg: '#FFFBF5', border: '#FDB75A', status: copy.primarySessionMeta },
-                { name: copy.teamAgent2, task: copy.teamAgent2Task, machine: copy.teamAgent2Machine, color: '#4A9EFF', bg: '#F5F9FF', border: '#7BB8FF', status: copy.secondarySessionMeta },
-                { name: copy.teamAgent3, task: copy.teamAgent3Task, machine: copy.teamAgent3Machine, color: '#2BC866', bg: '#F2FBF5', border: '#6DD99A', status: 'testing' },
-                { name: copy.teamAgent4, task: copy.teamAgent4Task, machine: copy.teamAgent4Machine, color: '#A78BFA', bg: '#F8F5FF', border: '#C4B5FD', status: 'deploying' },
+                { name: t('landing.teamAgent1'), task: t('landing.teamAgent1Task'), machine: t('landing.teamAgent1Machine'), color: '#FFB547', bg: '#FFFBF5', border: '#FDB75A', status: t('landing.primarySessionMeta') },
+                { name: t('landing.teamAgent2'), task: t('landing.teamAgent2Task'), machine: t('landing.teamAgent2Machine'), color: '#4A9EFF', bg: '#F5F9FF', border: '#7BB8FF', status: t('landing.secondarySessionMeta') },
+                { name: t('landing.teamAgent3'), task: t('landing.teamAgent3Task'), machine: t('landing.teamAgent3Machine'), color: '#2BC866', bg: '#F2FBF5', border: '#6DD99A', status: t('landing.agentStatusTesting') },
+                { name: t('landing.teamAgent4'), task: t('landing.teamAgent4Task'), machine: t('landing.teamAgent4Machine'), color: '#A78BFA', bg: '#F8F5FF', border: '#C4B5FD', status: t('landing.agentStatusDeploying') },
             ].map((agent, i) => (
                 <View key={i} style={{ marginTop: i === 0 ? 0 : 8, borderRadius: 14, borderWidth: 1, borderColor: agent.border, backgroundColor: agent.bg, padding: 14 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: agent.color }} />
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#1A1209', flex: 1 }}>{agent.name}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.text, flex: 1 }}>{agent.name}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="hardware-chip-outline" size={11} color="#9C8F83" />
-                            <Text style={{ fontSize: 10, color: '#9C8F83' }}>{agent.machine}</Text>
+                            <Ionicons name="hardware-chip-outline" size={11} color={theme.colors.textSecondary} />
+                            <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{agent.machine}</Text>
                         </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#8A7F74', marginTop: 4 }}>{agent.task}</Text>
+                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>{agent.task}</Text>
                     <Text style={{ fontSize: 10, color: agent.color, marginTop: 4, fontWeight: '600' }}>{agent.status}</Text>
                 </View>
             ))}
@@ -551,16 +459,16 @@ function NotAuthenticated() {
                     <View style={styles.landingDesktopHeader}>
                         <View style={styles.landingDesktopBrand}>
                             <View style={[styles.landingIconShell, styles.landingIconShellDark]}>
-                                <Ionicons name="terminal-outline" size={16} color="#FAF8F5" />
+                                <Ionicons name="terminal-outline" size={16} color={theme.colors.surface} />
                             </View>
-                            <Text style={styles.landingDesktopBrandText}>{copy.brand}</Text>
+                            <Text style={styles.landingDesktopBrandText}>{t('landing.brand')}</Text>
                         </View>
                         <Pressable
-                            accessibilityLabel={copy.openServer}
+                            accessibilityLabel={t('landing.openServer')}
                             style={styles.landingIconShell}
                             onPress={handleOpenServer}
                         >
-                            <Ionicons name="server-outline" size={16} color="#1A1209" />
+                            <Ionicons name="server-outline" size={16} color={theme.colors.text} />
                         </Pressable>
                     </View>
 
@@ -568,7 +476,7 @@ function NotAuthenticated() {
                         <View style={styles.landingCopyColumn}>
                             <View style={styles.landingEyebrow}>
                                 <View style={styles.landingEyebrowDot} />
-                                <Text style={styles.landingEyebrowText}>{copy.eyebrow}</Text>
+                                <Text style={styles.landingEyebrowText}>{t('landing.eyebrow')}</Text>
                             </View>
                             <Text style={styles.landingTitle}>{t('welcome.title')}</Text>
                             <Text style={styles.landingSubtitle}>{t('welcome.subtitle')}</Text>
@@ -576,7 +484,7 @@ function NotAuthenticated() {
                             <View style={styles.landingActionsRow}>
                                 <LandingButton
                                     icon="copy-outline"
-                                    title={copy.cliCommand}
+                                    title={t('landing.cliCommand')}
                                     onPress={handleCopyCliCommand}
                                     tone="primary"
                                 />
@@ -594,8 +502,8 @@ function NotAuthenticated() {
                             </View>
 
                             <View style={styles.landingTrustRow}>
-                                <TrustItem icon="lock-closed-outline" label={copy.trustEncrypted} />
-                                <TrustItem icon="globe-outline" label={copy.trustLocal} />
+                                <TrustItem icon="lock-closed-outline" label={t('landing.trustEncrypted')} />
+                                <TrustItem icon="globe-outline" label={t('landing.trustLocal')} />
                             </View>
                         </View>
 
@@ -627,19 +535,19 @@ function NotAuthenticated() {
             <View style={styles.landingMobileHeader}>
                 <View style={styles.landingMobileBrand}>
                     <View style={[styles.landingIconShell, styles.landingIconShellDark]}>
-                        <Ionicons name="terminal-outline" size={16} color="#FAF8F5" />
+                        <Ionicons name="terminal-outline" size={16} color={theme.colors.surface} />
                     </View>
-                    <Text style={styles.landingMobileBrandText}>{copy.brand}</Text>
+                    <Text style={styles.landingMobileBrandText}>{t('landing.brand')}</Text>
                 </View>
-                <Pressable accessibilityLabel={copy.openServer} style={styles.landingIconShell} onPress={handleOpenServer}>
-                    <Ionicons name="server-outline" size={16} color="#1A1209" />
+                <Pressable accessibilityLabel={t('landing.openServer')} style={styles.landingIconShell} onPress={handleOpenServer}>
+                    <Ionicons name="server-outline" size={16} color={theme.colors.text} />
                 </Pressable>
             </View>
 
             <View style={styles.landingMobileBody}>
                 <View style={styles.landingEyebrow}>
                     <View style={styles.landingEyebrowDot} />
-                    <Text style={styles.landingEyebrowText}>{copy.eyebrow}</Text>
+                    <Text style={styles.landingEyebrowText}>{t('landing.eyebrow')}</Text>
                 </View>
                 <Text style={styles.landingMobileTitle}>{t('welcome.title')}</Text>
                 <Text style={styles.landingMobileSubtitle}>{t('welcome.subtitle')}</Text>
@@ -649,7 +557,7 @@ function NotAuthenticated() {
                         icon={Platform.OS === 'android' || Platform.OS === 'ios' ? undefined : 'copy-outline'}
                         title={Platform.OS === 'android' || Platform.OS === 'ios'
                             ? t('welcome.createAccount')
-                            : copy.cliCommand}
+                            : t('landing.cliCommand')}
                         onPress={Platform.OS === 'android' || Platform.OS === 'ios' ? handleCreateAccount : handleCopyCliCommand}
                         tone="primary"
                     />
@@ -669,8 +577,8 @@ function NotAuthenticated() {
                 </View>
 
                 <View style={styles.landingTrustRow}>
-                    <TrustItem icon="lock-closed-outline" label={copy.trustEncrypted} />
-                    <TrustItem icon="globe-outline" label={copy.trustLocal} />
+                    <TrustItem icon="lock-closed-outline" label={t('landing.trustEncrypted')} />
+                    <TrustItem icon="globe-outline" label={t('landing.trustLocal')} />
                 </View>
 
                 <View style={styles.landingMobilePreview}>

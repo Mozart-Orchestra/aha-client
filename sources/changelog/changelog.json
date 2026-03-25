@@ -1,6 +1,20 @@
 {
   "entries": [
     {
+      "version": 6,
+      "date": "2026-03-25 (WeChat Integration)",
+      "summary": "全新微信集成，通过微信直接管理团队和 Agent。支持图片、语音、视频、链接等多媒体消息接收，以及通过微信指令控制团队。",
+      "changes": [
+        "**微信消息通道**: 通过 iLink Bot 或公众号接收和发送微信消息",
+        "**多媒体消息支持**: 接收图片（含URL）、语音（含识别文本）、视频、链接、文件等多种消息类型",
+        "**微信指令系统**: 在微信中使用 /help、/teams、/status、/tasks、/agents 等指令管理团队",
+        "**推送策略**: 支持 /mute 和 /unmute 控制消息推送级别",
+        "**团队消息转发**: 微信消息自动路由到团队消息时间线，Agent 实时响应",
+        "**Channel 设置**: 新增 Channel 管理页面，集中配置微信等 IM 通道"
+      ],
+      "rawMarkdown": "## Version 6 - 2026-03-25 (WeChat Integration)\n\n全新微信集成，通过微信直接管理团队和 Agent。支持图片、语音、视频、链接等多媒体消息接收，以及通过微信指令控制团队。\n\n- **微信消息通道**: 通过 iLink Bot 或公众号接收和发送微信消息\n- **多媒体消息支持**: 接收图片（含URL）、语音（含识别文本）、视频、链接、文件等多种消息类型\n- **微信指令系统**: 在微信中使用 /help、/teams、/status、/tasks、/agents 等指令管理团队\n- **推送策略**: 支持 /mute 和 /unmute 控制消息推送级别\n- **团队消息转发**: 微信消息自动路由到团队消息时间线，Agent 实时响应\n- **Channel 设置**: 新增 Channel 管理页面，集中配置微信等 IM 通道"
+    },
+    {
       "version": 5,
       "date": "2026-01-19 (Dev-1119 UI Beautification)",
       "summary": "This release delivers the P0 phase of the UI beautification initiative, introducing modern shadow systems and enhanced elevation across core components. The implementation establishes a cohesive visual foundation with cross-platform consistency.",
@@ -79,5 +93,5 @@
       "rawMarkdown": "## Version 1 - 2025-05-12\n\n\nWelcome to Happy - your secure, encrypted mobile companion for Claude Code. This inaugural release establishes the foundation for private, powerful AI interactions on the go.\n\n- Implemented end-to-end encrypted session management ensuring complete privacy\n- Integrated intelligent voice assistant with natural conversation capabilities\n- Added experimental file manager with syntax highlighting and tree navigation\n- Built seamless real-time synchronization across all your devices\n- Established native support for iOS, Android, and responsive web interfaces"
     }
   ],
-  "latestVersion": 5
+  "latestVersion": 6
 }

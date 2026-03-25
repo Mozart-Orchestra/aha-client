@@ -19,7 +19,7 @@ export const DESKTOP_BREAKPOINT = 1180;
  * only appears when `settings.experiments` is enabled, and is managed locally
  * inside TabBar / MainView.
  */
-export type NavTabKey = 'home' | 'agents' | 'teams' | 'settings';
+export type NavTabKey = 'home' | 'agents' | 'teams' | 'channels' | 'settings';
 
 export interface NavTabDefinition {
     /** Unique key for the tab. */
@@ -77,6 +77,16 @@ export const NAV_TABS: readonly NavTabDefinition[] = [
         showInTabBar: true,
     },
     {
+        key: 'channels',
+        route: '/channels',
+        railIcon: 'link-outline',
+        tabIcon: null,
+        tabLabelKey: null,
+        showInRail: true,
+        showInDock: false,
+        showInTabBar: false,
+    },
+    {
         key: 'settings',
         route: '/settings',
         railIcon: 'settings-outline',
@@ -103,6 +113,9 @@ export function getActiveTabFromPathname(pathname: string): NavTabKey {
     if (pathname.startsWith('/teams')) {
         return 'teams';
     }
+    if (pathname.startsWith('/channels')) {
+        return 'channels';
+    }
     if (pathname.startsWith('/agents')) {
         return 'agents';
     }
@@ -124,6 +137,8 @@ export function isEmbeddedDesktopRoute(pathname: string): boolean {
         || pathname === '/teams'
         || pathname === '/teams/new'
         || /^\/teams\/[^/]+$/.test(pathname)
+        || pathname === '/channels'
+        || pathname === '/channels/weixin'
         || pathname === '/restore'
         || pathname.startsWith('/restore/')
         || pathname.startsWith('/session/')
