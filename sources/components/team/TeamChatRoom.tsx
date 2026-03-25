@@ -41,7 +41,6 @@ import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
-import { resolveTeamChatComposerKeyAction } from './teamChatComposer';
 import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages } from './teamChatRoomList';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
@@ -65,9 +64,31 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderWidth: 1,
         borderColor: theme.colors.warning + '40',
     },
+    reconnectingBannerContent: {
+        flex: 1,
+        gap: 2,
+    },
     reconnectingBannerText: {
         fontSize: 13,
         fontWeight: '600',
+        color: theme.colors.warning,
+    },
+    reconnectingBannerSubtext: {
+        fontSize: 11,
+        color: theme.colors.warning,
+        opacity: 0.7,
+    },
+    reconnectingBannerButton: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+        backgroundColor: theme.colors.warning + '30',
+        borderWidth: 1,
+        borderColor: theme.colors.warning + '60',
+    },
+    reconnectingBannerButtonText: {
+        fontSize: 12,
+        fontWeight: '700',
         color: theme.colors.warning,
     },
     messageList: {
@@ -2654,10 +2675,27 @@ export default function TeamChatRoom({
         return null;
     }, [members, fallbackMachineId]);
 
-    const reconnectingBanner = connectionStatus.isReconnecting ? (
+    const reconnectingBanner = connectionStatus.isDisconnected ? (
         <View style={styles.reconnectingBanner}>
             <ActivityIndicator size="small" color={theme.colors.warning} />
-            <Text style={styles.reconnectingBannerText}>重连中...</Text>
+            <View style={styles.reconnectingBannerContent}>
+                <Text style={styles.reconnectingBannerText}>
+                    {connectionStatus.isReconnecting ? '重连中...' : '网络断开'}
+                </Text>
+                {connectionStatus.disconnectedForSeconds !== null && (
+                    <Text style={styles.reconnectingBannerSubtext}>
+                        已断线 {connectionStatus.disconnectedForSeconds}s，消息可能无法接收
+                    </Text>
+                )}
+            </View>
+            <Pressable
+                style={styles.reconnectingBannerButton}
+                onPress={connectionStatus.reconnect}
+                accessibilityRole="button"
+                accessibilityLabel="重新连接"
+            >
+                <Text style={styles.reconnectingBannerButtonText}>重连</Text>
+            </Pressable>
         </View>
     ) : null;
 
@@ -2871,6 +2909,7 @@ export default function TeamChatRoom({
                                 setTimeout(() => setClipboardHasImage(false), 200);
                             }}
                             onKeyPress={(e) => {
+                                const { resolveTeamChatComposerKeyAction } = require('./teamChatComposer') as typeof import('./teamChatComposer');
                                 const action = resolveTeamChatComposerKeyAction({
                                     key: e.nativeEvent.key,
                                     shiftKey: Boolean((e.nativeEvent as { shiftKey?: boolean }).shiftKey),
