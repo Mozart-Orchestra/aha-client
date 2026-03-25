@@ -43,7 +43,11 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine AS runner
 ARG BASE_PATH=""
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Use base-path-aware nginx config if BASE_PATH is set, otherwise use default
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Replace the default nginx config with a base-path-aware variant when BASE_PATH is set.
+# nginx-unprivileged runs as non-root, so we need to switch to root temporarily.
+USER root
 RUN if [ -n "$BASE_PATH" ]; then \
       echo "server { \
         listen 8080; \
@@ -55,6 +59,7 @@ RUN if [ -n "$BASE_PATH" ]; then \
         location = ${BASE_PATH} { return 301 ${BASE_PATH}/; } \
       }" > /etc/nginx/conf.d/default.conf; \
     fi
+USER nginx
 
 # Fall back to copied nginx.conf when no BASE_PATH
 COPY nginx.conf /tmp/nginx-default.conf
