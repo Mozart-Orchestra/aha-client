@@ -1,17 +1,18 @@
 import React from 'react';
 import {
     ActivityIndicator,
-    Clipboard,
     Pressable,
     Text,
     View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
 import { QRCode } from '@/components/qr';
 import { useAuth } from '@/auth/AuthContext';
+import { Modal } from '@/modal';
 import {
     bindWeixinChannel,
     disconnectWeixinChannel,
@@ -42,9 +43,13 @@ export default React.memo(function WeixinChannelScreen() {
     const [error, setError] = React.useState<string | null>(null);
     const [notice, setNotice] = React.useState<string | null>(null);
 
-    const copyCommand = (cmd: string) => {
-        Clipboard.setString(cmd)
-    }
+    const copyCommand = React.useCallback(async (cmd: string, label?: string) => {
+        await Clipboard.setStringAsync(cmd);
+        Modal.alert(
+            t('common.copied'),
+            t('items.copiedToClipboard', { label: label ?? cmd }),
+        );
+    }, []);
 
     const refreshStatus = React.useCallback(async () => {
         if (!credentials) return;
@@ -253,19 +258,19 @@ export default React.memo(function WeixinChannelScreen() {
                     title={t('channels.connectWeixin')}
                     subtitle="aha channels weixin login"
                     icon={<Ionicons name="qr-code-outline" size={29} color="#09B83E" />}
-                    onPress={() => copyCommand('aha channels weixin login')}
+                    onPress={() => void copyCommand('aha channels weixin login', t('channels.connectWeixin'))}
                 />
                 <Item
                     title={t('channels.checkStatus')}
                     subtitle="aha channels status"
                     icon={<Ionicons name="radio-outline" size={29} color="#007AFF" />}
-                    onPress={() => copyCommand('aha channels status')}
+                    onPress={() => void copyCommand('aha channels status', t('channels.checkStatus'))}
                 />
                 <Item
                     title={t('common.disconnect')}
                     subtitle="aha channels weixin disconnect"
                     icon={<Ionicons name="close-circle-outline" size={29} color="#FF3B30" />}
-                    onPress={() => copyCommand('aha channels weixin disconnect')}
+                    onPress={() => void copyCommand('aha channels weixin disconnect', t('common.disconnect'))}
                 />
             </ItemGroup>
 
