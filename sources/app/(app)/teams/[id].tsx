@@ -59,6 +59,7 @@ import { getActiveTaskForSession } from '@/utils/teamActiveTask';
 import { compareTeamRosterEntries } from '@/utils/teamRoster';
 import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
 import { getServerUrl } from '@/sync/serverConfig';
+import { fetchBypassAgents, type BypassAgent } from '@/sync/apiEvolution';
 import { stylesheet } from './teamStyles';
 import {
     STANDARD_SHELL_TABS,
@@ -135,6 +136,7 @@ export default function TeamDashboardScreen() {
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
+    const [bypassAgents, setBypassAgents] = React.useState<BypassAgent[]>([]);
     const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
 
     const { bridge: desktopBridge, collaborationState } = useDesktopBridge();
@@ -161,6 +163,36 @@ export default function TeamDashboardScreen() {
 
     const { teamScorecard, teamPublicReviews, teamReviewLoading } = useTeamReviews(teamId, isAuthenticated);
     useTeamLifecyclePersist(artifact, parsedArtifactBoard.board, teamMessages, allSessions);
+
+    React.useEffect(() => {
+        let cancelled = false;
+
+        const loadBypassAgents = async () => {
+            const auth = getCurrentAuth();
+            if (!auth?.credentials || !teamId) {
+                if (!cancelled) {
+                    setBypassAgents([]);
+                }
+                return;
+            }
+
+            try {
+                const result = await fetchBypassAgents(auth.credentials, teamId);
+                if (!cancelled) {
+                    setBypassAgents(result.agents || []);
+                }
+            } catch {
+                if (!cancelled) {
+                    setBypassAgents([]);
+                }
+            }
+        };
+
+        void loadBypassAgents();
+        return () => {
+            cancelled = true;
+        };
+    }, [teamId, isAuthenticated]);
 
     const artifactRoomId = React.useMemo(() => {
         return parsedArtifactBoard.board?.roomId;
@@ -1064,11 +1096,27 @@ export default function TeamDashboardScreen() {
     }, [kanbanData.team?.members, artifact?.sessions, sessionLookup, roleDefinitions, kanbanData.tasks]);
 
     const systemRoster = React.useMemo(() => {
-        return roster.filter((entry) => {
+        const rosterSystemEntries = roster.filter((entry) => {
             const roleId = entry.member.roleId || entry.session?.metadata?.role || '';
             return roleId === 'supervisor' || roleId === 'help-agent';
         });
-    }, [roster]);
+        const existingIds = new Set(rosterSystemEntries.map((entry) => entry.member.sessionId));
+        const bypassEntries = bypassAgents
+            .filter((agent) => (agent.roleId === 'supervisor' || agent.roleId === 'help-agent') && !existingIds.has(agent.agentId))
+            .map((agent) => ({
+                member: {
+                    sessionId: agent.agentId,
+                    roleId: agent.roleId,
+                    displayName: agent.roleId === 'supervisor' ? 'Supervisor' : 'Help Agent',
+                    executionPlane: 'bypass',
+                    runtimeType: 'claude',
+                },
+                session: undefined,
+                role: undefined,
+            }));
+
+        return [...rosterSystemEntries, ...bypassEntries];
+    }, [roster, bypassAgents]);
 
     /** Sessions map for AgentRoster — maps sessionId → { active, activeAt } */
     const agentRosterSessions = React.useMemo(() => {
