@@ -91,6 +91,9 @@ export const en = {
         myKeyDescription: 'Restoring this key on any device connects all machines bound to it — they will all be active and able to communicate.',
         restoreDescription: 'Enter your secret key to restore this device. All machines previously linked to this key will reconnect automatically.',
         restoreKeyHint: 'Paste the backup key from your password manager or another trusted device.',
+        linkViaQRCode: 'Link via QR Code',
+        linkViaQRCodeDescription: 'Scan from an authorized device to link this machine.',
+        linkViaQRCodeInstructions: 'Open Aha on an authorized device, go to Settings → Account → Link New Device, and scan this QR code.',
     },
 
     settings: {

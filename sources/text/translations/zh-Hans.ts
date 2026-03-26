@@ -93,6 +93,9 @@ export const zhHans: TranslationStructure = {
         myKeyDescription: '在任意设备上恢复此密钥，即可连接所有绑定的机器——它们将全部激活并可互相通信。',
         restoreDescription: '输入您的密钥以恢复此设备。之前链接到此密钥的所有机器将自动重新连接。',
         restoreKeyHint: '从密码管理器或另一台可信设备粘贴备份密钥。',
+        linkViaQRCode: '通过 QR 码接入',
+        linkViaQRCodeDescription: '在已授权的设备上扫码，接入此机器。',
+        linkViaQRCodeInstructions: '在已授权的设备上打开 Aha，进入「设置 → 账户 → 接入新设备」，扫描此 QR 码即可完成接入。',
     },
 
     settings: {
