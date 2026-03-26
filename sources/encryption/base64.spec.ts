@@ -42,4 +42,16 @@ describe('base64 web implementation', () => {
             new TextEncoder().encode('Hello'),
         );
     });
+
+    it('encodes large buffers without overflowing the call stack', () => {
+        const input = new Uint8Array(300_000);
+        for (let i = 0; i < input.length; i += 1) {
+            input[i] = i % 251;
+        }
+
+        const encoded = encodeBase64(input);
+        const decoded = decodeBase64(encoded);
+
+        expect(decoded).toEqual(input);
+    });
 });
