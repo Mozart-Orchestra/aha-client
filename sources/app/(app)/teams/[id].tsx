@@ -588,6 +588,7 @@ export default function TeamDashboardScreen() {
                         await sync.addTeamMember(teamId, member.sessionId, member.roleId, sessionName, {
                             memberId,
                             sessionTag,
+                            candidateId: member.candidateId,
                             specId: member.specId,
                             customPrompt: member.customPrompt,
                             parentSessionId: member.parentSessionId,
@@ -643,6 +644,7 @@ export default function TeamDashboardScreen() {
                     await sync.addTeamMember(teamId, recoveredSessionId, member.roleId, sessionName, {
                         memberId,
                         sessionTag,
+                        candidateId: member.candidateId,
                         specId: member.specId,
                         customPrompt: member.customPrompt,
                         parentSessionId: member.parentSessionId,

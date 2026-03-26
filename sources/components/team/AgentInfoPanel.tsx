@@ -75,6 +75,7 @@ export interface AgentInfoPanelProps {
 interface MemberInfo {
     roleId: string;
     displayName: string | undefined;
+    candidateId: string | undefined;
     specId: string | undefined;
     runtimeType: string | undefined;
     executionPlane: string | undefined;
@@ -98,6 +99,7 @@ function useMemberInfo(sessionId: string): MemberInfo | null {
             return {
                 roleId: member.roleId,
                 displayName: member.displayName,
+                candidateId: member.candidateId,
                 specId: member.specId,
                 runtimeType: member.runtimeType,
                 executionPlane: member.executionPlane,
@@ -652,6 +654,7 @@ function useResolvedAgentInfo(sessionId: string, specIdProp?: string | null) {
     const resolvedSpecId = specIdProp ?? memberInfo?.specId ?? null;
     const { genome, spec, loading } = useGenomeData(resolvedSpecId);
     const roleId = memberInfo?.roleId ?? (session?.metadata as any)?.roleId;
+    const candidateId = memberInfo?.candidateId ?? (session?.metadata as any)?.candidateId ?? undefined;
     const rawDisplayName = memberInfo?.displayName;
     const agentDisplayName = resolveDisplayName(rawDisplayName, roleId, sessionId);
     const roleLabel = getRoleLabel(roleId);
@@ -669,6 +672,7 @@ function useResolvedAgentInfo(sessionId: string, specIdProp?: string | null) {
         genome,
         spec,
         loading,
+        candidateId,
         resolvedSpecId,
         roleId,
         agentDisplayName,
@@ -699,6 +703,7 @@ function AgentInfoCardContent({
         genome,
         spec,
         loading,
+        candidateId,
         resolvedSpecId,
         roleId,
         agentDisplayName,
@@ -766,6 +771,21 @@ function AgentInfoCardContent({
                         {facts.map((fact) => (
                             <FactPill key={`${fact.label}:${fact.value}`} label={fact.label} value={fact.value} />
                         ))}
+                    </View>
+                    <Divider />
+                </>
+            ) : null}
+
+            {candidateId || resolvedSpecId ? (
+                <>
+                    <SectionLabel label="Internal Identity" />
+                    <View style={{ gap: 8, marginBottom: 14 }}>
+                        {candidateId ? (
+                            <FactPill label="Candidate" value={candidateId} />
+                        ) : null}
+                        {resolvedSpecId ? (
+                            <FactPill label="Spec ID" value={resolvedSpecId} />
+                        ) : null}
                     </View>
                     <Divider />
                 </>

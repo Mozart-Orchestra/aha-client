@@ -3566,6 +3566,7 @@ class Sync {
         opts?: {
             memberId?: string;
             sessionTag?: string;
+            candidateId?: string;
             specId?: string;
             customPrompt?: string;
             parentSessionId?: string;
