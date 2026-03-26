@@ -119,16 +119,13 @@ export function useArtifactAutoInit({
         if (artifact === null) {
             setAutoInitAttempted(true);
             setIsLoading(true);
-            console.log(`🔍 Checking server for existing Board for team ${teamId}...`);
 
             sync.fetchArtifactWithBody(teamId)
                 .then((existingArtifact) => {
                     if (existingArtifact) {
-                        console.log(`✅ Found existing Board for team ${teamId} on server`);
                         return;
                     }
 
-                    console.log(`🔧 Auto-initializing Board for team ${teamId}...`);
                     const initialBoard: KanbanBoard = {
                         ...DEFAULT_KANBAN_BOARD,
                         tasks: [],
@@ -147,7 +144,6 @@ export function useArtifactAutoInit({
                         'team',
                         teamId
                     ).then(() => {
-                        console.log(`✅ Board auto-initialized for team ${teamId}`);
                         return sync.fetchArtifactWithBody(teamId);
                     }).then((createdArtifact) => {
                         if (createdArtifact) {
