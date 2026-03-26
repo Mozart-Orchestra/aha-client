@@ -2524,7 +2524,7 @@ class Sync {
                 }
             }
 
-            const result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-aha-session', {
+            const rpcParams = {
                 ...params,
                 machineId,
                 approvedNewDirectoryCreation: true,
@@ -2547,7 +2547,30 @@ class Sync {
                 bypassProfile: params.bypassProfile,
                 lifecycleTokenId: params.lifecycleTokenId,
                 ttlSeconds: params.ttlSeconds,
-            });
+            };
+
+            let result: any;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    result = await apiSocket.machineRPC<any, any>(machineId, 'spawn-aha-session', rpcParams);
+                    break;
+                } catch (error) {
+                    const shouldRetry =
+                        attempt === 0 &&
+                        error instanceof Error &&
+                        error.message.includes('RPC method not available');
+
+                    if (!shouldRetry) {
+                        throw error;
+                    }
+
+                    log.log(`Machine ${machineId} daemon RPC not ready yet; refreshing machine state and retrying spawn once`);
+                    await this.machinesSync.invalidateAndAwait().catch(() => {
+                        // Best effort refresh only; retry once regardless.
+                    });
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+                }
+            }
             const sessionId = result?.sessionId || (result?.type === 'success' ? result?.sessionId : null);
             if (result?.type === 'requestToApproveDirectoryCreation') {
                 console.warn(`Directory creation approval required for: ${result.directory}`);
@@ -2578,11 +2601,31 @@ class Sync {
         severity: 'low' | 'medium' | 'high' | 'critical';
     }): Promise<{ success: boolean; helpAgentSessionId?: string; error?: string }> {
         try {
-            return await apiSocket.machineRPC<{ success: boolean; helpAgentSessionId?: string; error?: string }, typeof params>(
-                machineId,
-                'request-help',
-                params
-            );
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    return await apiSocket.machineRPC<{ success: boolean; helpAgentSessionId?: string; error?: string }, typeof params>(
+                        machineId,
+                        'request-help',
+                        params
+                    );
+                } catch (error) {
+                    const shouldRetry =
+                        attempt === 0 &&
+                        error instanceof Error &&
+                        error.message.includes('RPC method not available');
+
+                    if (!shouldRetry) {
+                        throw error;
+                    }
+
+                    log.log(`Machine ${machineId} help RPC not ready yet; refreshing machine state and retrying once`);
+                    await this.machinesSync.invalidateAndAwait().catch(() => {
+                        // Best effort refresh only; retry once regardless.
+                    });
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+                }
+            }
+            throw new Error(`Machine ${machineId} request-help RPC failed after retry`);
         } catch (error) {
             console.error(`Failed to request help on machine ${machineId}:`, error);
             return {
