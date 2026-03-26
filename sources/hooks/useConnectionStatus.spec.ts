@@ -10,6 +10,10 @@ vi.mock('@/sync/storage', () => ({
     useSocketStatus: mockState.useSocketStatus,
 }));
 
+vi.mock('@/sync/apiSocket', () => ({
+    apiSocket: { reconnect: vi.fn() },
+}));
+
 import { RECONNECTING_BANNER_DELAY_MS, useConnectionStatus } from './useConnectionStatus';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
