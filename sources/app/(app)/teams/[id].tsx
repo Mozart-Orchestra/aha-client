@@ -525,6 +525,16 @@ export default function TeamDashboardScreen() {
     }, [kanbanData.tasks, selectedTaskId]);
 
     React.useEffect(() => {
+        return () => {
+            if (lifecyclePersistTimerRef.current) {
+                clearTimeout(lifecyclePersistTimerRef.current);
+                lifecyclePersistTimerRef.current = null;
+            }
+            pendingLifecyclePersistBodyRef.current = null;
+        };
+    }, []);
+
+    React.useEffect(() => {
         if (!selectedTaskId) {
             return;
         }
