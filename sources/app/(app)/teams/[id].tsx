@@ -15,7 +15,8 @@ import {
     trackTeamViewed,
 } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts } from '@/sync/storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts, useSocketStatus } from '@/sync/storage';
 import { useShallow } from 'zustand/react/shallow';
 import { sync } from '@/sync/sync';
 import { useUnistyles } from 'react-native-unistyles';
@@ -140,6 +141,7 @@ export default function TeamDashboardScreen() {
     const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
     const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null);
     const [isRecoveringTeam, setIsRecoveringTeam] = React.useState(false);
+    const socketStatus = useSocketStatus();
     const [bypassAgents, setBypassAgents] = React.useState<BypassAgent[]>([]);
     const lastKnownKanbanBoardRef = React.useRef<KanbanBoard | null>(null);
     const unavailableTeamMissesRef = React.useRef(0);
@@ -1584,7 +1586,35 @@ export default function TeamDashboardScreen() {
                 ]}
             >
                 <TeamAgentsPopover
+                    connectionStatus={(() => {
+                        switch (socketStatus.status) {
+                            case 'connected':
+                                return { text: t('status.connected'), color: theme.colors.status.connected, isPulsing: false };
+                            case 'connecting':
+                                return { text: t('status.connecting'), color: theme.colors.status.connecting, isPulsing: true };
+                            case 'disconnected':
+                                return { text: t('status.disconnected'), color: theme.colors.status.disconnected, isPulsing: false };
+                            case 'error':
+                                return { text: t('status.error'), color: theme.colors.status.error, isPulsing: false };
+                            default:
+                                return null;
+                        }
+                    })()}
                     items={agentRoster.map((entry) => ({
+                        presenceLabel: (() => {
+                            if (!entry.session) return 'Offline';
+                            const visual = getAgentPresenceVisual(entry.session);
+                            switch (visual.state) {
+                                case 'online':
+                                    return 'Online';
+                                case 'stale':
+                                    return 'Stale';
+                                case 'dead':
+                                    return 'Ended';
+                                default:
+                                    return 'Offline';
+                            }
+                        })(),
                         sessionId: entry.member.sessionId,
                         specId: entry.member.specId ?? null,
                         displayName: entry.member.displayName || entry.session?.metadata?.name || entry.role?.title || entry.member.sessionId,
