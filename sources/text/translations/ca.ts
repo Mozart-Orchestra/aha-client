@@ -1153,9 +1153,6 @@ export const ca: TranslationStructure = {
         mine: 'Meus',
         official: 'Oficial',
         draft: 'Esborrany',
-        specialBadge: 'Especial',
-        savesCount: ({ count }: { count: number }) => `${count} desats`,
-        corpsDefaultDescription: ({ count }: { count: number }) => `${count} agents a punt per desplegar junts`,
         unverified: 'Sense verificar',
         verified: 'Verificat',
         archived: 'Arxivat',
@@ -1408,12 +1405,6 @@ export const ca: TranslationStructure = {
         soloAgentsNewAgent: 'Nou agent',
         orgManagerInitializing: 'org-manager està inicialitzant el teu equip',
         orgManagerInitializingSubtitle: 'S\'estan configurant els agents i l\'espai de treball. Normalment triga uns segons.',
-        loadingTeams: 'S\'estan carregant els equips...',
-        newTeamButton: 'Nou equip',
-        soloBadge: 'SOLO',
-        chipTotal: ({ count }: { count: number }) => `${count} total`,
-        chipSelected: ({ count }: { count: number }) => `${count} seleccionats`,
-        chipDone: ({ count }: { count: number }) => `${count} fets`,
     },
 
     zen: {

@@ -15,7 +15,6 @@ import {
     trackTeamViewed,
 } from '@/track';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { storage, useArtifact, useAllMachines, useProfile, useIsDataReady, useArtifacts, useSocketStatus } from '@/sync/storage';
 import { useShallow } from 'zustand/react/shallow';
 import { sync } from '@/sync/sync';
@@ -1348,6 +1347,11 @@ export default function TeamDashboardScreen() {
     const isArtifactParseError = !desktopBridge && !!artifact?.body && !!parsedArtifactBoard.parseError;
     const isAuthMissing = !desktopBridge && !isAuthenticated;
     const shouldShowBoardFallback = isAuthMissing || isMissingDesktopRoom || isMissingDesktopBoard || isMissingArtifact || isArtifactParseError;
+    const isOrgManagerInitializing = !desktopBridge
+        && isLoading
+        && autoInitAttempted
+        && !hasLocalTeamSessions
+        && !artifact?.body;
     const boardFallbackTitle = isAuthMissing
         ? 'Authentication Required'
         : isArtifactParseError
@@ -1557,6 +1561,7 @@ export default function TeamDashboardScreen() {
             isArtifactParseError={isArtifactParseError}
             isAuthMissing={isAuthMissing}
             onInitialize={handleInitializeArtifact}
+            isOrgManagerInitializing={isOrgManagerInitializing}
         />
     );
 

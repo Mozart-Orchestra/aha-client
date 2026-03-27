@@ -1056,9 +1056,6 @@ export const es: TranslationStructure = {
         mine: 'Míos',
         official: 'Oficial',
         draft: 'Borrador',
-        specialBadge: 'Especial',
-        savesCount: ({ count }: { count: number }) => `${count} guardados`,
-        corpsDefaultDescription: ({ count }: { count: number }) => `${count} agentes listos para desplegar juntos`,
         unverified: 'Sin verificar',
         verified: 'Verificado',
         archived: 'Archivado',
@@ -1311,12 +1308,6 @@ export const es: TranslationStructure = {
         soloAgentsNewAgent: 'Nuevo agente',
         orgManagerInitializing: 'org-manager está inicializando tu equipo',
         orgManagerInitializingSubtitle: 'Configurando agentes y espacio de trabajo. Esto suele tardar unos segundos.',
-        loadingTeams: 'Cargando equipos...',
-        newTeamButton: 'Nuevo equipo',
-        soloBadge: 'SOLO',
-        chipTotal: ({ count }: { count: number }) => `${count} total`,
-        chipSelected: ({ count }: { count: number }) => `${count} seleccionados`,
-        chipDone: ({ count }: { count: number }) => `${count} hechos`,
     },
 
     zen: {

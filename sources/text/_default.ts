@@ -1691,6 +1691,8 @@ export const en = {
         soloAgentsEmptyHint: 'Run an agent from the marketplace',
         soloAgentsTitle: 'Solo Agents',
         soloAgentsNewAgent: 'New Agent',
+        orgManagerInitializing: 'org-manager is initializing your team',
+        orgManagerInitializingSubtitle: 'Setting up agents and workspace. This usually takes a few seconds.',
         loadingTeams: 'Loading teams...',
         newTeamButton: 'New Team',
         soloBadge: 'SOLO',

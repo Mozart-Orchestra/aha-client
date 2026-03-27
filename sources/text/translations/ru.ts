@@ -1078,9 +1078,6 @@ export const ru: TranslationStructure = {
         mine: 'Мои',
         official: 'Официальный',
         draft: 'Черновик',
-        specialBadge: 'Специальный',
-        savesCount: ({ count }: { count: number }) => `${count} сохранений`,
-        corpsDefaultDescription: ({ count }: { count: number }) => `${count} агентов готовы к совместному развёртыванию`,
         unverified: 'Не подтвержден',
         verified: 'Проверен',
         archived: 'Архив',
@@ -1333,12 +1330,6 @@ export const ru: TranslationStructure = {
         soloAgentsNewAgent: 'Новый агент',
         orgManagerInitializing: 'org-manager инициализирует вашу команду',
         orgManagerInitializingSubtitle: 'Настраиваем агентов и рабочее пространство. Обычно это занимает несколько секунд.',
-        loadingTeams: 'Загрузка команд...',
-        newTeamButton: 'Новая команда',
-        soloBadge: 'SOLO',
-        chipTotal: ({ count }: { count: number }) => `${count} всего`,
-        chipSelected: ({ count }: { count: number }) => `${count} выбрано`,
-        chipDone: ({ count }: { count: number }) => `${count} завершено`,
     },
 
     zen: {
