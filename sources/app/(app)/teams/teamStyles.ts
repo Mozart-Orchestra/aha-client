@@ -531,4 +531,37 @@ export const stylesheet = StyleSheet.create((theme) => ({
         elevation: 12,
         zIndex: 1300,
     },
+    agentsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    agentsButtonText: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    floatingPanelBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 900,
+    },
+    floatingPanelAnchor: {
+        position: 'absolute',
+        right: 12,
+        top: 56,
+        zIndex: 1000,
+        width: 320,
+    },
+    headerActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
 }));

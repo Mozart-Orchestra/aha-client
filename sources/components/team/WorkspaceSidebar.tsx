@@ -34,7 +34,7 @@ type StatusSummary = {
     review: number;
 };
 
-type ArtifactLike = { id: string; title?: string; type?: string };
+type ArtifactLike = { id: string; title?: string | null; type?: string };
 
 interface WorkspaceSidebarProps {
     myDisplayName: string;
@@ -81,7 +81,7 @@ export function WorkspaceSidebar({
             }}
             agentItems={roster.map((entry) => {
                 const presence = entry.session
-                    ? getAgentPresenceVisual(entry.session)
+                    ? getAgentPresenceVisual({ active: entry.session.active ?? false, activeAt: entry.session.activeAt ?? 0 })
                     : { dotColor: '#8A7F74', inactive: true, dead: false };
                 const runtimeLabel = entry.member.runtimeType ? entry.member.runtimeType : undefined;
                 const roleLabel = entry.role?.title || entry.member.roleId || entry.session?.metadata?.role || '';

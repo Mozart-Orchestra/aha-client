@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Platform,
     Pressable,
+    StyleSheet,
     View,
     useWindowDimensions,
 } from 'react-native';
@@ -79,6 +80,7 @@ import { TeamInfoSection } from '@/components/team/TeamInfoSection';
 import { WorkspaceSidebar } from '@/components/team/WorkspaceSidebar';
 import { BoardFallbackView } from '@/components/team/BoardFallbackView';
 import { MobileTeamMenu } from '@/components/team/MobileTeamMenu';
+import { getAgentPresenceVisual } from '@/utils/sessionUtils';
 
 type TeamStandardTab = 'chat' | 'board' | 'info' | 'evolution';
 
@@ -796,6 +798,16 @@ export default function TeamDashboardScreen() {
             ]
         );
     }, [handleDeleteSessionMember, handleRenameSessionMember, handleRemoveTeamMember]);
+
+    const teamDisplayName = artifact?.title || desktopRoom?.name || 'Team';
+
+    const handleOpenAgentLibrary = React.useCallback(() => {
+        setShowAgentLibrary(true);
+    }, []);
+
+    const handleOpenAgentRosterSession = React.useCallback((sessionId: string) => {
+        router.push(`/session/${sessionId}` as any);
+    }, [router]);
 
     const handleTaskUpdate = React.useCallback(async (taskId: string, updates: Partial<KanbanTask>) => {
         if (desktopBridge && roomId) {
@@ -1573,7 +1585,7 @@ export default function TeamDashboardScreen() {
             <Ionicons name="sparkles-outline" size={compact ? 16 : 15} color={theme.colors.text} />
             <Text style={[styles.agentsButtonText, { color: theme.colors.text }]}>Agents</Text>
             <Text style={[styles.agentsButtonText, { color: theme.colors.textSecondary }]}>
-                {agentRoster.length}
+                {roster.length}
             </Text>
         </Pressable>
     );
@@ -1605,10 +1617,10 @@ export default function TeamDashboardScreen() {
                                 return null;
                         }
                     })()}
-                    items={agentRoster.map((entry) => ({
+                    items={roster.map((entry) => ({
                         presenceLabel: (() => {
                             if (!entry.session) return 'Offline';
-                            const visual = getAgentPresenceVisual(entry.session);
+                            const visual = getAgentPresenceVisual({ active: entry.session.active ?? false, activeAt: entry.session.activeAt ?? 0 });
                             switch (visual.state) {
                                 case 'online':
                                     return 'Online';
@@ -1882,7 +1894,7 @@ export default function TeamDashboardScreen() {
                                         {artifact?.title || desktopRoom?.name || 'Workspace'}
                                     </Text>
                                     <Text style={styles.mobileWorkspaceSubtitle} numberOfLines={1}>
-                                        {onlineCount} online · {agentRoster.length} agents · {allTeams.length} teams
+                                        {onlineCount} online · {roster.length} agents · {allTeams.length} teams
                                     </Text>
                                 </View>
                                 <Ionicons
