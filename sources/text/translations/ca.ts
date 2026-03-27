@@ -1434,6 +1434,57 @@ export const ca: TranslationStructure = {
     zen: {
         noTasksYet: 'No tasks yet. Tap + to add one.',
     },
+
+    channelsList: {
+        title: 'Channels',
+        connectedTitle: 'Connected Channels',
+        connectedFooter: 'Channels actively bridging Agent messages.',
+        availableTitle: 'Available Channels',
+    },
+
+    addAgent: {
+        title: 'Add Agent to Team',
+        searchPlaceholder: 'Search agents...',
+        sortedByRank: 'Sorted by Score (Rank)',
+        noResults: 'No agents found. Try a different search.',
+        spawn: 'Add to Team',
+    },
+
+    landing: {
+        eyebrow: 'Claude Code + Codex Orchestration',
+        trustEncrypted: 'End-to-end encrypted',
+        trustLocal: 'Any machine, anywhere',
+        previewTitle: 'Team: aha-saas-mvp',
+        primarySessionTitle: 'Architect',
+        primarySessionSubtitle: 'Designing system architecture and distributing tasks to the team',
+        primarySessionMeta: 'leading',
+        secondarySessionTitle: 'Builder',
+        secondarySessionSubtitle: "Implementing authentication module based on Architect's design",
+        secondarySessionMeta: 'coding',
+        deny: 'Deny',
+        approve: 'Approve',
+        openServer: 'Open server settings',
+        brand: 'Aha',
+        teamAgent1: 'Architect',
+        teamAgent1Task: 'System design & task distribution',
+        teamAgent1Machine: 'Mac Studio',
+        teamAgent2: 'Builder',
+        teamAgent2Task: 'Auth module + API endpoints',
+        teamAgent2Machine: 'Linux Server',
+        teamAgent3: 'QA',
+        teamAgent3Task: 'E2E tests & integration tests',
+        teamAgent3Machine: 'Windows PC',
+        teamAgent4: 'DevOps',
+        teamAgent4Task: 'CI/CD pipeline & deployment',
+        teamAgent4Machine: 'GPU Cloud',
+        cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
+        activeCount: ({ count }: { count: number }) => `${count} active`,
+        cliCopiedTitle: 'Copied',
+        cliCopiedMessage: 'Command copied to clipboard. Paste it in your terminal to get started.',
+        previewAgentCount: ({ count }: { count: number }) => `${count} agents`,
+        agentStatusTesting: 'testing',
+        agentStatusDeploying: 'deploying',
+    },
 } as const;
 
 export type TranslationsCa = typeof ca;

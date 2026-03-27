@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import type { DecryptedArtifact } from '@/sync/artifactTypes';
 
 // Hoisted mocks
 const mockFetchArtifactWithBody = vi.hoisted(() => vi.fn().mockResolvedValue(null));
@@ -65,7 +66,7 @@ function makeBaseParams(overrides = {}) {
     return {
         teamId: 'team-1',
         // default: artifact exists so auto-init doesn't fire; override to null for init tests
-        artifact: { id: 'art-1' } as null | undefined | { id: string; body?: unknown; title?: string },
+        artifact: { id: 'art-1' } as unknown as DecryptedArtifact | null | undefined,
         isAuthenticated: true,
         desktopBridge: null as unknown,
         hasLocalTeamSessions: false,

@@ -189,8 +189,8 @@ describe('RestoreQR', () => {
         let resolveWait!: (val: { secret: Uint8Array; token: string } | null) => void;
         mockAuthQRStart.mockResolvedValue(true);
         mockAuthQRWait.mockImplementation(
-            (_kp, _progress, shouldCancel) =>
-                new Promise(resolve => {
+            ((_kp: unknown, _progress: unknown, shouldCancel: (() => boolean) | undefined) =>
+                new Promise<{ secret: Uint8Array; token: string } | null>(resolve => {
                     resolveWait = resolve;
                     // Poll the cancel flag — simulate what the real implementation does
                     const interval = setInterval(() => {
@@ -199,7 +199,7 @@ describe('RestoreQR', () => {
                             resolve(null);
                         }
                     }, 5);
-                }),
+                })) as any
         );
 
         const { unmount } = renderQR();

@@ -287,28 +287,6 @@ function Divider() {
     return <View style={{ height: 1, backgroundColor: theme.colors.divider, marginVertical: 14 }} />;
 }
 
-function FactPill({ label, value }: { label: string; value: string }) {
-    const { theme } = useUnistyles();
-    return (
-        <View style={{
-            paddingHorizontal: 10,
-            paddingVertical: 7,
-            borderRadius: 12,
-            backgroundColor: theme.colors.groupped.background,
-            borderWidth: 1,
-            borderColor: theme.colors.divider,
-            minWidth: 92,
-        }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                {label}
-            </Text>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.text, marginTop: 3 }} numberOfLines={2}>
-                {value}
-            </Text>
-        </View>
-    );
-}
-
 /** The genome details section — loaded state. */
 function GenomeDetails({
     genome,

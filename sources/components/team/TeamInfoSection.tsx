@@ -20,7 +20,7 @@ type RosterEntry = {
             role?: string;
             name?: string;
             executionPlane?: string;
-            flavor?: string;
+            flavor?: string | null;
         } | null;
     } | null;
     role?: { id?: string; title?: string };
