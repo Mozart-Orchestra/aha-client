@@ -21,8 +21,8 @@ type RosterEntry = {
             name?: string;
             executionPlane?: string;
             flavor?: string;
-        };
-    };
+        } | null;
+    } | null;
     role?: { id?: string; title?: string };
 };
 

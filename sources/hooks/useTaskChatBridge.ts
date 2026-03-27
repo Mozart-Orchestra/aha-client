@@ -5,7 +5,7 @@ import type { KanbanTask } from '@/sync/kanbanTypes';
 type RosterEntry = {
     member: { sessionId: string; roleId?: string; displayName?: string };
     role?: { id?: string; title?: string };
-    session?: { metadata?: { role?: string } };
+    session?: { metadata?: { role?: string } | null };
 };
 
 type ChatComposerPrefill = { text: string; token: number };

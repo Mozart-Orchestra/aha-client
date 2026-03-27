@@ -341,7 +341,7 @@ export default function TeamDashboardScreen() {
         isDataReady,
         isLoading,
         setIsLoading,
-        router,
+        router: router as any,
     });
 
     // Helper to get session IDs from artifact body
@@ -1237,9 +1237,9 @@ export default function TeamDashboardScreen() {
         }).length;
 
         return {
-            decision: pendingTasks.length || undefined,
-            working: workingCount || undefined,
-            review: reviewCount || undefined,
+            decision: pendingTasks.length || 0,
+            working: workingCount || 0,
+            review: reviewCount || 0,
         };
     }, [approvedTasks, normalizeStatus, pendingTasks.length]);
 

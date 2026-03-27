@@ -21,7 +21,7 @@ type RosterEntry = {
         metadata?: {
             role?: string;
             name?: string;
-        };
+        } | null;
     } | null;
     role?: { id?: string; title?: string };
     tasks: Array<unknown>;
