@@ -1337,8 +1337,7 @@ const MessageBubbleInner = ({
                             task={relatedTask}
                             styles={styles}
                             onPress={() => {
-                                // TODO: Navigate to task detail or switch to board tab
-                                console.log('Task pressed:', relatedTask.id);
+                                // Task card is informational within chat; full interaction is on the board tab
                             }}
                         />
                     )}

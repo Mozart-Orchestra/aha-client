@@ -389,8 +389,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
     // Handler for adding subtask
     const handleAddSubtask = () => {
-        // TODO: Show add subtask modal
-        console.log('Add subtask not implemented');
+        // Subtask creation not yet implemented
     };
 
     const handleDelete = async () => {
@@ -440,7 +439,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         <TextInput
                             style={stylesheet.titleInput}
                             value={editedTask.title}
-                            onChangeText={(text) => setEditedTask({ ...editedTask, title: text })}
+                            onChangeText={(text) => setEditedTask((previous) => ({ ...previous, title: text }))}
                             placeholder="Task title"
                         />
                     ) : (
@@ -518,7 +517,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     <TextInput
                                         style={stylesheet.descriptionInput}
                                         value={editedTask.description}
-                                        onChangeText={(text) => setEditedTask({ ...editedTask, description: text })}
+                                        onChangeText={(text) => setEditedTask((previous) => ({ ...previous, description: text }))}
                                         placeholder="Add a description..."
                                         multiline
                                         numberOfLines={4}
