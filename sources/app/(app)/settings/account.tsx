@@ -297,7 +297,7 @@ export default React.memo(() => {
                                 paddingHorizontal: 16,
                                 paddingVertical: 14,
                                 borderTopWidth: 1,
-                                borderTopColor: theme.colors.border,
+                                borderTopColor: theme.colors.divider,
                                 width: '100%',
                                 maxWidth: layout.maxWidth,
                                 alignSelf: 'center'
