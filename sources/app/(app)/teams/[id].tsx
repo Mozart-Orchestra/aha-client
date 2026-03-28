@@ -113,10 +113,12 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     column: {
         flex: 1,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: theme.colors.groupped.background,
         borderRadius: 12,
         marginHorizontal: 6,
         padding: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
     },
     columnHeader: {
         flexDirection: 'row',
@@ -124,27 +126,49 @@ const stylesheet = StyleSheet.create((theme) => ({
         alignItems: 'center',
         marginBottom: 12,
     },
+    columnHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    columnStatusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
     columnTitle: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
         color: theme.colors.text,
     },
     taskCount: {
-        fontSize: 12,
+        fontSize: 11,
         color: theme.colors.textSecondary,
-        backgroundColor: theme.colors.groupped.background,
-        paddingHorizontal: 8,
+        backgroundColor: theme.colors.surface,
+        paddingHorizontal: 7,
         paddingVertical: 2,
         borderRadius: 10,
     },
     taskCard: {
-        backgroundColor: theme.colors.groupped.background,
-        borderRadius: 8,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 12,
         padding: 12,
-        borderWidth: 1,
-        borderColor: theme.colors.divider,
+        paddingLeft: 15,
         // Force card to fill column width and constrain children
         width: '100%',
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.07,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    taskPriorityAccent: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 3,
     },
     taskTitle: {
         fontSize: 14,
@@ -152,6 +176,29 @@ const stylesheet = StyleSheet.create((theme) => ({
         marginBottom: 4,
         // Explicit width: 100% forces text to wrap within card boundaries
         width: '100%',
+    },
+    taskAssigneeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 6,
+    },
+    taskAssigneeBadge: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    taskAssigneeBadgeText: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    taskAssigneeName: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        fontWeight: '500',
     },
     taskAssignee: {
         fontSize: 12,
@@ -216,10 +263,12 @@ const stylesheet = StyleSheet.create((theme) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
         borderRadius: 999,
-        backgroundColor: 'rgba(255, 149, 0, 0.12)',
+        backgroundColor: 'rgba(255, 149, 0, 0.18)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 149, 0, 0.32)',
     },
     taskActiveExecutionText: {
         fontSize: 10,
@@ -654,6 +703,28 @@ const withAlpha = (color: string, alpha: number): string => {
     }
 };
 
+function getPriorityAccentColor(priority?: string | null): string {
+    if (priority === 'high' || priority === 'urgent') return '#FF3B30';
+    if (priority === 'medium') return '#FF9500';
+    if (priority === 'low') return '#34C759';
+    return 'transparent';
+}
+
+function getColumnStatusColor(columnId: string): string {
+    if (columnId === 'done') return '#34C759';
+    if (columnId === 'in-progress') return '#FF9500';
+    if (columnId === 'review') return '#007AFF';
+    return '#C7C7CC';
+}
+
+const ASSIGNEE_BADGE_COLORS = ['#007AFF', '#FF9500', '#34C759', '#AF52DE', '#FF2D55', '#5AC8FA', '#FF6B6B'];
+
+function getAssigneeBadgeColor(id: string): string {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+    return ASSIGNEE_BADGE_COLORS[Math.abs(hash) % ASSIGNEE_BADGE_COLORS.length];
+}
+
 const STANDARD_SHELL_TABS = [
     { id: 'chat', label: 'Chat' },
     { id: 'board', label: 'Board' },
@@ -799,7 +870,15 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                 {columns.map((column) => (
                     <View key={column.id} style={styles.column}>
                         <View style={styles.columnHeader}>
-                            <Text style={styles.columnTitle}>{column.title}</Text>
+                            <View style={styles.columnHeaderLeft}>
+                                <View
+                                    style={[
+                                        styles.columnStatusDot,
+                                        { backgroundColor: getColumnStatusColor(column.id) },
+                                    ]}
+                                />
+                                <Text style={styles.columnTitle}>{column.title}</Text>
+                            </View>
                             <Text style={styles.taskCount}>
                                 {approvedTasks.filter((task) => matchesColumn(task, column.id)).length}
                             </Text>
@@ -840,9 +919,29 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                             onPress={() => onOpenTask(task)}
                                             onLongPress={() => onMoveTask(task)}
                                         >
+                                            {task.priority && (
+                                                <View
+                                                    style={[
+                                                        styles.taskPriorityAccent,
+                                                        { backgroundColor: getPriorityAccentColor(task.priority) },
+                                                    ]}
+                                                />
+                                            )}
                                             <Text style={styles.taskTitle}>{task.title}</Text>
                                             {assigneeName ? (
-                                                <Text style={styles.taskAssignee}>Assignee: @{assigneeName}</Text>
+                                                <View style={styles.taskAssigneeRow}>
+                                                    <View
+                                                        style={[
+                                                            styles.taskAssigneeBadge,
+                                                            { backgroundColor: getAssigneeBadgeColor(task.assigneeId || assigneeName) },
+                                                        ]}
+                                                    >
+                                                        <Text style={styles.taskAssigneeBadgeText}>
+                                                            {assigneeName[0].toUpperCase()}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={styles.taskAssigneeName}>{assigneeName}</Text>
+                                                </View>
                                             ) : null}
                                             {reporterName ? (
                                                 <Text style={styles.taskReporter}>Reporter: {reporterName}</Text>
