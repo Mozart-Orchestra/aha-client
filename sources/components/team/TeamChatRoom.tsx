@@ -1520,7 +1520,54 @@ export default function TeamChatRoom({
             setTimeout(focusInput, 80);
         }
     }, [composerPrefill]);
-    const [isCompressing, setIsCompressing] = React.useState(false);
+
+    // 🆕 Web: listen for native paste (Cmd+V) to support direct clipboard image pasting
+    React.useEffect(() => {
+        if (Platform.OS !== 'web') return;
+
+        const handleWebPaste = (event: Event) => {
+            const clipboardEvent = event as ClipboardEvent;
+            const items = clipboardEvent.clipboardData?.items;
+            if (!items) return;
+
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (!item.type.startsWith('image/')) continue;
+
+                const file = item.getAsFile();
+                if (!file) continue;
+
+                clipboardEvent.preventDefault();
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const dataUrl = e.target?.result as string;
+                    if (!dataUrl) return;
+
+                    // dataUrl is "data:image/png;base64,<data>"
+                    const base64 = dataUrl.split(',')[1];
+                    const img = new Image();
+                    img.onload = () => {
+                        setSelectedImage({
+                            uri: dataUrl,
+                            base64,
+                            width: img.naturalWidth,
+                            height: img.naturalHeight,
+                            fileSize: file.size,
+                        });
+                    };
+                    img.src = dataUrl;
+                };
+                reader.readAsDataURL(file);
+                break; // handle first image only
+            }
+        };
+
+        document.addEventListener('paste', handleWebPaste);
+        return () => {
+            document.removeEventListener('paste', handleWebPaste);
+        };
+    }, []);
     // 🆕 Clipboard image detection state
     const [clipboardHasImage, setClipboardHasImage] = React.useState(false);
     const [isCheckingClipboard, setIsCheckingClipboard] = React.useState(false);
@@ -1571,10 +1618,10 @@ export default function TeamChatRoom({
             const asset = result.assets[0];
             setIsCompressing(true);
 
-            // Compress image with aggressive settings for mobile/WebSocket
-            const MAX_WIDTH = 800;
-            const MAX_SIZE_KB = 150; // Max 150KB to ensure fast transmission
-            let quality = 0.6;
+            // Compress image while preserving readability
+            const MAX_WIDTH = 1600;
+            const MAX_SIZE_KB = 800; // Max 800KB to balance quality and transmission
+            let quality = 0.85;
 
             // Calculate new dimensions maintaining aspect ratio
             let width = asset.width;
@@ -1600,7 +1647,7 @@ export default function TeamChatRoom({
                 : 0;
 
             // If still too large, compress more aggressively
-            while (estimatedSize > MAX_SIZE_KB * 1024 && quality > 0.3) {
+            while (estimatedSize > MAX_SIZE_KB * 1024 && quality > 0.5) {
                 quality -= 0.1;
                 width = Math.round(width * 0.8);
                 height = Math.round(height * 0.8);
