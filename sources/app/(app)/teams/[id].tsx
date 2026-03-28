@@ -943,14 +943,6 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                                     <Text style={styles.taskAssigneeName}>{assigneeName}</Text>
                                                 </View>
                                             ) : null}
-                                            {reporterName ? (
-                                                <Text style={styles.taskReporter}>Reporter: {reporterName}</Text>
-                                            ) : null}
-                                            {lastComment && lastCommentAuthor ? (
-                                                <Text style={styles.taskCommentSummary} numberOfLines={2}>
-                                                    {lastCommentAuthor}: {lastComment.content}
-                                                </Text>
-                                            ) : null}
                                             {humanLockLabel ? (
                                                 <View style={styles.taskHumanLockBadge}>
                                                     <Ionicons name="hand-left-outline" size={12} color="#C26A00" />
@@ -958,25 +950,12 @@ const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                                 </View>
                                             ) : null}
 
-                                            {(sessionCount > 0 || task.priority || activeAgentName) && (
+                                            {(task.priority || activeAgentName) && (
                                                 <View style={styles.taskMeta}>
                                                     {activeAgentName && (
                                                         <View style={styles.taskActiveExecution}>
                                                             <Ionicons name="flash" size={11} color="#FF9500" />
                                                             <Text style={styles.taskActiveExecutionText}>{activeAgentName}</Text>
-                                                        </View>
-                                                    )}
-                                                    {sessionCount > 0 && (
-                                                        <View style={styles.taskSessionsLink}>
-                                                            <Ionicons
-                                                                name="chatbubble-outline"
-                                                                size={14}
-                                                                color={theme.colors.textSecondary}
-                                                                style={styles.taskSessionsIcon}
-                                                            />
-                                                            <Text style={styles.taskSessionsText}>
-                                                                {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
-                                                            </Text>
                                                         </View>
                                                     )}
                                                     {task.priority && (
