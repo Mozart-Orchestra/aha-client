@@ -110,6 +110,11 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                                 />
                                             )}
                                             <Text style={styles.taskTitle}>{task.title}</Text>
+                                            {task.description ? (
+                                                <Text style={styles.taskDescription} numberOfLines={3}>
+                                                    {task.description}
+                                                </Text>
+                                            ) : null}
                                             {assigneeName ? (
                                                 <View style={styles.taskAssigneeRow}>
                                                     <View

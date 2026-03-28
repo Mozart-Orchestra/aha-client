@@ -97,6 +97,12 @@ export const stylesheet = StyleSheet.create((theme) => ({
         // Explicit width: 100% forces text to wrap within card boundaries
         width: '100%',
     },
+    taskDescription: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        lineHeight: 16,
+        marginTop: 2,
+    },
     taskAssigneeRow: {
         flexDirection: 'row',
         alignItems: 'center',
