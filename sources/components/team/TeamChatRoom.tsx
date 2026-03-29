@@ -1549,6 +1549,7 @@ export default function TeamChatRoom({
         height: number;
         fileSize?: number;
     } | null>(null);
+    const [isCompressing, setIsCompressing] = React.useState(false);
     const [uploadProgress, setUploadProgress] = React.useState(0);
     const inputRef = React.useRef<TextInput>(null);
 
@@ -1595,7 +1596,7 @@ export default function TeamChatRoom({
 
                     // dataUrl is "data:image/png;base64,<data>"
                     const base64 = dataUrl.split(',')[1];
-                    const img = new Image();
+                    const img = new globalThis.Image();
                     img.onload = () => {
                         setSelectedImage({
                             uri: dataUrl,
