@@ -23,6 +23,7 @@ import { HappyError } from '@/utils/errors';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 import { fetchGenomeById, parseSpec, type GenomeSpec, type GenomeRecord } from '@/utils/genomeHub';
+import { getGenomeScoreSummary } from '@/utils/genomeScoreSummary';
 import { type KanbanBoard } from '@/sync/kanbanTypes';
 import { listAgents } from '@/sync/apiAgents';
 import { sync } from '@/sync/sync';
@@ -181,7 +182,10 @@ function GenomeInfoPanel({ session }: { session: Session }) {
     const displayName = spec?.displayName ?? genome?.name ?? '—';
     const namespace = genome?.namespace ?? spec?.namespace ?? '—';
     const version = genome?.version ?? spec?.version;
-    const avgScore = (genome as any)?.avgScore as number | undefined;
+    const { avgScore, evaluationCount } = React.useMemo(
+        () => getGenomeScoreSummary(genome, spec),
+        [genome, spec]
+    );
 
     return (
         <ItemGroup title="Agent Genome">
@@ -210,11 +214,19 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                     />
 
                     {/* Supervisor score */}
-                    {typeof avgScore === 'number' && (
+                    {typeof avgScore === 'number' ? (
                         <Item
                             title="Supervisor Score"
+                            subtitle={typeof evaluationCount === 'number' ? `${evaluationCount} evaluation${evaluationCount === 1 ? '' : 's'}` : undefined}
                             detail={`${avgScore.toFixed(0)} / 100`}
                             icon={<Ionicons name="star-outline" size={29} color={avgScore >= 75 ? '#30D158' : avgScore >= 50 ? '#FF9500' : '#FF3B30'} />}
+                            showChevron={false}
+                        />
+                    ) : (
+                        <Item
+                            title="Supervisor Score"
+                            subtitle="No synced feedback yet. Score stats will appear after supervisor feedback reaches the genome."
+                            icon={<Ionicons name="bar-chart-outline" size={29} color={theme.colors.textSecondary} />}
                             showChevron={false}
                         />
                     )}
