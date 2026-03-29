@@ -2187,7 +2187,16 @@ class Sync {
         }
 
         try {
-            await this.addTeamMember(teamId, sessionId, role);
+            await this.addTeamMember(teamId, sessionId, role, undefined, {
+                ...(typeof metadata.memberId === 'string' ? { memberId: metadata.memberId } : {}),
+                ...(typeof metadata.sessionTag === 'string' ? { sessionTag: metadata.sessionTag } : {}),
+                ...(typeof metadata.executionPlane === 'string' ? { executionPlane: metadata.executionPlane } : {}),
+                ...(typeof metadata.runtimeType === 'string'
+                    ? { runtimeType: metadata.runtimeType }
+                    : typeof metadata.flavor === 'string'
+                        ? { runtimeType: metadata.flavor }
+                        : {}),
+            });
             this.syncedSessionTeams.add(dedupeKey);
         } catch (error) {
             // Log but don't throw - member may already exist

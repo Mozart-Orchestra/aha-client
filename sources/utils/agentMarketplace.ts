@@ -31,11 +31,13 @@ export function isSpecialMarketplaceGenome(genome: Pick<GenomeRecord, 'name' | '
 export function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRecord {
     return {
         id: genome.id,
+        kind: 'agent',
         namespace: genome.namespace ?? '@private',
         name: genome.name,
         version: genome.version ?? 1,
         status: genome.namespace === '@official' ? 'official' : (genome.status ?? 'draft'),
         description: genome.description,
+        seed: null,
         spec: genome.spec,
         tags: genome.tags ?? null,
         category: genome.category ?? null,
@@ -44,6 +46,9 @@ export function toGenomeRecordFromPrivateGenome(genome: PrivateGenome): GenomeRe
         downloadCount: 0,
         starCount: 0,
         feedbackData: genome.feedbackData ?? null,
+        runtimeType: null,
+        executionPlane: null,
+        permissionMode: null,
         lifecycle: null,
         publisherId: genome.accountId,
         parentId: null,

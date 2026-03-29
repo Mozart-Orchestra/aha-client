@@ -3,9 +3,44 @@
  * Base URL defaults to EXPO_PUBLIC_GENOME_HUB_URL or localhost:3006.
  */
 
-const BASE = (process.env.EXPO_PUBLIC_GENOME_HUB_URL ?? 'http://localhost:3006').replace(/\/$/, '');
+const BASE = (() => {
+    const url = process.env.EXPO_PUBLIC_GENOME_HUB_URL;
+    if (!url) {
+        throw new Error('EXPO_PUBLIC_GENOME_HUB_URL is not configured — genome-hub URL is required');
+    }
+    return url.replace(/\/$/, '');
+})();
 const GENOME_BY_NAME_TTL_MS = 30_000;
 const genomeByNameCache = new Map<string, { expiresAt: number; value: Promise<GenomeRecord | null> }>();
+const OFFICIAL_GENOME_ALIASES: Record<string, string> = {
+    architect: 'researcher',
+    'solution-architect': 'researcher',
+    framer: 'researcher',
+    builder: 'implementer',
+    reviewer: 'qa-engineer',
+    qa: 'qa-engineer',
+    scout: 'researcher',
+    observer: 'researcher',
+    orchestrator: 'master',
+    'project-manager': 'master',
+    'product-owner': 'master',
+    'business-analyst': 'researcher',
+    'product-designer': 'researcher',
+    'ux-designer': 'researcher',
+    'ux-researcher': 'researcher',
+    scribe: 'researcher',
+    'technical-writer': 'researcher',
+    'spec-writer': 'researcher',
+};
+
+export function resolveCanonicalGenomeName(namespace: string, name: string): string {
+    const trimmedName = name.trim();
+    const normalizedName = name.trim().toLowerCase().replace(/[\s_]+/g, '-');
+    if (namespace.trim().toLowerCase() !== '@official') {
+        return trimmedName;
+    }
+    return OFFICIAL_GENOME_ALIASES[normalizedName] ?? normalizedName;
+}
 
 export interface GenomeFeedback {
     evaluationCount: number;
@@ -30,11 +65,13 @@ export interface GenomeFeedback {
 
 export interface GenomeRecord {
     id: string;
+    kind?: 'agent' | 'legion';           // evolution: entity type (absent on pre-migration records)
     namespace: string | null;
     name: string;
     version: number;
     status: 'draft' | 'unverified' | 'verified' | 'official' | 'archived';
     description: string | null;
+    seed?: string | null;                  // evolution: original v1 spec (absent on pre-migration records)
     spec: string;
     tags: string | null;
     category: string | null;
@@ -45,9 +82,50 @@ export interface GenomeRecord {
     feedbackData: string | null;
     publisherId: string | null;
     parentId: string | null;
+    runtimeType?: string | null;           // evolution: kernel extraction (absent on pre-migration)
+    executionPlane?: string | null;         // evolution: kernel extraction
+    permissionMode?: string | null;         // evolution: kernel extraction
     lifecycle: 'experimental' | 'active' | 'deprecated' | null;
     createdAt: string;
     updatedAt: string;
+}
+
+// ── Evolution types (from genome-hub) ──────────────────────────────
+
+export interface GenomeDiffRecord {
+    id: string;
+    genomeId: string;
+    version: number;
+    description: string;
+    verdictRefs: string | null;
+    changes: string;
+    strategy: string | null;
+    authorRole: string | null;
+    createdAt: string;
+}
+
+export interface TrialRecord {
+    id: string;
+    hubEntityId: string;
+    entityVersion: number;
+    teamId: string | null;
+    sessionId: string | null;
+    contextNarrative: string | null;
+    logRefs: string | null;
+    startedAt: string;
+    endedAt: string | null;
+}
+
+export interface VerdictRecord {
+    id: string;
+    trialId: string;
+    readerRole: string;
+    readerSessionId: string | null;
+    content: string;
+    score: number | null;
+    action: string | null;
+    dimensions: string | null;
+    createdAt: string;
 }
 
 export function parseFeedback(feedbackData: string | null): GenomeFeedback | null {
@@ -88,7 +166,8 @@ export async function searchGenomes(params: SearchParams = {}): Promise<SearchRe
 
 /** Fetch a genome by namespace + name (latest version). Returns null if not found. */
 export async function fetchGenomeByName(namespace: string, name: string): Promise<GenomeRecord | null> {
-    const cacheKey = `${namespace}::${name}`;
+    const resolvedName = resolveCanonicalGenomeName(namespace, name);
+    const cacheKey = `${namespace}::${resolvedName}`;
     const cached = genomeByNameCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
         return cached.value;
@@ -97,7 +176,7 @@ export async function fetchGenomeByName(namespace: string, name: string): Promis
     const request = (async () => {
         try {
             const encodedNs = encodeURIComponent(namespace);
-            const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(name)}`);
+            const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}`);
             if (res.status === 429) {
                 return null;
             }
@@ -494,6 +573,34 @@ export async function fetchGenomeById(id: string): Promise<GenomeRecord | null> 
         if (!res.ok) return null;
         const data = await res.json() as { genome?: GenomeRecord };
         return data.genome ?? null;
+    } catch {
+        return null;
+    }
+}
+
+// ── Evolution: diff chain + seed ───────────────────────────────────
+
+/** view-diff: Get the ordered diff chain for a genome (evolution history). */
+export async function fetchGenomeDiffs(namespace: string, name: string): Promise<GenomeDiffRecord[]> {
+    try {
+        const encodedNs = encodeURIComponent(namespace);
+        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(name)}/diffs`);
+        if (!res.ok) return [];
+        const data = await res.json() as { diffs: GenomeDiffRecord[] };
+        return data.diffs ?? [];
+    } catch {
+        return [];
+    }
+}
+
+/** view-not-diff: Get the original seed spec. */
+export async function fetchGenomeSeed(namespace: string, name: string): Promise<string | null> {
+    try {
+        const encodedNs = encodeURIComponent(namespace);
+        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(name)}/seed`);
+        if (!res.ok) return null;
+        const data = await res.json() as { seed: string };
+        return data.seed ?? null;
     } catch {
         return null;
     }
