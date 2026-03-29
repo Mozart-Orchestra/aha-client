@@ -548,27 +548,6 @@ const stylesheet = StyleSheet.create((theme) => ({
         padding: 6,
         marginLeft: 8,
     },
-    scrollToLatestContainer: {
-        alignItems: 'flex-end',
-        paddingHorizontal: 12,
-        paddingBottom: 8,
-    },
-    scrollToLatestButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.colors.button.primary.background,
-        shadowColor: theme.colors.shadow.color || '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: theme.colors.shadow.opacity || 0.18,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    scrollToLatestButtonPressed: {
-        opacity: 0.85,
-    },
 }));
 
 // Helper to get avatar initials or icon based on role
@@ -3005,26 +2984,6 @@ export default function TeamChatRoom({
                         hitSlop={8}
                     >
                         <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
-                    </Pressable>
-                </View>
-            )}
-
-            {showScrollToLatestButton && (
-                <View style={styles.scrollToLatestContainer}>
-                    <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Scroll to latest team messages"
-                        style={({ pressed }) => [
-                            styles.scrollToLatestButton,
-                            pressed && styles.scrollToLatestButtonPressed,
-                        ]}
-                        onPress={() => {
-                            isNearBottomRef.current = true;
-                            setShowScrollToLatestButton(false);
-                            scrollToEnd(true);
-                        }}
-                    >
-                        <Ionicons name="arrow-down" size={20} color="#FFFFFF" />
                     </Pressable>
                 </View>
             )}
