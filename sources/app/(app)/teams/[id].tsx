@@ -1070,28 +1070,79 @@ export default function TeamDashboardScreen() {
             'done': 'todo'
         }[normalized] || 'todo';
 
+        const applyTaskStatusChange = async (nextStatusValue: string, source: 'board_quick_move' | 'board_drag_drop') => {
+            // 🆕 使用 Chat-Board 同步功能：自动发送通知到聊天
+            try {
+                const humanLockReason = `${myDisplayName || '用户'} manually changed status to ${nextStatusValue}.`;
+                await updateTaskWithSync(
+                    task.id,
+                    {
+                        status: nextStatusValue,
+                        humanStatusLock: buildHumanStatusLock('manual-status', humanLockReason),
+                        comments: [
+                            ...(task.comments || []),
+                            buildManualStatusLockComment(task, nextStatusValue, humanLockReason),
+                        ],
+                    },
+                    myDisplayName || '用户'
+                );
+
+                trackTaskMoved(task.id, teamId, normalized, nextStatusValue, {
+                    source,
+                });
+                if (nextStatusValue === 'done') {
+                    trackTaskCompleted(task.id, teamId, {
+                        source,
+                    });
+                }
+
+                // 🆕 Phase 2: 同步状态到 Todo（如果有链接）
+                if (task.todoId) {
+                    const auth = getCurrentAuth();
+                    if (auth?.credentials) {
+                        syncKanbanStatusToTodo(auth.credentials, task.id, nextStatusValue).catch(err => {
+                            console.error('Failed to sync Kanban status to Todo:', err);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to sync task update:', error);
+                // 即使同步失败，任务状态更新仍然会进行（在 updateTaskWithSync 中）
+            }
+        };
+
+        await applyTaskStatusChange(nextStatus, 'board_quick_move');
+    }, [buildHumanStatusLock, buildManualStatusLockComment, myDisplayName, normalizeStatus, teamId, updateTaskWithSync]);
+
+    const handleMoveTaskToColumn = React.useCallback(async (task: KanbanTask, nextStatus: string) => {
+        const previousStatus = normalizeStatus(task.status);
+        const normalizedNextStatus = normalizeStatus(nextStatus);
+        if (!normalizedNextStatus || previousStatus === normalizedNextStatus) {
+            return;
+        }
+
         // 🆕 使用 Chat-Board 同步功能：自动发送通知到聊天
         try {
-            const humanLockReason = `${myDisplayName || '用户'} manually changed status to ${nextStatus}.`;
+            const humanLockReason = `${myDisplayName || '用户'} manually changed status to ${normalizedNextStatus}.`;
             await updateTaskWithSync(
                 task.id,
                 {
-                    status: nextStatus,
+                    status: normalizedNextStatus,
                     humanStatusLock: buildHumanStatusLock('manual-status', humanLockReason),
                     comments: [
                         ...(task.comments || []),
-                        buildManualStatusLockComment(task, nextStatus, humanLockReason),
+                        buildManualStatusLockComment(task, normalizedNextStatus, humanLockReason),
                     ],
                 },
                 myDisplayName || '用户'
             );
 
-            trackTaskMoved(task.id, teamId, normalized, nextStatus, {
-                source: 'board_quick_move',
+            trackTaskMoved(task.id, teamId, previousStatus, normalizedNextStatus, {
+                source: 'board_drag_drop',
             });
-            if (nextStatus === 'done') {
+            if (normalizedNextStatus === 'done' && previousStatus !== 'done') {
                 trackTaskCompleted(task.id, teamId, {
-                    source: 'board_quick_move',
+                    source: 'board_drag_drop',
                 });
             }
 
@@ -1099,7 +1150,7 @@ export default function TeamDashboardScreen() {
             if (task.todoId) {
                 const auth = getCurrentAuth();
                 if (auth?.credentials) {
-                    syncKanbanStatusToTodo(auth.credentials, task.id, nextStatus).catch(err => {
+                    syncKanbanStatusToTodo(auth.credentials, task.id, normalizedNextStatus).catch(err => {
                         console.error('Failed to sync Kanban status to Todo:', err);
                     });
                 }
@@ -1416,6 +1467,7 @@ export default function TeamDashboardScreen() {
                 onBoardSignalPress={handleBoardSignalPress}
                 onOpenTask={handleOpenTaskDetail}
                 onMoveTask={handleMoveTask}
+                onMoveTaskToColumn={handleMoveTaskToColumn}
                 onAddTask={handleAddTask}
             />
         </View>
@@ -1434,6 +1486,7 @@ export default function TeamDashboardScreen() {
         handleBoardSignalPress,
         handleOpenTaskDetail,
         handleMoveTask,
+        handleMoveTaskToColumn,
         handleAddTask,
         handleTasksImported,
     ]);

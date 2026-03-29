@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView, Pressable, Platform } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
 import { Ionicons } from '@expo/vector-icons';
 import { TeamStatusBar } from '@/components/team/TeamStatusBar';
@@ -7,6 +7,7 @@ import { getSessionName } from '@/utils/sessionUtils';
 import { withAlpha, getHumanStatusLockLabel } from '@/utils/teamUtils';
 import type { KanbanTask, KanbanColumn } from '@/sync/kanbanTypes';
 import type { stylesheet } from '@/app/(app)/teams/teamStyles';
+import { resolveTaskDropStatus } from './kanbanBoardDrag';
 
 function getPriorityAccentColor(priority?: string | null): string {
     if (priority === 'high' || priority === 'urgent') return '#FF3B30';
@@ -42,6 +43,7 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
     onBoardSignalPress,
     onOpenTask,
     onMoveTask,
+    onMoveTaskToColumn,
     onAddTask,
 }: {
     styles: typeof stylesheet;
@@ -55,15 +57,76 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
     onBoardSignalPress?: (signal: 'running' | 'deciding' | 'blocked') => void;
     onOpenTask: (task: KanbanTask) => void;
     onMoveTask: (task: KanbanTask) => void;
+    onMoveTaskToColumn: (task: KanbanTask, columnId: string) => void;
     onAddTask: (columnId: string) => void;
 }) {
+    const [draggingTaskId, setDraggingTaskId] = React.useState<string | null>(null);
+    const [touchMoveTaskId, setTouchMoveTaskId] = React.useState<string | null>(null);
+    const [activeDropColumnId, setActiveDropColumnId] = React.useState<string | null>(null);
+    const suppressOpenTaskIdRef = React.useRef<string | null>(null);
+    const activeMoveTaskId = draggingTaskId ?? touchMoveTaskId;
+    const activeMoveTask = React.useMemo(
+        () => approvedTasks.find((task) => task.id === activeMoveTaskId) ?? null,
+        [activeMoveTaskId, approvedTasks]
+    );
+
+    const resetMoveState = React.useCallback(() => {
+        setDraggingTaskId(null);
+        setTouchMoveTaskId(null);
+        setActiveDropColumnId(null);
+    }, []);
+
+    const commitMove = React.useCallback((targetColumnId: string) => {
+        if (!activeMoveTask) {
+            resetMoveState();
+            return;
+        }
+
+        const nextStatus = resolveTaskDropStatus({
+            currentStatus: activeMoveTask.status,
+            targetColumnId,
+        });
+
+        if (nextStatus) {
+            onMoveTaskToColumn(activeMoveTask, nextStatus);
+        }
+
+        resetMoveState();
+    }, [activeMoveTask, onMoveTaskToColumn, resetMoveState]);
+
     return (
         <>
             <TeamStatusBar tasks={tasks} onSignalPress={onBoardSignalPress} />
 
             <View style={styles.boardContainer}>
                 {columns.map((column) => (
-                    <View key={column.id} style={styles.column}>
+                    <View
+                        key={column.id}
+                        style={[
+                            styles.column,
+                            { position: 'relative' },
+                            activeMoveTaskId && activeDropColumnId === column.id
+                                ? {
+                                    borderColor: theme.colors.button.primary.background,
+                                    backgroundColor: withAlpha(theme.colors.button.primary.background, 0.08),
+                                }
+                                : null,
+                        ]}
+                        {...(Platform.OS === 'web'
+                            ? {
+                                onDragOver: (event: any) => {
+                                    if (!draggingTaskId) return;
+                                    event.preventDefault?.();
+                                    setActiveDropColumnId(column.id);
+                                },
+                                onDrop: (event: any) => {
+                                    if (!draggingTaskId) return;
+                                    event.preventDefault?.();
+                                    commitMove(column.id);
+                                },
+                            }
+                            : {})}
+                    >
                         <View style={styles.columnHeader}>
                             <View style={styles.columnHeaderLeft}>
                                 <View
@@ -78,6 +141,48 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                 {approvedTasks.filter((task) => matchesColumn(task, column.id)).length}
                             </Text>
                         </View>
+
+                        {touchMoveTaskId && activeMoveTask && (
+                            <Pressable
+                                style={{
+                                    position: 'absolute',
+                                    top: 54,
+                                    left: 12,
+                                    right: 12,
+                                    bottom: 12,
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderStyle: 'dashed',
+                                    borderColor: activeDropColumnId === column.id
+                                        ? theme.colors.button.primary.background
+                                        : theme.colors.divider,
+                                    backgroundColor: activeDropColumnId === column.id
+                                        ? withAlpha(theme.colors.button.primary.background, 0.12)
+                                        : withAlpha(theme.colors.surface, 0.9),
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    paddingHorizontal: 16,
+                                    zIndex: 3,
+                                }}
+                                onPress={() => commitMove(column.id)}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 12,
+                                        fontWeight: '600',
+                                        color: theme.colors.text,
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    {resolveTaskDropStatus({
+                                        currentStatus: activeMoveTask.status,
+                                        targetColumnId: column.id,
+                                    })
+                                        ? `移动到 ${column.title}`
+                                        : '当前位置'}
+                                </Text>
+                            </Pressable>
+                        )}
 
                         <ScrollView contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
                             {approvedTasks
@@ -97,9 +202,48 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                     return (
                                         <Pressable
                                             key={task.id}
-                                            style={styles.taskCard}
-                                            onPress={() => onOpenTask(task)}
-                                            onLongPress={() => onMoveTask(task)}
+                                            style={[
+                                                styles.taskCard,
+                                                activeMoveTaskId === task.id
+                                                    ? { opacity: 0.48 }
+                                                    : null,
+                                            ]}
+                                            onPress={() => {
+                                                if (suppressOpenTaskIdRef.current === task.id) {
+                                                    suppressOpenTaskIdRef.current = null;
+                                                    return;
+                                                }
+                                                if (touchMoveTaskId) {
+                                                    return;
+                                                }
+                                                onOpenTask(task);
+                                            }}
+                                            onLongPress={() => {
+                                                if (Platform.OS === 'web') {
+                                                    onMoveTask(task);
+                                                    return;
+                                                }
+                                                suppressOpenTaskIdRef.current = task.id;
+                                                setTouchMoveTaskId(task.id);
+                                                setActiveDropColumnId(column.id);
+                                            }}
+                                            delayLongPress={Platform.OS === 'web' ? 400 : 220}
+                                            {...(Platform.OS === 'web'
+                                                ? ({
+                                                    draggable: true,
+                                                    onDragStart: (event: any) => {
+                                                        setDraggingTaskId(task.id);
+                                                        setActiveDropColumnId(null);
+                                                        event.dataTransfer?.setData?.('text/plain', task.id);
+                                                        if (event.dataTransfer) {
+                                                            event.dataTransfer.effectAllowed = 'move';
+                                                        }
+                                                    },
+                                                    onDragEnd: () => {
+                                                        resetMoveState();
+                                                    },
+                                                } as any)
+                                                : {})}
                                         >
                                             {task.priority && (
                                                 <View
