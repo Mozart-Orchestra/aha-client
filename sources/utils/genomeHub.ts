@@ -1,12 +1,17 @@
 /**
  * Genome Hub API client — talks to the standalone marketplace server.
- * Base URL defaults to EXPO_PUBLIC_GENOME_HUB_URL or localhost:3006.
+ * Base URL defaults to EXPO_PUBLIC_GENOME_HUB_URL or localhost:3007.
  */
 
+const DEFAULT_GENOME_HUB_BASE = 'http://localhost:3007';
+
 const BASE = (() => {
-    const url = process.env.EXPO_PUBLIC_GENOME_HUB_URL;
+    const url = process.env.EXPO_PUBLIC_GENOME_HUB_URL?.trim();
     if (!url) {
-        throw new Error('EXPO_PUBLIC_GENOME_HUB_URL is not configured — genome-hub URL is required');
+        console.warn(
+            `[genomeHub] EXPO_PUBLIC_GENOME_HUB_URL is not configured — falling back to ${DEFAULT_GENOME_HUB_BASE}`,
+        );
+        return DEFAULT_GENOME_HUB_BASE;
     }
     return url.replace(/\/$/, '');
 })();
@@ -584,7 +589,8 @@ export async function fetchGenomeById(id: string): Promise<GenomeRecord | null> 
 export async function fetchGenomeDiffs(namespace: string, name: string): Promise<GenomeDiffRecord[]> {
     try {
         const encodedNs = encodeURIComponent(namespace);
-        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(name)}/diffs`);
+        const resolvedName = resolveCanonicalGenomeName(namespace, name);
+        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/diffs`);
         if (!res.ok) return [];
         const data = await res.json() as { diffs: GenomeDiffRecord[] };
         return data.diffs ?? [];
@@ -597,7 +603,8 @@ export async function fetchGenomeDiffs(namespace: string, name: string): Promise
 export async function fetchGenomeSeed(namespace: string, name: string): Promise<string | null> {
     try {
         const encodedNs = encodeURIComponent(namespace);
-        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(name)}/seed`);
+        const resolvedName = resolveCanonicalGenomeName(namespace, name);
+        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/seed`);
         if (!res.ok) return null;
         const data = await res.json() as { seed: string };
         return data.seed ?? null;

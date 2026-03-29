@@ -72,4 +72,48 @@ describe('genomeHub role alias lookup', () => {
         expect(genome?.namespace).toBe('@private');
         expect(genome?.name).toBe('MyPrivateBuilder');
     });
+
+    it('falls back to localhost:3007 with a warning when genome hub env is missing', async () => {
+        delete process.env.EXPO_PUBLIC_GENOME_HUB_URL;
+        vi.resetModules();
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ genome: makeGenome('implementer') }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { fetchGenomeByName } = await import('./genomeHub');
+        const genome = await fetchGenomeByName('@official', 'implementer');
+
+        expect(fetchMock).toHaveBeenCalledWith('http://localhost:3007/genomes/%40official/implementer');
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('EXPO_PUBLIC_GENOME_HUB_URL'));
+        expect(genome?.name).toBe('implementer');
+    });
+
+    it('reuses canonical alias resolution for official diff and seed lookups', async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({ diffs: [{ id: 'diff-1', genomeId: 'genome-implementer', version: 2, description: 'builder->implementer', verdictRefs: null, changes: '[]', strategy: 'conservative', authorRole: 'supervisor', createdAt: '2026-03-29T00:00:00.000Z' }] }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({ seed: '{"role":"implementer"}' }),
+            });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { fetchGenomeDiffs, fetchGenomeSeed } = await import('./genomeHub');
+        const diffs = await fetchGenomeDiffs('@official', 'builder');
+        const seed = await fetchGenomeSeed('@official', 'builder');
+
+        expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://genome-hub.test/genomes/%40official/implementer/diffs');
+        expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://genome-hub.test/genomes/%40official/implementer/seed');
+        expect(diffs).toHaveLength(1);
+        expect(seed).toBe('{"role":"implementer"}');
+    });
 });
