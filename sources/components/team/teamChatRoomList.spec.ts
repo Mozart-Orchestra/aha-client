@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import type { TeamMessage } from '@/sync/teamMessageTypes';
 import {
     appendTeamMessage,
     dedupeAndSortTeamMessages,
     isNearBottom,
     mergeTeamMessages,
+    shouldShowScrollToLatestButton,
 } from './teamChatRoomList';
 
 function makeMessage(id: string, timestamp: number, content = id): TeamMessage {
@@ -64,5 +66,23 @@ describe('teamChatRoomList helpers', () => {
     it('isNearBottom only returns true when within the configured threshold', () => {
         expect(isNearBottom(400, 500, 980)).toBe(true);
         expect(isNearBottom(400, 300, 980)).toBe(false);
+    });
+
+    it('shows scroll-to-latest button when messages exist and user is away from bottom', () => {
+        expect(shouldShowScrollToLatestButton({
+            messageCount: 12,
+            layoutHeight: 400,
+            offsetY: 120,
+            contentHeight: 1000,
+        })).toBe(true);
+    });
+
+    it('hides scroll-to-latest button when there are no messages', () => {
+        expect(shouldShowScrollToLatestButton({
+            messageCount: 0,
+            layoutHeight: 400,
+            offsetY: 0,
+            contentHeight: 0,
+        })).toBe(false);
     });
 });

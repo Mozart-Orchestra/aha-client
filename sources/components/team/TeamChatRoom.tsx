@@ -41,7 +41,7 @@ import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
-import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages } from './teamChatRoomList';
+import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages, shouldShowScrollToLatestButton } from './teamChatRoomList';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
@@ -75,6 +75,27 @@ const stylesheet = StyleSheet.create((theme) => ({
     messageListContent: {
         padding: 16,
         paddingBottom: 24,
+    },
+    scrollToLatestContainer: {
+        alignItems: 'flex-end',
+        paddingHorizontal: 12,
+        paddingBottom: 8,
+    },
+    scrollToLatestButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.button.primary.background,
+        shadowColor: theme.colors.shadow.color || '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: theme.colors.shadow.opacity || 0.18,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    scrollToLatestButtonPressed: {
+        opacity: 0.85,
     },
     messageRow: {
         flexDirection: 'row',
@@ -2861,7 +2882,12 @@ export default function TeamChatRoom({
                     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
                     const nearBottom = isNearBottom(layoutMeasurement.height, contentOffset.y, contentSize.height);
                     isNearBottomRef.current = nearBottom;
-                    setShowScrollToLatestButton(!nearBottom);
+                    setShowScrollToLatestButton(shouldShowScrollToLatestButton({
+                        messageCount: uniqueMessages.length,
+                        layoutHeight: layoutMeasurement.height,
+                        offsetY: contentOffset.y,
+                        contentHeight: contentSize.height,
+                    }));
                 }}
                 scrollEventThrottle={16}
                 // Only auto-scroll when user is near bottom (respecting user intent)
@@ -2881,6 +2907,26 @@ export default function TeamChatRoom({
                     }
                 }}
             />
+
+            {showScrollToLatestButton && (
+                <View style={styles.scrollToLatestContainer}>
+                    <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="跳到最新消息"
+                        style={({ pressed }) => [
+                            styles.scrollToLatestButton,
+                            pressed && styles.scrollToLatestButtonPressed,
+                        ]}
+                        onPress={() => {
+                            isNearBottomRef.current = true;
+                            setShowScrollToLatestButton(false);
+                            scrollToEnd(true);
+                        }}
+                    >
+                        <Ionicons name="arrow-down" size={20} color="#FFFFFF" />
+                    </Pressable>
+                </View>
+            )}
 
             {/* 🆕 历史消息选择器 */}
             {showHistory && myMessageHistory.length > 0 && (
