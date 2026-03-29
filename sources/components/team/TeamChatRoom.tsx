@@ -41,7 +41,7 @@ import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
-import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages } from './teamChatRoomList';
+import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages, shouldShowScrollToLatestButton } from './teamChatRoomList';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
@@ -75,6 +75,27 @@ const stylesheet = StyleSheet.create((theme) => ({
     messageListContent: {
         padding: 16,
         paddingBottom: 24,
+    },
+    scrollToLatestContainer: {
+        alignItems: 'flex-end',
+        paddingHorizontal: 12,
+        paddingBottom: 8,
+    },
+    scrollToLatestButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.button.primary.background,
+        shadowColor: theme.colors.shadow.color || '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: theme.colors.shadow.opacity || 0.18,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    scrollToLatestButtonPressed: {
+        opacity: 0.85,
     },
     messageRow: {
         flexDirection: 'row',
@@ -1467,6 +1488,8 @@ export default function TeamChatRoom({
     const messageListRef = React.useRef<FlatList<TeamMessage>>(null);
     const isNearBottomRef = React.useRef(true);  // Track if user is near bottom for auto-scroll
     const hasInitialScrolled = React.useRef(false);  // Ensure we scroll to bottom on first layout
+    const hasInitialMessageSync = React.useRef(false);  // Ensure first loaded message batch lands at bottom
+    const [showScrollToLatestButton, setShowScrollToLatestButton] = React.useState(false);
 
     // Reliable scroll-to-end helper — uses rAF on web for accurate post-paint timing
     const scrollToEnd = React.useCallback((animated: boolean) => {
@@ -1526,6 +1549,7 @@ export default function TeamChatRoom({
         height: number;
         fileSize?: number;
     } | null>(null);
+    const [isCompressing, setIsCompressing] = React.useState(false);
     const [uploadProgress, setUploadProgress] = React.useState(0);
     const inputRef = React.useRef<TextInput>(null);
 
@@ -1572,7 +1596,7 @@ export default function TeamChatRoom({
 
                     // dataUrl is "data:image/png;base64,<data>"
                     const base64 = dataUrl.split(',')[1];
-                    const img = new Image();
+                    const img = new globalThis.Image();
                     img.onload = () => {
                         setSelectedImage({
                             uri: dataUrl,
@@ -2219,6 +2243,13 @@ export default function TeamChatRoom({
         return dedupeAndSortTeamMessages(messages);
     }, [messages]);
 
+    React.useEffect(() => {
+        isNearBottomRef.current = true;
+        hasInitialScrolled.current = false;
+        hasInitialMessageSync.current = false;
+        setShowScrollToLatestButton(false);
+    }, [teamId]);
+
     const loadMessages = React.useCallback(async () => {
         try {
             setIsLoading(true);
@@ -2227,6 +2258,8 @@ export default function TeamChatRoom({
             setMessages(prev => mergeTeamMessages(prev, result.messages));
 
             setTimeout(() => {
+                isNearBottomRef.current = true;
+                setShowScrollToLatestButton(false);
                 scrollToEnd(false);
             }, 100);
         } catch (error) {
@@ -2234,12 +2267,23 @@ export default function TeamChatRoom({
         } finally {
             setIsLoading(false);
         }
-    }, [teamId, setMessages]);
+    }, [scrollToEnd, setMessages, teamId]);
 
     // Load messages
     React.useEffect(() => {
         void loadMessages();
     }, [loadMessages]);
+
+    React.useEffect(() => {
+        if (uniqueMessages.length === 0 || hasInitialMessageSync.current) {
+            return;
+        }
+
+        hasInitialMessageSync.current = true;
+        isNearBottomRef.current = true;
+        setShowScrollToLatestButton(false);
+        scrollToEnd(false);
+    }, [scrollToEnd, uniqueMessages.length]);
 
     // Subscribe to real-time messages
     React.useEffect(() => {
@@ -2258,6 +2302,7 @@ export default function TeamChatRoom({
                         return appendTeamMessage(prev, message);
                     });
                     if (shouldAutoScroll) {
+                        setShowScrollToLatestButton(false);
                         scrollToEnd(true);
                     }
                 });
@@ -2334,6 +2379,7 @@ export default function TeamChatRoom({
                 setUploadProgress(100);
 
                 isNearBottomRef.current = true;
+                setShowScrollToLatestButton(false);
                 scrollToEnd(true);
 
                 // Clear states
@@ -2629,6 +2675,7 @@ export default function TeamChatRoom({
             messageIdsRef.current.add(messageId);
             setMessages(prev => appendTeamMessage(prev, optimisticMsg));
             isNearBottomRef.current = true;
+            setShowScrollToLatestButton(false);
             scrollToEnd(true);
             setInputText('');
 
@@ -2812,12 +2859,20 @@ export default function TeamChatRoom({
                 // Track user scroll position to determine if near bottom
                 onScroll={(event) => {
                     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-                    isNearBottomRef.current = isNearBottom(layoutMeasurement.height, contentOffset.y, contentSize.height);
+                    const nearBottom = isNearBottom(layoutMeasurement.height, contentOffset.y, contentSize.height);
+                    isNearBottomRef.current = nearBottom;
+                    setShowScrollToLatestButton(shouldShowScrollToLatestButton({
+                        messageCount: uniqueMessages.length,
+                        layoutHeight: layoutMeasurement.height,
+                        offsetY: contentOffset.y,
+                        contentHeight: contentSize.height,
+                    }));
                 }}
                 scrollEventThrottle={16}
                 // Only auto-scroll when user is near bottom (respecting user intent)
                 onContentSizeChange={() => {
                     if (isNearBottomRef.current) {
+                        setShowScrollToLatestButton(false);
                         scrollToEnd(true);
                     }
                 }}
@@ -2825,10 +2880,32 @@ export default function TeamChatRoom({
                 onLayout={() => {
                     if (!hasInitialScrolled.current) {
                         hasInitialScrolled.current = true;
+                        isNearBottomRef.current = true;
+                        setShowScrollToLatestButton(false);
                         scrollToEnd(false);
                     }
                 }}
             />
+
+            {showScrollToLatestButton && (
+                <View style={styles.scrollToLatestContainer}>
+                    <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="跳到最新消息"
+                        style={({ pressed }) => [
+                            styles.scrollToLatestButton,
+                            pressed && styles.scrollToLatestButtonPressed,
+                        ]}
+                        onPress={() => {
+                            isNearBottomRef.current = true;
+                            setShowScrollToLatestButton(false);
+                            scrollToEnd(true);
+                        }}
+                    >
+                        <Ionicons name="arrow-down" size={20} color="#FFFFFF" />
+                    </Pressable>
+                </View>
+            )}
 
             {/* 🆕 历史消息选择器 */}
             {showHistory && myMessageHistory.length > 0 && (

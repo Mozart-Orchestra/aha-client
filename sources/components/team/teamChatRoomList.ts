@@ -33,3 +33,22 @@ export function isNearBottom(
 ): boolean {
     return layoutHeight + offsetY >= contentHeight - threshold;
 }
+
+export function shouldShowScrollToLatestButton(args: {
+    messageCount: number;
+    layoutHeight: number;
+    offsetY: number;
+    contentHeight: number;
+    threshold?: number;
+}): boolean {
+    if (args.messageCount === 0) {
+        return false;
+    }
+
+    return !isNearBottom(
+        args.layoutHeight,
+        args.offsetY,
+        args.contentHeight,
+        args.threshold
+    );
+}
