@@ -1,17 +1,15 @@
 /**
  * Genome Hub API client — talks to the standalone marketplace server.
- * Base URL defaults to EXPO_PUBLIC_GENOME_HUB_URL or localhost:3007.
+ * Base URL must be provided via EXPO_PUBLIC_GENOME_HUB_URL.
  */
-
-const DEFAULT_GENOME_HUB_BASE = 'http://localhost:3007';
 
 const BASE = (() => {
     const url = process.env.EXPO_PUBLIC_GENOME_HUB_URL?.trim();
     if (!url) {
         console.warn(
-            `[genomeHub] EXPO_PUBLIC_GENOME_HUB_URL is not configured — falling back to ${DEFAULT_GENOME_HUB_BASE}`,
+            '[genomeHub] EXPO_PUBLIC_GENOME_HUB_URL is not configured — refusing to fall back silently',
         );
-        return DEFAULT_GENOME_HUB_BASE;
+        throw new Error('EXPO_PUBLIC_GENOME_HUB_URL is not configured — genome-hub URL is required');
     }
     return url.replace(/\/$/, '');
 })();
