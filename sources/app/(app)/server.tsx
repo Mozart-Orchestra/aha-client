@@ -1,16 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { Text } from '@/components/ui/StyledText';
 import { Typography } from '@/constants/Typography';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
+import { Item } from '@/components/ui/Item';
 import { RoundButton } from '@/components/ui/RoundButton';
+import { Switch } from '@/components/ui/Switch';
 import { Modal } from '@/modal';
 import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import { getServerUrl, setServerUrl, validateServerUrl, getServerInfo } from '@/sync/serverConfig';
 import { useAuth } from '@/auth/AuthContext';
+import { getRuntimeModelPolicy, setRuntimeModelPolicy } from '@/sync/runtimeModelPolicy';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -84,6 +87,44 @@ export default function ServerConfigScreen() {
     const [inputUrl, setInputUrl] = useState(serverInfo.isCustom ? getServerUrl() : '');
     const [error, setError] = useState<string | null>(null);
     const [isValidating, setIsValidating] = useState(false);
+    const [allowGenomeModelSelection, setAllowGenomeModelSelection] = useState(false);
+    const [isLoadingRuntimePolicy, setIsLoadingRuntimePolicy] = useState(false);
+    const [isSavingRuntimePolicy, setIsSavingRuntimePolicy] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (!auth.credentials) {
+            setAllowGenomeModelSelection(false);
+            setIsLoadingRuntimePolicy(false);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        setIsLoadingRuntimePolicy(true);
+        getRuntimeModelPolicy(auth.credentials)
+            .then(({ policy }) => {
+                if (!cancelled) {
+                    setAllowGenomeModelSelection(policy.allowGenomeModelSelection);
+                }
+            })
+            .catch((loadError) => {
+                console.warn('Failed to load runtime model policy:', loadError);
+                if (!cancelled) {
+                    setAllowGenomeModelSelection(false);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setIsLoadingRuntimePolicy(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [auth.credentials]);
 
     const validateServer = async (url: string): Promise<boolean> => {
         try {
@@ -165,6 +206,34 @@ export default function ServerConfigScreen() {
         }
     };
 
+    const handleRuntimeModelSelectionChange = async (value: boolean) => {
+        if (!auth.credentials || isSavingRuntimePolicy) {
+            return;
+        }
+
+        const previousValue = allowGenomeModelSelection;
+        setAllowGenomeModelSelection(value);
+        setIsSavingRuntimePolicy(true);
+
+        try {
+            await setRuntimeModelPolicy(auth.credentials, {
+                allowGenomeModelSelection: value,
+            });
+        } catch (saveError) {
+            console.warn('Failed to save runtime model policy:', saveError);
+            setAllowGenomeModelSelection(previousValue);
+            Modal.alert(t('common.error'), t('server.honorGenomeModelsSaveFailed'));
+        } finally {
+            setIsSavingRuntimePolicy(false);
+        }
+    };
+
+    const runtimeModelSubtitle = !auth.credentials
+        ? t('server.honorGenomeModelsAuthRequired')
+        : allowGenomeModelSelection
+            ? t('server.honorGenomeModelsEnabled')
+            : t('server.honorGenomeModelsDisabled');
+
     return (
         <>
             <Stack.Screen
@@ -236,7 +305,27 @@ export default function ServerConfigScreen() {
                         </View>
                     </ItemGroup>
 
-                    </ItemList>
+                    <ItemGroup
+                        title={t('server.agentRuntimeTitle')}
+                        footer={t('server.honorGenomeModelsFooter')}
+                    >
+                        <Item
+                            title={t('server.honorGenomeModels')}
+                            subtitle={runtimeModelSubtitle}
+                            rightElement={
+                                <Switch
+                                    value={allowGenomeModelSelection}
+                                    onValueChange={handleRuntimeModelSelectionChange}
+                                    disabled={!auth.credentials || isLoadingRuntimePolicy || isSavingRuntimePolicy}
+                                    trackColor={{ false: '#767577', true: '#34C759' }}
+                                    thumbColor="#FFFFFF"
+                                />
+                            }
+                            showChevron={false}
+                        />
+                    </ItemGroup>
+
+                </ItemList>
             </KeyboardAvoidingView>
         </>
     );

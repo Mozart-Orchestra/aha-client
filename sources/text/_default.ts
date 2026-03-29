@@ -359,7 +359,14 @@ export const en = {
         failedToConnectToServer: 'Failed to connect to server',
         currentlyUsingCustomServer: 'Currently using custom server',
         customServerUrlLabel: 'Custom Server URL',
-        advancedFeatureFooter: "This is an advanced feature. Only change the server if you know what you're doing. You will need to log out and log in again after changing servers."
+        advancedFeatureFooter: "This is an advanced feature. Only change the server if you know what you're doing. You will need to log out and log in again after changing servers.",
+        agentRuntimeTitle: 'Agent Runtime',
+        honorGenomeModels: 'Honor Genome Model Selection',
+        honorGenomeModelsEnabled: 'Runtime will follow agent-specific model IDs from genomes',
+        honorGenomeModelsDisabled: 'Default cost control: ignore genome model IDs and use routing/default models',
+        honorGenomeModelsAuthRequired: 'Connect your account to sync this runtime policy',
+        honorGenomeModelsFooter: 'Disabled by default to prevent expensive model drift during development. Enable this only when you intentionally want agents to force the models declared in their genomes.',
+        honorGenomeModelsSaveFailed: 'Failed to update runtime model policy'
     },
 
     sessionInfo: {

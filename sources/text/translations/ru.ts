@@ -319,7 +319,14 @@ export const ru: TranslationStructure = {
         failedToConnectToServer: 'Не удалось подключиться к серверу',
         currentlyUsingCustomServer: 'Сейчас используется пользовательский сервер',
         customServerUrlLabel: 'URL пользовательского сервера',
-        advancedFeatureFooter: 'Это расширенная функция. Изменяйте сервер только если знаете, что делаете. Вам нужно будет выйти и войти снова после изменения серверов.'
+        advancedFeatureFooter: 'Это расширенная функция. Изменяйте сервер только если знаете, что делаете. Вам нужно будет выйти и войти снова после изменения серверов.',
+        agentRuntimeTitle: 'Agent Runtime',
+        honorGenomeModels: 'Honor Genome Model Selection',
+        honorGenomeModelsEnabled: 'Runtime will follow agent-specific model IDs from genomes',
+        honorGenomeModelsDisabled: 'Default cost control: ignore genome model IDs and use routing/default models',
+        honorGenomeModelsAuthRequired: 'Connect your account to sync this runtime policy',
+        honorGenomeModelsFooter: 'Disabled by default to prevent expensive model drift during development. Enable this only when you intentionally want agents to force the models declared in their genomes.',
+        honorGenomeModelsSaveFailed: 'Failed to update runtime model policy'
     },
 
     sessionInfo: {

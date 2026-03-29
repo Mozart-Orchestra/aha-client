@@ -345,7 +345,14 @@ export const ca: TranslationStructure = {
         failedToConnectToServer: 'Ha fallat la connexió amb el servidor',
         currentlyUsingCustomServer: 'Actualment utilitzant un servidor personalitzat',
         customServerUrlLabel: 'URL del servidor personalitzat',
-        advancedFeatureFooter: 'Aquesta és una funció avançada. Només canvia el servidor si saps el que fas. Hauràs de tancar la sessió i tornar-la a iniciar després de canviar els servidors.'
+        advancedFeatureFooter: 'Aquesta és una funció avançada. Només canvia el servidor si saps el que fas. Hauràs de tancar la sessió i tornar-la a iniciar després de canviar els servidors.',
+        agentRuntimeTitle: 'Agent Runtime',
+        honorGenomeModels: 'Honor Genome Model Selection',
+        honorGenomeModelsEnabled: 'Runtime will follow agent-specific model IDs from genomes',
+        honorGenomeModelsDisabled: 'Default cost control: ignore genome model IDs and use routing/default models',
+        honorGenomeModelsAuthRequired: 'Connect your account to sync this runtime policy',
+        honorGenomeModelsFooter: 'Disabled by default to prevent expensive model drift during development. Enable this only when you intentionally want agents to force the models declared in their genomes.',
+        honorGenomeModelsSaveFailed: 'Failed to update runtime model policy'
     },
 
     sessionInfo: {

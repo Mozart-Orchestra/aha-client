@@ -362,7 +362,14 @@ export const zhHans: TranslationStructure = {
         failedToConnectToServer: '连接服务器失败',
         currentlyUsingCustomServer: '当前使用自定义服务器',
         customServerUrlLabel: '自定义服务器 URL',
-        advancedFeatureFooter: "这是一个高级功能。只有在您知道自己在做什么时才更改服务器。更改服务器后您需要重新登录。"
+        advancedFeatureFooter: "这是一个高级功能。只有在您知道自己在做什么时才更改服务器。更改服务器后您需要重新登录。",
+        agentRuntimeTitle: 'Agent 运行时',
+        honorGenomeModels: '启用基因内模型指定',
+        honorGenomeModelsEnabled: '运行时会遵循 genome 中为各 agent 指定的模型 ID',
+        honorGenomeModelsDisabled: '默认成本控制：忽略 genome 中的模型 ID，改用路由或默认模型',
+        honorGenomeModelsAuthRequired: '请先连接账户以同步这项运行时策略',
+        honorGenomeModelsFooter: '开发阶段默认关闭，避免昂贵模型被 genome 漂移误触发。只有在你明确希望 agent 强制使用 genome 声明模型时才打开。',
+        honorGenomeModelsSaveFailed: '更新运行时模型策略失败'
     },
 
     sessionInfo: {

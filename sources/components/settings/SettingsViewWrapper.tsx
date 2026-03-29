@@ -8,7 +8,6 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Typography } from '@/constants/Typography';
 import { t } from '@/text';
-import { isUsingCustomServer } from '@/sync/serverConfig';
 import { useSocketStatus } from '@/sync/storage';
 import { StatusDot } from '../ui/StatusDot';
 
@@ -136,12 +135,6 @@ function HeaderRight() {
     const router = useRouter();
     const styles = stylesheet;
     const { theme } = useUnistyles();
-    const isCustomServer = isUsingCustomServer();
-
-    if (!isCustomServer) {
-        // Return empty view to maintain header centering
-        return <View style={styles.headerButton} />;
-    }
 
     return (
         <Pressable

@@ -345,7 +345,14 @@ export const es: TranslationStructure = {
         failedToConnectToServer: 'Falló al conectar con el servidor',
         currentlyUsingCustomServer: 'Actualmente usando servidor personalizado',
         customServerUrlLabel: 'URL del servidor personalizado',
-        advancedFeatureFooter: 'Esta es una característica avanzada. Solo cambia el servidor si sabes lo que haces. Necesitarás cerrar sesión e iniciarla nuevamente después de cambiar servidores.'
+        advancedFeatureFooter: 'Esta es una característica avanzada. Solo cambia el servidor si sabes lo que haces. Necesitarás cerrar sesión e iniciarla nuevamente después de cambiar servidores.',
+        agentRuntimeTitle: 'Agent Runtime',
+        honorGenomeModels: 'Honor Genome Model Selection',
+        honorGenomeModelsEnabled: 'Runtime will follow agent-specific model IDs from genomes',
+        honorGenomeModelsDisabled: 'Default cost control: ignore genome model IDs and use routing/default models',
+        honorGenomeModelsAuthRequired: 'Connect your account to sync this runtime policy',
+        honorGenomeModelsFooter: 'Disabled by default to prevent expensive model drift during development. Enable this only when you intentionally want agents to force the models declared in their genomes.',
+        honorGenomeModelsSaveFailed: 'Failed to update runtime model policy'
     },
 
     sessionInfo: {

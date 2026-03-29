@@ -228,15 +228,14 @@ export default React.memo(() => {
                 })()}
 
                 {/* Server Info */}
-                {serverInfo.isCustom && (
-                    <ItemGroup title={t('settingsAccount.server')}>
-                        <Item
-                            title={t('settingsAccount.server')}
-                            detail={serverInfo.hostname + (serverInfo.port ? `:${serverInfo.port}` : '')}
-                            showChevron={false}
-                        />
-                    </ItemGroup>
-                )}
+                <ItemGroup title={t('settingsAccount.server')}>
+                    <Item
+                        title={t('server.serverConfiguration')}
+                        subtitle={serverInfo.isCustom ? t('server.currentlyUsingCustomServer') : undefined}
+                        detail={serverInfo.hostname + (serverInfo.port ? `:${serverInfo.port}` : '')}
+                        onPress={() => router.push('/server')}
+                    />
+                </ItemGroup>
 
                 {/* Backup Section */}
                 <ItemGroup

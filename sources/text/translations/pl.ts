@@ -356,7 +356,14 @@ export const pl: TranslationStructure = {
         failedToConnectToServer: 'Nie udało się połączyć z serwerem',
         currentlyUsingCustomServer: 'Aktualnie używany jest niestandardowy serwer',
         customServerUrlLabel: 'URL niestandardowego serwera',
-        advancedFeatureFooter: 'To jest zaawansowana funkcja. Zmieniaj serwer tylko jeśli wiesz, co robisz. Po zmianie serwera będziesz musiał się wylogować i zalogować ponownie.'
+        advancedFeatureFooter: 'To jest zaawansowana funkcja. Zmieniaj serwer tylko jeśli wiesz, co robisz. Po zmianie serwera będziesz musiał się wylogować i zalogować ponownie.',
+        agentRuntimeTitle: 'Agent Runtime',
+        honorGenomeModels: 'Honor Genome Model Selection',
+        honorGenomeModelsEnabled: 'Runtime will follow agent-specific model IDs from genomes',
+        honorGenomeModelsDisabled: 'Default cost control: ignore genome model IDs and use routing/default models',
+        honorGenomeModelsAuthRequired: 'Connect your account to sync this runtime policy',
+        honorGenomeModelsFooter: 'Disabled by default to prevent expensive model drift during development. Enable this only when you intentionally want agents to force the models declared in their genomes.',
+        honorGenomeModelsSaveFailed: 'Failed to update runtime model policy'
     },
 
     sessionInfo: {
