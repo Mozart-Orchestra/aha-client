@@ -110,6 +110,20 @@ export interface AgentPlugRecord {
 export type AgentPlug = AgentPlugRecord;
 export type GenomeDiffRecord = AgentPlugRecord;
 
+export interface DiffLedgerEntry {
+    id: string;
+    genomeId: string;
+    version: number;
+    seqNo: number;
+    timestamp: string;
+    diffType: 'kv' | 'string' | 'narrative';
+    path?: string | null;
+    op?: string | null;
+    oldValue?: string | null;
+    newValue?: string | null;
+    content?: string | null;
+}
+
 export interface TrialRecord {
     id: string;
     hubEntityId: string;
@@ -267,8 +281,11 @@ export interface LegionImage {
     tags?: string[];
     category?: string;
     members: {
-        genome: string;
+        genome?: string | null;
+        genomeRef?: string | null;
         roleAlias?: string;
+        role?: string;
+        displayName?: string;
         count?: number;
         required?: boolean;
         overlay?: LegionMemberOverlay;
@@ -295,6 +312,37 @@ export function parseLegionImage(specJson: string): LegionImage | null {
 
 export const parseCorpsSpec = parseLegionImage;
 export const parseLegionSpec = parseLegionImage;
+
+export function getLegionMemberReference(member: {
+    genome?: string | null;
+    genomeRef?: string | null;
+} | null | undefined): string | null {
+    const ref = member?.genome ?? member?.genomeRef;
+    return typeof ref === 'string' && ref.trim().length > 0 ? ref.trim() : null;
+}
+
+export function getLegionMemberDisplayName(member: {
+    roleAlias?: string | null;
+    displayName?: string | null;
+    role?: string | null;
+    genome?: string | null;
+    genomeRef?: string | null;
+} | null | undefined): string {
+    for (const value of [member?.roleAlias, member?.displayName, member?.role]) {
+        if (typeof value === 'string' && value.trim().length > 0) {
+            return value.trim();
+        }
+    }
+
+    const ref = getLegionMemberReference(member);
+    if (!ref) {
+        return '?';
+    }
+
+    const tail = ref.split('/').filter(Boolean).pop() ?? ref;
+    const label = tail.split('@')[0]?.trim();
+    return label || ref;
+}
 
 export interface AgentPackageRef {
     ref: string;
@@ -633,5 +681,34 @@ export async function fetchGenomeSeed(namespace: string, name: string): Promise<
         return data.seed ?? null;
     } catch {
         return null;
+    }
+}
+
+export async function fetchGenomeLedger(
+    namespace: string,
+    name: string,
+    version?: number,
+): Promise<{ ledger: DiffLedgerEntry[]; replayedSpec: string | null }> {
+    try {
+        const encodedNs = encodeURIComponent(namespace);
+        const resolvedName = resolveCanonicalGenomeName(namespace, name);
+        const params = new URLSearchParams();
+        if (typeof version === 'number' && Number.isFinite(version)) {
+            params.set('version', String(version));
+        }
+        const query = params.toString();
+        const res = await fetch(
+            `${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/ledger${query ? `?${query}` : ''}`,
+        );
+        if (!res.ok) {
+            return { ledger: [], replayedSpec: null };
+        }
+        const data = await res.json() as { ledger?: DiffLedgerEntry[]; replayedSpec?: string | null };
+        return {
+            ledger: data.ledger ?? [],
+            replayedSpec: data.replayedSpec ?? null,
+        };
+    } catch {
+        return { ledger: [], replayedSpec: null };
     }
 }

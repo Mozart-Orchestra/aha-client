@@ -39,13 +39,40 @@ export function parseCorpsGenomeRef(ref: string): ParsedCorpsGenomeRef | null {
     };
 }
 
+function getCorpsMemberReference(member: LegionImage['members'][number]): string | null {
+    const ref = member.genome ?? member.genomeRef;
+    return typeof ref === 'string' && ref.trim().length > 0 ? ref.trim() : null;
+}
+
+function getCorpsMemberDisplayName(member: LegionImage['members'][number]): string {
+    for (const value of [member.roleAlias, member.displayName, member.role]) {
+        if (typeof value === 'string' && value.trim().length > 0) {
+            return value.trim();
+        }
+    }
+
+    const ref = getCorpsMemberReference(member);
+    if (!ref) {
+        return '?';
+    }
+
+    const tail = ref.split('/').filter(Boolean).pop() ?? ref;
+    const label = tail.split('@')[0]?.trim();
+    return label || ref;
+}
+
 export function resolveCorpsRoleId(member: LegionImage['members'][number]): string {
     const alias = member.roleAlias?.trim();
     if (alias) {
         return alias;
     }
 
-    return parseCorpsGenomeRef(member.genome)?.name ?? 'member';
+    const role = member.role?.trim();
+    if (role) {
+        return role;
+    }
+
+    return parseCorpsGenomeRef(getCorpsMemberReference(member) ?? '')?.name ?? 'member';
 }
 
 function formatRoleDisplay(roleId: string): string {
@@ -61,21 +88,24 @@ export function expandCorpsMemberPlans(corps: LegionImage): CorpsMemberPlan[] {
 
     for (const member of corps.members ?? []) {
         const count = Math.max(1, member.count ?? 1);
+        const genomeRef = getCorpsMemberReference(member) ?? '';
         const roleId = resolveCorpsRoleId(member);
-        const parsedRef = parseCorpsGenomeRef(member.genome);
+        const parsedRef = parseCorpsGenomeRef(genomeRef);
         const required = member.required !== false;
+        const displayLabel = member.displayName?.trim()
+            || (roleId !== 'member' ? formatRoleDisplay(roleId) : getCorpsMemberDisplayName(member));
 
         for (let ordinal = 1; ordinal <= count; ordinal += 1) {
             plans.push({
-                genomeRef: member.genome,
+                genomeRef,
                 namespace: parsedRef?.namespace ?? null,
                 genomeName: parsedRef?.name ?? null,
                 roleId,
                 ordinal,
                 required,
                 displayName: count > 1
-                    ? `${formatRoleDisplay(roleId)} ${ordinal}`
-                    : formatRoleDisplay(roleId),
+                    ? `${displayLabel} ${ordinal}`
+                    : displayLabel,
                 overlay: member.overlay
                     ? {
                         ...member.overlay,

@@ -108,4 +108,65 @@ describe('genomeHub role alias lookup', () => {
         expect(diffs).toHaveLength(1);
         expect(seed).toBe('{"role":"implementer"}');
     });
+
+    it('reuses canonical alias resolution for official ledger lookups and surfaces replay evidence', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({
+                ledger: [
+                    {
+                        id: 'ledger-1',
+                        genomeId: 'genome-implementer',
+                        version: 2,
+                        seqNo: 1,
+                        timestamp: '2026-03-30T00:00:00.000Z',
+                        diffType: 'kv',
+                        path: 'behavior.onIdle',
+                        op: null,
+                        oldValue: '"wait"',
+                        newValue: '"self-assign"',
+                        content: null,
+                    },
+                ],
+                replayedSpec: '{"role":"implementer","version":2}',
+            }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { fetchGenomeLedger } = await import('./genomeHub');
+        const result = await fetchGenomeLedger('@official', 'builder', 2);
+
+        expect(fetchMock).toHaveBeenCalledWith('http://genome-hub.test/genomes/%40official/implementer/ledger?version=2');
+        expect(result.ledger).toHaveLength(1);
+        expect(result.replayedSpec).toBe('{"role":"implementer","version":2}');
+    });
+
+    it('derives safe legion member labels from canonical and legacy member fields', async () => {
+        const { getLegionMemberDisplayName, getLegionMemberReference } = await import('./genomeHub');
+
+        expect(getLegionMemberDisplayName({
+            roleAlias: 'org-manager',
+            genome: '@official/org-manager',
+        })).toBe('org-manager');
+
+        expect(getLegionMemberDisplayName({
+            displayName: '军团指挥官',
+            genomeRef: 'Army Commander',
+        })).toBe('军团指挥官');
+
+        expect(getLegionMemberDisplayName({
+            genome: '@official/master:5',
+        })).toBe('master:5');
+
+        expect(getLegionMemberDisplayName({
+            role: 'content-strategist',
+            genomeRef: 'legacy/content-strategist',
+        })).toBe('content-strategist');
+
+        expect(getLegionMemberDisplayName({})).toBe('?');
+        expect(getLegionMemberReference({
+            genomeRef: 'legacy/content-strategist',
+        })).toBe('legacy/content-strategist');
+    });
 });

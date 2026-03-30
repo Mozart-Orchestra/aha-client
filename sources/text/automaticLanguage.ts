@@ -25,6 +25,12 @@ const IP_LOOKUP_ENDPOINTS = [
     },
 ] as const;
 
+function shouldSkipIpLookup(): boolean {
+    // Direct browser calls to third-party IP services are frequently blocked by CORS.
+    // Use deterministic locale fallback for web/local flows instead of surfacing console noise.
+    return typeof window !== 'undefined';
+}
+
 function normalizeAutomaticLanguage(value: string | null | undefined): AutomaticLanguage | null {
     return value === 'en' || value === 'zh-Hans' ? value : null;
 }
@@ -140,6 +146,15 @@ export async function refreshAutomaticLanguagePreference() {
     }
 
     const localeLanguage = resolveAutomaticLanguageFromLocale();
+
+    if (shouldSkipIpLookup()) {
+        persistAutomaticLanguage(localeLanguage, 'device', null);
+        return {
+            language: localeLanguage,
+            source: 'device' as const,
+            countryCode: null,
+        };
+    }
 
     for (const endpoint of IP_LOOKUP_ENDPOINTS) {
         const payload = await fetchJsonWithTimeout(endpoint.url);

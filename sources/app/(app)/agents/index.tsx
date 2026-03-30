@@ -16,6 +16,8 @@ import { t } from '@/text';
 import {
     addGenomeFavorite,
     fetchFavoriteGenomes,
+    getLegionMemberDisplayName,
+    getLegionMemberReference,
     parseLegionImage,
     parseAgentVerdict,
     parseAgentImage,
@@ -344,9 +346,12 @@ function CorpsCard({
                     </Text>
                 </View>
                 {memberPreview.map((member, index) => (
-                    <View key={`${member.genome}-${index}`} style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <View
+                        key={`${getLegionMemberReference(member) ?? getLegionMemberDisplayName(member)}-${index}`}
+                        style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}
+                    >
                         <Text style={[stylesheet.metaBadgeText, { color: theme.colors.textSecondary }]}>
-                            {member.roleAlias ?? member.genome.split('/').pop()?.split('@')[0] ?? '?'}
+                            {getLegionMemberDisplayName(member)}
                         </Text>
                     </View>
                 ))}

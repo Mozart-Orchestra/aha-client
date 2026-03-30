@@ -54,6 +54,14 @@ describe('corpsDeployment', () => {
         expect(resolveCorpsRoleId(sampleCorps.members[1])).toBe('implementer');
     });
 
+    it('resolves corps member roles from legacy role fields when genome refs are missing', () => {
+        expect(resolveCorpsRoleId({
+            role: 'content-strategist',
+            displayName: '内容策划师',
+            genomeRef: '内容策划师 (Content Strategist)',
+        })).toBe('content-strategist');
+    });
+
     it('expands corps members into concrete deployment plans', () => {
         expect(expandCorpsMemberPlans(sampleCorps)).toEqual([
             expect.objectContaining({ roleId: 'master', ordinal: 1, displayName: 'Master' }),
@@ -62,6 +70,49 @@ describe('corpsDeployment', () => {
             expect.objectContaining({ roleId: 'qa-engineer', ordinal: 1, displayName: 'Qa Engineer' }),
         ]);
         expect(expandCorpsMemberPlans(sampleCorps)[0].authorities).toEqual(['user.reply', 'task.create', 'task.assign']);
+    });
+
+    it('expands legacy corps members with display names and non-canonical refs', () => {
+        expect(expandCorpsMemberPlans({
+            ...sampleCorps,
+            members: [
+                {
+                    role: 'master',
+                    displayName: '军团指挥官',
+                },
+                {
+                    role: 'content-strategist',
+                    displayName: '内容策划师',
+                    genomeRef: '内容策划师 (Content Strategist)',
+                    count: 2,
+                },
+            ],
+        })).toEqual([
+            expect.objectContaining({
+                genomeRef: '',
+                namespace: null,
+                genomeName: null,
+                roleId: 'master',
+                ordinal: 1,
+                displayName: '军团指挥官',
+            }),
+            expect.objectContaining({
+                genomeRef: '内容策划师 (Content Strategist)',
+                namespace: null,
+                genomeName: null,
+                roleId: 'content-strategist',
+                ordinal: 1,
+                displayName: '内容策划师 1',
+            }),
+            expect.objectContaining({
+                genomeRef: '内容策划师 (Content Strategist)',
+                namespace: null,
+                genomeName: null,
+                roleId: 'content-strategist',
+                ordinal: 2,
+                displayName: '内容策划师 2',
+            }),
+        ]);
     });
 
     it('prefers boot context name when deriving default team names', () => {

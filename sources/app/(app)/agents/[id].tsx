@@ -16,25 +16,33 @@ import {
     fetchAgentPlugs,
     fetchGenomeById,
     fetchGenomeFavoriteStatus,
+    fetchGenomeLedger,
     fetchGenomeSeed,
+    getLegionMemberDisplayName,
+    getLegionMemberReference,
     removeGenomeFavorite,
     parseAgentImage,
     parseAgentVerdict,
     parseTags,
     parseLegionImage,
     type AgentPlug,
+    type DiffLedgerEntry,
     type GenomeRecord,
     type AgentImage,
     type AgentVerdict,
 } from '@/utils/genomeHub';
 import {
+    describeGenomeLedgerEntry,
     describeGenomeDiffChange,
     getGenomeEnvDeclaration,
     getGenomeDiffChangeKindLabel,
     getAgentPlugChanges,
+    getGenomeClosureState,
     getGenomeHookDisplay,
     getGenomeInlineFileEntries,
+    getGenomeLedgerEntryKindLabel,
     getGenomeMcpServerList,
+    getGenomeReplayAlignment,
     getGenomeSkillEntries,
     getGenomeVersionIdentity,
     getGenomeWorkspaceConfig,
@@ -137,6 +145,31 @@ function formatDiffMeta(iso: string, authorRole?: string | null): string {
     return authorRole ? `${dateLabel} · ${authorRole}` : dateLabel;
 }
 
+function formatStatusLabel(value: string): string {
+    return value
+        .split('-')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function getStatusTone(status: string): { text: string; bg: string } {
+    if (status === 'established' || status === 'verified' || status === 'removed' || status === 'proven') {
+        return { text: '#22c55e', bg: '#22c55e18' };
+    }
+    if (
+        status === 'partial'
+        || status === 'pending'
+        || status === 'spawned'
+        || status === 'tasks-migrated'
+        || status === 'old-session-archived'
+        || status === 'not-proven'
+        || status === 'drift'
+    ) {
+        return { text: '#f59e0b', bg: '#f59e0b18' };
+    }
+    return { text: '#8A7F74', bg: '#8A7F7418' };
+}
+
 function parseAgentDetailSpec(agent: AgentDetailRecord | null): AgentImage | null {
     if (!agent) return null;
 
@@ -172,7 +205,9 @@ export default React.memo(function AgentDetailScreen() {
     const [showRunStandalone, setShowRunStandalone] = React.useState(false);
     const [showJoinTeam, setShowJoinTeam] = React.useState(false);
     const [diffs, setDiffs] = React.useState<AgentPlug[]>([]);
+    const [ledgerEntries, setLedgerEntries] = React.useState<DiffLedgerEntry[]>([]);
     const [seedSpec, setSeedSpec] = React.useState<string | null>(null);
+    const [replayedSpec, setReplayedSpec] = React.useState<string | null>(null);
     const [historyLoading, setHistoryLoading] = React.useState(false);
 
     React.useEffect(() => {
@@ -348,7 +383,9 @@ export default React.memo(function AgentDetailScreen() {
         const name = templateGenome?.name;
         if (!namespace || !name) {
             setDiffs([]);
+            setLedgerEntries([]);
             setSeedSpec(null);
+            setReplayedSpec(null);
             setHistoryLoading(false);
             return;
         }
@@ -358,15 +395,20 @@ export default React.memo(function AgentDetailScreen() {
         Promise.all([
             fetchAgentPlugs(namespace, name),
             fetchGenomeSeed(namespace, name),
-        ]).then(([nextDiffs, nextSeed]) => {
+            fetchGenomeLedger(namespace, name),
+        ]).then(([nextDiffs, nextSeed, nextLedger]) => {
             if (cancelled) return;
             setDiffs(nextDiffs);
+            setLedgerEntries(nextLedger.ledger);
             setSeedSpec(nextSeed);
+            setReplayedSpec(nextLedger.replayedSpec);
             setHistoryLoading(false);
         }).catch(() => {
             if (cancelled) return;
             setDiffs([]);
+            setLedgerEntries([]);
             setSeedSpec(null);
+            setReplayedSpec(null);
             setHistoryLoading(false);
         });
 
@@ -374,6 +416,26 @@ export default React.memo(function AgentDetailScreen() {
             cancelled = true;
         };
     }, [templateGenome?.name, templateGenome?.namespace]);
+    const replayAlignment = React.useMemo(
+        () => getGenomeReplayAlignment(templateGenome?.spec, replayedSpec),
+        [replayedSpec, templateGenome?.spec],
+    );
+    const closureState = React.useMemo(
+        () => getGenomeClosureState({
+            versionIdentity,
+            diffs,
+            ledger: ledgerEntries,
+            replayAlignment,
+            agentStatus: agentDetail?.status ?? null,
+            sessionActive: standaloneSession?.active ?? null,
+        }),
+        [agentDetail?.status, diffs, ledgerEntries, replayAlignment, standaloneSession?.active, versionIdentity],
+    );
+    const hasEvolutionEvidence = historyLoading
+        || Boolean(seedSpec)
+        || Boolean(replayedSpec)
+        || diffs.length > 0
+        || ledgerEntries.length > 0;
 
     const toggleFavorite = React.useCallback(async () => {
         if (!genome) return;
@@ -740,8 +802,53 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    {(historyLoading || seedSpec || diffs.length > 0) ? (
-                        <ItemGroup title="view-diff · Evolution Ledger">
+                    <ItemGroup title="Closure State">
+                        <Item
+                            title="Control-plane closure"
+                            subtitle={`Diff chain ${diffs.length} · canonical ledger ${ledgerEntries.length} row${ledgerEntries.length === 1 ? '' : 's'}`}
+                            subtitleLines={0}
+                            detail={formatStatusLabel(closureState.controlPlaneClosure)}
+                            detailStyle={{ color: getStatusTone(closureState.controlPlaneClosure).text, fontWeight: '700' }}
+                            icon={<Ionicons name="git-branch-outline" size={18} color={getStatusTone(closureState.controlPlaneClosure).text} />}
+                        />
+                        <Item
+                            title="Downstream closure"
+                            subtitle={`Version identity ${versionIdentity.status} · canonical replay ${replayAlignment.status}`}
+                            subtitleLines={0}
+                            detail={formatStatusLabel(closureState.downstreamClosure)}
+                            detailStyle={{ color: getStatusTone(closureState.downstreamClosure).text, fontWeight: '700' }}
+                            icon={<Ionicons name="analytics-outline" size={18} color={getStatusTone(closureState.downstreamClosure).text} />}
+                        />
+                        <Item
+                            title="Replace status"
+                            subtitle={agentDetail
+                                ? `Agent ${agentDetail.status}${standaloneSession?.active != null ? ` · session ${standaloneSession.active ? 'active' : 'inactive'}` : ''}`
+                                : 'No live runtime is attached on this screen.'}
+                            subtitleLines={0}
+                            detail={formatStatusLabel(closureState.replaceStatus)}
+                            detailStyle={{ color: getStatusTone(closureState.replaceStatus).text, fontWeight: '700' }}
+                            icon={<Ionicons name="swap-horizontal-outline" size={18} color={getStatusTone(closureState.replaceStatus).text} />}
+                        />
+                        <Item
+                            title="Roster exit"
+                            subtitle="Requires replace/archive evidence from the team roster layer."
+                            subtitleLines={0}
+                            detail={formatStatusLabel(closureState.rosterExitStatus)}
+                            detailStyle={{ color: getStatusTone(closureState.rosterExitStatus).text, fontWeight: '700' }}
+                            icon={<Ionicons name="people-outline" size={18} color={getStatusTone(closureState.rosterExitStatus).text} />}
+                        />
+                        <Item
+                            title="Behavior delta"
+                            subtitle="Trial / verdict / materialization evidence is not wired into this page yet."
+                            subtitleLines={0}
+                            detail={formatStatusLabel(closureState.behaviorDeltaStatus)}
+                            detailStyle={{ color: getStatusTone(closureState.behaviorDeltaStatus).text, fontWeight: '700' }}
+                            icon={<Ionicons name="pulse-outline" size={18} color={getStatusTone(closureState.behaviorDeltaStatus).text} />}
+                        />
+                    </ItemGroup>
+
+                    {hasEvolutionEvidence ? (
+                        <ItemGroup title="Evolution Evidence">
                             {historyLoading ? (
                                 <Item
                                     title="Loading evolution history…"
@@ -755,6 +862,77 @@ export default React.memo(function AgentDetailScreen() {
                                         {getGenomeImageSeedTitle(imageKind)}
                                     </Text>
                                     <CodeView code={stringifyGenomeSpec(seedSpec)} />
+                                </View>
+                            ) : null}
+                            {ledgerEntries.length > 0 ? (
+                                <>
+                                    <View style={styles.ledgerSection}>
+                                        <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                            Canonical Ledger
+                                        </Text>
+                                        <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
+                                            Ordered atomic mutations replayed on top of the v1 seed.
+                                        </Text>
+                                    </View>
+                                    {ledgerEntries.map((entry) => {
+                                        const badgeTone = entry.diffType === 'narrative'
+                                            ? { text: '#FF9500', bg: '#FF950018' }
+                                            : entry.diffType === 'string'
+                                                ? { text: '#34C759', bg: '#34C75918' }
+                                                : { text: '#007AFF', bg: '#007AFF18' };
+                                        return (
+                                            <View
+                                                key={entry.id}
+                                                style={[
+                                                    styles.ledgerCard,
+                                                    {
+                                                        backgroundColor: theme.colors.surfaceHigh,
+                                                        borderColor: theme.colors.divider,
+                                                    },
+                                                ]}
+                                            >
+                                                <View style={styles.ledgerHeader}>
+                                                    <Text style={[styles.ledgerVersion, { color: theme.colors.text }]}>
+                                                        v{entry.version} · #{entry.seqNo}
+                                                    </Text>
+                                                    <View style={[styles.ledgerBadge, { backgroundColor: badgeTone.bg }]}>
+                                                        <Text style={[styles.ledgerBadgeText, { color: badgeTone.text }]}>
+                                                            {getGenomeLedgerEntryKindLabel(entry)}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
+                                                    {formatDate(entry.timestamp)}
+                                                </Text>
+                                                <Text style={[styles.ledgerChangeText, { color: theme.colors.textSecondary }]}>
+                                                    {describeGenomeLedgerEntry(entry)}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })}
+                                </>
+                            ) : null}
+                            {replayedSpec ? (
+                                <View style={styles.ledgerSection}>
+                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                        Replayed Spec
+                                    </Text>
+                                    <View style={[styles.badge, { backgroundColor: getStatusTone(replayAlignment.status).bg }]}>
+                                        <Text style={[styles.badgeText, { color: getStatusTone(replayAlignment.status).text }]}>
+                                            {formatStatusLabel(replayAlignment.status)}
+                                        </Text>
+                                    </View>
+                                    <CodeView code={stringifyGenomeSpec(replayedSpec)} />
+                                </View>
+                            ) : null}
+                            {diffs.length > 0 ? (
+                                <View style={styles.ledgerSection}>
+                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                        Diff Chain Browser
+                                    </Text>
+                                    <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
+                                        High-level change batches submitted to genome-hub.
+                                    </Text>
                                 </View>
                             ) : null}
                             {diffs.map((diff) => {
@@ -1068,9 +1246,9 @@ export default React.memo(function AgentDetailScreen() {
                         <ItemGroup title="LegionImage Members">
                             {legionSpec.members.map((m, i) => (
                                 <Item
-                                    key={`m-${i}`}
-                                    title={m.roleAlias ?? m.genome.split('/').pop()?.split('@')[0] ?? '?'}
-                                    subtitle={m.genome}
+                                    key={`m-${getLegionMemberReference(m) ?? getLegionMemberDisplayName(m)}-${i}`}
+                                    title={getLegionMemberDisplayName(m)}
+                                    subtitle={getLegionMemberReference(m) ?? undefined}
                                     detail={m.count && m.count > 1 ? `x${m.count}` : undefined}
                                     icon={<Ionicons name="person-outline" size={18} color={theme.colors.textSecondary} />}
                                 />
