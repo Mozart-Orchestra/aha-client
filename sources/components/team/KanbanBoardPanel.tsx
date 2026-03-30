@@ -31,6 +31,25 @@ function getAssigneeBadgeColor(id: string): string {
     return ASSIGNEE_BADGE_COLORS[Math.abs(hash) % ASSIGNEE_BADGE_COLORS.length];
 }
 
+const HUMAN_CREATOR_BG = '#EEF4FF';
+const HUMAN_CREATOR_TEXT = '#007AFF';
+
+function getCreatorBadge(
+    reporterId: string | undefined,
+    sessionLookup: Map<string, any>,
+): { label: string; bgColor: string; textColor: string } | null {
+    if (!reporterId) return null;
+    const session = sessionLookup.get(reporterId);
+    if (session) {
+        // Agent creator
+        const name = getSessionName(session);
+        const color = getAssigneeBadgeColor(reporterId);
+        return { label: name[0]?.toUpperCase() ?? 'A', bgColor: color + '20', textColor: color };
+    }
+    // Human creator
+    return { label: 'U', bgColor: HUMAN_CREATOR_BG, textColor: HUMAN_CREATOR_TEXT };
+}
+
 export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
     styles,
     theme,
@@ -198,6 +217,7 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                         ? getSessionName(assigneeSession)
                                         : task.assigneeId?.slice(0, 8) ?? null;
                                     const humanLockLabel = getHumanStatusLockLabel(task.humanStatusLock);
+                                    const creatorBadge = getCreatorBadge(task.reporterId, sessionLookup);
 
                                     return (
                                         <Pressable
@@ -281,8 +301,25 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                                                 </View>
                                             ) : null}
 
-                                            {(task.priority || activeAgentName) && (
+                                            {(task.priority || activeAgentName || creatorBadge) && (
                                                 <View style={styles.taskMeta}>
+                                                    {creatorBadge && (
+                                                        <View
+                                                            style={[
+                                                                styles.taskCreatorBadge,
+                                                                { backgroundColor: creatorBadge.bgColor },
+                                                            ]}
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    styles.taskCreatorBadgeText,
+                                                                    { color: creatorBadge.textColor },
+                                                                ]}
+                                                            >
+                                                                {creatorBadge.label}
+                                                            </Text>
+                                                        </View>
+                                                    )}
                                                     {activeAgentName && (
                                                         <View style={styles.taskActiveExecution}>
                                                             <Ionicons name="flash" size={11} color="#FF9500" />

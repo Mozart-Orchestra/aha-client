@@ -158,9 +158,21 @@ export const stylesheet = StyleSheet.create((theme) => ({
         fontWeight: '600',
         color: '#C26A00',
     },
+    taskCreatorBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 999,
+    },
+    taskCreatorBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
     taskMeta: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 6,
         marginTop: 8,
         paddingTop: 8,
         borderTopWidth: 1,
