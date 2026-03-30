@@ -550,9 +550,11 @@ A high-quality agent is:
 - opinionated enough to avoid vagueness
 - packaged clearly enough to reuse
 
-## GenomeSpec: complete field reference
+## AgentImage: complete field reference
 
-When calling `create_genome`, the `spec` JSON can include all of the following fields.
+When calling `create_genome`, the `spec` JSON is the canonical **AgentImage** payload
+(legacy API/code paths may still refer to the same shape as `GenomeSpec`).
+It can include all of the following fields.
 
 **Fields marked [REQUIRED] must always be present for any non-trivial agent.**
 
@@ -590,7 +592,7 @@ When calling `create_genome`, the `spec` JSON can include all of the following f
 
 ### Tier 7: Social graph + behavioral protocol **[REQUIRED for all non-trivial agents]**
 
-Every genome that will run in a real team MUST include both `messaging` and `behavior`.
+Every AgentImage that will run in a real team MUST include both `messaging` and `behavior`.
 Without these fields, the platform cannot route messages or govern idle/blocked behavior.
 
 ```json
@@ -649,20 +651,21 @@ Without these fields, the platform cannot route messages or govern idle/blocked 
 
 ### Optional advanced fields
 - `hooks.preToolUse` / `hooks.postToolUse` / `hooks.stop` — shell command hooks
-- `compatibility.worksWellWith` — genome names that pair well with this agent
+- `compatibility.worksWellWith` — agent image names that pair well with this agent
 - `compatibility.requiredMcpServers` — MCP servers this agent requires
 - `resourceBudget.contextWindowSize` — `'small'` | `'medium'` | `'large'`
 
 ---
 
-## CorpsSpec: creating corps / legions
+## LegionImage: creating legions
 
-A corps = a team template. It is a roster of genomes plus shared boot context.
+A **LegionImage** (legacy `CorpsSpec`) is a team template.
+It is a roster of AgentImages plus shared boot context.
 
-**Corps does NOT define routing rules or message filtering.**
-Each genome carries its own complete behavioral DNA (messaging + behavior).
+**A LegionImage does NOT define routing rules or message filtering.**
+Each AgentImage carries its own complete behavioral DNA (messaging + behavior).
 
-When to create a corps:
+When to create a legion:
 - A team of agents has proven to work well together
 - You want to reuse the team composition as a marketplace template
 - A user requests a "squad" or "legion" preset
@@ -670,10 +673,10 @@ When to create a corps:
 ```json
 {
   "namespace": "@public",
-  "name": "marketing-corps",
+  "name": "marketing-legion",
   "version": 1,
   "description": "Marketing team: master + SEO specialist + content creator",
-  "tags": ["corps", "marketing", "seo", "content"],
+  "tags": ["legion", "marketing", "seo", "content"],
   "members": [
     { "genome": "@official/master",          "roleAlias": "master",           "count": 1, "required": true },
     { "genome": "@public/营销SEO专家",       "roleAlias": "seo-specialist",   "count": 1, "required": true },
@@ -687,7 +690,8 @@ When to create a corps:
 }
 ```
 
-Corps creation requires `category: 'corps'` and all member genomes must already exist in the marketplace.
+Legion creation currently still uses `category: 'corps'` for marketplace compatibility,
+and all member AgentImages must already exist in the marketplace.
 
 ---
 
