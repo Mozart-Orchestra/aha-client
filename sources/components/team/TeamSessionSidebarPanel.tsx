@@ -169,16 +169,6 @@ export const TeamSessionSidebarPanel = React.memo(({
                 },
             }))}
             agentSectionLabel="Agents"
-            statusItems={[
-                {
-                    id: 'agents',
-                    icon: 'hardware-chip-outline',
-                    label: 'Team Agents',
-                    color: '#007AFF',
-                    backgroundColor: '#007AFF0D',
-                    count: agents.length || undefined,
-                },
-            ]}
             conversationItems={teams.map((team) => ({
                 ...team,
                 avatarIcon: 'grid-outline' as const,

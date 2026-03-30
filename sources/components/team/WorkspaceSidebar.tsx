@@ -115,32 +115,6 @@ export function WorkspaceSidebar({
                     },
                 };
             })}
-            statusItems={[
-                {
-                    id: 'decision',
-                    icon: 'radio-button-on',
-                    label: 'Needs Decision',
-                    color: '#FF3B30',
-                    backgroundColor: '#FF3B300D',
-                    count: statusSummary.decision,
-                },
-                {
-                    id: 'working',
-                    icon: 'pulse',
-                    label: 'Working',
-                    color: '#FF9500',
-                    backgroundColor: '#FF950012',
-                    count: statusSummary.working,
-                },
-                {
-                    id: 'review',
-                    icon: 'people',
-                    label: 'Team Review',
-                    color: '#8A7F74',
-                    backgroundColor: '#00000000',
-                    count: statusSummary.review,
-                },
-            ]}
             conversationItems={allTeams.map((team, index) => ({
                 id: team.id,
                 name: team.title || 'Team',
