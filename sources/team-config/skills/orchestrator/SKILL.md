@@ -4,7 +4,7 @@ description: Plans, delegates, and coordinates team workflows
 license: MIT
 compatibility: ohmyopencode
 metadata:
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.3
   thinkingBudget: 32000
 ---

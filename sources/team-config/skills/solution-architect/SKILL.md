@@ -5,7 +5,7 @@ scalability, security, and performance.
 license: MIT
 compatibility: ohmyopencode
 metadata:
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.3
   thinkingBudget: 32000
 ---

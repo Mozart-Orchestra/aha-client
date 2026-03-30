@@ -4,7 +4,7 @@ description: Makes high-level architectural decisions and ensures technical cohe
 license: MIT
 compatibility: ohmyopencode
 metadata:
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   thinkingBudget: 32000
 

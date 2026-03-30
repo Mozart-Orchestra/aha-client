@@ -42,11 +42,11 @@ export interface RoleMetadata {
 
 const ROLE_MODEL_CONFIG: Record<string, RoleModelConfig> = {
   user: { model: 'human', temperature: 0, maxTokens: 0 },  // Human user, no AI model
-  master: { model: 'claude-opus-4-5', temperature: 0.3, maxTokens: 32000, thinkingBudget: 32000 },
-  orchestrator: { model: 'claude-opus-4-5', temperature: 0.3, maxTokens: 32000, thinkingBudget: 32000 },
-  architect: { model: 'claude-sonnet-4-5', temperature: 0.2, maxTokens: 32000 },
-  researcher: { model: 'claude-sonnet-4-5', temperature: 0.1, maxTokens: 32000 },
-  implementer: { model: 'claude-sonnet-4-5', temperature: 0.3, maxTokens: 32000 },
+  master: { model: 'claude-opus-4-6', temperature: 0.3, maxTokens: 32000, thinkingBudget: 32000 },
+  orchestrator: { model: 'claude-opus-4-6', temperature: 0.3, maxTokens: 32000, thinkingBudget: 32000 },
+  architect: { model: 'claude-sonnet-4-6', temperature: 0.2, maxTokens: 32000 },
+  researcher: { model: 'claude-sonnet-4-6', temperature: 0.1, maxTokens: 32000 },
+  implementer: { model: 'claude-sonnet-4-6', temperature: 0.3, maxTokens: 32000 },
   'qa-engineer': { model: 'claude-haiku-4', temperature: 0.1, maxTokens: 32000 },
   observer: { model: 'claude-haiku-4', temperature: 0, maxTokens: 32000 },
 }
@@ -63,7 +63,7 @@ const ROLE_TOOL_PERMISSIONS: Record<string, RoleToolPermissions> = {
 }
 
 export function getRoleModelConfig(roleId: string): RoleModelConfig {
-  return ROLE_MODEL_CONFIG[roleId] || { model: 'claude-sonnet-4-5', temperature: 0.2, maxTokens: 32000 };
+  return ROLE_MODEL_CONFIG[roleId] || { model: 'claude-sonnet-4-6', temperature: 0.2, maxTokens: 32000 };
 }
 
 export function getRoleToolPermissions(roleId: string): RoleToolPermissions {

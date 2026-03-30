@@ -4,7 +4,7 @@ description: Explores codebase, gathers information, and provides context for de
 license: MIT
 compatibility: ohmyopencode
 metadata:
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.1
   thinkingBudget: 32000
 

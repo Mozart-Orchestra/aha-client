@@ -12,7 +12,7 @@ This example demonstrates the complete OpenSpec-based workflow from idea to impl
 **Task:** "Define user authentication feature"
 **Category:** `product-planning`
 **Assigned To:** product-owner
-**Model:** claude-opus-4-5 (temp: 0.3)
+**Model:** claude-opus-4-6 (temp: 0.3)
 
 **Product Owner Actions:**
 1. Analyzes market needs
@@ -43,7 +43,7 @@ Users need secure access to their personal data. Current anonymous usage limits 
 **Task:** "Gather authentication requirements"
 **Category:** `requirements-analysis`
 **Assigned To:** business-analyst
-**Model:** claude-sonnet-4-5 (temp: 0.2)
+**Model:** claude-sonnet-4-6 (temp: 0.2)
 
 **Business Analyst Actions:**
 1. Interviews stakeholders
@@ -83,7 +83,7 @@ Users need secure access to their personal data. Current anonymous usage limits 
 **Task:** "Write authentication specification"
 **Category:** `spec-writing`
 **Assigned To:** spec-writer
-**Model:** claude-sonnet-4-5 (temp: 0.1)
+**Model:** claude-sonnet-4-6 (temp: 0.1)
 
 **Spec Writer Actions:**
 1. Uses template: `/kanban/sources/team-config/templates/spec-template.md`
@@ -233,7 +233,7 @@ Use bcrypt with cost factor 12.
 **Task:** "Research authentication best practices"
 **Category:** `ux-research`
 **Assigned To:** ux-researcher
-**Model:** claude-sonnet-4-5 (temp: 0.3)
+**Model:** claude-sonnet-4-6 (temp: 0.3)
 
 **Research Findings:**
 - Users expect inline validation (not after submit)
@@ -273,7 +273,7 @@ Use bcrypt with cost factor 12.
 **Task:** "Implement user authentication API"
 **Category:** `code-implementation`
 **Assigned To:** implementer
-**Model:** claude-sonnet-4-5 (temp: 0.3)
+**Model:** claude-sonnet-4-6 (temp: 0.3)
 
 **Implementer Workflow:**
 1. **Reads Spec:** `changes/add-user-authentication/spec.md`

@@ -25,7 +25,7 @@ orchestrator:
   category: coordination
   title: Orchestrator
   summary: Plans, delegates, and coordinates team workflows
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.3
   capabilities:
     - Break down user requests into actionable tasks
@@ -51,7 +51,7 @@ project-manager:
   category: coordination
   title: Project Manager
   summary: Manages project timelines, coordinates resources, tracks risks
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.3
   capabilities:
     - Manage project timelines and milestones
@@ -81,7 +81,7 @@ product-owner:
   category: product
   title: Product Owner
   summary: Owns product vision, roadmap, and backlog prioritization
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.3
   capabilities:
     - Define product vision and strategy
@@ -107,7 +107,7 @@ business-analyst:
   category: product
   title: Business Analyst
   summary: Analyzes business requirements and processes
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Elicit and document business requirements
@@ -132,7 +132,7 @@ ux-researcher:
   category: product
   title: UX Researcher
   summary: Conducts user research, usability testing, and provides design insights
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Plan and conduct user research studies
@@ -215,7 +215,7 @@ architect:
   category: architecture
   title: Architect
   summary: Makes technical decisions and designs system architecture
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.3
   capabilities:
     - Design system architecture and components
@@ -270,7 +270,7 @@ builder:
   category: development
   title: Builder
   summary: Implements features with full code access
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.3
   capabilities:
     - Implement scoped work
@@ -296,7 +296,7 @@ implementer:
   category: development
   title: Implementer
   summary: Owns implementation, testing, and integration of features
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.3
   capabilities:
     - Implement scoped work, keep diffs small
@@ -320,7 +320,7 @@ framer:
   category: development
   title: Framer
   summary: Frontend developer specializing in React Native and UI
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.3
   capabilities:
     - Build React Native components
@@ -345,7 +345,7 @@ qa:
   category: qa
   title: QA Engineer
   summary: Quality assurance and testing
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Design and execute test plans
@@ -366,7 +366,7 @@ qa-engineer:
   category: qa
   title: QA Engineer
   summary: Quality assurance specialist focused on testing strategy
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Design comprehensive test strategies
@@ -390,7 +390,7 @@ reviewer:
   category: qa
   title: Code Reviewer
   summary: Reviews code for quality, security, and best practices
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Review code changes and pull requests
@@ -418,7 +418,7 @@ researcher:
   category: support
   title: Researcher
   summary: Conducts research and gathers information
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Research technical topics
@@ -442,7 +442,7 @@ scout:
   category: support
   title: Scout
   summary: Explores codebase and discovers architectural patterns
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Explore and understand codebase architecture
@@ -465,7 +465,7 @@ scribe:
   category: support
   title: Scribe
   summary: Documents team activities and maintains records
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Document team meetings and decisions
@@ -487,7 +487,7 @@ technical-writer:
   category: support
   title: Technical Writer
   summary: Creates technical documentation and guides
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Write technical documentation
@@ -509,7 +509,7 @@ spec-writer:
   category: support
   title: Spec Writer
   summary: Writes technical specifications and requirements
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   capabilities:
     - Gather requirements from stakeholders
@@ -531,7 +531,7 @@ observer:
   category: support
   title: Observer
   summary: Observes team activities without active participation
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.0
   capabilities:
     - Observe team activities
@@ -553,7 +553,7 @@ troubleshooter:
   category: support
   title: Troubleshooter
   summary: Diagnoses and resolves technical issues
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.3
   capabilities:
     - Diagnose technical problems
@@ -575,7 +575,7 @@ master:
   category: coordination
   title: Master
   summary: Legacy role - maps to orchestrator
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.3
   capabilities:
     - Task planning and coordination

@@ -4,7 +4,7 @@ description: Analyzes business requirements, identifies user pain points, and br
 license: MIT
 compatibility: ohmyopencode
 metadata:
-  model: claude-opus-4-5
+  model: claude-opus-4-6
   temperature: 0.2
   thinkingBudget: 32000
 

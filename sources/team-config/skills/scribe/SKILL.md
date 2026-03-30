@@ -5,7 +5,7 @@ Only edits documentation files, not implementation code.
 license: MIT
 compatibility: ohmyopencode
 metadata:
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.3
   thinkingBudget: 16000
 ---

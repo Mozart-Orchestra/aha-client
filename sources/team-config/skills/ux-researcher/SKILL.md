@@ -4,7 +4,7 @@ description: Conducts user research, usability testing, and provides design insi
 license: MIT
 compatibility: ohmyopencode
 metadata:
-  model: claude-sonnet-4-5
+  model: claude-sonnet-4-6
   temperature: 0.2
   thinkingBudget: 32000
 
