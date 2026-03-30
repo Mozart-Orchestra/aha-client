@@ -25,6 +25,8 @@ export const LocalSettingsSchema = z.object({
     markdownCopyV2: z.boolean().describe('Replace native paragraph selection with long-press modal for full markdown copy'),
     // CLI version acknowledgments - keyed by machineId
     acknowledgedCliVersions: z.record(z.string(), z.string()).describe('Acknowledged CLI versions per machine'),
+    // AI model selection
+    smartModelSelectionEnabled: z.boolean().describe('Use role-optimized model selection (Sonnet for implementers, Opus for architects). Off by default to control cost.'),
 });
 
 //
@@ -51,6 +53,7 @@ export const localSettingsDefaults: LocalSettings = {
     autoDetectedLanguageUpdatedAt: null,
     markdownCopyV2: false,
     acknowledgedCliVersions: {},
+    smartModelSelectionEnabled: false,
 };
 Object.freeze(localSettingsDefaults);
 

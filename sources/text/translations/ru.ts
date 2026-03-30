@@ -119,6 +119,8 @@ export const ru: TranslationStructure = {
         exchangingTokens: 'Обмен токенов...',
         usage: 'Использование',
         usageSubtitle: 'Просмотр использования API и затрат',
+        smartModelSelection: 'Умный выбор модели',
+        smartModelSelectionSubtitle: 'Использовать оптимальные модели по роли (Sonnet / Opus). По умолчанию отключено для контроля расходов.',
 
         // Dynamic settings messages
         accountConnected: ({ service }: { service: string }) => `Аккаунт ${service} подключен`,

@@ -139,6 +139,8 @@ export const zhHans: TranslationStructure = {
         exchangingTokens: '正在交换令牌...',
         usage: '使用情况',
         usageSubtitle: '查看 API 使用情况和费用',
+        smartModelSelection: '智能模型选择',
+        smartModelSelectionSubtitle: '根据角色使用最优模型（Sonnet / Opus）。默认关闭以控制费用。',
 
         // Dynamic settings messages
         accountConnected: ({ service }: { service: string }) => `已连接 ${service} 账户`,

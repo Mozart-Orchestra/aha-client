@@ -137,6 +137,8 @@ export const en = {
         exchangingTokens: 'Exchanging tokens...',
         usage: 'Usage',
         usageSubtitle: 'View your API usage and costs',
+        smartModelSelection: 'Smart Model Selection',
+        smartModelSelectionSubtitle: 'Use role-optimized models (Sonnet / Opus). Disabled by default to control costs.',
 
         // Dynamic settings messages
         accountConnected: ({ service }: { service: string }) => `${service} account connected`,

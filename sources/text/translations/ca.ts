@@ -137,6 +137,8 @@ export const ca: TranslationStructure = {
         exchangingTokens: 'Intercanviant tokens...',
         usage: 'Ús',
         usageSubtitle: "Veure l'ús de l'API i costos",
+        smartModelSelection: 'Selecció intel·ligent de model',
+        smartModelSelectionSubtitle: "Usar models optimitzats per rol (Sonnet / Opus). Desactivat per defecte per controlar costos.",
 
         // Dynamic settings messages
         accountConnected: ({ service }: { service: string }) => `Compte de ${service} connectat`,

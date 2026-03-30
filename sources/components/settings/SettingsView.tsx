@@ -6,8 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
-import { useLocalSetting } from '@/sync/storage';
+import { useLocalSetting, useLocalSettingMutable } from '@/sync/storage';
 import { useAllMachines } from '@/sync/storage';
+import { Switch } from '@/components/ui/Switch';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { useUnistyles } from 'react-native-unistyles';
 import { layout } from '@/utils/layout';
@@ -20,6 +21,7 @@ export const SettingsView = React.memo(function SettingsView() {
     const { theme } = useUnistyles();
     const router = useRouter();
     const devModeEnabled = useLocalSetting('devModeEnabled');
+    const [smartModelSelectionEnabled, setSmartModelSelectionEnabled] = useLocalSettingMutable('smartModelSelectionEnabled');
     const allMachines = useAllMachines();
     const profile = useProfile();
     const displayName = getDisplayName(profile);
@@ -131,6 +133,22 @@ export const SettingsView = React.memo(function SettingsView() {
                     subtitle={t('settings.usageSubtitle')}
                     icon={<Ionicons name="analytics-outline" size={29} color="#007AFF" />}
                     onPress={() => router.push('/settings/usage')}
+                />
+            </ItemGroup>
+
+            {/* AI */}
+            <ItemGroup title="AI">
+                <Item
+                    title={t('settings.smartModelSelection')}
+                    subtitle={t('settings.smartModelSelectionSubtitle')}
+                    icon={<Ionicons name="hardware-chip-outline" size={29} color="#AF52DE" />}
+                    rightElement={
+                        <Switch
+                            value={smartModelSelectionEnabled}
+                            onValueChange={setSmartModelSelectionEnabled}
+                        />
+                    }
+                    showChevron={false}
                 />
             </ItemGroup>
 

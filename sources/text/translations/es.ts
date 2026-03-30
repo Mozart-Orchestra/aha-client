@@ -137,6 +137,8 @@ export const es: TranslationStructure = {
         exchangingTokens: 'Intercambiando tokens...',
         usage: 'Uso',
         usageSubtitle: 'Ver tu uso de API y costos',
+        smartModelSelection: 'Selección inteligente de modelo',
+        smartModelSelectionSubtitle: 'Usar modelos optimizados por rol (Sonnet / Opus). Desactivado por defecto para controlar costos.',
 
         // Dynamic settings messages
         accountConnected: ({ service }: { service: string }) => `Cuenta de ${service} conectada`,
