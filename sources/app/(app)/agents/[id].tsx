@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ItemList } from '@/components/ui/ItemList';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { Item } from '@/components/ui/Item';
+import { CodeView } from '@/components/session/CodeView';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { DesktopShellContext } from '@/components/layout/DesktopShellContext';
 import { layout } from '@/utils/layout';
@@ -13,16 +14,26 @@ import { t } from '@/text';
 import {
     addGenomeFavorite,
     fetchGenomeById,
+    fetchGenomeDiffs,
     fetchGenomeFavoriteStatus,
+    fetchGenomeSeed,
     removeGenomeFavorite,
     parseSpec,
     parseFeedback,
     parseTags,
     parseCorpsSpec,
+    type GenomeDiffRecord,
     type GenomeRecord,
     type GenomeSpec,
     type GenomeFeedback,
 } from '@/utils/genomeHub';
+import {
+    describeGenomeDiffChange,
+    getGenomeDiffChangeKindLabel,
+    getGenomeDiffRecordChanges,
+    getGenomeVersionIdentity,
+    stringifyGenomeSpec,
+} from '@/utils/genomeObservability';
 import { fetchAccessibleGenomeById } from '@/utils/agentMarketplace';
 import {
     loadFavoriteGenomeIdsFromStorage,
@@ -107,6 +118,11 @@ function splitPromptLines(text: string): string[] {
         .filter(Boolean);
 }
 
+function formatDiffMeta(iso: string, authorRole?: string | null): string {
+    const dateLabel = formatDate(iso);
+    return authorRole ? `${dateLabel} · ${authorRole}` : dateLabel;
+}
+
 function parseAgentDetailSpec(agent: AgentDetailRecord | null): GenomeSpec | null {
     if (!agent) return null;
 
@@ -141,6 +157,9 @@ export default React.memo(function AgentDetailScreen() {
     const [favoriteLoading, setFavoriteLoading] = React.useState(false);
     const [showRunStandalone, setShowRunStandalone] = React.useState(false);
     const [showJoinTeam, setShowJoinTeam] = React.useState(false);
+    const [diffs, setDiffs] = React.useState<GenomeDiffRecord[]>([]);
+    const [seedSpec, setSeedSpec] = React.useState<string | null>(null);
+    const [historyLoading, setHistoryLoading] = React.useState(false);
 
     React.useEffect(() => {
         if (!id) {
@@ -228,6 +247,23 @@ export default React.memo(function AgentDetailScreen() {
         return parseAgentDetailSpec(agentDetail);
     }, [agentDetail, genome]);
     const templateGenome = genome ?? linkedGenome;
+    const versionIdentity = React.useMemo(
+        () => getGenomeVersionIdentity(templateGenome, spec),
+        [spec, templateGenome]
+    );
+    const formattedSpecJson = React.useMemo(() => {
+        if (templateGenome?.spec) {
+            return stringifyGenomeSpec(templateGenome.spec);
+        }
+        if (agentDetail?.genomeSpec) {
+            try {
+                return JSON.stringify(agentDetail.genomeSpec, null, 2);
+            } catch {
+                return String(agentDetail.genomeSpec);
+            }
+        }
+        return null;
+    }, [agentDetail?.genomeSpec, templateGenome?.spec]);
     const feedback = React.useMemo(() => templateGenome ? parseFeedback(templateGenome.feedbackData) : null, [templateGenome]);
     const tags = React.useMemo(() => templateGenome ? parseTags(templateGenome.tags) : [], [templateGenome]);
     const isSpecialTemplate = React.useMemo(
@@ -265,6 +301,38 @@ export default React.memo(function AgentDetailScreen() {
         [spec?.modelScores]
     );
     const crowdReviewCount = feedback?.evaluationCount ?? spec?.resume?.totalSessions ?? null;
+
+    React.useEffect(() => {
+        const namespace = templateGenome?.namespace;
+        const name = templateGenome?.name;
+        if (!namespace || !name) {
+            setDiffs([]);
+            setSeedSpec(null);
+            setHistoryLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setHistoryLoading(true);
+        Promise.all([
+            fetchGenomeDiffs(namespace, name),
+            fetchGenomeSeed(namespace, name),
+        ]).then(([nextDiffs, nextSeed]) => {
+            if (cancelled) return;
+            setDiffs(nextDiffs);
+            setSeedSpec(nextSeed);
+            setHistoryLoading(false);
+        }).catch(() => {
+            if (cancelled) return;
+            setDiffs([]);
+            setSeedSpec(null);
+            setHistoryLoading(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [templateGenome?.name, templateGenome?.namespace]);
 
     const toggleFavorite = React.useCallback(async () => {
         if (!genome) return;
@@ -403,10 +471,17 @@ export default React.memo(function AgentDetailScreen() {
                                     </Text>
                                 </View>
                             ) : null}
-                            {genome ? (
+                            {versionIdentity.displayVersion != null ? (
                                 <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
-                                    {t('agents.versionLabel', { version: genome.version })}
+                                    {t('agents.versionLabel', { version: versionIdentity.displayVersion })}
                                 </Text>
+                            ) : null}
+                            {versionIdentity.mismatch ? (
+                                <View style={[styles.badge, { backgroundColor: '#FF950018' }]}>
+                                    <Text style={[styles.badgeText, { color: '#FF9500' }]}>
+                                        Legacy spec v{versionIdentity.specVersion}
+                                    </Text>
+                                </View>
                             ) : null}
                         </View>
                         {genome ? (
@@ -538,6 +613,25 @@ export default React.memo(function AgentDetailScreen() {
                     {/* ── Configuration ── */}
                     <ItemGroup title={t('agents.configuration')}>
                         {spec?.runtimeType ? <Item title="Runtime" detail={spec.runtimeType} /> : null}
+                        {versionIdentity.hubVersion != null ? <Item title="Canonical Version" detail={`v${versionIdentity.hubVersion}`} /> : null}
+                        {versionIdentity.hubVersion == null && versionIdentity.specVersion != null ? <Item title="Spec Snapshot Version" detail={`v${versionIdentity.specVersion}`} /> : null}
+                        {versionIdentity.mismatch ? (
+                            <Item
+                                title="Legacy Embedded Version"
+                                subtitle={`Embedded spec still reports v${versionIdentity.specVersion}; canonical runtime identity is entity version v${versionIdentity.hubVersion}.`}
+                                detail={`v${versionIdentity.specVersion}`}
+                                detailStyle={{ color: '#FF9500', fontWeight: '700' }}
+                                showChevron={false}
+                            />
+                        ) : versionIdentity.hubVersion != null ? (
+                            <Item
+                                title="Version Source"
+                                subtitle="Runtime version is sourced from the genome entity row."
+                                detail="Entity"
+                                detailStyle={{ color: '#22c55e', fontWeight: '700' }}
+                                showChevron={false}
+                            />
+                        ) : null}
                         <Item title={t('agents.model')} detail={spec?.modelId ?? 'Default'} />
                         <Item title={t('agents.executionPlane')} detail={spec?.executionPlane ?? 'mainline'} />
                         <Item title={t('agents.permissionMode')} detail={spec?.permissionMode ?? 'default'} />
@@ -597,6 +691,123 @@ export default React.memo(function AgentDetailScreen() {
                             {spec?.memory?.knowledgeBase?.length ? (
                                 <Item title="Knowledge Base" subtitle={spec.memory.knowledgeBase.join('\n')} subtitleLines={0} />
                             ) : null}
+                        </ItemGroup>
+                    ) : null}
+
+                    {(historyLoading || seedSpec || diffs.length > 0) ? (
+                        <ItemGroup title="view-diff · Evolution Ledger">
+                            {historyLoading ? (
+                                <Item
+                                    title="Loading evolution history…"
+                                    icon={<ActivityIndicator size="small" color={theme.colors.textSecondary} />}
+                                    showChevron={false}
+                                />
+                            ) : null}
+                            {seedSpec ? (
+                                <View style={styles.ledgerSection}>
+                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                        view-not-diff · Seed Snapshot
+                                    </Text>
+                                    <CodeView code={stringifyGenomeSpec(seedSpec)} />
+                                </View>
+                            ) : null}
+                            {diffs.map((diff) => {
+                                let changes: ReturnType<typeof getGenomeDiffRecordChanges> = [];
+                                let diffError: string | null = null;
+                                try {
+                                    changes = getGenomeDiffRecordChanges(diff);
+                                } catch (error) {
+                                    diffError = error instanceof Error ? error.message : 'Failed to parse diff payload.';
+                                }
+                                return (
+                                    <View
+                                        key={diff.id}
+                                        style={[
+                                            styles.ledgerCard,
+                                            {
+                                                backgroundColor: theme.colors.surfaceHigh,
+                                                borderColor: theme.colors.divider,
+                                            },
+                                        ]}
+                                    >
+                                        <View style={styles.ledgerHeader}>
+                                            <Text style={[styles.ledgerVersion, { color: theme.colors.text }]}>
+                                                v{diff.version}
+                                            </Text>
+                                            {diff.strategy ? (
+                                                <View style={[styles.ledgerBadge, { backgroundColor: `${theme.colors.textLink}18` }]}>
+                                                    <Text style={[styles.ledgerBadgeText, { color: theme.colors.textLink }]}>
+                                                        {diff.strategy}
+                                                    </Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
+                                        <Text style={[styles.ledgerTitle, { color: theme.colors.text }]}>
+                                            {diff.description}
+                                        </Text>
+                                        <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
+                                            {formatDiffMeta(diff.createdAt, diff.authorRole)}
+                                        </Text>
+                                        {diffError ? (
+                                            <Text style={[styles.ledgerError, { color: theme.colors.textDestructive }]}>
+                                                Invalid diff payload: {diffError}
+                                            </Text>
+                                        ) : changes.length > 0 ? (
+                                            <View style={styles.ledgerChanges}>
+                                                {changes.map((change, index) => (
+                                                    <View key={`${diff.id}-${index}`} style={styles.ledgerChangeRow}>
+                                                        <View
+                                                            style={[
+                                                                styles.ledgerBadge,
+                                                                {
+                                                                    backgroundColor: change.type === 'narrative'
+                                                                        ? '#FF950018'
+                                                                        : change.type === 'string'
+                                                                            ? '#34C75918'
+                                                                            : '#007AFF18',
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    styles.ledgerBadgeText,
+                                                                    {
+                                                                        color: change.type === 'narrative'
+                                                                            ? '#FF9500'
+                                                                            : change.type === 'string'
+                                                                                ? '#34C759'
+                                                                                : '#007AFF',
+                                                                    },
+                                                                ]}
+                                                            >
+                                                                {getGenomeDiffChangeKindLabel(change)}
+                                                            </Text>
+                                                        </View>
+                                                        <Text style={[styles.ledgerChangeText, { color: theme.colors.textSecondary }]}>
+                                                            {describeGenomeDiffChange(change)}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        ) : (
+                                            <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary, marginTop: 8 }]}>
+                                                No structured diff payload was recorded for this version.
+                                            </Text>
+                                        )}
+                                    </View>
+                                );
+                            })}
+                        </ItemGroup>
+                    ) : null}
+
+                    {formattedSpecJson ? (
+                        <ItemGroup title="view · Spec Mirror">
+                            <View style={styles.ledgerSection}>
+                                <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                    Full Genome Spec JSON
+                                </Text>
+                                <CodeView code={formattedSpecJson} />
+                            </View>
                         </ItemGroup>
                     ) : null}
 
@@ -926,6 +1137,70 @@ const styles = StyleSheet.create((theme) => ({
     },
     tagChipText: {
         fontSize: 12,
+    },
+    ledgerSection: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        gap: 10,
+    },
+    ledgerSectionTitle: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    ledgerCard: {
+        marginHorizontal: 16,
+        marginVertical: 8,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 14,
+        gap: 8,
+    },
+    ledgerHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    ledgerVersion: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    ledgerTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        lineHeight: 20,
+    },
+    ledgerMeta: {
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    ledgerError: {
+        fontSize: 12,
+        lineHeight: 18,
+        fontWeight: '600',
+    },
+    ledgerChanges: {
+        gap: 8,
+    },
+    ledgerChangeRow: {
+        gap: 6,
+    },
+    ledgerChangeText: {
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    ledgerBadge: {
+        alignSelf: 'flex-start',
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
+    ledgerBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     promptShowcaseCard: {
         borderWidth: StyleSheet.hairlineWidth,

@@ -31,6 +31,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSession, useArtifact } from '@/sync/storage';
 import { type KanbanBoard } from '@/sync/kanbanTypes';
+import { CodeView } from '@/components/session/CodeView';
 import {
     fetchGenomeById,
     parseSpec,
@@ -39,6 +40,10 @@ import {
     type GenomeRecord,
     type GenomeSpec,
 } from '@/utils/genomeHub';
+import {
+    getGenomeVersionIdentity,
+    stringifyGenomeSpec,
+} from '@/utils/genomeObservability';
 import { Avatar } from '@/components/avatar/Avatar';
 import { getRoleLabel, resolveDisplayName } from '@/utils/roleVisualUtils';
 import { getSessionAvatarId } from '@/utils/sessionUtils';
@@ -77,6 +82,7 @@ interface MemberInfo {
     displayName: string | undefined;
     candidateId: string | undefined;
     specId: string | undefined;
+    parentSessionId: string | undefined;
     runtimeType: string | undefined;
     executionPlane: string | undefined;
 }
@@ -101,6 +107,7 @@ function useMemberInfo(sessionId: string): MemberInfo | null {
                 displayName: member.displayName,
                 candidateId: member.candidateId,
                 specId: member.specId,
+                parentSessionId: member.parentSessionId,
                 runtimeType: member.runtimeType,
                 executionPlane: member.executionPlane,
             };
@@ -300,12 +307,16 @@ function GenomeDetails({
     const { theme } = useUnistyles();
     const displayName = spec?.displayName ?? genome.name;
     const namespace = genome.namespace ?? '@public';
-    const version = genome.version ?? 1;
+    const versionIdentity = getGenomeVersionIdentity(genome, spec);
+    const version = versionIdentity.displayVersion ?? genome.version ?? 1;
     const description = spec?.description ?? genome.description;
     const feedback = parseFeedback(genome.feedbackData ?? null);
     const tags = parseTags(genome.tags ?? null);
     const responsibilities = spec?.responsibilities ?? [];
+    const learnings = spec?.memory?.learnings ?? [];
+    const fullSpecJson = stringifyGenomeSpec(genome.spec);
     const facts = [
+        versionIdentity.hubVersion != null ? { label: 'Version', value: `v${versionIdentity.hubVersion}` } : null,
         spec?.runtimeType ? { label: 'Runtime', value: spec.runtimeType } : null,
         spec?.modelId || spec?.preferredModel ? { label: 'Model', value: spec?.modelId ?? spec?.preferredModel ?? '—' } : null,
         spec?.modelProvider ? { label: 'Provider', value: spec.modelProvider } : null,
@@ -428,6 +439,16 @@ function GenomeDetails({
                 </>
             )}
 
+            {versionIdentity.mismatch ? (
+                <>
+                    <Divider />
+                    <SectionLabel label="Version Identity" />
+                    <Text style={{ fontSize: 12, color: '#FF9500', lineHeight: 18 }}>
+                        Embedded spec still reports v{versionIdentity.specVersion}; canonical runtime version is entity v{versionIdentity.hubVersion}.
+                    </Text>
+                </>
+            ) : null}
+
             {/* Responsibilities */}
             {responsibilities.length > 0 && (
                 <>
@@ -444,6 +465,19 @@ function GenomeDetails({
                             +{responsibilities.length - 4} more…
                         </Text>
                     )}
+                </>
+            )}
+
+            {learnings.length > 0 && (
+                <>
+                    <Divider />
+                    <SectionLabel label={`Memory & Learnings (${learnings.length})`} />
+                    {learnings.map((learning, index) => (
+                        <View key={`${learning}-${index}`} style={{ flexDirection: 'row', marginBottom: 4 }}>
+                            <Text style={{ color: WG.accent, fontSize: 13, marginRight: 6, lineHeight: 18 }}>•</Text>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, flex: 1, lineHeight: 18 }}>{learning}</Text>
+                        </View>
+                    ))}
                 </>
             )}
 
@@ -573,6 +607,10 @@ function GenomeDetails({
                 </>
             )}
 
+            <Divider />
+            <SectionLabel label="Spec Mirror" />
+            <CodeView code={fullSpecJson} />
+
             {/* View in Marketplace CTA */}
             <View style={{ marginTop: 20 }}>
                 <Pressable
@@ -633,6 +671,7 @@ function useResolvedAgentInfo(sessionId: string, specIdProp?: string | null) {
     const { genome, spec, loading } = useGenomeData(resolvedSpecId);
     const roleId = memberInfo?.roleId ?? (session?.metadata as any)?.roleId;
     const candidateId = memberInfo?.candidateId ?? (session?.metadata as any)?.candidateId ?? undefined;
+    const parentSessionId = memberInfo?.parentSessionId ?? undefined;
     const rawDisplayName = memberInfo?.displayName;
     const agentDisplayName = resolveDisplayName(rawDisplayName, roleId, sessionId);
     const roleLabel = getRoleLabel(roleId);
@@ -651,6 +690,7 @@ function useResolvedAgentInfo(sessionId: string, specIdProp?: string | null) {
         spec,
         loading,
         candidateId,
+        parentSessionId,
         resolvedSpecId,
         roleId,
         agentDisplayName,
@@ -682,6 +722,7 @@ function AgentInfoCardContent({
         spec,
         loading,
         candidateId,
+        parentSessionId,
         resolvedSpecId,
         roleId,
         agentDisplayName,
@@ -754,7 +795,7 @@ function AgentInfoCardContent({
                 </>
             ) : null}
 
-            {candidateId || resolvedSpecId ? (
+            {candidateId || resolvedSpecId || parentSessionId ? (
                 <>
                     <SectionLabel label="Internal Identity" />
                     <View style={{ gap: 8, marginBottom: 14 }}>
@@ -763,6 +804,9 @@ function AgentInfoCardContent({
                         ) : null}
                         {resolvedSpecId ? (
                             <FactPill label="Spec ID" value={resolvedSpecId} />
+                        ) : null}
+                        {parentSessionId ? (
+                            <FactPill label="Parent Session" value={parentSessionId} />
                         ) : null}
                     </View>
                     <Divider />

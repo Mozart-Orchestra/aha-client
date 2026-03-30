@@ -24,6 +24,7 @@ import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 import { fetchGenomeById, parseSpec, type GenomeSpec, type GenomeRecord } from '@/utils/genomeHub';
 import { getGenomeScoreSummary } from '@/utils/genomeScoreSummary';
+import { getGenomeVersionIdentity, stringifyGenomeSpec } from '@/utils/genomeObservability';
 import { type KanbanBoard } from '@/sync/kanbanTypes';
 import { listAgents } from '@/sync/apiAgents';
 import { sync } from '@/sync/sync';
@@ -181,7 +182,10 @@ function GenomeInfoPanel({ session }: { session: Session }) {
     const genomeId = genome?.id;
     const displayName = spec?.displayName ?? genome?.name ?? '—';
     const namespace = genome?.namespace ?? spec?.namespace ?? '—';
-    const version = genome?.version ?? spec?.version;
+    const versionIdentity = React.useMemo(() => getGenomeVersionIdentity(genome, spec), [genome, spec]);
+    const version = versionIdentity.displayVersion;
+    const learnings = spec?.memory?.learnings ?? [];
+    const fullSpecJson = genome?.spec ? stringifyGenomeSpec(genome.spec) : null;
     const { avgScore, evaluationCount } = React.useMemo(
         () => getGenomeScoreSummary(genome, spec),
         [genome, spec]
@@ -231,6 +235,17 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                         />
                     )}
 
+                    {versionIdentity.mismatch ? (
+                        <Item
+                            title="Legacy Embedded Version"
+                            subtitle={`Embedded spec still reports v${versionIdentity.specVersion}; canonical runtime version is entity v${versionIdentity.hubVersion}.`}
+                            detail={`v${versionIdentity.specVersion}`}
+                            detailStyle={{ color: '#FF9500', fontWeight: '700' }}
+                            icon={<Ionicons name="git-compare-outline" size={29} color="#FF9500" />}
+                            showChevron={false}
+                        />
+                    ) : null}
+
                     {/* Responsibilities */}
                     {spec?.responsibilities && spec.responsibilities.length > 0 && (
                         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
@@ -261,6 +276,20 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                         </View>
                     )}
 
+                    {learnings.length > 0 && (
+                        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
+                                Learnings
+                            </Text>
+                            {learnings.map((learning, i) => (
+                                <View key={`${learning}-${i}`} style={{ flexDirection: 'row', marginBottom: 3 }}>
+                                    <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginRight: 6, ...Typography.default() }}>•</Text>
+                                    <Text style={{ color: theme.colors.text, fontSize: 13, flex: 1, lineHeight: 18, ...Typography.default() }}>{learning}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
                     {/* Allowed Tools */}
                     {spec?.allowedTools && spec.allowedTools.length > 0 && (
                         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
@@ -276,6 +305,15 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                             </View>
                         </View>
                     )}
+
+                    {fullSpecJson ? (
+                        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
+                                Full Spec Mirror
+                            </Text>
+                            <CodeView code={fullSpecJson} />
+                        </View>
+                    ) : null}
 
                     {/* View full genome button */}
                     {genomeId && (
@@ -307,8 +345,9 @@ function InternalIdentityPanel({ session }: { session: Session }) {
 
     const candidateId = member?.candidateId ?? (session.metadata as any)?.candidateId ?? null;
     const specId = member?.specId ?? (session.metadata as any)?.genomeId ?? null;
+    const parentSessionId = member?.parentSessionId ?? null;
 
-    if (!candidateId && !specId) {
+    if (!candidateId && !specId && !parentSessionId) {
         return null;
     }
 
@@ -327,6 +366,14 @@ function InternalIdentityPanel({ session }: { session: Session }) {
                     title="Spec ID"
                     subtitle={specId}
                     icon={<Ionicons name="finger-print-outline" size={29} color="#8E8E93" />}
+                    showChevron={false}
+                />
+            ) : null}
+            {parentSessionId ? (
+                <Item
+                    title="Parent Session"
+                    subtitle={parentSessionId}
+                    icon={<Ionicons name="git-merge-outline" size={29} color="#8E8E93" />}
                     showChevron={false}
                 />
             ) : null}

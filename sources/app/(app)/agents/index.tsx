@@ -227,6 +227,11 @@ function GenomeCard({
                         </Text>
                     </View>
                 ) : null}
+                <View style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <Text style={[stylesheet.metaBadgeText, stylesheet.versionText, { color: theme.colors.textSecondary }]}>
+                        v{genome.version}
+                    </Text>
+                </View>
                 {specialTags.length > 0 ? (
                     <View style={[stylesheet.specialTag, { backgroundColor: '#FFB54720' }]}>
                         <Text style={{ fontSize: 10, fontWeight: '600', color: '#D4870A' }}>{specialTags[0]}</Text>
@@ -317,6 +322,11 @@ function CorpsCard({
                 <View style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
                     <Text style={[stylesheet.metaBadgeText, { color: theme.colors.textSecondary }]}>
                         {t('agents.memberCount', { count: memberCount })}
+                    </Text>
+                </View>
+                <View style={[stylesheet.metaBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                    <Text style={[stylesheet.metaBadgeText, stylesheet.versionText, { color: theme.colors.textSecondary }]}>
+                        v{genome.version}
                     </Text>
                 </View>
                 {memberPreview.map((member, index) => (

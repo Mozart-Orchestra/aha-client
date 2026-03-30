@@ -257,6 +257,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         .filter((comment) => comment.type === 'plan')
         .sort((left, right) => right.createdAt - left.createdAt)[0];
     const hasPlanComment = Boolean(latestPlanComment);
+    const handoffComments = [...(task?.comments || [])]
+        .filter((comment) => comment.type === 'handoff')
+        .sort((left, right) => left.createdAt - right.createdAt);
 
     // Early return AFTER all hooks to avoid "Rendered fewer/more hooks" error
     if (!task) return null;
@@ -509,6 +512,31 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     </Text>
                                 </View>
                             </View>
+
+                            {handoffComments.length > 0 && (
+                                <View style={stylesheet.section}>
+                                    <View style={stylesheet.sectionHeader}>
+                                        <Text style={stylesheet.sectionTitle}>Migration History</Text>
+                                        <Text style={stylesheet.progress}>{handoffComments.length}</Text>
+                                    </View>
+                                    {handoffComments.map((comment) => (
+                                        <View key={comment.id} style={stylesheet.migrationCard}>
+                                            <View style={stylesheet.migrationHeader}>
+                                                <View style={stylesheet.migrationBadge}>
+                                                    <Ionicons name="git-compare-outline" size={12} color="#C26A00" />
+                                                    <Text style={stylesheet.migrationBadgeText}>Handoff</Text>
+                                                </View>
+                                                <Text style={stylesheet.migrationMeta}>
+                                                    {formatCommentDate(comment.createdAt)}
+                                                </Text>
+                                            </View>
+                                            <View style={stylesheet.markdownBlock}>
+                                                <MarkdownView markdown={comment.content} textColor={theme.colors.text} />
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
 
                             {/* Description */}
                             <View style={stylesheet.section}>
@@ -977,6 +1005,41 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 14,
         color: theme.colors.textSecondary,
         fontStyle: 'italic',
+    },
+    migrationCard: {
+        backgroundColor: '#C26A000F',
+        borderRadius: 10,
+        padding: 12,
+        gap: 8,
+        borderWidth: 1,
+        borderColor: '#C26A0026',
+    },
+    migrationHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    migrationBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        alignSelf: 'flex-start',
+        backgroundColor: '#C26A0018',
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    migrationBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#C26A00',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    migrationMeta: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
     },
     commentsList: {
         gap: 10,
