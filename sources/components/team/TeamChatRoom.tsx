@@ -757,6 +757,13 @@ interface TaskCardProps {
     styles: any;
 }
 
+function getMessageTypeAccentColor(type: string | undefined): string | null {
+    if (type === 'task-update') return '#FF9500';
+    if (type === 'notification') return '#007AFF';
+    if (type === 'vote') return '#AF52DE';
+    return null;
+}
+
 const TaskCard = ({ task, onPress, styles }: TaskCardProps) => {
     const statusColors: Record<string, string> = {
         'todo': '#888',
@@ -1283,6 +1290,10 @@ const MessageBubbleInner = ({
                             style={[
                                 styles.messageBubble,
                                 isMyMessage && styles.myMessageBubble,
+                                !isMyMessage && !isEdzlf && (() => {
+                                    const accent = getMessageTypeAccentColor(message.type);
+                                    return accent ? { borderLeftWidth: 3, borderLeftColor: accent } : null;
+                                })(),
                                 isEdzlf && {
                                     borderRadius: 20,
                                     borderBottomLeftRadius: 20,

@@ -204,6 +204,25 @@ export const KanbanBoardPanel = React.memo(function KanbanBoardPanel({
                         )}
 
                         <ScrollView contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                            {approvedTasks.filter((task) => matchesColumn(task, column.id)).length === 0 && (
+                                <Pressable
+                                    style={{
+                                        alignItems: 'center',
+                                        paddingVertical: 24,
+                                        gap: 8,
+                                        borderWidth: 1,
+                                        borderStyle: 'dashed',
+                                        borderColor: theme.colors.divider,
+                                        borderRadius: 10,
+                                    }}
+                                    onPress={() => onAddTask(column.id)}
+                                >
+                                    <Ionicons name="add-circle-outline" size={22} color={theme.colors.textSecondary} />
+                                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, textAlign: 'center' }}>
+                                        此列暂无任务{'\n'}点击添加
+                                    </Text>
+                                </Pressable>
+                            )}
                             {approvedTasks
                                 .filter((task) => matchesColumn(task, column.id))
                                 .map((task) => {
