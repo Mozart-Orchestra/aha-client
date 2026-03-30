@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, mq } from 'react-native-unistyles';
 import { Text } from '@/components/ui/StyledText';
+import * as Clipboard from 'expo-clipboard';
 
 // Landing page — marketing content (non-i18n by design, fixed marketing copy)
 
@@ -47,6 +48,38 @@ const FEATURES = [
     },
 ] as const;
 
+type PlatformKey = 'mac' | 'win' | 'linux' | 'mobile';
+
+const PLATFORMS: { key: PlatformKey; label: string; icon: string }[] = [
+    { key: 'mac', label: 'macOS', icon: 'logo-apple' },
+    { key: 'win', label: 'Windows', icon: 'logo-windows' },
+    { key: 'linux', label: 'Linux', icon: 'terminal-outline' },
+    { key: 'mobile', label: 'Mobile', icon: 'phone-portrait-outline' },
+];
+
+const INSTALL_STEPS: Record<PlatformKey, { label: string; cmd?: string }[]> = {
+    mac: [
+        { label: '安装 Node.js 18+（如未安装）', cmd: 'brew install node' },
+        { label: '安装 aha-cli', cmd: 'npm install -g aha-cli' },
+        { label: '启动 Daemon', cmd: 'aha daemon start' },
+    ],
+    win: [
+        { label: '安装 Node.js 18+', cmd: 'winget install OpenJS.NodeJS.LTS' },
+        { label: '安装 aha-cli', cmd: 'npm install -g aha-cli' },
+        { label: '启动 Daemon', cmd: 'aha daemon start' },
+    ],
+    linux: [
+        { label: '安装 Node.js 18+', cmd: 'curl -fsSL https://fnm.vercel.app/install | bash && fnm install 20' },
+        { label: '安装 aha-cli', cmd: 'npm install -g aha-cli' },
+        { label: '启动 Daemon', cmd: 'aha daemon start' },
+    ],
+    mobile: [
+        { label: '从 App Store / Google Play 下载 happyhere App' },
+        { label: '在已安装 aha-cli 的机器上启动 Daemon', cmd: 'aha daemon start' },
+        { label: '打开 App，扫码连接 Daemon' },
+    ],
+};
+
 const WORKFLOW_STEPS = [
     { number: '01', title: '定义目标', desc: '在看板创建任务，描述需求和验收标准' },
     { number: '02', title: '分配角色', desc: '从 Genome 市场选择专业 Agent，一键组建团队' },
@@ -59,6 +92,66 @@ const STATS = [
     { value: '∞', label: '可扩展 Agent 角色' },
     { value: '<1ms', label: '实时状态延迟' },
 ] as const;
+
+function PlatformPicker() {
+    const [selected, setSelected] = React.useState<PlatformKey>('mac');
+    const [copiedIdx, setCopiedIdx] = React.useState<number | null>(null);
+
+    const handleCopy = React.useCallback(async (cmd: string, idx: number) => {
+        await Clipboard.setStringAsync(cmd);
+        setCopiedIdx(idx);
+        setTimeout(() => setCopiedIdx(null), 1500);
+    }, []);
+
+    return (
+        <View style={styles.platformPicker}>
+            <Text style={styles.platformPickerLabel}>选择你的平台，查看安装教程</Text>
+            <View style={styles.platformTabs}>
+                {PLATFORMS.map((p) => (
+                    <Pressable
+                        key={p.key}
+                        style={[styles.platformTab, selected === p.key && styles.platformTabActive]}
+                        onPress={() => setSelected(p.key)}
+                    >
+                        <Ionicons
+                            name={p.icon as any}
+                            size={13}
+                            color={selected === p.key ? '#F0F6FC' : '#8B9199'}
+                        />
+                        <Text style={[styles.platformTabText, selected === p.key && styles.platformTabTextActive]}>
+                            {p.label}
+                        </Text>
+                    </Pressable>
+                ))}
+            </View>
+            <View style={styles.platformSteps}>
+                {INSTALL_STEPS[selected].map((step, idx) => (
+                    <View key={idx} style={styles.platformStep}>
+                        <View style={styles.platformStepNum}>
+                            <Text style={styles.platformStepNumText}>{idx + 1}</Text>
+                        </View>
+                        <View style={styles.platformStepContent}>
+                            <Text style={styles.platformStepLabel}>{step.label}</Text>
+                            {step.cmd ? (
+                                <Pressable
+                                    style={styles.platformStepCmd}
+                                    onPress={() => handleCopy(step.cmd!, idx)}
+                                >
+                                    <Text style={styles.platformStepCmdText}>{step.cmd}</Text>
+                                    <Ionicons
+                                        name={copiedIdx === idx ? 'checkmark' : 'copy-outline'}
+                                        size={13}
+                                        color={copiedIdx === idx ? '#34C759' : '#484F58'}
+                                    />
+                                </Pressable>
+                            ) : null}
+                        </View>
+                    </View>
+                ))}
+            </View>
+        </View>
+    );
+}
 
 function FeatureCard({ feature }: { feature: typeof FEATURES[number] }) {
     return (
@@ -128,13 +221,7 @@ export default React.memo(function LandingPage() {
                         <Ionicons name="arrow-forward" size={14} color="#8B9199" />
                     </Pressable>
                 </View>
-                <View style={styles.heroInstall}>
-                    <Text style={styles.heroInstallLabel}>快速开始</Text>
-                    <View style={styles.heroInstallBox}>
-                        <Ionicons name="terminal-outline" size={13} color="#58A6FF" />
-                        <Text style={styles.heroInstallCode}>npx aha-cli@latest init</Text>
-                    </View>
-                </View>
+                <PlatformPicker />
             </LinearGradient>
 
             {/* Stats */}
@@ -321,31 +408,101 @@ const styles = StyleSheet.create((theme) => ({
         fontWeight: '500',
         color: '#8B9199',
     },
-    heroInstall: {
-        alignItems: 'center',
-        gap: 10,
+    // Platform Picker
+    platformPicker: {
+        width: '100%',
+        maxWidth: 600,
+        marginTop: 32,
     },
-    heroInstallLabel: {
-        fontSize: 11,
+    platformPickerLabel: {
+        fontSize: 12,
         color: '#484F58',
         fontWeight: '500',
-        letterSpacing: 0.5,
+        letterSpacing: 0.4,
         textTransform: 'uppercase' as const,
+        textAlign: 'center',
+        marginBottom: 12,
     },
-    heroInstallBox: {
+    platformTabs: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
         backgroundColor: '#161B22',
         borderWidth: 1,
         borderColor: '#30363D',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        borderRadius: 10,
+        padding: 4,
+        gap: 2,
     },
-    heroInstallCode: {
-        fontSize: 13,
+    platformTab: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        paddingVertical: 8,
+        borderRadius: 7,
+    },
+    platformTabActive: {
+        backgroundColor: '#21262D',
+    },
+    platformTabText: {
+        fontSize: 12,
+        color: '#8B9199',
+        fontWeight: '500',
+    },
+    platformTabTextActive: {
         color: '#F0F6FC',
+    },
+    platformSteps: {
+        marginTop: 16,
+        gap: 10,
+    },
+    platformStep: {
+        flexDirection: 'row',
+        gap: 12,
+        alignItems: 'flex-start',
+    },
+    platformStepNum: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#21262D',
+        borderWidth: 1,
+        borderColor: '#30363D',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+        flexShrink: 0,
+    },
+    platformStepNumText: {
+        fontSize: 11,
+        color: '#8B9199',
+        fontWeight: '600',
+    },
+    platformStepContent: {
+        flex: 1,
+        gap: 6,
+    },
+    platformStepLabel: {
+        fontSize: 13,
+        color: '#C9D1D9',
+        lineHeight: 20,
+    },
+    platformStepCmd: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#161B22',
+        borderWidth: 1,
+        borderColor: '#30363D',
+        borderRadius: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        gap: 8,
+    },
+    platformStepCmdText: {
+        flex: 1,
+        fontSize: 12,
+        color: '#58A6FF',
         fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }),
     },
 
