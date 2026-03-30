@@ -17,6 +17,7 @@ import {
 function createGenomeRecord(overrides: Partial<GenomeRecord> & Pick<GenomeRecord, 'id' | 'name'>): GenomeRecord {
     return {
         id: overrides.id,
+        kind: overrides.kind,
         namespace: overrides.namespace ?? '@public',
         name: overrides.name,
         version: overrides.version ?? 1,
@@ -91,6 +92,23 @@ describe('agentMarketplace', () => {
             category: 'coordination',
             query: 'go review',
         }).map((genome) => genome.id)).toEqual(['g1']);
+    });
+
+    it('treats explicit legion kind as a LegionImage even when legacy corps category is absent', () => {
+        const genomes = [
+            createGenomeRecord({
+                id: 'legion-1',
+                name: 'Legion Alpha',
+                kind: 'legion',
+                category: 'coordination',
+            }),
+        ];
+
+        expect(filterPrivateMarketplaceGenomes(genomes, {
+            tab: 'corps',
+            category: 'all',
+            query: '',
+        }).map((genome) => genome.id)).toEqual(['legion-1']);
     });
 
     it('selects favorites across public and private sources while preserving filters', () => {

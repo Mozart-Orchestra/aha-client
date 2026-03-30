@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/StyledText';
 import { Avatar } from '@/components/avatar/Avatar';
 import { JoinTeamModal } from '@/app/(app)/agents/JoinTeamModal';
-import { parseSpec, searchGenomes, type GenomeRecord } from '@/utils/genomeHub';
+import { parseAgentImage, searchGenomes, type GenomeRecord } from '@/utils/genomeHub';
 
 interface Props {
     visible: boolean;
@@ -287,7 +287,7 @@ export const TeamAgentLibraryModal = React.memo(function TeamAgentLibraryModal({
                                     </Text>
                                 </View>
                             ) : genomes.map((genome) => {
-                                const spec = parseSpec(genome.spec);
+                                const spec = parseAgentImage(genome.spec);
                                 const modelLabel = spec?.preferredModel || spec?.modelId;
                                 const meta = [
                                     genome.namespace || '@public',

@@ -2,7 +2,8 @@ import type { AuthCredentials } from '@/auth/tokenStorage';
 import type { Genome as PrivateGenome } from '@/sync/apiEvolution';
 
 import { isFavoriteGenomeId } from './favoriteGenomes';
-import { fetchGenomeById, parseFeedback, parseSpec, parseTags, type GenomeRecord } from './genomeHub';
+import { getGenomeImageKind } from './genomeImageSemantics';
+import { fetchGenomeById, parseAgentVerdict, parseAgentImage, parseTags, type GenomeRecord } from './genomeHub';
 
 export type MarketplacePageTab = 'agents' | 'corps';
 export type MarketplaceSourceTab = 'market' | 'favorites' | 'mine';
@@ -83,11 +84,11 @@ export function sortGenomesForDisplay(genomes: GenomeRecord[], favoriteGenomeIds
 }
 
 export function getGenomeScore(genome: GenomeRecord): number {
-    const feedback = parseFeedback(genome.feedbackData);
+    const feedback = parseAgentVerdict(genome.feedbackData);
     if (feedback?.avgScore) {
         return feedback.avgScore;
     }
-    const spec = parseSpec(genome.spec);
+    const spec = parseAgentImage(genome.spec);
     return spec?.resume?.performanceRating ?? 0;
 }
 
@@ -102,8 +103,8 @@ export function sortGenomesByScore(genomes: GenomeRecord[]): GenomeRecord[] {
 }
 
 function matchesMarketplaceTab(genome: GenomeRecord, tab: MarketplacePageTab): boolean {
-    const isCorps = genome.category === 'corps';
-    return tab === 'corps' ? isCorps : !isCorps;
+    const kind = getGenomeImageKind(genome);
+    return tab === 'corps' ? kind === 'legion' : kind === 'agent';
 }
 
 function matchesCategory(genome: GenomeRecord, category: AgentMarketplaceCategory): boolean {
@@ -120,7 +121,7 @@ function matchesQuery(genome: GenomeRecord, query: string): boolean {
         return true;
     }
 
-    const spec = parseSpec(genome.spec);
+    const spec = parseAgentImage(genome.spec);
 
     const haystack = [
         genome.name,

@@ -16,7 +16,7 @@ import {
 import { buildSidebarAgentRosterEntries, selectSidebarAgentSessions } from '@/utils/sidebarAgentSessions';
 import { getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
-import { fetchGenomeByName, parseFeedback } from '@/utils/genomeHub';
+import { fetchGenomeByName, parseAgentVerdict } from '@/utils/genomeHub';
 import {
     normalizeRoleKey,
     resolveSidebarAgentIdentity,
@@ -216,7 +216,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     for (const candidate of buildRoleCandidates(roleKey)) {
                         try {
                             const genome = await fetchGenomeByName('@official', candidate);
-                            const feedback = parseFeedback(genome?.feedbackData ?? null);
+                            const feedback = parseAgentVerdict(genome?.feedbackData ?? null);
                             if (feedback && feedback.evaluationCount > 0) {
                                 return [roleKey, {
                                     score: feedback.avgScore,

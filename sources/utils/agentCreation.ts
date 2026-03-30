@@ -1,4 +1,4 @@
-import type { GenomeSpec } from '@/utils/genomeHub';
+import type { AgentImage } from '@/utils/genomeHub';
 import type { Genome } from '@/sync/apiEvolution';
 
 export type ManualAgentCategory = 'coordination' | 'support' | 'execution';
@@ -166,7 +166,7 @@ export function slugifyAgentName(value: string): string {
     return slug || 'agent';
 }
 
-export function buildManualGenomeSpec(draft: ManualAgentDraft): GenomeSpec {
+export function buildManualAgentImage(draft: ManualAgentDraft): AgentImage {
     const responsibilities = splitListInput(draft.responsibilities);
     const capabilities = splitListInput(draft.capabilities);
     const tags = splitListInput(draft.tags);
@@ -301,7 +301,7 @@ export function buildPrivateAgentBuilderKickoff(options: {
     };
 }
 
-export function buildPrivateAgentBuilderGenomeSpec(draft: ChatBuilderDraft): GenomeSpec {
+export function buildPrivateAgentBuilderImage(draft: ChatBuilderDraft): AgentImage {
     const brief = draft.brief.trim();
 
     return {
@@ -400,7 +400,7 @@ export function buildPrivateAgentBuilderGenomeSpec(draft: ChatBuilderDraft): Gen
     };
 }
 
-export function buildAgentBuilderGenomeSpec(draft: ChatBuilderDraft): GenomeSpec {
+export function buildAgentBuilderImage(draft: ChatBuilderDraft): AgentImage {
     const brief = draft.brief.trim();
     const systemPrompt = [
         'You are Agent Builder, the platform specialist responsible for creating high-quality reusable Aha agents.',
@@ -425,7 +425,7 @@ export function buildAgentBuilderGenomeSpec(draft: ChatBuilderDraft): GenomeSpec
         'MANDATORY disallowedTools — always block supervisor tools for non-supervisor agents:',
         '  kill_agent, score_agent, score_supervisor_self, save_supervisor_state, delete_task',
         '',
-        'For corps / legion creation, use CorpsSpec (not GenomeSpec): members array + bootContext.',
+        'For corps / legion creation, use LegionImage (not AgentImage): members array + bootContext.',
         'Corps is a team template — it does not define routing rules. Each member genome carries its own messaging + behavior.',
         '',
         'Promotion rule: a v1 genome can only be promoted to v2 after supervisor evaluations (evaluationCount >= 3, avgScore >= 80). Never try to promote a newly created genome immediately.',

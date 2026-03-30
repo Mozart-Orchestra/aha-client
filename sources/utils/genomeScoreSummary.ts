@@ -1,4 +1,4 @@
-import { parseFeedback, type GenomeRecord, type GenomeSpec } from '@/utils/genomeHub';
+import { parseAgentVerdict, type AgentImage, type GenomeRecord } from '@/utils/genomeHub';
 
 export type GenomeScoreSummary = {
     avgScore: number | null;
@@ -8,9 +8,9 @@ export type GenomeScoreSummary = {
 
 export function getGenomeScoreSummary(
     genome: Pick<GenomeRecord, 'feedbackData'> | null | undefined,
-    spec: Pick<GenomeSpec, 'resume'> | null | undefined
+    spec: Pick<AgentImage, 'resume'> | null | undefined
 ): GenomeScoreSummary {
-    const feedback = parseFeedback(genome?.feedbackData ?? null);
+    const feedback = parseAgentVerdict(genome?.feedbackData ?? null);
 
     return {
         avgScore: feedback?.avgScore ?? spec?.resume?.performanceRating ?? null,

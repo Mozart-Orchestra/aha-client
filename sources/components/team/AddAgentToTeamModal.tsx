@@ -15,7 +15,7 @@ import { sync } from '@/sync/sync';
 import { useAllMachines, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getRecentPathForMachine, getKnownPathsForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
-import { searchGenomes, parseFeedback, parseSpec, type GenomeRecord } from '@/utils/genomeHub';
+import { searchGenomes, parseAgentVerdict, parseAgentImage, type GenomeRecord } from '@/utils/genomeHub';
 import { getGenomeScore } from '@/utils/agentMarketplace';
 import { randomUUID } from '@/utils/uuid';
 
@@ -98,7 +98,7 @@ export const AddAgentToTeamModal = React.memo(function AddAgentToTeamModal({ tea
 
         setSpawning(true);
         try {
-            const spec = parseSpec(selectedGenome.spec);
+            const spec = parseAgentImage(selectedGenome.spec);
             const runtimeType = (spec?.runtimeType === 'codex' ? 'codex' : 'claude') as 'claude' | 'codex';
             const roleId = spec?.teamRole ?? spec?.baseRoleId ?? 'member';
             const memberId = randomUUID();
@@ -148,7 +148,7 @@ export const AddAgentToTeamModal = React.memo(function AddAgentToTeamModal({ tea
     const renderGenomeCard = (genome: GenomeRecord) => {
         const score = getGenomeScore(genome);
         const scoreColor = score >= 85 ? '#22c55e' : score >= 70 ? '#f59e0b' : score > 0 ? '#ef4444' : theme.colors.textSecondary;
-        const spec = parseSpec(genome.spec);
+        const spec = parseAgentImage(genome.spec);
         const roleId = spec?.teamRole ?? spec?.baseRoleId ?? '';
 
         return (
@@ -220,7 +220,7 @@ export const AddAgentToTeamModal = React.memo(function AddAgentToTeamModal({ tea
                         ) : selectedGenome ? (
                             <View style={[styles.selectedBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
                                 <Text style={[styles.selectedBadgeText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                                    {parseSpec(selectedGenome.spec)?.displayName || selectedGenome.name}
+                                    {parseAgentImage(selectedGenome.spec)?.displayName || selectedGenome.name}
                                 </Text>
                             </View>
                         ) : null}

@@ -6,7 +6,7 @@ import {
     type KanbanTeamMember,
 } from '@/sync/kanbanTypes';
 
-import type { CorpsMemberOverlay, CorpsSpec, TeamAuthority } from './genomeHub';
+import type { LegionMemberOverlay, LegionImage, TeamAuthority } from './genomeHub';
 
 export interface ParsedCorpsGenomeRef {
     namespace: string;
@@ -21,7 +21,7 @@ export interface CorpsMemberPlan {
     ordinal: number;
     required: boolean;
     displayName: string;
-    overlay?: CorpsMemberOverlay;
+    overlay?: LegionMemberOverlay;
     authorities?: TeamAuthority[];
 }
 
@@ -39,7 +39,7 @@ export function parseCorpsGenomeRef(ref: string): ParsedCorpsGenomeRef | null {
     };
 }
 
-export function resolveCorpsRoleId(member: CorpsSpec['members'][number]): string {
+export function resolveCorpsRoleId(member: LegionImage['members'][number]): string {
     const alias = member.roleAlias?.trim();
     if (alias) {
         return alias;
@@ -56,7 +56,7 @@ function formatRoleDisplay(roleId: string): string {
         .join(' ');
 }
 
-export function expandCorpsMemberPlans(corps: CorpsSpec): CorpsMemberPlan[] {
+export function expandCorpsMemberPlans(corps: LegionImage): CorpsMemberPlan[] {
     const plans: CorpsMemberPlan[] = [];
 
     for (const member of corps.members ?? []) {
@@ -92,7 +92,7 @@ export function expandCorpsMemberPlans(corps: CorpsSpec): CorpsMemberPlan[] {
     return plans;
 }
 
-export function getDefaultCorpsTeamName(genomeName: string, corps: CorpsSpec): string {
+export function getDefaultCorpsTeamName(genomeName: string, corps: LegionImage): string {
     const bootName = corps.bootContext?.teamDescription?.trim();
     if (bootName) {
         const firstLine = bootName.split('\n').map((line) => line.trim()).find(Boolean);
@@ -115,7 +115,7 @@ export function buildCorpsSeedBoard({
     members,
 }: {
     name: string;
-    corps: CorpsSpec;
+    corps: LegionImage;
     members: KanbanTeamMember[];
 }): KanbanBoard {
     const board = JSON.parse(JSON.stringify(DEFAULT_KANBAN_BOARD)) as KanbanBoard;

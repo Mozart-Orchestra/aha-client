@@ -45,7 +45,7 @@ export function resolveCanonicalGenomeName(namespace: string, name: string): str
     return OFFICIAL_GENOME_ALIASES[normalizedName] ?? normalizedName;
 }
 
-export interface GenomeFeedback {
+export interface AgentVerdict {
     evaluationCount: number;
     avgScore: number;
     sessionScore?: {
@@ -95,7 +95,7 @@ export interface GenomeRecord {
 
 // ── Evolution types (from genome-hub) ──────────────────────────────
 
-export interface GenomeDiffRecord {
+export interface AgentPlugRecord {
     id: string;
     genomeId: string;
     version: number;
@@ -106,6 +106,9 @@ export interface GenomeDiffRecord {
     authorRole: string | null;
     createdAt: string;
 }
+
+export type AgentPlug = AgentPlugRecord;
+export type GenomeDiffRecord = AgentPlugRecord;
 
 export interface TrialRecord {
     id: string;
@@ -119,7 +122,7 @@ export interface TrialRecord {
     endedAt: string | null;
 }
 
-export interface VerdictRecord {
+export interface AgentVerdictRecord {
     id: string;
     trialId: string;
     readerRole: string;
@@ -131,14 +134,19 @@ export interface VerdictRecord {
     createdAt: string;
 }
 
-export function parseFeedback(feedbackData: string | null): GenomeFeedback | null {
+export type VerdictRecord = AgentVerdictRecord;
+export type GenomeFeedback = AgentVerdict;
+
+export function parseAgentVerdict(feedbackData: string | null): AgentVerdict | null {
     if (!feedbackData) return null;
     try {
-        return JSON.parse(feedbackData) as GenomeFeedback;
+        return JSON.parse(feedbackData) as AgentVerdict;
     } catch {
         return null;
     }
 }
+
+export const parseFeedback = parseAgentVerdict;
 
 export interface SearchResult {
     genomes: GenomeRecord[];
@@ -224,7 +232,7 @@ export type TeamAuthority =
     | 'task.complete.self'
     | 'agent.spawn';
 
-export interface CorpsMemberOverlay {
+export interface LegionMemberOverlay {
     promptSuffix?: string;
     messaging?: {
         listenFrom?: string[] | '*';
@@ -240,14 +248,18 @@ export interface CorpsMemberOverlay {
     authorities?: TeamAuthority[];
 }
 
-export interface CorpsTaskPolicy {
+export type CorpsMemberOverlay = LegionMemberOverlay;
+
+export interface LegionTaskPolicy {
     boardIsSourceOfTruth?: boolean;
     requireTaskForExecution?: boolean;
     forbidChatOnlyExecution?: boolean;
     forbidPeerToPeerRouting?: boolean;
 }
 
-export interface CorpsSpec {
+export type CorpsTaskPolicy = LegionTaskPolicy;
+
+export interface LegionImage {
     namespace: string;
     name: string;
     version: number;
@@ -259,24 +271,30 @@ export interface CorpsSpec {
         roleAlias?: string;
         count?: number;
         required?: boolean;
-        overlay?: CorpsMemberOverlay;
+        overlay?: LegionMemberOverlay;
     }[];
     bootContext?: {
         teamDescription?: string;
         initialObjective?: string;
         sharedContext?: string[];
         commandChain?: string[];
-        taskPolicy?: CorpsTaskPolicy;
+        taskPolicy?: LegionTaskPolicy;
     };
 }
 
-export function parseCorpsSpec(specJson: string): CorpsSpec | null {
+export type CorpsSpec = LegionImage;
+export type LegionSpec = LegionImage;
+
+export function parseLegionImage(specJson: string): LegionImage | null {
     try {
-        return JSON.parse(specJson) as CorpsSpec;
+        return JSON.parse(specJson) as LegionImage;
     } catch {
         return null;
     }
 }
+
+export const parseCorpsSpec = parseLegionImage;
+export const parseLegionSpec = parseLegionImage;
 
 export interface AgentPackageRef {
     ref: string;
@@ -331,9 +349,9 @@ export interface RuntimeAdapterSpec {
     };
 }
 
-// ─── GenomeSpec (display-only subset of the canonical spec) ─────────────────
+// ─── AgentImage (display-only subset of the canonical spec) ──────────────────
 
-export interface GenomeSpec {
+export interface AgentImage {
     // Tier 0 — Identity
     displayName?: string;
     description?: string;
@@ -456,6 +474,9 @@ export interface GenomeSpec {
     meta?: Record<string, unknown>;
 }
 
+export type GenomeSpec = AgentImage;
+export type AgentSpec = AgentImage;
+
 export interface CanonicalAgentCard {
     kind: 'aha.agent.v1';
     identity: AgentPackageRef & {
@@ -464,7 +485,7 @@ export interface CanonicalAgentCard {
         displayName?: string;
         description?: string;
     };
-    genome: GenomeSpec;
+    genome: AgentImage;
     adapters?: {
         claude?: RuntimeAdapterSpec;
         codex?: RuntimeAdapterSpec;
@@ -509,13 +530,15 @@ export interface A2AProjectionCard {
     }>;
 }
 
-export function parseSpec(specJson: string): GenomeSpec | null {
+export function parseAgentImage(specJson: string): AgentImage | null {
     try {
-        return JSON.parse(specJson) as GenomeSpec;
+        return JSON.parse(specJson) as AgentImage;
     } catch {
         return null;
     }
 }
+
+export const parseSpec = parseAgentImage;
 
 export interface FavoriteGenomeResponse {
     genomes: GenomeRecord[];
@@ -584,18 +607,20 @@ export async function fetchGenomeById(id: string): Promise<GenomeRecord | null> 
 // ── Evolution: diff chain + seed ───────────────────────────────────
 
 /** view-diff: Get the ordered diff chain for a genome (evolution history). */
-export async function fetchGenomeDiffs(namespace: string, name: string): Promise<GenomeDiffRecord[]> {
+export async function fetchGenomeDiffs(namespace: string, name: string): Promise<AgentPlugRecord[]> {
     try {
         const encodedNs = encodeURIComponent(namespace);
         const resolvedName = resolveCanonicalGenomeName(namespace, name);
         const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/diffs`);
         if (!res.ok) return [];
-        const data = await res.json() as { diffs: GenomeDiffRecord[] };
+        const data = await res.json() as { diffs: AgentPlugRecord[] };
         return data.diffs ?? [];
     } catch {
         return [];
     }
 }
+
+export const fetchAgentPlugs = fetchGenomeDiffs;
 
 /** view-not-diff: Get the original seed spec. */
 export async function fetchGenomeSeed(namespace: string, name: string): Promise<string | null> {

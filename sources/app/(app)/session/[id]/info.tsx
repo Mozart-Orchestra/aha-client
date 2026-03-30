@@ -22,7 +22,7 @@ import { useHappyAction } from '@/hooks/useHappyAction';
 import { HappyError } from '@/utils/errors';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
-import { fetchGenomeById, parseSpec, type GenomeSpec, type GenomeRecord } from '@/utils/genomeHub';
+import { fetchGenomeById, parseAgentImage, type AgentImage, type GenomeRecord } from '@/utils/genomeHub';
 import { getGenomeScoreSummary } from '@/utils/genomeScoreSummary';
 import { getGenomeVersionIdentity, stringifyGenomeSpec } from '@/utils/genomeObservability';
 import { type KanbanBoard } from '@/sync/kanbanTypes';
@@ -75,7 +75,7 @@ function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: 
 
 // ─── Genome Info Panel ───────────────────────────────────────────────────────
 
-function useGenomeForSession(session: Session): { genome: GenomeRecord | null; spec: GenomeSpec | null; loading: boolean } {
+function useGenomeForSession(session: Session): { genome: GenomeRecord | null; spec: AgentImage | null; loading: boolean } {
     const teamId = session.metadata?.teamId ?? '';
     const artifact = useArtifact(teamId);
     const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
@@ -147,7 +147,7 @@ function useGenomeForSession(session: Session): { genome: GenomeRecord | null; s
 
     const spec = React.useMemo(() => {
         if (!genome?.spec) return null;
-        return parseSpec(genome.spec);
+        return parseAgentImage(genome.spec);
     }, [genome]);
 
     return { genome, spec, loading };

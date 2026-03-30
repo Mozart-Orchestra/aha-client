@@ -25,8 +25,8 @@ import { useAllMachines, useSessionMessages, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import {
-    buildManualGenomeSpec,
-    buildPrivateAgentBuilderGenomeSpec,
+    buildManualAgentImage,
+    buildPrivateAgentBuilderImage,
     buildPrivateAgentBuilderKickoff,
     mergeManualDraftUpdate,
     parseManualDraftSyncComment,
@@ -582,7 +582,7 @@ export default React.memo(function NewAgentScreen() {
 
         setSaving(true);
         try {
-            const spec = buildManualGenomeSpec(manualDraft);
+            const spec = buildManualAgentImage(manualDraft);
             const created = await createGenome(credentials, {
                 name: slugifyAgentName(manualDraft.displayName),
                 description: manualDraft.description.trim() || undefined,
@@ -627,7 +627,7 @@ export default React.memo(function NewAgentScreen() {
                 return;
             }
 
-            const builderSpec = buildPrivateAgentBuilderGenomeSpec({
+            const builderSpec = buildPrivateAgentBuilderImage({
                 displayName: PRIVATE_BUILDER_NAME,
                 runtime: manualDraft.runtime,
                 brief: chatBrief,

@@ -13,27 +13,41 @@ import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import {
     addGenomeFavorite,
+    fetchAgentPlugs,
     fetchGenomeById,
-    fetchGenomeDiffs,
     fetchGenomeFavoriteStatus,
     fetchGenomeSeed,
     removeGenomeFavorite,
-    parseSpec,
-    parseFeedback,
+    parseAgentImage,
+    parseAgentVerdict,
     parseTags,
-    parseCorpsSpec,
-    type GenomeDiffRecord,
+    parseLegionImage,
+    type AgentPlug,
     type GenomeRecord,
-    type GenomeSpec,
-    type GenomeFeedback,
+    type AgentImage,
+    type AgentVerdict,
 } from '@/utils/genomeHub';
 import {
     describeGenomeDiffChange,
+    getGenomeEnvDeclaration,
     getGenomeDiffChangeKindLabel,
-    getGenomeDiffRecordChanges,
+    getAgentPlugChanges,
+    getGenomeHookDisplay,
+    getGenomeInlineFileEntries,
+    getGenomeMcpServerList,
+    getGenomeSkillEntries,
     getGenomeVersionIdentity,
+    getGenomeWorkspaceConfig,
     stringifyGenomeSpec,
 } from '@/utils/genomeObservability';
+import {
+    getGenomeImageKind,
+    getGenomeImageLabel,
+    getGenomeImageMirrorTitle,
+    getGenomeImageSeedTitle,
+    getGenomeImageSurfaceTitle,
+    getLegionLayerFacts,
+} from '@/utils/genomeImageSemantics';
 import { fetchAccessibleGenomeById } from '@/utils/agentMarketplace';
 import {
     loadFavoriteGenomeIdsFromStorage,
@@ -96,7 +110,7 @@ function ScoreBar({ label, value, compact }: { label: string; value: number; com
     );
 }
 
-function formatLatestAction(action: GenomeFeedback['latestAction']): string {
+function formatLatestAction(action: AgentVerdict['latestAction']): string {
     return action
         .split('_')
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -123,16 +137,16 @@ function formatDiffMeta(iso: string, authorRole?: string | null): string {
     return authorRole ? `${dateLabel} · ${authorRole}` : dateLabel;
 }
 
-function parseAgentDetailSpec(agent: AgentDetailRecord | null): GenomeSpec | null {
+function parseAgentDetailSpec(agent: AgentDetailRecord | null): AgentImage | null {
     if (!agent) return null;
 
     const embeddedGenome = agent.genome as { spec?: string } | null | undefined;
     if (embeddedGenome?.spec && typeof embeddedGenome.spec === 'string') {
-        return parseSpec(embeddedGenome.spec);
+        return parseAgentImage(embeddedGenome.spec);
     }
 
     if (agent.genomeSpec && typeof agent.genomeSpec === 'object') {
-        return agent.genomeSpec as GenomeSpec;
+        return agent.genomeSpec as AgentImage;
     }
 
     return null;
@@ -157,7 +171,7 @@ export default React.memo(function AgentDetailScreen() {
     const [favoriteLoading, setFavoriteLoading] = React.useState(false);
     const [showRunStandalone, setShowRunStandalone] = React.useState(false);
     const [showJoinTeam, setShowJoinTeam] = React.useState(false);
-    const [diffs, setDiffs] = React.useState<GenomeDiffRecord[]>([]);
+    const [diffs, setDiffs] = React.useState<AgentPlug[]>([]);
     const [seedSpec, setSeedSpec] = React.useState<string | null>(null);
     const [historyLoading, setHistoryLoading] = React.useState(false);
 
@@ -242,7 +256,7 @@ export default React.memo(function AgentDetailScreen() {
 
     const spec = React.useMemo(() => {
         if (genome) {
-            return parseSpec(genome.spec);
+            return parseAgentImage(genome.spec);
         }
         return parseAgentDetailSpec(agentDetail);
     }, [agentDetail, genome]);
@@ -264,24 +278,40 @@ export default React.memo(function AgentDetailScreen() {
         }
         return null;
     }, [agentDetail?.genomeSpec, templateGenome?.spec]);
-    const feedback = React.useMemo(() => templateGenome ? parseFeedback(templateGenome.feedbackData) : null, [templateGenome]);
+    const workspaceConfig = React.useMemo(() => getGenomeWorkspaceConfig(spec), [spec]);
+    const envDeclaration = React.useMemo(() => getGenomeEnvDeclaration(spec), [spec]);
+    const inlineFiles = React.useMemo(() => getGenomeInlineFileEntries(spec), [spec]);
+    const observedSkills = React.useMemo(() => getGenomeSkillEntries(spec), [spec]);
+    const observedMcpServers = React.useMemo(() => getGenomeMcpServerList(spec), [spec]);
+    const hookDisplay = React.useMemo(
+        () => getGenomeHookDisplay(spec, templateGenome?.namespace ?? null),
+        [spec, templateGenome?.namespace],
+    );
+    const feedback = React.useMemo(() => templateGenome ? parseAgentVerdict(templateGenome.feedbackData) : null, [templateGenome]);
     const tags = React.useMemo(() => templateGenome ? parseTags(templateGenome.tags) : [], [templateGenome]);
     const isSpecialTemplate = React.useMemo(
         () => templateGenome ? isSpecialGenome(tags, templateGenome.name) : false,
         [tags, templateGenome],
     );
-    const corpsSpec = React.useMemo(() => (templateGenome?.category === 'corps') ? parseCorpsSpec(templateGenome.spec) : null, [templateGenome]);
+    const legionSpec = React.useMemo(() => (
+        templateGenome && (templateGenome.kind === 'legion' || templateGenome.category === 'corps')
+            ? parseLegionImage(templateGenome.spec)
+            : null
+    ), [templateGenome]);
+    const imageKind = React.useMemo(() => getGenomeImageKind(templateGenome), [templateGenome]);
+    const imageLabel = React.useMemo(() => getGenomeImageLabel(imageKind), [imageKind]);
     const corpsTeamPrompt = React.useMemo(
-        () => corpsSpec?.bootContext?.teamDescription?.trim() ?? '',
-        [corpsSpec]
+        () => legionSpec?.bootContext?.teamDescription?.trim() ?? '',
+        [legionSpec]
     );
     const corpsInitialObjective = React.useMemo(
-        () => corpsSpec?.bootContext?.initialObjective?.trim() ?? '',
-        [corpsSpec]
+        () => legionSpec?.bootContext?.initialObjective?.trim() ?? '',
+        [legionSpec]
     );
     const corpsPromptLines = React.useMemo(() => splitPromptLines(corpsTeamPrompt), [corpsTeamPrompt]);
     const corpsPromptTitle = corpsPromptLines[0] ?? '';
     const corpsPromptBody = corpsPromptLines.slice(corpsPromptTitle ? 1 : 0);
+    const legionLayerFacts = React.useMemo(() => getLegionLayerFacts(legionSpec), [legionSpec]);
     const standaloneSession = useSession(agentDetail?.sessionId ?? '');
     const storefrontRating = React.useMemo(() => {
         if (typeof feedback?.avgScore === 'number') {
@@ -301,6 +331,17 @@ export default React.memo(function AgentDetailScreen() {
         [spec?.modelScores]
     );
     const crowdReviewCount = feedback?.evaluationCount ?? spec?.resume?.totalSessions ?? null;
+    const hasAgentJsonKernelObservability = Boolean(
+        workspaceConfig
+        || envDeclaration
+        || observedMcpServers.length > 0
+        || observedSkills.length > 0
+        || inlineFiles.length > 0
+        || hookDisplay.visibility !== 'absent'
+    );
+    const packageSurfaceIntro = imageKind === 'legion'
+        ? 'authoring truth = team.json + team.norms.json · LegionImage remains the TypeScript compatibility projection'
+        : 'authoring truth = agent.json · AgentImage remains the TypeScript compatibility projection';
 
     React.useEffect(() => {
         const namespace = templateGenome?.namespace;
@@ -315,7 +356,7 @@ export default React.memo(function AgentDetailScreen() {
         let cancelled = false;
         setHistoryLoading(true);
         Promise.all([
-            fetchGenomeDiffs(namespace, name),
+            fetchAgentPlugs(namespace, name),
             fetchGenomeSeed(namespace, name),
         ]).then(([nextDiffs, nextSeed]) => {
             if (cancelled) return;
@@ -393,7 +434,7 @@ export default React.memo(function AgentDetailScreen() {
     }
 
     const status = genome ? getStatusColor(genome.status) : null;
-    const isCorps = genome?.category === 'corps' || corpsSpec != null;
+    const isCorps = imageKind === 'legion' || legionSpec != null;
     const standaloneStatusColor = agentDetail?.status === 'active'
         ? '#22c55e'
         : agentDetail?.status === 'paused'
@@ -461,7 +502,12 @@ export default React.memo(function AgentDetailScreen() {
                             ) : null}
                             {isCorps ? (
                                 <View style={[styles.badge, { backgroundColor: '#FF950018' }]}>
-                                    <Text style={[styles.badgeText, { color: '#FF9500' }]}>Corps</Text>
+                                    <Text style={[styles.badgeText, { color: '#FF9500' }]}>{imageLabel}</Text>
+                                </View>
+                            ) : null}
+                            {!isCorps ? (
+                                <View style={[styles.badge, { backgroundColor: '#007AFF18' }]}>
+                                    <Text style={[styles.badgeText, { color: '#007AFF' }]}>{imageLabel}</Text>
                                 </View>
                             ) : null}
                             {spec?.runtimeType ? (
@@ -706,16 +752,16 @@ export default React.memo(function AgentDetailScreen() {
                             {seedSpec ? (
                                 <View style={styles.ledgerSection}>
                                     <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
-                                        view-not-diff · Seed Snapshot
+                                        {getGenomeImageSeedTitle(imageKind)}
                                     </Text>
                                     <CodeView code={stringifyGenomeSpec(seedSpec)} />
                                 </View>
                             ) : null}
                             {diffs.map((diff) => {
-                                let changes: ReturnType<typeof getGenomeDiffRecordChanges> = [];
+                                let changes: ReturnType<typeof getAgentPlugChanges> = [];
                                 let diffError: string | null = null;
                                 try {
-                                    changes = getGenomeDiffRecordChanges(diff);
+                                    changes = getAgentPlugChanges(diff);
                                 } catch (error) {
                                     diffError = error instanceof Error ? error.message : 'Failed to parse diff payload.';
                                 }
@@ -801,18 +847,18 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {formattedSpecJson ? (
-                        <ItemGroup title="view · Spec Mirror">
+                        <ItemGroup title={getGenomeImageMirrorTitle(imageKind)}>
                             <View style={styles.ledgerSection}>
                                 <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
-                                    Full Genome Spec JSON
+                                    Full {imageLabel} JSON
                                 </Text>
                                 <CodeView code={formattedSpecJson} />
                             </View>
                         </ItemGroup>
                     ) : null}
 
-                    {/* ── Tools & MCPs ── */}
-                    {(spec?.allowedTools?.length || spec?.disallowedTools?.length || spec?.mcpServers?.length) ? (
+                    {/* ── Tools allow/deny ── */}
+                    {(spec?.allowedTools?.length || spec?.disallowedTools?.length) ? (
                         <ItemGroup title={t('agents.toolsAndMcps')}>
                             {spec?.allowedTools?.length ? (
                                 <Item title={t('agents.allowedTools')} subtitle={spec.allowedTools.join(', ')} subtitleLines={0} />
@@ -820,55 +866,182 @@ export default React.memo(function AgentDetailScreen() {
                             {spec?.disallowedTools?.length ? (
                                 <Item title={t('agents.blockedTools')} subtitle={spec.disallowedTools.join(', ')} subtitleLines={0} />
                             ) : null}
-                            {spec?.mcpServers?.length ? (
-                                <Item title={t('agents.mcpServers')} subtitle={spec.mcpServers.join(', ')} subtitleLines={0} />
+                        </ItemGroup>
+                    ) : null}
+
+                    {/* ── agent.json kernel observability ── */}
+                    {hasAgentJsonKernelObservability ? (
+                        <ItemGroup title={getGenomeImageSurfaceTitle(imageKind)}>
+                            <View style={styles.ledgerSection}>
+                                <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                    {imageKind === 'legion' ? 'Portable composition package' : 'Portable runtime package'}
+                                </Text>
+                                <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
+                                    {packageSurfaceIntro}
+                                </Text>
+                            </View>
+
+                            {workspaceConfig ? (
+                                <Item
+                                    title="Workspace"
+                                    subtitle={[
+                                        workspaceConfig.defaultMode ? `defaultMode: ${workspaceConfig.defaultMode}` : null,
+                                        workspaceConfig.allowedModes.length > 0
+                                            ? `allowedModes: ${workspaceConfig.allowedModes.join(', ')}`
+                                            : null,
+                                    ].filter(Boolean).join('\n')}
+                                    subtitleLines={0}
+                                    icon={<Ionicons name="folder-open-outline" size={18} color={theme.colors.textSecondary} />}
+                                />
                             ) : null}
-                        </ItemGroup>
-                    ) : null}
 
-                    {/* ── Hooks (Tier 8) ── */}
-                    {spec?.hooks ? (
-                        <ItemGroup title={t('agents.hooksSection')}>
-                            {spec.hooks.preToolUse?.map((h, i) => (
+                            {envDeclaration ? (
                                 <Item
-                                    key={`pre-${i}`}
-                                    title={h.description ?? h.matcher}
-                                    subtitle={`PreToolUse: ${h.command}`}
+                                    title="Env Contract"
+                                    subtitle={[
+                                        envDeclaration.required.length > 0
+                                            ? `required: ${envDeclaration.required.join(', ')}`
+                                            : 'required: —',
+                                        envDeclaration.optional.length > 0
+                                            ? `optional: ${envDeclaration.optional.join(', ')}`
+                                            : 'optional: —',
+                                        envDeclaration.secretsPolicy.length > 0
+                                            ? `secretsPolicy: ${envDeclaration.secretsPolicy.join(', ')}`
+                                            : null,
+                                    ].filter(Boolean).join('\n')}
                                     subtitleLines={0}
-                                    icon={<Ionicons name="code-slash-outline" size={18} color={theme.colors.textSecondary} />}
+                                    icon={<Ionicons name="key-outline" size={18} color={theme.colors.textSecondary} />}
                                 />
-                            ))}
-                            {spec.hooks.postToolUse?.map((h, i) => (
-                                <Item
-                                    key={`post-${i}`}
-                                    title={h.description ?? h.matcher}
-                                    subtitle={`PostToolUse: ${h.command}`}
-                                    subtitleLines={0}
-                                    icon={<Ionicons name="code-slash-outline" size={18} color={theme.colors.textSecondary} />}
-                                />
-                            ))}
-                            {spec.hooks.stop?.map((h, i) => (
-                                <Item
-                                    key={`stop-${i}`}
-                                    title={h.description ?? 'Stop hook'}
-                                    subtitle={`Stop: ${h.command}`}
-                                    subtitleLines={0}
-                                    icon={<Ionicons name="stop-circle-outline" size={18} color={theme.colors.textSecondary} />}
-                                />
-                            ))}
-                        </ItemGroup>
-                    ) : null}
+                            ) : null}
 
-                    {/* ── Skills (Tier 9) ── */}
-                    {spec?.skills?.length ? (
-                        <ItemGroup title={t('agents.skillsSection')}>
-                            {spec.skills.map((skill) => (
+                            {observedMcpServers.length > 0 ? (
                                 <Item
-                                    key={skill}
-                                    title={skill}
-                                    icon={<Ionicons name="extension-puzzle-outline" size={18} color="#007AFF" />}
+                                    title={`MCP Servers (${observedMcpServers.length})`}
+                                    subtitle={observedMcpServers.join('\n')}
+                                    subtitleLines={0}
+                                    icon={<Ionicons name="server-outline" size={18} color={theme.colors.textSecondary} />}
                                 />
-                            ))}
+                            ) : null}
+
+                            {observedSkills.length > 0 ? (
+                                <View style={styles.ledgerSection}>
+                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                        Skills ({observedSkills.length})
+                                    </Text>
+                                    {observedSkills.map((skill) => (
+                                        <View
+                                            key={`${skill.name}-${skill.source}`}
+                                            style={[
+                                                styles.packageCard,
+                                                { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider },
+                                            ]}
+                                        >
+                                            <View style={styles.packageCardHeader}>
+                                                <Text style={[styles.packageCardTitle, { color: theme.colors.text }]}>
+                                                    {skill.name}
+                                                </Text>
+                                                <View
+                                                    style={[
+                                                        styles.ledgerBadge,
+                                                        {
+                                                            backgroundColor: skill.source === 'inline'
+                                                                ? '#34C75918'
+                                                                : '#007AFF18',
+                                                        },
+                                                    ]}
+                                                >
+                                                    <Text
+                                                        style={[
+                                                            styles.ledgerBadgeText,
+                                                            {
+                                                                color: skill.source === 'inline' ? '#34C759' : '#007AFF',
+                                                            },
+                                                        ]}
+                                                    >
+                                                        {skill.source === 'inline' ? 'INLINE' : 'REF'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
+                                                {skill.inlinePath ?? 'runtime-lib reference'}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            ) : null}
+
+                            {hookDisplay.visibility === 'security-trimmed' ? (
+                                <Item
+                                    title="Hooks"
+                                    subtitle="已安全裁剪 · only @official genomes expose hook commands in the UI."
+                                    subtitleLines={0}
+                                    icon={<Ionicons name="shield-checkmark-outline" size={18} color={theme.colors.textSecondary} />}
+                                />
+                            ) : null}
+
+                            {hookDisplay.visibility === 'visible' ? (
+                                <View style={styles.ledgerSection}>
+                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                        Hooks ({hookDisplay.entries.length})
+                                    </Text>
+                                    {hookDisplay.entries.map((entry, index) => (
+                                        <Item
+                                            key={`${entry.phase}-${entry.command}-${index}`}
+                                            title={entry.description ?? entry.matcher ?? entry.phase}
+                                            subtitle={[
+                                                entry.matcher ? `${entry.phase} · ${entry.matcher}` : entry.phase,
+                                                entry.command,
+                                            ].join('\n')}
+                                            subtitleLines={0}
+                                            icon={<Ionicons name="code-slash-outline" size={18} color={theme.colors.textSecondary} />}
+                                        />
+                                    ))}
+                                </View>
+                            ) : null}
+
+                            {inlineFiles.length > 0 ? (
+                                <View style={styles.ledgerSection}>
+                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
+                                        Inline Files ({inlineFiles.length})
+                                    </Text>
+                                    {inlineFiles.map((file) => (
+                                        <View
+                                            key={file.path}
+                                            style={[
+                                                styles.packageCard,
+                                                { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider },
+                                            ]}
+                                        >
+                                            <View style={styles.packageCardHeader}>
+                                                <Text style={[styles.packageCardTitle, styles.mono, { color: theme.colors.text }]}>
+                                                    {file.path}
+                                                </Text>
+                                                <View style={styles.packageBadges}>
+                                                    {file.inlineSkillName ? (
+                                                        <View style={[styles.ledgerBadge, { backgroundColor: '#34C75918' }]}>
+                                                            <Text style={[styles.ledgerBadgeText, { color: '#34C759' }]}>
+                                                                skill:{file.inlineSkillName}
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                    {file.truncated ? (
+                                                        <View style={[styles.ledgerBadge, { backgroundColor: '#FF950018' }]}>
+                                                            <Text style={[styles.ledgerBadgeText, { color: '#FF9500' }]}>
+                                                                preview
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
+                                            </View>
+                                            <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
+                                                {file.lineCount} {file.lineCount === 1 ? 'line' : 'lines'}
+                                                {file.truncated ? ' · preview truncated' : ''}
+                                            </Text>
+                                            <CodeView code={file.preview} />
+                                        </View>
+                                    ))}
+                                </View>
+                            ) : null}
                         </ItemGroup>
                     ) : null}
 
@@ -891,9 +1064,9 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {/* ── Corps Members ── */}
-                    {corpsSpec?.members?.length ? (
-                        <ItemGroup title={t('agents.members')}>
-                            {corpsSpec.members.map((m, i) => (
+                    {legionSpec?.members?.length ? (
+                        <ItemGroup title="LegionImage Members">
+                            {legionSpec.members.map((m, i) => (
                                 <Item
                                     key={`m-${i}`}
                                     title={m.roleAlias ?? m.genome.split('/').pop()?.split('@')[0] ?? '?'}
@@ -905,14 +1078,27 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
+                    {legionLayerFacts.length > 0 ? (
+                        <ItemGroup title="LegionLayer · Coordination">
+                            {legionLayerFacts.map((fact) => (
+                                <Item
+                                    key={`${fact.label}-${fact.value}`}
+                                    title={fact.label}
+                                    subtitle={fact.value}
+                                    subtitleLines={0}
+                                />
+                            ))}
+                        </ItemGroup>
+                    ) : null}
+
                     {corpsTeamPrompt ? (
-                        <ItemGroup title="Team System Prompt">
+                        <ItemGroup title="LegionLayer · Boot Context">
                             <View style={[styles.promptShowcaseCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
                                 <Text style={[styles.promptShowcaseEyebrow, { color: theme.colors.textSecondary }]}>
-                                    Shared boot context
+                                    Shared LegionLayer boot context
                                 </Text>
                                 <Text style={[styles.promptShowcaseTitle, { color: theme.colors.text }]}>
-                                    {corpsPromptTitle || 'Team System Prompt'}
+                                    {corpsPromptTitle || 'Legion boot prompt'}
                                 </Text>
                                 {corpsPromptBody.map((line, index) => (
                                     <Text key={`${line}-${index}`} style={[styles.promptShowcaseLine, { color: theme.colors.text }]}>
@@ -1201,6 +1387,33 @@ const styles = StyleSheet.create((theme) => ({
         fontSize: 10,
         fontWeight: '700',
         letterSpacing: 0.5,
+    },
+    packageCard: {
+        marginHorizontal: 16,
+        marginVertical: 6,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 14,
+        gap: 8,
+    },
+    packageCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    packageCardTitle: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '600',
+        lineHeight: 18,
+    },
+    packageBadges: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
     },
     promptShowcaseCard: {
         borderWidth: StyleSheet.hairlineWidth,

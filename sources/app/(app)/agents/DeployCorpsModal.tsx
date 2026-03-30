@@ -21,7 +21,7 @@ import {
     getDefaultCorpsTeamName,
     parseCorpsGenomeRef,
 } from '@/utils/corpsDeployment';
-import { fetchGenomeByName, parseCorpsSpec, parseSpec, type GenomeRecord } from '@/utils/genomeHub';
+import { fetchGenomeByName, parseLegionImage, parseAgentImage, type GenomeRecord } from '@/utils/genomeHub';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { randomUUID } from '@/utils/uuid';
@@ -41,7 +41,7 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
     const machines = useAllMachines();
     const recentPaths = useSetting('recentMachinePaths');
 
-    const corps = React.useMemo(() => parseCorpsSpec(genome.spec), [genome.spec]);
+    const corps = React.useMemo(() => parseLegionImage(genome.spec), [genome.spec]);
     const memberPlans = React.useMemo(() => (corps ? expandCorpsMemberPlans(corps) : []), [corps]);
 
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
@@ -101,7 +101,7 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
 
             for (const plan of memberPlans) {
                 const matchedGenome = genomesByRef.get(plan.genomeRef) ?? null;
-                const matchedSpec = matchedGenome ? parseSpec(matchedGenome.spec) : null;
+                const matchedSpec = matchedGenome ? parseAgentImage(matchedGenome.spec) : null;
                 const runtimeType = matchedSpec?.runtimeType === 'codex' ? 'codex' : 'claude';
                 const memberId = randomUUID();
                 const sessionTag = buildTeamMemberSessionTag(teamId, memberId);

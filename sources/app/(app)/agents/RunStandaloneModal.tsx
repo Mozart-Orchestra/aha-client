@@ -16,7 +16,7 @@ import { useAllMachines, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getRecentPathForMachine, getKnownPathsForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { createAgent } from '@/sync/apiAgents';
-import { parseSpec } from '@/utils/genomeHub';
+import { parseAgentImage } from '@/utils/genomeHub';
 import type { GenomeRecord } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
 
@@ -38,7 +38,7 @@ export const RunStandaloneModal = React.memo(function RunStandaloneModal({ genom
     const machines = useAllMachines();
     const recentPaths = useSetting('recentMachinePaths');
 
-    const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
+    const spec = React.useMemo(() => parseAgentImage(genome.spec), [genome.spec]);
     const runtimeType = (spec?.runtimeType === 'codex' ? 'codex' : 'claude') as 'claude' | 'codex';
     const roleId = spec?.baseRoleId ?? spec?.teamRole ?? 'standalone';
 

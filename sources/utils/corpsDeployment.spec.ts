@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CorpsSpec } from './genomeHub';
+import type { LegionImage } from './genomeHub';
 import {
     buildCorpsSeedBoard,
     expandCorpsMemberPlans,
@@ -9,7 +9,7 @@ import {
     resolveCorpsRoleId,
 } from './corpsDeployment';
 
-const sampleCorps: CorpsSpec = {
+const sampleCorps: LegionImage = {
     namespace: '@official',
     name: 'fullstack-squad',
     version: 1,

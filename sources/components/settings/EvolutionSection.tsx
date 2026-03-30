@@ -34,7 +34,7 @@ import {
     type SupervisorStateSummary,
 } from '@/sync/apiEvolution';
 import { Modal } from '@/modal';
-import { searchGenomes, parseFeedback } from '@/utils/genomeHub';
+import { searchGenomes, parseAgentVerdict } from '@/utils/genomeHub';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -522,7 +522,7 @@ function SupervisorReports() {
             .then(result => {
                 const scored = result.genomes
                     .map(g => {
-                        const fb = parseFeedback(g.feedbackData);
+                        const fb = parseAgentVerdict(g.feedbackData);
                         if (!fb || fb.evaluationCount < 1) return null;
                         return {
                             name: g.name,

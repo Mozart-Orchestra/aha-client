@@ -69,7 +69,7 @@ export interface SupervisorStateResponse {
     state: SupervisorStateSummary | null;
 }
 
-export interface GenomeSpec {
+export interface AgentImage {
     roleId?: string;
     systemPrompt?: string;
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'read-only' | 'safe-yolo' | 'yolo';
@@ -81,6 +81,9 @@ export interface GenomeSpec {
     version?: number;
 }
 
+export type AgentSpec = AgentImage;
+export type GenomeSpec = AgentImage;
+
 export interface Genome {
     id: string;
     accountId: string;
@@ -89,7 +92,7 @@ export interface Genome {
     version?: number;
     status?: 'draft' | 'unverified' | 'verified' | 'official' | 'archived';
     description: string | null;
-    spec: string;   // JSON string of GenomeSpec
+    spec: string;   // JSON string of AgentImage
     parentSessionId: string;
     teamId: string | null;
     tags?: string | null;

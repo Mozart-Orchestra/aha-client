@@ -16,9 +16,9 @@ import { t } from '@/text';
 import {
     addGenomeFavorite,
     fetchFavoriteGenomes,
-    parseCorpsSpec,
-    parseFeedback,
-    parseSpec,
+    parseLegionImage,
+    parseAgentVerdict,
+    parseAgentImage,
     parseTags,
     removeGenomeFavorite,
     searchGenomes,
@@ -45,6 +45,12 @@ import { useProfile } from '@/sync/storage';
 import { FAB } from '@/components/ui/FAB';
 import { listAgents, deleteAgent, type AgentRecord } from '@/sync/apiAgents';
 import { Modal } from '@/modal';
+import {
+    getGenomeImageEmptyState,
+    getGenomeImageKind,
+    getGenomeImageLabel,
+    getGenomeImagePluralLabel,
+} from '@/utils/genomeImageSemantics';
 import { DeployCorpsModal } from './DeployCorpsModal';
 import { RunStandaloneModal } from './RunStandaloneModal';
 import { JoinTeamModal } from './JoinTeamModal';
@@ -62,12 +68,12 @@ function upsertGenomeRecord(records: GenomeRecord[], genome: GenomeRecord): Geno
 }
 
 function getStorefrontRating(genome: GenomeRecord): number | null {
-    const feedback = parseFeedback(genome.feedbackData);
+    const feedback = parseAgentVerdict(genome.feedbackData);
     if (typeof feedback?.avgScore === 'number') {
         return feedback.avgScore;
     }
 
-    const spec = parseSpec(genome.spec);
+    const spec = parseAgentImage(genome.spec);
     if (typeof spec?.resume?.performanceRating === 'number') {
         return spec.resume.performanceRating;
     }
@@ -127,8 +133,10 @@ function GenomeCard({
     onJoinTeam?: () => void;
 }) {
     const { theme } = useUnistyles();
-    const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
-    const feedback = React.useMemo(() => parseFeedback(genome.feedbackData), [genome.feedbackData]);
+    const spec = React.useMemo(() => parseAgentImage(genome.spec), [genome.spec]);
+    const imageKind = getGenomeImageKind(genome);
+    const imageLabel = getGenomeImageLabel(imageKind);
+    const feedback = React.useMemo(() => parseAgentVerdict(genome.feedbackData), [genome.feedbackData]);
     const storefrontRating = getStorefrontRating(genome);
     const crowdReviewCount = feedback?.evaluationCount ?? spec?.resume?.totalSessions ?? null;
     const tags = parseTags(genome.tags);
@@ -174,6 +182,11 @@ function GenomeCard({
                             <Text style={{ fontSize: 10, fontWeight: '700', color: '#22c55e' }}>{t('agents.verified')}</Text>
                         </View>
                     ) : null}
+                    <View style={[stylesheet.categoryBadge, { backgroundColor: '#007AFF18' }]}>
+                        <Text style={[stylesheet.categoryText, { color: '#007AFF' }]}>
+                            {imageLabel}
+                        </Text>
+                    </View>
                 </View>
                 <View style={stylesheet.headerRight}>
                     {storefrontRating != null ? (
@@ -277,11 +290,12 @@ function CorpsCard({
     onRunStandalone?: () => void;
 }) {
     const { theme } = useUnistyles();
-    const corps = parseCorpsSpec(genome.spec);
+    const corps = parseLegionImage(genome.spec);
+    const imageLabel = getGenomeImageLabel(getGenomeImageKind(genome));
     const memberCount = corps?.members?.length ?? 0;
     const status = getGenomeStatusColor(genome.status, theme.colors.textSecondary);
     const memberPreview = corps?.members?.slice(0, 3) ?? [];
-    const whatItDoes = genome.description || t('agents.corpsDefaultDescription', { count: memberCount });
+    const whatItDoes = genome.description || `Ready-to-deploy ${imageLabel} with ${memberCount} AgentImage members.`;
 
     return (
         <Pressable onPress={onPress} style={[stylesheet.card, stylesheet.corpsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
@@ -292,7 +306,7 @@ function CorpsCard({
                     </Text>
                     <View style={[stylesheet.categoryBadge, { backgroundColor: '#FF950018' }]}>
                         <Text style={[stylesheet.categoryText, { color: '#FF9500' }]}>
-                            {t('agents.corpsTab')}
+                            {imageLabel}
                         </Text>
                     </View>
                     <View style={[stylesheet.categoryBadge, { backgroundColor: status.background }]}>
@@ -449,7 +463,7 @@ export default React.memo(function AgentsScreen() {
         const publicPromise = marketplaceSource === 'market' || (!actorId && marketplaceSource === 'favorites')
             ? searchGenomes({
                 q: debouncedQuery || undefined,
-                category: isCorps ? 'corps' : (category === 'all' ? undefined : category),
+                category: isCorps ? undefined : (category === 'all' ? undefined : category),
                 limit: 50,
             }).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }))
             : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
@@ -559,7 +573,7 @@ export default React.memo(function AgentsScreen() {
         }
     }, [actorId, genomeById, serverFavoriteGenomes, sourceFilter]);
 
-    const isCorpsTab = tab === 'corps';
+    const isLegionTab = tab === 'corps';
     const marketplaceSource = sourceFilter === 'deployed' ? 'market' : sourceFilter;
     const selectedGenomes = React.useMemo(() => selectMarketplaceGenomes({
         sourceTab: marketplaceSource,
@@ -582,7 +596,7 @@ export default React.memo(function AgentsScreen() {
     );
     const showDeployedList = tab === 'agents' && sourceFilter === 'deployed';
     const sourceOptions = React.useMemo(() => (
-        isCorpsTab
+        isLegionTab
             ? ([
                 { key: 'market', label: t('agents.market'), icon: 'globe-outline' },
                 { key: 'favorites', label: t('favorites.title'), icon: 'star-outline' },
@@ -594,17 +608,20 @@ export default React.memo(function AgentsScreen() {
                 { key: 'mine', label: t('agents.mine'), icon: 'person-outline' },
                 { key: 'deployed', label: t('agents.myAgentsTab'), icon: 'flash-outline' },
             ] as const)
-    ), [isCorpsTab]);
+    ), [isLegionTab]);
     const headerTitle = showDeployedList
         ? t('agents.myAgents')
-        : isCorpsTab
-            ? t('agents.corpsTab')
-            : t('agents.marketplace');
+        : isLegionTab
+            ? getGenomeImagePluralLabel('legion')
+            : getGenomeImagePluralLabel('agent');
     const headerSubtitle = showDeployedList
         ? t('agents.myAgentsEmptyHint')
-        : isCorpsTab
-            ? t('agents.corpsSubtitle')
-            : t('agents.marketplaceSubtitle');
+        : isLegionTab
+            ? 'Multi-agent images: AgentImage member refs plus LegionLayer coordination.'
+            : 'Single-agent images with full package metadata and evolution history.';
+    const emptyState = isLegionTab
+        ? getGenomeImageEmptyState('legion')
+        : getGenomeImageEmptyState('agent');
 
     const mainPanel = (
         <View style={[stylesheet.root, { backgroundColor: theme.colors.groupped.background }]}>
@@ -649,6 +666,7 @@ export default React.memo(function AgentsScreen() {
                 <View style={[stylesheet.tabBar, { backgroundColor: theme.colors.surfaceHigh }]}>
                     {(['agents', 'corps'] as PageTab[]).map(tabKey => {
                         const active = tab === tabKey;
+                        const kind = tabKey === 'agents' ? 'agent' : 'legion';
                         return (
                             <Pressable
                                 key={tabKey}
@@ -659,13 +677,13 @@ export default React.memo(function AgentsScreen() {
                                 ]}
                             >
                                 <Ionicons
-                                    name={tabKey === 'agents' ? 'cube-outline' : 'people-outline'}
+                                    name={tabKey === 'agents' ? 'cube-outline' : 'layers-outline'}
                                     size={14}
                                     color={active ? theme.colors.text : theme.colors.textSecondary}
                                     style={{ marginRight: 5 }}
                                 />
                                 <Text style={[stylesheet.tabText, { color: active ? theme.colors.text : theme.colors.textSecondary, fontWeight: active ? '600' : '400' }]}>
-                                    {tabKey === 'agents' ? t('agents.agentsTab') : t('agents.corpsTab')}
+                                    {getGenomeImageLabel(kind)}
                                 </Text>
                             </Pressable>
                         );
@@ -726,7 +744,7 @@ export default React.memo(function AgentsScreen() {
                 </View>
 
                 {/* Category filters — only for agents tab */}
-                {!isCorpsTab && !showDeployedList ? (
+                {!isLegionTab && !showDeployedList ? (
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -754,7 +772,7 @@ export default React.memo(function AgentsScreen() {
                         })}
                     </ScrollView>
                 ) : <View style={{ height: 12 }} />}
-                {!isCorpsTab && !showDeployedList && (
+                {!isLegionTab && !showDeployedList && (
                     <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 8 }}>
                         <Pressable
                             onPress={() => setSortMode((prev) => prev === 'default' ? 'rank' : 'default')}
@@ -826,16 +844,16 @@ export default React.memo(function AgentsScreen() {
                     ) : displayedGenomes.length === 0 && loaded ? (
                         <View style={stylesheet.center}>
                             <Ionicons
-                                name={isCorpsTab ? 'people-outline' : 'cube-outline'}
+                                name={isLegionTab ? 'layers-outline' : 'cube-outline'}
                                 size={48}
                                 color={theme.colors.textSecondary}
                                 style={{ marginBottom: 12 }}
                             />
                             <Text style={[stylesheet.emptyTitle, { color: theme.colors.text }]}>
-                                {isCorpsTab ? t('agents.noCorps') : t('agents.noResults')}
+                                {emptyState.title}
                             </Text>
                             <Text style={[stylesheet.emptyHint, { color: theme.colors.textSecondary }]}>
-                                {isCorpsTab ? t('agents.noCorpsHint') : t('agents.noResultsHint')}
+                                {emptyState.hint}
                             </Text>
                         </View>
                     ) : (
@@ -867,7 +885,7 @@ export default React.memo(function AgentsScreen() {
                                 </View>
                             ) : null}
                             <View style={stylesheet.cardGrid}>
-                                {isCorpsTab
+                                {isLegionTab
                                     ? displayedGenomes.map(g => (
                                         <CorpsCardMemo
                                             key={g.id}
@@ -902,7 +920,7 @@ export default React.memo(function AgentsScreen() {
         <>
             <SidebarView mainPanel={mainPanel} />
             {runModal && activeGenome ? (
-                activeGenome.category === 'corps' ? (
+                getGenomeImageKind(activeGenome) === 'legion' ? (
                     <DeployCorpsModal
                         genome={activeGenome}
                         onClose={() => { setRunModal(false); setActiveGenome(null); }}

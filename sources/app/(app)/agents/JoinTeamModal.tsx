@@ -15,7 +15,7 @@ import { sync } from '@/sync/sync';
 import { useArtifacts, useAllMachines, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getRecentPathForMachine, getKnownPathsForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
-import { parseSpec } from '@/utils/genomeHub';
+import { parseAgentImage } from '@/utils/genomeHub';
 import type { GenomeRecord } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
 
@@ -56,7 +56,7 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
     );
     const machines = allMachines;
 
-    const spec = React.useMemo(() => parseSpec(genome.spec), [genome.spec]);
+    const spec = React.useMemo(() => parseAgentImage(genome.spec), [genome.spec]);
     const runtimeType = (spec?.runtimeType === 'codex' ? 'codex' : 'claude') as 'claude' | 'codex';
     const roleId = spec?.teamRole ?? spec?.baseRoleId ?? 'member';
     const roleTranslations = getTranslationSection('teamRoles') as Record<string, { title?: string; summary?: string }>;

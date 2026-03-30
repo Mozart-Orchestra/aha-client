@@ -34,11 +34,11 @@ import { type KanbanBoard } from '@/sync/kanbanTypes';
 import { CodeView } from '@/components/session/CodeView';
 import {
     fetchGenomeById,
-    parseSpec,
-    parseFeedback,
+    parseAgentImage,
+    parseAgentVerdict,
     parseTags,
+    type AgentImage,
     type GenomeRecord,
-    type GenomeSpec,
 } from '@/utils/genomeHub';
 import {
     getGenomeVersionIdentity,
@@ -120,7 +120,7 @@ function useMemberInfo(sessionId: string): MemberInfo | null {
 /** Fetches genome data; returns {genome, spec, loading}. */
 function useGenomeData(specId: string | null | undefined): {
     genome: GenomeRecord | null;
-    spec: GenomeSpec | null;
+    spec: AgentImage | null;
     loading: boolean;
 } {
     const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
@@ -152,7 +152,7 @@ function useGenomeData(specId: string | null | undefined): {
     }, [specId]);
 
     const spec = React.useMemo(
-        () => (genome?.spec ? parseSpec(genome.spec) : null),
+        () => (genome?.spec ? parseAgentImage(genome.spec) : null),
         [genome?.spec],
     );
 
@@ -301,7 +301,7 @@ function GenomeDetails({
     onViewMarketplace,
 }: {
     genome: GenomeRecord;
-    spec: GenomeSpec | null;
+    spec: AgentImage | null;
     onViewMarketplace: () => void;
 }) {
     const { theme } = useUnistyles();
@@ -310,7 +310,7 @@ function GenomeDetails({
     const versionIdentity = getGenomeVersionIdentity(genome, spec);
     const version = versionIdentity.displayVersion ?? genome.version ?? 1;
     const description = spec?.description ?? genome.description;
-    const feedback = parseFeedback(genome.feedbackData ?? null);
+    const feedback = parseAgentVerdict(genome.feedbackData ?? null);
     const tags = parseTags(genome.tags ?? null);
     const responsibilities = spec?.responsibilities ?? [];
     const learnings = spec?.memory?.learnings ?? [];
