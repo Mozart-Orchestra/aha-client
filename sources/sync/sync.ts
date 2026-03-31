@@ -1887,8 +1887,8 @@ class Sync {
         if (Object.keys(this.pendingSettings).length > 0) {
 
             while (true) {
-                let version = storage.getState().settingsVersion;
-                let settings = applySettings(storage.getState().settings, this.pendingSettings);
+                const version = storage.getState().settingsVersion;
+                const settings = applySettings(storage.getState().settings, this.pendingSettings);
                 const response = await fetch(`${API_ENDPOINT}/v1/account/settings`, {
                     method: 'POST',
                     body: JSON.stringify({
@@ -1906,9 +1906,13 @@ class Sync {
                     currentVersion: number,
                     currentSettings: string | null
                 } | {
-                    success: true
+                    success: true,
+                    version: number
                 };
                 if (data.success) {
+                    storage.getState().applySettings(settings, data.version);
+                    this.pendingSettings = {};
+                    savePendingSettings({});
                     break;
                 }
                 if (data.error === 'version-mismatch') {
@@ -1921,9 +1925,6 @@ class Sync {
 
                     // Apply settings to storage
                     storage.getState().applySettings(parsedSettings, data.currentVersion);
-
-                    // Clear pending
-                    savePendingSettings({});
 
                     // Sync PostHog opt-out state with settings
                     if (tracking) {
@@ -1940,7 +1941,6 @@ class Sync {
 
                 // Wait 1 second
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                break;
             }
         }
 
@@ -3007,6 +3007,25 @@ class Sync {
             const accountUpdate = updateData.body;
             const currentProfile = storage.getState().profile;
 
+            if (accountUpdate.settings) {
+                let parsedSettings: Settings;
+                if (accountUpdate.settings.value) {
+                    parsedSettings = settingsParse(await this.encryption.decryptRaw(accountUpdate.settings.value));
+                } else {
+                    parsedSettings = { ...settingsDefaults };
+                }
+
+                storage.getState().applySettings(parsedSettings, accountUpdate.settings.version);
+
+                if (tracking) {
+                    if (parsedSettings.analyticsOptOut) {
+                        tracking.optOut();
+                    } else {
+                        tracking.optIn();
+                    }
+                }
+            }
+
             // Build updated profile with new data
             const updatedProfile: Profile = {
                 ...currentProfile,
@@ -3631,6 +3650,8 @@ class Sync {
             parentSessionId?: string;
             executionPlane?: string;
             runtimeType?: string;
+            machineId?: string | null;
+            workspacePath?: string | null;
             authorities?: string[];
             teamOverlay?: Record<string, unknown>;
         }
@@ -3662,6 +3683,18 @@ class Sync {
         }
         const { createTeam } = await import('./apiTeamManagement');
         return await createTeam(this.credentials, params);
+    }
+
+    /**
+     * Create a manual corps/team plan through the explicit happy-server
+     * `POST /v1/corps` contract.
+     */
+    public async createCorps(params: import('./apiTeamManagement').CreateCorpsParams): Promise<import('./apiTeamManagement').CreateCorpsResponse> {
+        if (!this.credentials) {
+            throw new Error('Not authenticated');
+        }
+        const { createCorps } = await import('./apiTeamManagement');
+        return await createCorps(this.credentials, params);
     }
 
     /**

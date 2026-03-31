@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthCredentials } from '@/auth/tokenStorage';
 import { NonRetryableError } from '@/utils/time';
 
-import { deleteTeam } from './apiTeamManagement';
+import { createCorps, deleteTeam } from './apiTeamManagement';
 
 vi.mock('./serverConfig', () => ({
     getServerUrl: () => 'https://api.test.com',
@@ -48,5 +48,61 @@ describe('apiTeamManagement', () => {
         await expect(request).rejects.toBeInstanceOf(NonRetryableError);
         await expect(request).rejects.toThrow('Team not found');
         expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('serializes corps seat configs without null machine/path fields', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 201,
+            json: vi.fn().mockResolvedValue({
+                success: true,
+                corps: {
+                    id: 'team-corps',
+                    name: 'Launch Squad',
+                    seatCount: 1,
+                    plannedMemberCount: 1,
+                },
+                team: {
+                    id: 'team-corps',
+                    name: 'Launch Squad',
+                    memberCount: 0,
+                    taskCount: 0,
+                    createdAt: 1,
+                    updatedAt: 2,
+                },
+                plannedMembers: [],
+            }),
+        });
+
+        await createCorps(credentials, {
+            name: 'Launch Squad',
+            machineId: null,
+            workspacePath: null,
+            seats: [
+                {
+                    genomeId: 'genome-builder',
+                    roleId: 'builder',
+                    runtimeType: 'codex',
+                    machineId: null,
+                    workspacePath: null,
+                    quantity: 1,
+                },
+            ],
+        });
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const [, init] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+        const parsedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        expect(parsedBody).toEqual({
+            name: 'Launch Squad',
+            seats: [
+                {
+                    genomeId: 'genome-builder',
+                    roleId: 'builder',
+                    runtimeType: 'codex',
+                    quantity: 1,
+                },
+            ],
+        });
     });
 });

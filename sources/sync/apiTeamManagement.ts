@@ -17,6 +17,8 @@ export interface TeamMemberResponse {
         joinedAt: number;
         authorities?: string[];
         teamOverlay?: Record<string, unknown>;
+        machineId?: string;
+        workspacePath?: string;
     };
 }
 
@@ -90,6 +92,56 @@ export interface TeamSummary {
     updatedAt: number;
 }
 
+export interface CorpsSeatRequest {
+    id?: string;
+    genomeId: string;
+    genomeName?: string | null;
+    genomeNamespace?: string | null;
+    genomeVersion?: number | null;
+    genomeDisplayName?: string | null;
+    roleId: string;
+    displayName?: string;
+    runtimeType: 'claude' | 'codex';
+    machineId?: string | null;
+    workspacePath?: string | null;
+    quantity: number;
+    customPrompt?: string;
+}
+
+export interface CreateCorpsParams {
+    id?: string;
+    name: string;
+    description?: string;
+    target?: string;
+    machineId?: string | null;
+    workspacePath?: string | null;
+    seats?: CorpsSeatRequest[];
+    roles?: CorpsSeatRequest[];
+}
+
+export interface CreateCorpsResponse {
+    success: true;
+    corps: {
+        id: string;
+        name: string;
+        seatCount: number;
+        plannedMemberCount: number;
+    };
+    team: TeamSummary;
+    plannedMembers: Array<{
+        memberId: string;
+        sessionTag: string;
+        roleId: string;
+        displayName: string;
+        genomeId: string;
+        candidateId: string;
+        runtimeType: 'claude' | 'codex';
+        machineId: string;
+        workspacePath: string;
+        customPrompt?: string;
+    }>;
+}
+
 async function throwTeamManagementHttpError(response: Response, fallbackMessage: string): Promise<never> {
     let serverMessage: string | null = null;
 
@@ -112,6 +164,24 @@ async function throwTeamManagementHttpError(response: Response, fallbackMessage:
     }
 
     throw new Error(message);
+}
+
+function serializeCorpsSeat(seat: CorpsSeatRequest): Record<string, unknown> {
+    return {
+        ...(seat.id !== undefined ? { id: seat.id } : {}),
+        genomeId: seat.genomeId,
+        ...(seat.genomeName !== undefined && seat.genomeName !== null ? { genomeName: seat.genomeName } : {}),
+        ...(seat.genomeNamespace !== undefined && seat.genomeNamespace !== null ? { genomeNamespace: seat.genomeNamespace } : {}),
+        ...(seat.genomeVersion !== undefined && seat.genomeVersion !== null ? { genomeVersion: seat.genomeVersion } : {}),
+        ...(seat.genomeDisplayName !== undefined && seat.genomeDisplayName !== null ? { genomeDisplayName: seat.genomeDisplayName } : {}),
+        roleId: seat.roleId,
+        ...(seat.displayName !== undefined ? { displayName: seat.displayName } : {}),
+        runtimeType: seat.runtimeType,
+        ...(seat.machineId !== undefined && seat.machineId !== null ? { machineId: seat.machineId } : {}),
+        ...(seat.workspacePath !== undefined && seat.workspacePath !== null ? { workspacePath: seat.workspacePath } : {}),
+        quantity: seat.quantity,
+        ...(seat.customPrompt !== undefined ? { customPrompt: seat.customPrompt } : {}),
+    };
 }
 
 export async function fetchWorkspaceOverview(
@@ -169,6 +239,45 @@ export async function createTeam(
 }
 
 /**
+ * Create a manual corps/team plan on the server so the frontend can use the
+ * explicit `POST /v1/corps` contract instead of assembling the board locally.
+ */
+export async function createCorps(
+    credentials: AuthCredentials,
+    params: CreateCorpsParams,
+): Promise<CreateCorpsResponse> {
+    const API_ENDPOINT = getServerUrl();
+    const body: Record<string, unknown> = {
+        ...(params.id !== undefined ? { id: params.id } : {}),
+        name: params.name,
+        ...(params.description !== undefined ? { description: params.description } : {}),
+        ...(params.target !== undefined ? { target: params.target } : {}),
+        ...(params.machineId !== undefined && params.machineId !== null ? { machineId: params.machineId } : {}),
+        ...(params.workspacePath !== undefined && params.workspacePath !== null ? { workspacePath: params.workspacePath } : {}),
+        ...(params.seats !== undefined ? { seats: params.seats.map(serializeCorpsSeat) } : {}),
+        ...(params.roles !== undefined ? { roles: params.roles.map(serializeCorpsSeat) } : {}),
+    };
+
+    return await backoff(async () => {
+        const response = await fetch(`${API_ENDPOINT}/v1/corps`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${credentials.token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            await throwTeamManagementHttpError(response, `Failed to create corps: ${response.status}`);
+        }
+
+        return await response.json() as CreateCorpsResponse;
+    });
+}
+
+/**
  * Add a member to a team
  */
 export async function addTeamMember(
@@ -186,6 +295,8 @@ export async function addTeamMember(
         parentSessionId?: string;
         executionPlane?: string;
         runtimeType?: string;
+        machineId?: string | null;
+        workspacePath?: string | null;
         authorities?: string[];
         teamOverlay?: Record<string, unknown>;
     }
@@ -212,6 +323,8 @@ export async function addTeamMember(
                 ...(opts?.parentSessionId !== undefined ? { parentSessionId: opts.parentSessionId } : {}),
                 ...(opts?.executionPlane !== undefined ? { executionPlane: opts.executionPlane } : {}),
                 ...(opts?.runtimeType !== undefined ? { runtimeType: opts.runtimeType } : {}),
+                ...(opts?.machineId !== undefined && opts.machineId !== null ? { machineId: opts.machineId } : {}),
+                ...(opts?.workspacePath !== undefined && opts.workspacePath !== null ? { workspacePath: opts.workspacePath } : {}),
                 ...(opts?.authorities !== undefined ? { authorities: opts.authorities } : {}),
                 ...(opts?.teamOverlay !== undefined ? { teamOverlay: opts.teamOverlay } : {}),
             })

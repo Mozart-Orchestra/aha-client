@@ -16,23 +16,14 @@ import { sync } from '@/sync/sync';
 import { useAllMachines, useSetting } from '@/sync/storage';
 import { t } from '@/text';
 import type { ManualCorpsDraft, ManualCorpsSeatConfig } from '@/sync/settings';
-import {
-    buildCorpsSeedBoard,
-    getDefaultCorpsTeamName,
-} from '@/utils/corpsDeployment';
 import { searchGenomes, type GenomeRecord } from '@/utils/genomeHub';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { randomUUID } from '@/utils/uuid';
-import type { KanbanTeamMember } from '@/sync/kanbanTypes';
 
 interface Props {
     onClose: () => void;
     onSuccess: (teamId: string) => void;
-}
-
-function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
-    return `team:${teamId}:member:${memberId}`;
 }
 
 function buildEmptySeat(): ManualCorpsSeatConfig {
@@ -370,10 +361,12 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
     }, []);
 
     const totalMemberCount = draft.seats.reduce((sum, s) => sum + s.quantity, 0);
+    const hasSelectedGenomeForEverySeat = draft.seats.every((seat) => !!seat.genomeId);
 
     const canStart = !!selectedMachineId
         && !!cwd.trim()
         && draft.seats.length > 0
+        && hasSelectedGenomeForEverySeat
         && !!selectedMachine
         && isMachineOnline(selectedMachine);
 
@@ -382,95 +375,39 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
 
         setDeploying(true);
         try {
+            const missingGenomeSeat = draft.seats.find((seat) => !seat.genomeId);
+            if (missingGenomeSeat) {
+                throw new Error(`Please select a marketplace genome for ${missingGenomeSeat.displayName || missingGenomeSeat.roleId}.`);
+            }
+
             const teamName = draft.title.trim() || 'My Corps';
-            const teamId = randomUUID();
-            const spawnedMembers: KanbanTeamMember[] = [];
-            const failures: string[] = [];
-
-            for (const seat of draft.seats) {
-                for (let i = 0; i < seat.quantity; i++) {
-                    const memberId = randomUUID();
-                    const sessionTag = buildTeamMemberSessionTag(teamId, memberId);
-                    const memberName = seat.quantity > 1
-                        ? `${seat.displayName || seat.roleId} ${i + 1}`
-                        : (seat.displayName || seat.roleId);
-
-                    try {
-                        const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
-                            directory: cwd.trim(),
-                            agent: seat.runtimeType,
-                            sessionTag,
-                            teamId,
-                            role: seat.roleId,
-                            sessionName: memberName,
-                            sessionPath: cwd.trim(),
-                            ...(seat.genomeId ? { specId: seat.genomeId } : {}),
-                            env: {
-                                AHA_TEAM_MEMBER_ID: memberId,
-                            },
-                        });
-
-                        if (!sessionId) {
-                            failures.push(`${memberName}: spawn returned no session ID`);
-                            continue;
-                        }
-
-                        spawnedMembers.push({
-                            memberId,
-                            sessionId,
-                            sessionTag,
-                            roleId: seat.roleId,
-                            displayName: memberName,
-                            ...(seat.genomeId ? { specId: seat.genomeId } : {}),
-                            runtimeType: seat.runtimeType,
-                            lifecycle: { spawnRequestedAt: Date.now() },
-                        });
-                    } catch (error) {
-                        failures.push(`${memberName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                    }
-                }
-            }
-
-            if (spawnedMembers.length === 0) {
-                throw new Error(failures[0] ?? 'Failed to start corps.');
-            }
-
-            const board = buildCorpsSeedBoard({
+            const result = await sync.createCorps({
                 name: teamName,
-                corps: {
-                    namespace: '@manual',
-                    name: teamName,
-                    version: 1,
-                    description: draft.target.trim() || '',
-                    members: draft.seats.map(s => ({
-                        genomeRef: s.genomeName ? `${s.genomeNamespace ?? '@public'}/${s.genomeName}` : undefined,
-                        role: s.roleId,
-                        displayName: s.displayName || s.roleId,
-                        count: s.quantity,
-                    })),
-                },
-                members: spawnedMembers,
+                ...(draft.target.trim() ? { description: draft.target.trim(), target: draft.target.trim() } : {}),
+                machineId: selectedMachineId,
+                workspacePath: cwd.trim(),
+                seats: draft.seats.map((seat) => ({
+                    id: seat.id,
+                    genomeId: seat.genomeId!,
+                    genomeName: seat.genomeName,
+                    genomeNamespace: seat.genomeNamespace,
+                    genomeVersion: seat.genomeVersion,
+                    genomeDisplayName: seat.genomeDisplayName,
+                    roleId: seat.roleId,
+                    displayName: seat.displayName || seat.roleId,
+                    runtimeType: seat.runtimeType,
+                    machineId: seat.machineId ?? selectedMachineId,
+                    workspacePath: seat.workspacePath.trim() || cwd.trim(),
+                    quantity: seat.quantity,
+                    customPrompt: seat.customPrompt.trim() || undefined,
+                })),
             });
-
-            await sync.registerTeam({
-                id: teamId,
-                name: teamName,
-                ...(draft.target.trim() ? { description: draft.target.trim() } : {}),
-                board,
-            });
-            await sync.fetchArtifactWithBody(teamId);
+            await sync.fetchArtifactWithBody(result.team.id);
 
             const updatedPaths = updateRecentMachinePaths(recentPaths, selectedMachineId, cwd.trim());
             sync.applySettings({ recentMachinePaths: updatedPaths });
 
-            if (failures.length > 0) {
-                await AppModal.alert(
-                    t('agents.deployCorps'),
-                    `${teamName} created with ${spawnedMembers.length}/${totalMemberCount} agents.\n\n${failures.join('\n')}`,
-                );
-            }
-
-            onSuccess(teamId);
+            onSuccess(result.team.id);
         } catch (error) {
             await AppModal.alert(
                 t('common.error'),
@@ -479,7 +416,7 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
         } finally {
             setDeploying(false);
         }
-    }, [canStart, cwd, deploying, draft, onSuccess, recentPaths, selectedMachineId, totalMemberCount]);
+    }, [canStart, cwd, deploying, draft, onSuccess, recentPaths, selectedMachineId]);
 
     return (
         <Modal
@@ -514,6 +451,19 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
                             placeholder="My Corps"
                             placeholderTextColor={theme.colors.input.placeholder}
                             autoCapitalize="words"
+                            autoCorrect={false}
+                        />
+
+                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+                            {t('newTeam.teamGoalLabel')}
+                        </Text>
+                        <TextInput
+                            style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
+                            value={draft.target}
+                            onChangeText={(v) => setDraft(d => ({ ...d, target: v }))}
+                            placeholder="e.g. Build a new landing page"
+                            placeholderTextColor={theme.colors.input.placeholder}
+                            autoCapitalize="sentences"
                             autoCorrect={false}
                         />
 
