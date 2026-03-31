@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getRandomBytesAsync } from 'expo-crypto';
 import {
+    Image as RNImage,
     Platform,
     Pressable,
     ScrollView,
@@ -26,15 +27,13 @@ import { supabase } from '@/auth/supabase';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
-import { PreviewSessionCard } from '@/components/session/PreviewSessionCard';
 import { encodeBase64 } from '@/encryption/base64';
 import { Modal } from '@/modal';
-import { useAllSessions } from '@/sync/storage';
-import { isSessionActive } from '@/utils/sessionUtils';
 import { t } from '@/text';
 import { trackAccountCreated, trackAccountRestored } from '@/track';
 
 const DESKTOP_BREAKPOINT = 1180;
+const LANDING_HERO_ARTWORK_ASPECT_RATIO = 2814 / 1536;
 
 const styles = StyleSheet.create((theme) => ({
     shellContent: {
@@ -248,19 +247,13 @@ const styles = StyleSheet.create((theme) => ({
     },
     landingPreviewPanel: {
         width: '100%',
-        maxWidth: 420,
-        minHeight: 560,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: theme.colors.divider,
-        backgroundColor: theme.colors.surface,
-        paddingHorizontal: 24,
-        paddingVertical: 28,
-        shadowColor: theme.colors.shadow.color,
-        shadowOffset: { width: 0, height: 18 },
-        shadowOpacity: theme.colors.shadow.opacity,
-        shadowRadius: 36,
-        elevation: 8,
+        alignSelf: 'center',
+        flexShrink: 1,
+    },
+    landingPreviewArtwork: {
+        width: '100%',
+        aspectRatio: LANDING_HERO_ARTWORK_ASPECT_RATIO,
+        alignSelf: 'center',
     },
     landingPreviewHeader: {
         flexDirection: 'row',
@@ -422,16 +415,14 @@ function NotAuthenticated() {
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
     const { theme } = useUnistyles();
-    const previewSessions = useAllSessions();
     const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
-    const liveSessionCount = React.useMemo(() => (
-        previewSessions.filter((session) => (
-            isSessionActive(session) || session.presence === 'online' || session.thinking
-        )).length
-    ), [previewSessions]);
-    const previewCountLabel = React.useMemo(() => {
-        return t('landing.activeCount', { count: liveSessionCount });
-    }, [liveSessionCount]);
+    const previewPanelMaxWidth = React.useMemo(() => {
+        if (isDesktop) {
+            return Math.min(Math.max(width * 0.44, 420), 640);
+        }
+
+        return Math.min(width - 48, 520);
+    }, [isDesktop, width]);
 
     const handleCreateAccount = React.useCallback(async () => {
         try {
@@ -594,32 +585,12 @@ function NotAuthenticated() {
     }, [completeSupabaseLogin]);
 
     const previewPanel = (
-        <View style={styles.landingPreviewPanel}>
-            <View style={styles.landingPreviewHeader}>
-                <Text style={styles.landingPreviewTitle}>{t('landing.previewTitle')}</Text>
-                <View style={styles.landingPreviewBadge}>
-                    <Text style={styles.landingPreviewBadgeText}>{t('landing.previewAgentCount', { count: 4 })}</Text>
-                </View>
-            </View>
-            {[
-                { name: t('landing.teamAgent1'), task: t('landing.teamAgent1Task'), machine: t('landing.teamAgent1Machine'), color: '#FFB547', bg: '#FFFBF5', border: '#FDB75A', status: t('landing.primarySessionMeta') },
-                { name: t('landing.teamAgent2'), task: t('landing.teamAgent2Task'), machine: t('landing.teamAgent2Machine'), color: '#4A9EFF', bg: '#F5F9FF', border: '#7BB8FF', status: t('landing.secondarySessionMeta') },
-                { name: t('landing.teamAgent3'), task: t('landing.teamAgent3Task'), machine: t('landing.teamAgent3Machine'), color: '#2BC866', bg: '#F2FBF5', border: '#6DD99A', status: t('landing.agentStatusTesting') },
-                { name: t('landing.teamAgent4'), task: t('landing.teamAgent4Task'), machine: t('landing.teamAgent4Machine'), color: '#A78BFA', bg: '#F8F5FF', border: '#C4B5FD', status: t('landing.agentStatusDeploying') },
-            ].map((agent, i) => (
-                <View key={i} style={{ marginTop: i === 0 ? 0 : 8, borderRadius: 14, borderWidth: 1, borderColor: agent.border, backgroundColor: agent.bg, padding: 14 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: agent.color }} />
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.text, flex: 1 }}>{agent.name}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="hardware-chip-outline" size={11} color={theme.colors.textSecondary} />
-                            <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{agent.machine}</Text>
-                        </View>
-                    </View>
-                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>{agent.task}</Text>
-                    <Text style={{ fontSize: 10, color: agent.color, marginTop: 4, fontWeight: '600' }}>{agent.status}</Text>
-                </View>
-            ))}
+        <View style={[styles.landingPreviewPanel, { maxWidth: previewPanelMaxWidth }]}>
+            <RNImage
+                source={require('@/assets/images/landing/aha-legion-hero.webp')}
+                resizeMode="contain"
+                style={styles.landingPreviewArtwork}
+            />
         </View>
     );
 
