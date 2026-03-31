@@ -56,6 +56,7 @@ import {
 import { DeployCorpsModal } from './DeployCorpsModal';
 import { RunStandaloneModal } from './RunStandaloneModal';
 import { JoinTeamModal } from './JoinTeamModal';
+import { ManualCorpsBuilderModal } from './ManualCorpsBuilderModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -408,6 +409,7 @@ export default React.memo(function AgentsScreen() {
     const [activeGenome, setActiveGenome] = React.useState<GenomeRecord | null>(null);
     const [runModal, setRunModal] = React.useState(false);
     const [joinModal, setJoinModal] = React.useState(false);
+    const [showManualCorpsModal, setShowManualCorpsModal] = React.useState(false);
 
     const loadMyAgents = React.useCallback(async () => {
         const credentials = sync.getCredentials();
@@ -641,15 +643,26 @@ export default React.memo(function AgentsScreen() {
                             {headerSubtitle}
                         </Text>
                     </View>
-                    <Pressable
-                        onPress={() => router.push('/agents/new' as any)}
-                        style={[stylesheet.headerCreateButton, { backgroundColor: theme.colors.button.primary.background }]}
-                    >
-                        <Ionicons name="add" size={14} color={theme.colors.button.primary.tint} />
-                        <Text style={[stylesheet.headerCreateButtonText, { color: theme.colors.button.primary.tint }]}>
-                            {t('agents.createAgent')}
-                        </Text>
-                    </Pressable>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable
+                            onPress={() => router.push('/agents/new' as any)}
+                            style={[stylesheet.headerCreateButton, { backgroundColor: theme.colors.button.primary.background }]}
+                        >
+                            <Ionicons name="add" size={14} color={theme.colors.button.primary.tint} />
+                            <Text style={[stylesheet.headerCreateButtonText, { color: theme.colors.button.primary.tint }]}>
+                                {t('agents.createAgent')}
+                            </Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={() => setShowManualCorpsModal(true)}
+                            style={[stylesheet.headerCreateButton, { backgroundColor: theme.colors.button.primary.background }]}
+                        >
+                            <Ionicons name="add" size={14} color={theme.colors.button.primary.tint} />
+                            <Text style={[stylesheet.headerCreateButtonText, { color: theme.colors.button.primary.tint }]}>
+                                {t('agents.newCorps')}
+                            </Text>
+                        </Pressable>
+                    </View>
                 </View>
 
                 {launchHint === 'great-agent' ? (
@@ -953,6 +966,15 @@ export default React.memo(function AgentsScreen() {
                 <JoinTeamModal
                     genome={activeGenome}
                     onClose={() => { setJoinModal(false); setActiveGenome(null); }}
+                />
+            ) : null}
+            {showManualCorpsModal ? (
+                <ManualCorpsBuilderModal
+                    onClose={() => setShowManualCorpsModal(false)}
+                    onSuccess={(teamId) => {
+                        setShowManualCorpsModal(false);
+                        router.push(`/teams/${teamId}` as any);
+                    }}
                 />
             ) : null}
         </>

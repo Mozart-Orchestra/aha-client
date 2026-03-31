@@ -24,6 +24,7 @@ import { createGenome, publishGenome } from '@/sync/apiEvolution';
 import { useAllMachines, useSessionMessages, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
+import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
 import {
     buildManualAgentImage,
     buildPrivateAgentBuilderImage,
@@ -492,9 +493,10 @@ export default React.memo(function NewAgentScreen() {
     const [manualPublishNow, setManualPublishNow] = React.useState(false);
     const [chatBrief, setChatBrief] = React.useState('');
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
-        () => machines.find(isMachineOnline)?.id ?? null,
+        () => getPreferredMachineId(machines, recentMachinePaths),
     );
     const [cwd, setCwd] = React.useState('');
+    const [cwdEdited, setCwdEdited] = React.useState(false);
     const [showPathDropdown, setShowPathDropdown] = React.useState(false);
     const [builderSessionId, setBuilderSessionId] = React.useState<string | null>(null);
     const processedBuilderMessagesRef = React.useRef<Set<string>>(new Set());
@@ -504,14 +506,33 @@ export default React.memo(function NewAgentScreen() {
     useEscapeAction(true, () => goBackOrReturn(router, '/agents'));
 
     React.useEffect(() => {
-        setCwd(getRecentPathForMachine(selectedMachineId, recentMachinePaths));
-    }, [recentMachinePaths, selectedMachineId]);
+        const preferredMachineId = getPreferredMachineId(machines, recentMachinePaths);
+        if (machines.length === 0) {
+            if (selectedMachineId !== null) {
+                setSelectedMachineId(null);
+                setCwdEdited(false);
+                setShowPathDropdown(false);
+            }
+            return;
+        }
+        if (selectedMachineId && machines.some((machine) => machine.id === selectedMachineId)) {
+            return;
+        }
+        if (selectedMachineId !== preferredMachineId) {
+            setSelectedMachineId(preferredMachineId);
+            setCwdEdited(false);
+            setShowPathDropdown(false);
+        }
+    }, [machines, recentMachinePaths, selectedMachineId]);
 
     React.useEffect(() => {
-        if (!selectedMachineId) {
-            setSelectedMachineId(machines.find(isMachineOnline)?.id ?? null);
+        if (!selectedMachineId || cwdEdited) {
+            return;
         }
-    }, [machines, selectedMachineId]);
+        const suggestedPath = getRecentPathForMachine(selectedMachineId, recentMachinePaths);
+        setCwd((previous) => previous === suggestedPath ? previous : suggestedPath);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedMachineId, cwdEdited]);
 
     React.useEffect(() => {
         if (!builderSessionId) {
@@ -600,6 +621,25 @@ export default React.memo(function NewAgentScreen() {
                 resolvedGenome = published.genome;
             }
 
+            // If machine is selected, also spawn the agent immediately
+            if (selectedMachineId && cwd.trim()) {
+                const cwdValidationError = getConcatenatedPathErrorMessage(cwd.trim());
+                if (!cwdValidationError) {
+                    const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
+                        directory: cwd.trim(),
+                        agent: manualDraft.runtime,
+                        sessionTag: buildStandaloneSessionTag(),
+                        role: spec.baseRoleId ?? manualDraft.roleId ?? 'agent',
+                        specId: resolvedGenome.id,
+                        sessionName: manualDraft.displayName.trim(),
+                    });
+                    if (sessionId) {
+                        const updatedPaths = updateRecentMachinePaths(recentMachinePaths, selectedMachineId, cwd.trim());
+                        sync.applySettings({ recentMachinePaths: updatedPaths });
+                    }
+                }
+            }
+
             router.push({ pathname: '/agents/[id]', params: { id: resolvedGenome.id } } as any);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to create agent';
@@ -607,7 +647,7 @@ export default React.memo(function NewAgentScreen() {
         } finally {
             setSaving(false);
         }
-    }, [canCreateDraft, manualDraft, manualPublishNow, router, saving]);
+    }, [canCreateDraft, cwd, manualDraft, manualPublishNow, recentMachinePaths, router, saving, selectedMachineId]);
 
     const handleStartBuilderChat = React.useCallback(async () => {
         const credentials = sync.getCredentials();
@@ -767,6 +807,8 @@ export default React.memo(function NewAgentScreen() {
             <GuideCard title={t('agents.guideIdentityTitle')} body={t('agents.guideIdentityBody')} />
             <GuideCard title={t('agents.guideBehaviorTitle')} body={t('agents.guideBehaviorBody')} />
             <GuideCard title={t('agents.guideOperationsTitle')} body={t('agents.guideOperationsBody')} />
+            {renderMachinePicker()}
+            {selectedMachineId ? renderWorkingDirectory() : null}
         </View>
     );
 
@@ -783,7 +825,14 @@ export default React.memo(function NewAgentScreen() {
                         return (
                             <Pressable
                                 key={machine.id}
-                                onPress={() => online ? setSelectedMachineId(machine.id) : undefined}
+                                onPress={() => {
+                                    if (!online) {
+                                        return;
+                                    }
+                                    setSelectedMachineId(machine.id);
+                                    setCwdEdited(false);
+                                    setShowPathDropdown(false);
+                                }}
                                 style={[
                                     styles.machineChip,
                                     { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface },
@@ -822,6 +871,7 @@ export default React.memo(function NewAgentScreen() {
                 value={cwd}
                 onChangeText={(value) => {
                     setCwd(value);
+                    setCwdEdited(true);
                     setShowPathDropdown(false);
                 }}
                 placeholder={t('agents.directoryPlaceholder')}
@@ -846,6 +896,7 @@ export default React.memo(function NewAgentScreen() {
                                     style={[styles.dropdownItem, { borderBottomColor: theme.colors.divider }]}
                                     onPress={() => {
                                         setCwd(path);
+                                        setCwdEdited(true);
                                         setShowPathDropdown(false);
                                     }}
                                 >
