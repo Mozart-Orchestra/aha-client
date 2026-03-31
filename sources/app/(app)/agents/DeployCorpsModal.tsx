@@ -24,6 +24,7 @@ import {
 import { fetchGenomeByName, parseLegionImage, parseAgentImage, type GenomeRecord } from '@/utils/genomeHub';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
+import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
 import { randomUUID } from '@/utils/uuid';
 
 interface Props {
@@ -45,18 +46,46 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
     const memberPlans = React.useMemo(() => (corps ? expandCorpsMemberPlans(corps) : []), [corps]);
 
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
-        () => machines.find(isMachineOnline)?.id ?? null,
+        () => getPreferredMachineId(machines, recentPaths),
     );
     const [teamName, setTeamName] = React.useState(
         () => (corps ? getDefaultCorpsTeamName(genome.name, corps) : genome.name),
     );
     const [cwd, setCwd] = React.useState('');
+    const [cwdEdited, setCwdEdited] = React.useState(false);
     const [showPathDropdown, setShowPathDropdown] = React.useState(false);
     const [deploying, setDeploying] = React.useState(false);
 
     React.useEffect(() => {
-        setCwd(getRecentPathForMachine(selectedMachineId, recentPaths));
-    }, [recentPaths, selectedMachineId]);
+        const preferredMachineId = getPreferredMachineId(machines, recentPaths);
+        if (machines.length === 0) {
+            if (selectedMachineId !== null) {
+                setSelectedMachineId(null);
+                setCwdEdited(false);
+                setShowPathDropdown(false);
+            }
+            return;
+        }
+        if (selectedMachineId && machines.some((machine) => machine.id === selectedMachineId)) {
+            return;
+        }
+        if (selectedMachineId !== preferredMachineId) {
+            setSelectedMachineId(preferredMachineId);
+            setCwdEdited(false);
+            setShowPathDropdown(false);
+        }
+    }, [machines, recentPaths, selectedMachineId]);
+
+    React.useEffect(() => {
+        if (!selectedMachineId || cwdEdited) {
+            return;
+        }
+        const suggestedPath = getRecentPathForMachine(selectedMachineId, recentPaths);
+        setCwd((previous) => previous === suggestedPath ? previous : suggestedPath);
+        // Intentionally avoid depending on recentPaths updates here so synced settings
+        // do not overwrite a path the user is actively editing for the selected machine.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedMachineId, cwdEdited]);
 
     const knownPaths = React.useMemo(
         () => getKnownPathsForMachine(selectedMachineId, recentPaths),
@@ -145,6 +174,8 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                             : {}),
                         ...(matchedGenome ? { specId: matchedGenome.id } : {}),
                         runtimeType,
+                        machineId: selectedMachineId,
+                        workspacePath: cwd.trim(),
                         lifecycle: {
                             spawnRequestedAt: Date.now(),
                         },
@@ -263,7 +294,14 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                                                         selected && { borderColor: theme.colors.button.primary.background, backgroundColor: theme.colors.groupped.background },
                                                         !online && styles.machineChipOffline,
                                                     ]}
-                                                    onPress={() => online ? setSelectedMachineId(machine.id) : undefined}
+                                                    onPress={() => {
+                                                        if (!online) {
+                                                            return;
+                                                        }
+                                                        setSelectedMachineId(machine.id);
+                                                        setCwdEdited(false);
+                                                        setShowPathDropdown(false);
+                                                    }}
                                                 >
                                                     <View style={[styles.statusDot, online ? styles.statusOnline : styles.statusOffline]} />
                                                     <Text style={[styles.machineName, { color: theme.colors.text }]} numberOfLines={1}>
@@ -283,6 +321,7 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                                     value={cwd}
                                     onChangeText={(value) => {
                                         setCwd(value);
+                                        setCwdEdited(true);
                                         setShowPathDropdown(false);
                                     }}
                                     placeholder={t('agents.directoryPlaceholder')}
@@ -314,6 +353,7 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                                                         style={[styles.dropdownItem, { borderBottomColor: theme.colors.divider }]}
                                                         onPress={() => {
                                                             setCwd(path);
+                                                            setCwdEdited(true);
                                                             setShowPathDropdown(false);
                                                         }}
                                                     >

@@ -531,6 +531,8 @@ export default React.memo(function NewAgentScreen() {
         }
         const suggestedPath = getRecentPathForMachine(selectedMachineId, recentMachinePaths);
         setCwd((previous) => previous === suggestedPath ? previous : suggestedPath);
+        // Intentionally avoid depending on recentMachinePaths updates here so synced settings
+        // do not overwrite a path the user is actively editing for the selected machine.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedMachineId, cwdEdited]);
 

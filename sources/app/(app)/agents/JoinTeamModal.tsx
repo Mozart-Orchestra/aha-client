@@ -15,6 +15,7 @@ import { sync } from '@/sync/sync';
 import { useArtifacts, useAllMachines, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getRecentPathForMachine, getKnownPathsForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
+import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
 import { parseAgentImage } from '@/utils/genomeHub';
 import type { GenomeRecord } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
@@ -67,21 +68,48 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
     const [step, setStep] = React.useState<Step>('team');
     const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(lockedTeamId);
     const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
-        () => machines.find(isMachineOnline)?.id ?? null,
+        () => getPreferredMachineId(machines, recentPaths),
     );
     const [cwd, setCwd] = React.useState('');
+    const [cwdEdited, setCwdEdited] = React.useState(false);
     const [customPrompt, setCustomPrompt] = React.useState('');
     const [showPathDropdown, setShowPathDropdown] = React.useState(false);
     const [spawning, setSpawning] = React.useState(false);
 
-    // Update cwd when machine changes
     React.useEffect(() => {
-        setCwd(getRecentPathForMachine(selectedMachineId, recentPaths));
-    }, [selectedMachineId]);
+        const preferredMachineId = getPreferredMachineId(machines, recentPaths);
+        if (machines.length === 0) {
+            if (selectedMachineId !== null) {
+                setSelectedMachineId(null);
+                setCwdEdited(false);
+                setShowPathDropdown(false);
+            }
+            return;
+        }
+        if (selectedMachineId && machines.some((machine) => machine.id === selectedMachineId)) {
+            return;
+        }
+        if (selectedMachineId !== preferredMachineId) {
+            setSelectedMachineId(preferredMachineId);
+            setCwdEdited(false);
+            setShowPathDropdown(false);
+        }
+    }, [machines, recentPaths, selectedMachineId]);
+
+    React.useEffect(() => {
+        if (!selectedMachineId || cwdEdited) {
+            return;
+        }
+        const suggestedPath = getRecentPathForMachine(selectedMachineId, recentPaths);
+        setCwd((previous) => previous === suggestedPath ? previous : suggestedPath);
+        // Intentionally avoid depending on recentPaths updates here so synced settings
+        // do not overwrite a path the user is actively editing for the selected machine.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedMachineId, cwdEdited]);
 
     const knownPaths = React.useMemo(
         () => getKnownPathsForMachine(selectedMachineId, recentPaths),
-        [selectedMachineId],
+        [recentPaths, selectedMachineId],
     );
     const selectedTeam = React.useMemo(() => {
         if (!selectedTeamId) return null;
@@ -131,6 +159,8 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
                 candidateId: `spec:${genome.id}`,
                 specId: genome.id,
                 runtimeType,
+                machineId: selectedMachineId,
+                workspacePath: cwd.trim(),
                 ...(trimmedCustomPrompt ? { customPrompt: trimmedCustomPrompt } : {}),
             });
 
@@ -308,7 +338,14 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
                                                         selected && { borderColor: theme.colors.button.primary.background, backgroundColor: theme.colors.groupped.background },
                                                         !online && styles.machineChipOffline,
                                                     ]}
-                                                    onPress={() => online ? setSelectedMachineId(machine.id) : undefined}
+                                                    onPress={() => {
+                                                        if (!online) {
+                                                            return;
+                                                        }
+                                                        setSelectedMachineId(machine.id);
+                                                        setCwdEdited(false);
+                                                        setShowPathDropdown(false);
+                                                    }}
                                                 >
                                                     <View style={[styles.statusDot, online ? styles.statusOnline : styles.statusOffline]} />
                                                     <Text style={[styles.machineName, { color: theme.colors.text }]} numberOfLines={1}>
@@ -327,7 +364,11 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
                                 <TextInput
                                     style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
                                     value={cwd}
-                                    onChangeText={(v) => { setCwd(v); setShowPathDropdown(false); }}
+                                    onChangeText={(value) => {
+                                        setCwd(value);
+                                        setCwdEdited(true);
+                                        setShowPathDropdown(false);
+                                    }}
                                     placeholder={t('agents.directoryPlaceholder')}
                                     placeholderTextColor={theme.colors.input.placeholder}
                                     autoCapitalize="none"
@@ -354,7 +395,11 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
                                                     <Pressable
                                                         key={p}
                                                         style={[styles.dropdownItem, { borderBottomColor: theme.colors.divider }]}
-                                                        onPress={() => { setCwd(p); setShowPathDropdown(false); }}
+                                                        onPress={() => {
+                                                            setCwd(p);
+                                                            setCwdEdited(true);
+                                                            setShowPathDropdown(false);
+                                                        }}
                                                     >
                                                         <Text style={[styles.dropdownItemText, { color: theme.colors.text }]} numberOfLines={1}>
                                                             {p}
