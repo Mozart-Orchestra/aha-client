@@ -1,13 +1,5 @@
 import * as React from 'react';
-import { Linking, Pressable, Text, View, useWindowDimensions } from 'react-native';
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withSequence,
-    withTiming,
-    withRepeat,
-    Easing,
-} from 'react-native-reanimated';
+import { Pressable, View, useWindowDimensions } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AhaLogo } from '@/components/ui/AhaLogo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native-unistyles';
-import { t } from '@/text';
 
 import { SidebarMainPanel } from './SidebarMainPanel';
 import {
@@ -31,36 +22,6 @@ import { DesktopShellContext } from './DesktopShellContext';
 
 const GITHUB_FEEDBACK_URL = 'https://github.com/Shiyao-Huang/aha/issues/new/choose';
 
-/**
- * Irregular heartbeat animation — lub-dub cardiac rhythm with random inter-beat pause.
- * Two quick beats (lub then dub, dub slightly smaller), long rest, repeat.
- */
-function useFeedbackHeartbeat() {
-    const scale = useSharedValue(1);
-
-    React.useEffect(() => {
-        scale.value = withRepeat(
-            withSequence(
-                // lub — primary beat
-                withTiming(1.22, { duration: 75, easing: Easing.out(Easing.quad) }),
-                withTiming(0.90, { duration: 85, easing: Easing.in(Easing.quad) }),
-                // dub — secondary beat (smaller, slightly delayed)
-                withTiming(1.12, { duration: 75, easing: Easing.out(Easing.quad) }),
-                withTiming(1.0,  { duration: 110, easing: Easing.inOut(Easing.quad) }),
-                // diastole — long rest before next beat
-                withTiming(1.0,  { duration: 1300 }),
-            ),
-            -1,
-            false,
-        );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    return useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }],
-    }));
-}
-
 interface SidebarViewProps {
     mainPanel?: React.ReactNode;
     secondaryPanel?: React.ReactNode;
@@ -73,7 +34,6 @@ export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarVie
     const router = useRouter();
     const pathname = usePathname();
     const { height: windowHeight } = useWindowDimensions();
-    const heartbeatStyle = useFeedbackHeartbeat();
 
     const activeTab = React.useMemo<NavTabKey>(
         () => getActiveTabFromPathname(pathname),
@@ -175,16 +135,6 @@ export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarVie
                 safeAreaTop={safeArea.top}
                 safeAreaBottom={safeArea.bottom}
             />
-            <Animated.View style={[styles.feedbackButton, heartbeatStyle]}>
-                <Pressable
-                    style={styles.feedbackButtonInner}
-                    onPress={() => Linking.openURL(GITHUB_FEEDBACK_URL)}
-                    accessibilityLabel={t('common.feedback')}
-                >
-                    <Ionicons name="chatbubble-ellipses-outline" size={14} color="#FAF8F5" />
-                    <Text style={styles.feedbackButtonText}>{t('common.feedback')}</Text>
-                </Pressable>
-            </Animated.View>
         </View>
     );
 });
@@ -192,31 +142,6 @@ export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarVie
 const styles = StyleSheet.create(() => ({
     shellWrap: {
         flex: 1,
-    },
-    feedbackButton: {
-        position: 'absolute',
-        right: 20,
-        bottom: '33%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.24,
-        shadowRadius: 12,
-        elevation: 8,
-        borderRadius: 22,
-    },
-    feedbackButtonInner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 7,
-        backgroundColor: 'rgba(26,18,9,0.86)',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 22,
-    },
-    feedbackButtonText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#FAF8F5',
     },
     railButton: {
         width: 46,

@@ -5,6 +5,7 @@ import { getAgentPresenceVisual } from '@/utils/sessionUtils';
 import { pushSessionRoute } from '@/utils/returnNavigation';
 import { SHELL_CONVERSATION_COLORS } from '@/utils/teamUtils';
 import type { DecryptedArtifact } from '@/sync/artifactTypes';
+import { t } from '@/text';
 
 type DesktopRoom = { name?: string; id?: string } | null;
 
@@ -44,7 +45,6 @@ interface WorkspaceSidebarProps {
     handleAgentLongPress: (sessionId: string, displayName: string) => void;
     allTeams: ArtifactLike[];
     onAddAgent?: () => void;
-    onAddCorps?: () => void;
 }
 
 export function WorkspaceSidebar({
@@ -61,7 +61,6 @@ export function WorkspaceSidebar({
     handleAgentLongPress,
     allTeams,
     onAddAgent,
-    onAddCorps,
 }: WorkspaceSidebarProps) {
     const router = useRouter();
 
@@ -113,8 +112,6 @@ export function WorkspaceSidebar({
             })}
             agentHeaderAction={onAddAgent}
             agentHeaderActionLabel="+新建Agent"
-            corpsHeaderAction={onAddCorps}
-            corpsHeaderActionLabel="+新建军团"
             conversationItems={allTeams.map((team, index) => ({
                 id: team.id,
                 name: team.title || 'Team',
@@ -132,6 +129,8 @@ export function WorkspaceSidebar({
                 },
             }))}
             conversationSectionLabel="Teams"
+            conversationHeaderAction={() => router.push('/teams/new' as any)}
+            conversationHeaderActionLabel={t('teams.newTeamButton')}
             conversationEmptyText="No teams yet"
         />
     );

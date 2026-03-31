@@ -14,11 +14,14 @@ import { Text } from '@/components/ui/StyledText';
 import { Modal as AppModal } from '@/modal';
 import { sync } from '@/sync/sync';
 import { useAllMachines, useSetting } from '@/sync/storage';
+import type { ManualCorpsDraft, ManualCorpsPreset, ManualCorpsSeatConfig } from '@/sync/settings';
+import type { Machine } from '@/sync/storageTypes';
+import { getLocalizedTeamRoles } from '@/team-config/i18n';
 import { t } from '@/text';
-import type { ManualCorpsDraft, ManualCorpsSeatConfig } from '@/sync/settings';
-import { searchGenomes, type GenomeRecord } from '@/utils/genomeHub';
+import { fetchGenomeByName, parseAgentVerdict, type GenomeRecord } from '@/utils/genomeHub';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
+import { getRoleVisual } from '@/utils/roleVisualUtils';
 import { randomUUID } from '@/utils/uuid';
 
 interface Props {
@@ -26,25 +29,24 @@ interface Props {
     onSuccess: (teamId: string) => void;
 }
 
-function buildEmptySeat(): ManualCorpsSeatConfig {
-    return {
-        id: randomUUID(),
-        genomeId: null,
-        genomeName: null,
-        genomeNamespace: null,
-        genomeVersion: null,
-        genomeDisplayName: null,
-        roleId: 'builder',
-        displayName: '',
-        runtimeType: 'claude',
-        machineId: null,
-        workspacePath: '',
-        quantity: 1,
-        customPrompt: '',
-    };
-}
+type RoleTemplate = {
+    id: string;
+    title: string;
+    summary?: string;
+};
 
-function buildDefaultDraft(): ManualCorpsDraft {
+type RoleGenomeState = {
+    loading: boolean;
+    genome: GenomeRecord | null;
+};
+
+const LOCALIZED_TEAM_ROLES: RoleTemplate[] = getLocalizedTeamRoles().map((role) => ({
+    id: role.id,
+    title: role.title,
+    summary: role.summary,
+}));
+
+function buildEmptyDraft(): ManualCorpsDraft {
     return {
         title: '',
         target: '',
@@ -52,340 +54,616 @@ function buildDefaultDraft(): ManualCorpsDraft {
     };
 }
 
-// ─── Genome Search ────────────────────────────────────────────────────────────
+function buildSeatFromRole(
+    role: RoleTemplate,
+    genome: GenomeRecord | null,
+    defaults: { machineId: string | null; workspacePath: string },
+): ManualCorpsSeatConfig {
+    return {
+        id: randomUUID(),
+        genomeId: genome?.id ?? null,
+        genomeName: genome?.name ?? role.title,
+        genomeNamespace: genome?.namespace ?? '@official',
+        genomeVersion: genome?.version ?? null,
+        genomeDisplayName: genome?.name ?? role.title,
+        roleId: role.id,
+        displayName: role.title,
+        runtimeType: genome?.runtimeType === 'codex' ? 'codex' : 'claude',
+        machineId: defaults.machineId,
+        workspacePath: defaults.workspacePath,
+        quantity: 1,
+        customPrompt: '',
+    };
+}
 
-function GenomePicker({
-    value,
-    onChange,
-    theme,
+function getMachineName(machine: Machine): string {
+    return machine.metadata?.displayName ?? machine.metadata?.host ?? machine.id.slice(0, 8);
+}
+
+function RoleAvatar({
+    roleId,
+    displayName,
+    size = 34,
 }: {
-    value: { genomeId: string | null; genomeName: string | null; genomeDisplayName: string | null } | null;
-    onChange: (genome: GenomeRecord | null) => void;
-    theme: any;
+    roleId: string;
+    displayName: string;
+    size?: number;
 }) {
-    const [query, setQuery] = React.useState('');
-    const [results, setResults] = React.useState<GenomeRecord[]>([]);
-    const [searching, setSearching] = React.useState(false);
-    const [open, setOpen] = React.useState(false);
-    const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const displayLabel = value?.genomeDisplayName ?? value?.genomeName ?? null;
-
-    const handleSearch = React.useCallback((q: string) => {
-        setQuery(q);
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        if (!q.trim()) {
-            setResults([]);
-            return;
-        }
-        debounceRef.current = setTimeout(async () => {
-            setSearching(true);
-            try {
-                const res = await searchGenomes({ q: q.trim(), limit: 20 });
-                setResults(res.genomes.filter(g => !g.spec.includes('"legion"') && !g.spec.includes('"corps"')));
-            } catch {
-                setResults([]);
-            } finally {
-                setSearching(false);
-            }
-        }, 300);
-    }, []);
-
-    const handleSelect = React.useCallback((genome: GenomeRecord) => {
-        onChange(genome);
-        setOpen(false);
-        setQuery('');
-        setResults([]);
-    }, [onChange]);
-
-    const handleClear = React.useCallback(() => {
-        onChange(null);
-    }, [onChange]);
+    const visual = getRoleVisual(roleId, displayName);
 
     return (
-        <View>
-            <Pressable
-                style={[styles.pickerBtn, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
-                onPress={() => setOpen(true)}
-            >
-                <Ionicons name="cube-outline" size={14} color={theme.colors.textSecondary} />
-                <Text style={[styles.pickerBtnText, { color: displayLabel ? theme.colors.text : theme.colors.textSecondary }]} numberOfLines={1}>
-                    {displayLabel ?? t('agents.agentGenomePlaceholder')}
+        <View
+            style={[
+                styles.avatarCircle,
+                {
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    backgroundColor: visual.avatarBackground,
+                },
+            ]}
+        >
+            {visual.avatarIcon ? (
+                <Ionicons name={visual.avatarIcon} size={Math.max(14, Math.round(size * 0.46))} color="#FFFFFF" />
+            ) : (
+                <Text style={{ color: '#FFFFFF', fontSize: Math.max(11, Math.round(size * 0.34)), fontWeight: '700' }}>
+                    {(visual.avatarLabel ?? displayName.slice(0, 2)).slice(0, 2).toUpperCase()}
                 </Text>
-                {displayLabel ? (
-                    <Pressable onPress={handleClear} hitSlop={8}>
-                        <Ionicons name="close-circle" size={14} color={theme.colors.textSecondary} />
+            )}
+        </View>
+    );
+}
+
+function RolePickerPanel({
+    roles,
+    query,
+    onQueryChange,
+    roleGenomes,
+    onPickRole,
+    theme,
+}: {
+    roles: RoleTemplate[];
+    query: string;
+    onQueryChange: (value: string) => void;
+    roleGenomes: Record<string, RoleGenomeState | undefined>;
+    onPickRole: (role: RoleTemplate) => void;
+    theme: any;
+}) {
+    const filteredRoles = React.useMemo(() => {
+        const keyword = query.trim().toLowerCase();
+        if (!keyword) {
+            return roles;
+        }
+
+        return roles.filter((role) => {
+            const haystack = [role.title, role.id, role.summary]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            return haystack.includes(keyword);
+        });
+    }, [query, roles]);
+
+    return (
+        <View style={[styles.rolePickerPanel, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
+            <View style={[styles.searchRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                <Ionicons name="search-outline" size={15} color={theme.colors.textSecondary} />
+                <TextInput
+                    style={[styles.searchInput, { color: theme.colors.text }]}
+                    value={query}
+                    onChangeText={onQueryChange}
+                    placeholder="搜索角色、职责或关键字"
+                    placeholderTextColor={theme.colors.input.placeholder}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                />
+            </View>
+
+            <ScrollView style={styles.rolePickerScroll} keyboardShouldPersistTaps="handled">
+                <View style={styles.rolePickerGrid}>
+                    {filteredRoles.map((role) => {
+                        const roleState = roleGenomes[role.id];
+                        const feedback = parseAgentVerdict(roleState?.genome?.feedbackData ?? null);
+                        const score = feedback?.avgScore ?? null;
+                        const evaluationCount = feedback?.evaluationCount ?? null;
+                        const scoreColor = score == null
+                            ? theme.colors.textSecondary
+                            : score >= 85
+                                ? '#22c55e'
+                                : score >= 70
+                                    ? '#f59e0b'
+                                    : '#ef4444';
+
+                        return (
+                            <Pressable
+                                key={role.id}
+                                style={[styles.roleCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
+                                onPress={() => onPickRole(role)}
+                            >
+                                <View style={styles.roleCardHeader}>
+                                    <RoleAvatar roleId={role.id} displayName={role.title} size={36} />
+                                    <View style={styles.roleCardHeaderText}>
+                                        <Text style={[styles.roleCardTitle, { color: theme.colors.text }]}>
+                                            {role.title}
+                                        </Text>
+                                        <Text style={[styles.roleCardSubtle, { color: theme.colors.textSecondary }]}>
+                                            {role.id}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <Text style={[styles.roleCardSummary, { color: theme.colors.textSecondary }]} numberOfLines={3}>
+                                    {role.summary || 'No summary available.'}
+                                </Text>
+
+                                <View style={styles.roleCardFooter}>
+                                    <View style={[styles.metricPill, { backgroundColor: `${scoreColor}16` }]}>
+                                        {roleState?.loading ? (
+                                            <ActivityIndicator size="small" color={scoreColor} />
+                                        ) : (
+                                            <>
+                                                <Ionicons name="star-outline" size={12} color={scoreColor} />
+                                                <Text style={[styles.metricPillText, { color: scoreColor }]}>
+                                                    {score == null ? '暂无评分' : `${Math.round(score)}`}
+                                                </Text>
+                                            </>
+                                        )}
+                                    </View>
+                                    <View style={[styles.metricPill, { backgroundColor: theme.colors.groupped.background }]}>
+                                        <Ionicons name="people-outline" size={12} color={theme.colors.textSecondary} />
+                                        <Text style={[styles.metricPillText, { color: theme.colors.textSecondary }]}>
+                                            {evaluationCount == null ? '无样本' : `${evaluationCount} 评测`}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </Pressable>
+                        );
+                    })}
+                </View>
+            </ScrollView>
+        </View>
+    );
+}
+
+function SeatCard({
+    seat,
+    role,
+    roleGenome,
+    machines,
+    defaultMachineId,
+    defaultWorkspacePath,
+    onChange,
+    onRemove,
+    theme,
+}: {
+    seat: ManualCorpsSeatConfig;
+    role: RoleTemplate | undefined;
+    roleGenome: RoleGenomeState | undefined;
+    machines: Machine[];
+    defaultMachineId: string | null;
+    defaultWorkspacePath: string;
+    onChange: (patch: Partial<ManualCorpsSeatConfig>) => void;
+    onRemove: () => void;
+    theme: any;
+}) {
+    const [showAdvanced, setShowAdvanced] = React.useState(false);
+    const effectiveMachineId = seat.machineId ?? defaultMachineId;
+    const effectiveWorkspacePath = seat.workspacePath.trim() || defaultWorkspacePath.trim();
+    const feedback = parseAgentVerdict(roleGenome?.genome?.feedbackData ?? null);
+    const score = feedback?.avgScore ?? null;
+    const scoreColor = score == null
+        ? theme.colors.textSecondary
+        : score >= 85
+            ? '#22c55e'
+            : score >= 70
+                ? '#f59e0b'
+                : '#ef4444';
+
+    return (
+        <View style={[styles.seatCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
+            <View style={styles.seatCardHeader}>
+                <View style={styles.seatIdentity}>
+                    <RoleAvatar roleId={seat.roleId} displayName={seat.displayName || role?.title || seat.roleId} size={42} />
+                    <View style={styles.seatIdentityText}>
+                        <Text style={[styles.seatTitle, { color: theme.colors.text }]}>
+                            {seat.displayName || role?.title || seat.roleId}
+                        </Text>
+                        <Text style={[styles.seatSummary, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                            {role?.summary || seat.genomeDisplayName || seat.genomeName || seat.roleId}
+                        </Text>
+                    </View>
+                </View>
+                <Pressable onPress={onRemove} hitSlop={8}>
+                    <Ionicons name="close-circle" size={20} color={theme.colors.textSecondary} />
+                </Pressable>
+            </View>
+
+            <View style={styles.metricRow}>
+                <View style={[styles.metricPill, { backgroundColor: `${scoreColor}16` }]}>
+                    <Ionicons name="star-outline" size={12} color={scoreColor} />
+                    <Text style={[styles.metricPillText, { color: scoreColor }]}>
+                        {score == null ? '暂无评分' : `表现 ${Math.round(score)}`}
+                    </Text>
+                </View>
+                <View style={[styles.metricPill, { backgroundColor: theme.colors.groupped.background }]}>
+                    <Ionicons name="pulse-outline" size={12} color={theme.colors.textSecondary} />
+                    <Text style={[styles.metricPillText, { color: theme.colors.textSecondary }]}>
+                        {roleGenome?.genome?.runtimeType === 'codex' ? '默认 Codex' : '默认 Claude'}
+                    </Text>
+                </View>
+                <View style={[styles.metricPill, { backgroundColor: theme.colors.groupped.background }]}>
+                    <Ionicons name="copy-outline" size={12} color={theme.colors.textSecondary} />
+                    <Text style={[styles.metricPillText, { color: theme.colors.textSecondary }]}>
+                        {seat.quantity} 位成员
+                    </Text>
+                </View>
+            </View>
+
+            <View style={styles.inlineSection}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>模型</Text>
+                <View style={styles.runtimeRow}>
+                    {(['claude', 'codex'] as const).map((runtimeType) => {
+                        const selected = seat.runtimeType === runtimeType;
+                        return (
+                            <Pressable
+                                key={runtimeType}
+                                style={[
+                                    styles.runtimeChip,
+                                    {
+                                        borderColor: selected ? theme.colors.button.primary.background : theme.colors.divider,
+                                        backgroundColor: selected ? theme.colors.button.primary.background : theme.colors.surface,
+                                    },
+                                ]}
+                                onPress={() => onChange({ runtimeType })}
+                            >
+                                <Text style={[styles.runtimeChipText, { color: selected ? theme.colors.button.primary.tint : theme.colors.text }]}>
+                                    {runtimeType === 'claude' ? 'Claude' : 'Codex'}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
+                </View>
+            </View>
+
+            <View style={styles.inlineSection}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>数量</Text>
+                <View style={[styles.quantityRow, { borderColor: theme.colors.divider }]}>
+                    <Pressable
+                        onPress={() => onChange({ quantity: Math.max(1, seat.quantity - 1) })}
+                        style={[styles.quantityBtn, { borderRightColor: theme.colors.divider }]}
+                    >
+                        <Ionicons name="remove" size={14} color={theme.colors.text} />
                     </Pressable>
+                    <Text style={[styles.quantityValue, { color: theme.colors.text }]}>
+                        {seat.quantity}
+                    </Text>
+                    <Pressable
+                        onPress={() => onChange({ quantity: Math.min(12, seat.quantity + 1) })}
+                        style={[styles.quantityBtn, { borderLeftColor: theme.colors.divider }]}
+                    >
+                        <Ionicons name="add" size={14} color={theme.colors.text} />
+                    </Pressable>
+                </View>
+            </View>
+
+            <View style={styles.inlineSection}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>机器</Text>
+                <View style={styles.machineWrap}>
+                    {machines.map((machine) => {
+                        const selected = machine.id === effectiveMachineId;
+                        const online = isMachineOnline(machine);
+                        return (
+                            <Pressable
+                                key={machine.id}
+                                style={[
+                                    styles.machineChip,
+                                    {
+                                        borderColor: selected ? theme.colors.button.primary.background : theme.colors.divider,
+                                        backgroundColor: selected ? theme.colors.groupped.background : theme.colors.surface,
+                                    },
+                                    !online && styles.machineChipOffline,
+                                ]}
+                                onPress={() => {
+                                    if (!online) {
+                                        return;
+                                    }
+                                    onChange({ machineId: machine.id });
+                                }}
+                            >
+                                <View style={[styles.statusDot, online ? styles.statusOnline : styles.statusOffline]} />
+                                <Text style={[styles.machineChipText, { color: theme.colors.text }]} numberOfLines={1}>
+                                    {getMachineName(machine)}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
+                </View>
+            </View>
+
+            <View style={styles.inlineSection}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>工作目录</Text>
+                <TextInput
+                    style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
+                    value={seat.workspacePath}
+                    onChangeText={(value) => onChange({ workspacePath: value })}
+                    placeholder={defaultWorkspacePath || '继承默认目录'}
+                    placeholderTextColor={theme.colors.input.placeholder}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                />
+                {effectiveWorkspacePath ? (
+                    <Text style={[styles.inlineHint, { color: theme.colors.textSecondary }]}>
+                        当前生效目录：{effectiveWorkspacePath}
+                    </Text>
                 ) : null}
+            </View>
+
+            <Pressable
+                style={[styles.advancedToggle, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}
+                onPress={() => setShowAdvanced((previous) => !previous)}
+            >
+                <Text style={[styles.advancedToggleText, { color: theme.colors.text }]}>
+                    高级选项
+                </Text>
+                <Ionicons
+                    name={showAdvanced ? 'chevron-up' : 'chevron-down'}
+                    size={14}
+                    color={theme.colors.textSecondary}
+                />
             </Pressable>
 
-            {open ? (
-                <View style={[styles.pickerDropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
-                    <View style={[styles.pickerSearchRow, { borderBottomColor: theme.colors.divider }]}>
-                        <Ionicons name="search-outline" size={14} color={theme.colors.textSecondary} />
-                        <TextInput
-                            style={[styles.pickerSearchInput, { color: theme.colors.text }]}
-                            value={query}
-                            onChangeText={handleSearch}
-                            placeholder={t('agents.searchPlaceholder')}
-                            placeholderTextColor={theme.colors.input.placeholder}
-                            autoFocus
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                        {searching ? <ActivityIndicator size="small" color={theme.colors.textSecondary} /> : null}
-                    </View>
-                    <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
-                        {results.map(g => (
-                            <Pressable
-                                key={g.id}
-                                style={[styles.pickerResultRow, { borderBottomColor: theme.colors.divider }]}
-                                onPress={() => handleSelect(g)}
-                            >
-                                <Text style={[styles.pickerResultName, { color: theme.colors.text }]} numberOfLines={1}>
-                                    {g.name}
-                                </Text>
-                                {g.description ? (
-                                    <Text style={[styles.pickerResultDesc, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                                        {g.description}
-                                    </Text>
-                                ) : null}
-                            </Pressable>
-                        ))}
-                        {!searching && query.trim() && results.length === 0 ? (
-                            <Text style={[styles.pickerResultDesc, { color: theme.colors.textSecondary, padding: 12 }]}>
-                                {t('agents.noResults')}
-                            </Text>
-                        ) : null}
-                    </ScrollView>
-                    <Pressable
-                        style={[styles.pickerCloseBtn, { borderTopColor: theme.colors.divider }]}
-                        onPress={() => setOpen(false)}
-                    >
-                        <Text style={[styles.pickerCloseBtnText, { color: theme.colors.textSecondary }]}>
-                            {t('common.cancel')}
-                        </Text>
-                    </Pressable>
+            {showAdvanced ? (
+                <View style={[styles.advancedPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>显示名称</Text>
+                    <TextInput
+                        style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
+                        value={seat.displayName}
+                        onChangeText={(value) => onChange({ displayName: value })}
+                        placeholder={role?.title || seat.roleId}
+                        placeholderTextColor={theme.colors.input.placeholder}
+                    />
+
+                    <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>自定义提示词</Text>
+                    <TextInput
+                        style={[
+                            styles.input,
+                            styles.multilineInput,
+                            { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider },
+                        ]}
+                        value={seat.customPrompt}
+                        onChangeText={(value) => onChange({ customPrompt: value })}
+                        placeholder="给这个成员附加额外约束、上下文或行为要求"
+                        placeholderTextColor={theme.colors.input.placeholder}
+                        multiline
+                    />
                 </View>
             ) : null}
         </View>
     );
 }
 
-// ─── Seat Row ─────────────────────────────────────────────────────────────────
-
-function SeatRow({
-    seat,
-    onChange,
-    onRemove,
-    theme,
-}: {
-    seat: ManualCorpsSeatConfig;
-    onChange: (patch: Partial<ManualCorpsSeatConfig>) => void;
-    onRemove: () => void;
-    theme: any;
-}) {
-    return (
-        <View style={[styles.seatCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
-            <View style={styles.seatHeader}>
-                <Text style={[styles.seatLabel, { color: theme.colors.textSecondary }]}>
-                    {t('agents.agentGenome')}
-                </Text>
-                <Pressable onPress={onRemove} hitSlop={8}>
-                    <Ionicons name="trash-outline" size={16} color={theme.colors.textSecondary} />
-                </Pressable>
-            </View>
-
-            <GenomePicker
-                value={{ genomeId: seat.genomeId, genomeName: seat.genomeName, genomeDisplayName: seat.genomeDisplayName }}
-                onChange={(genome) => {
-                    if (genome) {
-                        onChange({
-                            genomeId: genome.id,
-                            genomeName: genome.name,
-                            genomeNamespace: genome.namespace ?? null,
-                            genomeVersion: genome.version,
-                            genomeDisplayName: genome.name,
-                            displayName: genome.name,
-                        });
-                    } else {
-                        onChange({
-                            genomeId: null,
-                            genomeName: null,
-                            genomeNamespace: null,
-                            genomeVersion: null,
-                            genomeDisplayName: null,
-                        });
-                    }
-                }}
-                theme={theme}
-            />
-
-            <View style={styles.seatRow}>
-                <View style={styles.seatFieldHalf}>
-                    <Text style={[styles.seatLabel, { color: theme.colors.textSecondary }]}>
-                        {t('agents.agentName')}
-                    </Text>
-                    <TextInput
-                        style={[styles.seatInput, { color: theme.colors.text, backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
-                        value={seat.displayName}
-                        onChangeText={(v) => onChange({ displayName: v })}
-                        placeholder={t('agents.agentNamePlaceholder')}
-                        placeholderTextColor={theme.colors.input.placeholder}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                    />
-                </View>
-                <View style={styles.seatFieldHalf}>
-                    <Text style={[styles.seatLabel, { color: theme.colors.textSecondary }]}>
-                        {t('agents.roleIdLabel')}
-                    </Text>
-                    <TextInput
-                        style={[styles.seatInput, { color: theme.colors.text, backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
-                        value={seat.roleId}
-                        onChangeText={(v) => onChange({ roleId: v })}
-                        placeholder={t('agents.roleIdPlaceholder')}
-                        placeholderTextColor={theme.colors.input.placeholder}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                    />
-                </View>
-            </View>
-
-            <View style={styles.seatRow}>
-                {/* Runtime toggle */}
-                <View style={{ flex: 1 }}>
-                    <Text style={[styles.seatLabel, { color: theme.colors.textSecondary }]}>
-                        {t('agents.agentRuntime')}
-                    </Text>
-                    <View style={styles.runtimeRow}>
-                        {(['claude', 'codex'] as const).map(rt => (
-                            <Pressable
-                                key={rt}
-                                style={[
-                                    styles.runtimeChip,
-                                    {
-                                        borderColor: seat.runtimeType === rt ? theme.colors.button.primary.background : theme.colors.divider,
-                                        backgroundColor: seat.runtimeType === rt ? theme.colors.button.primary.background : theme.colors.surface,
-                                    },
-                                ]}
-                                onPress={() => onChange({ runtimeType: rt })}
-                            >
-                                <Text style={[styles.runtimeChipText, { color: seat.runtimeType === rt ? theme.colors.button.primary.tint : theme.colors.text }]}>
-                                    {rt === 'claude' ? 'Claude' : 'Codex'}
-                                </Text>
-                            </Pressable>
-                        ))}
-                    </View>
-                </View>
-
-                {/* Quantity */}
-                <View>
-                    <Text style={[styles.seatLabel, { color: theme.colors.textSecondary }]}>
-                        {t('agents.memberCount', { count: seat.quantity })}
-                    </Text>
-                    <View style={[styles.quantityRow, { borderColor: theme.colors.divider }]}>
-                        <Pressable
-                            onPress={() => onChange({ quantity: Math.max(1, seat.quantity - 1) })}
-                            style={[styles.quantityBtn, { borderRightColor: theme.colors.divider }]}
-                        >
-                            <Ionicons name="remove" size={14} color={theme.colors.text} />
-                        </Pressable>
-                        <Text style={[styles.quantityValue, { color: theme.colors.text }]}>
-                            {seat.quantity}
-                        </Text>
-                        <Pressable
-                            onPress={() => onChange({ quantity: Math.min(10, seat.quantity + 1) })}
-                            style={[styles.quantityBtn, { borderLeftColor: theme.colors.divider }]}
-                        >
-                            <Ionicons name="add" size={14} color={theme.colors.text} />
-                        </Pressable>
-                    </View>
-                </View>
-            </View>
-        </View>
-    );
-}
-
-// ─── Main Modal ───────────────────────────────────────────────────────────────
-
 export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderModal({ onClose, onSuccess }: Props) {
     const { theme } = useUnistyles();
     const machines = useAllMachines();
     const recentPaths = useSetting('recentMachinePaths');
     const cachedDraft = useSetting('manualCorpsDraft');
+    const savedPresets = useSetting('manualCorpsPresets');
 
-    const [draft, setDraft] = React.useState<ManualCorpsDraft>(() => cachedDraft ?? buildDefaultDraft());
-    const [selectedMachineId, setSelectedMachineId] = React.useState<string | null>(
-        () => machines.find(isMachineOnline)?.id ?? null,
+    const [draft, setDraft] = React.useState<ManualCorpsDraft>(() => cachedDraft ?? buildEmptyDraft());
+    const [defaultMachineId, setDefaultMachineId] = React.useState<string | null>(
+        () => machines.find(isMachineOnline)?.id ?? machines[0]?.id ?? null,
     );
-    const [cwd, setCwd] = React.useState('');
-    const [showPathDropdown, setShowPathDropdown] = React.useState(false);
-    const [deploying, setDeploying] = React.useState(false);
+    const [defaultWorkspacePath, setDefaultWorkspacePath] = React.useState('');
+    const [defaultWorkspaceEdited, setDefaultWorkspaceEdited] = React.useState(false);
+    const [showDefaultPathDropdown, setShowDefaultPathDropdown] = React.useState(false);
+    const [showRolePicker, setShowRolePicker] = React.useState(false);
+    const [roleQuery, setRoleQuery] = React.useState('');
+    const [savingPreset, setSavingPreset] = React.useState(false);
+    const [runningCorps, setRunningCorps] = React.useState(false);
+    const [roleGenomes, setRoleGenomes] = React.useState<Record<string, RoleGenomeState | undefined>>({});
 
     React.useEffect(() => {
-        setCwd(getRecentPathForMachine(selectedMachineId, recentPaths));
-    }, [recentPaths, selectedMachineId]);
+        if (machines.length === 0) {
+            if (defaultMachineId !== null) {
+                setDefaultMachineId(null);
+            }
+            return;
+        }
 
-    const knownPaths = React.useMemo(
-        () => getKnownPathsForMachine(selectedMachineId, recentPaths),
-        [recentPaths, selectedMachineId],
-    );
+        if (defaultMachineId && machines.some((machine) => machine.id === defaultMachineId)) {
+            return;
+        }
 
-    const selectedMachine = machines.find(m => m.id === selectedMachineId) ?? null;
+        setDefaultMachineId(machines.find(isMachineOnline)?.id ?? machines[0]?.id ?? null);
+    }, [defaultMachineId, machines]);
 
-    // Auto-save draft to settings
+    React.useEffect(() => {
+        if (!defaultMachineId || defaultWorkspaceEdited) {
+            return;
+        }
+        setDefaultWorkspacePath(getRecentPathForMachine(defaultMachineId, recentPaths));
+    }, [defaultMachineId, defaultWorkspaceEdited, recentPaths]);
+
     React.useEffect(() => {
         sync.applySettings({ manualCorpsDraft: draft });
     }, [draft]);
 
+    React.useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            const unresolvedRoles = LOCALIZED_TEAM_ROLES.filter((role) => roleGenomes[role.id] === undefined);
+            if (unresolvedRoles.length === 0) {
+                return;
+            }
+
+            unresolvedRoles.forEach((role) => {
+                setRoleGenomes((current) => ({ ...current, [role.id]: { loading: true, genome: null } }));
+            });
+
+            const resolvedEntries = await Promise.all(unresolvedRoles.map(async (role) => {
+                const genome = await fetchGenomeByName('@official', role.id);
+                return [role.id, genome] as const;
+            }));
+
+            if (cancelled) {
+                return;
+            }
+
+            setRoleGenomes((current) => {
+                const next = { ...current };
+                for (const [roleId, genome] of resolvedEntries) {
+                    next[roleId] = {
+                        loading: false,
+                        genome,
+                    };
+                }
+                return next;
+            });
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [roleGenomes]);
+
+    const knownDefaultPaths = React.useMemo(
+        () => getKnownPathsForMachine(defaultMachineId, recentPaths),
+        [defaultMachineId, recentPaths],
+    );
+
+    const selectedMembers = React.useMemo(() => {
+        return draft.seats.flatMap((seat) => {
+            const label = seat.displayName || LOCALIZED_TEAM_ROLES.find((role) => role.id === seat.roleId)?.title || seat.roleId;
+            return Array.from({ length: seat.quantity }, (_, index) => ({
+                id: `${seat.id}-${index + 1}`,
+                roleId: seat.roleId,
+                label: seat.quantity > 1 ? `${label} ${index + 1}` : label,
+            }));
+        });
+    }, [draft.seats]);
+
+    const canSavePreset = draft.seats.length > 0;
+    const canRunCorps = React.useMemo(() => {
+        if (draft.seats.length === 0) {
+            return false;
+        }
+
+        return draft.seats.every((seat) => {
+            const machineId = seat.machineId ?? defaultMachineId;
+            const workspacePath = seat.workspacePath.trim() || defaultWorkspacePath.trim();
+            const machine = machineId ? machines.find((item) => item.id === machineId) ?? null : null;
+
+            return Boolean(
+                seat.genomeId
+                && machineId
+                && workspacePath
+                && machine
+                && isMachineOnline(machine)
+            );
+        });
+    }, [defaultMachineId, defaultWorkspacePath, draft.seats, machines]);
+
     const updateSeat = React.useCallback((seatId: string, patch: Partial<ManualCorpsSeatConfig>) => {
-        setDraft(current => ({
+        setDraft((current) => ({
             ...current,
-            seats: current.seats.map(s => s.id === seatId ? { ...s, ...patch } : s),
+            seats: current.seats.map((seat) => seat.id === seatId ? { ...seat, ...patch } : seat),
         }));
     }, []);
 
     const removeSeat = React.useCallback((seatId: string) => {
-        setDraft(current => ({
+        setDraft((current) => ({
             ...current,
-            seats: current.seats.filter(s => s.id !== seatId),
+            seats: current.seats.filter((seat) => seat.id !== seatId),
         }));
     }, []);
 
-    const addSeat = React.useCallback(() => {
-        setDraft(current => ({
+    const resolveRoleGenome = React.useCallback(async (roleId: string) => {
+        const cached = roleGenomes[roleId];
+        if (cached && !cached.loading) {
+            return cached.genome;
+        }
+
+        setRoleGenomes((current) => ({ ...current, [roleId]: { loading: true, genome: null } }));
+        const genome = await fetchGenomeByName('@official', roleId);
+        setRoleGenomes((current) => ({ ...current, [roleId]: { loading: false, genome } }));
+        return genome;
+    }, [roleGenomes]);
+
+    const handleAddRole = React.useCallback(async (role: RoleTemplate) => {
+        const genome = await resolveRoleGenome(role.id);
+        if (!genome) {
+            await AppModal.alert(
+                t('common.error'),
+                `暂时无法加载 ${role.title} 的角色配置，请稍后重试。`,
+            );
+            return;
+        }
+        const nextSeat = buildSeatFromRole(role, genome, {
+            machineId: defaultMachineId,
+            workspacePath: defaultWorkspacePath,
+        });
+
+        setDraft((current) => ({
             ...current,
-            seats: [...current.seats, buildEmptySeat()],
+            seats: [...current.seats, nextSeat],
         }));
+        setShowRolePicker(false);
+        setRoleQuery('');
+    }, [defaultMachineId, defaultWorkspacePath, resolveRoleGenome]);
+
+    const handleLoadPreset = React.useCallback((preset: ManualCorpsPreset) => {
+        setDraft(preset.draft);
+        const firstSeat = preset.draft.seats[0];
+        setDefaultMachineId(firstSeat?.machineId ?? null);
+        setDefaultWorkspacePath(firstSeat?.workspacePath ?? '');
+        setDefaultWorkspaceEdited(Boolean(firstSeat?.workspacePath));
+        setShowRolePicker(false);
     }, []);
 
-    const totalMemberCount = draft.seats.reduce((sum, s) => sum + s.quantity, 0);
-    const hasSelectedGenomeForEverySeat = draft.seats.every((seat) => !!seat.genomeId);
+    const handleDeletePreset = React.useCallback((presetId: string) => {
+        const nextPresets = savedPresets.filter((preset) => preset.id !== presetId);
+        sync.applySettings({ manualCorpsPresets: nextPresets });
+    }, [savedPresets]);
 
-    const canStart = !!selectedMachineId
-        && !!cwd.trim()
-        && draft.seats.length > 0
-        && hasSelectedGenomeForEverySeat
-        && !!selectedMachine
-        && isMachineOnline(selectedMachine);
+    const handleSavePreset = React.useCallback(() => {
+        if (!canSavePreset || savingPreset) {
+            return;
+        }
 
-    const handleStart = React.useCallback(async () => {
-        if (!canStart || !selectedMachineId || !cwd.trim() || deploying) return;
-
-        setDeploying(true);
+        setSavingPreset(true);
         try {
-            const missingGenomeSeat = draft.seats.find((seat) => !seat.genomeId);
-            if (missingGenomeSeat) {
-                throw new Error(`Please select a marketplace genome for ${missingGenomeSeat.displayName || missingGenomeSeat.roleId}.`);
-            }
+            const label = draft.title.trim()
+                || draft.seats[0]?.displayName?.trim()
+                || draft.seats[0]?.roleId
+                || '军团配置';
+            const preset: ManualCorpsPreset = {
+                id: randomUUID(),
+                label,
+                updatedAt: Date.now(),
+                draft,
+            };
+            const nextPresets = [preset, ...savedPresets].slice(0, 12);
+            sync.applySettings({ manualCorpsPresets: nextPresets, manualCorpsDraft: draft });
+        } finally {
+            setSavingPreset(false);
+        }
+    }, [canSavePreset, draft, savedPresets, savingPreset]);
 
+    const handleRunCorps = React.useCallback(async () => {
+        if (!canRunCorps || runningCorps) {
+            return;
+        }
+
+        setRunningCorps(true);
+
+        try {
             const teamName = draft.title.trim() || 'My Corps';
             const result = await sync.createCorps({
                 name: teamName,
                 ...(draft.target.trim() ? { description: draft.target.trim(), target: draft.target.trim() } : {}),
-                machineId: selectedMachineId,
-                workspacePath: cwd.trim(),
+                machineId: defaultMachineId ?? undefined,
+                workspacePath: defaultWorkspacePath.trim() || undefined,
                 seats: draft.seats.map((seat) => ({
                     id: seat.id,
                     genomeId: seat.genomeId!,
@@ -396,27 +674,92 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
                     roleId: seat.roleId,
                     displayName: seat.displayName || seat.roleId,
                     runtimeType: seat.runtimeType,
-                    machineId: seat.machineId ?? selectedMachineId,
-                    workspacePath: seat.workspacePath.trim() || cwd.trim(),
+                    machineId: seat.machineId ?? defaultMachineId,
+                    workspacePath: seat.workspacePath.trim() || defaultWorkspacePath.trim(),
                     quantity: seat.quantity,
                     customPrompt: seat.customPrompt.trim() || undefined,
                 })),
             });
+
+            const failures: string[] = [];
+            let successCount = 0;
+            let nextRecentPaths = recentPaths;
+
+            for (const plannedMember of result.plannedMembers) {
+                try {
+                    const sessionId = await sync.spawnSessionOnMachine(plannedMember.machineId, {
+                        directory: plannedMember.workspacePath,
+                        agent: plannedMember.runtimeType,
+                        sessionTag: plannedMember.sessionTag,
+                        teamId: result.team.id,
+                        role: plannedMember.roleId,
+                        specId: plannedMember.genomeId,
+                        sessionName: plannedMember.displayName,
+                        sessionPath: plannedMember.workspacePath,
+                        env: {
+                            AHA_TEAM_MEMBER_ID: plannedMember.memberId,
+                            ...(plannedMember.customPrompt ? { AHA_AGENT_PROMPT: plannedMember.customPrompt } : {}),
+                        },
+                    });
+
+                    if (!sessionId) {
+                        throw new Error('Spawn returned no session ID');
+                    }
+
+                    await sync.addTeamMember(result.team.id, sessionId, plannedMember.roleId, plannedMember.displayName, {
+                        memberId: plannedMember.memberId,
+                        sessionTag: plannedMember.sessionTag,
+                        candidateId: plannedMember.candidateId,
+                        specId: plannedMember.genomeId,
+                        runtimeType: plannedMember.runtimeType,
+                        machineId: plannedMember.machineId,
+                        workspacePath: plannedMember.workspacePath,
+                        ...(plannedMember.customPrompt ? { customPrompt: plannedMember.customPrompt } : {}),
+                    });
+
+                    nextRecentPaths = updateRecentMachinePaths(
+                        nextRecentPaths,
+                        plannedMember.machineId,
+                        plannedMember.workspacePath,
+                    );
+                    successCount += 1;
+                } catch (error) {
+                    failures.push(`${plannedMember.displayName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+            }
+
+            sync.applySettings({ recentMachinePaths: nextRecentPaths });
             await sync.fetchArtifactWithBody(result.team.id);
 
-            const updatedPaths = updateRecentMachinePaths(recentPaths, selectedMachineId, cwd.trim());
-            sync.applySettings({ recentMachinePaths: updatedPaths });
+            if (successCount === 0) {
+                throw new Error(failures[0] ?? 'Failed to run corps.');
+            }
+
+            if (failures.length > 0) {
+                await AppModal.alert(
+                    t('agents.buildCorpsStart'),
+                    `${teamName} 已运行 ${successCount}/${result.plannedMembers.length} 位成员。\n\n${failures.join('\n')}`,
+                );
+            }
 
             onSuccess(result.team.id);
         } catch (error) {
             await AppModal.alert(
                 t('common.error'),
-                error instanceof Error ? error.message : 'Failed to start corps.',
+                error instanceof Error ? error.message : 'Failed to run corps.',
             );
         } finally {
-            setDeploying(false);
+            setRunningCorps(false);
         }
-    }, [canStart, cwd, deploying, draft, onSuccess, recentPaths, selectedMachineId]);
+    }, [
+        canRunCorps,
+        defaultMachineId,
+        defaultWorkspacePath,
+        draft,
+        onSuccess,
+        recentPaths,
+        runningCorps,
+    ]);
 
     return (
         <Modal
@@ -431,180 +774,305 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
                     onPress={() => {}}
                 >
                     <View style={[styles.header, { borderBottomColor: theme.colors.divider }]}>
-                        <Text style={[styles.title, { color: theme.colors.text }]}>
-                            {t('agents.buildCorpsTitle')}
-                        </Text>
+                        <View style={styles.headerCopy}>
+                            <Text style={[styles.title, { color: theme.colors.text }]}>
+                                {t('agents.buildCorpsTitle')}
+                            </Text>
+                            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                                先选角色，再按成员配置机器、模型和高级参数。保存配置后也可以随时再运行。
+                            </Text>
+                        </View>
                         <Pressable onPress={onClose} hitSlop={8}>
                             <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
                         </Pressable>
                     </View>
 
                     <ScrollView style={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                        {/* Corps name */}
-                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                            {t('newTeam.teamNameLabel')}
-                        </Text>
-                        <TextInput
-                            style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
-                            value={draft.title}
-                            onChangeText={(v) => setDraft(d => ({ ...d, title: v }))}
-                            placeholder="My Corps"
-                            placeholderTextColor={theme.colors.input.placeholder}
-                            autoCapitalize="words"
-                            autoCorrect={false}
-                        />
+                        {savedPresets.length > 0 ? (
+                            <View style={styles.section}>
+                                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                                    已保存军团
+                                </Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    <View style={styles.presetRow}>
+                                        {savedPresets.map((preset) => (
+                                            <Pressable
+                                                key={preset.id}
+                                                style={[styles.presetCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
+                                                onPress={() => handleLoadPreset(preset)}
+                                            >
+                                                <View style={styles.presetCardHeader}>
+                                                    <Text style={[styles.presetTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                                                        {preset.label}
+                                                    </Text>
+                                                    <Pressable
+                                                        onPress={() => handleDeletePreset(preset.id)}
+                                                        hitSlop={8}
+                                                    >
+                                                        <Ionicons name="close-outline" size={16} color={theme.colors.textSecondary} />
+                                                    </Pressable>
+                                                </View>
+                                                <Text style={[styles.presetMeta, { color: theme.colors.textSecondary }]}>
+                                                    {preset.draft.seats.length} 个角色配置
+                                                </Text>
+                                            </Pressable>
+                                        ))}
+                                    </View>
+                                </ScrollView>
+                            </View>
+                        ) : null}
 
-                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                            {t('newTeam.teamGoalLabel')}
-                        </Text>
-                        <TextInput
-                            style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
-                            value={draft.target}
-                            onChangeText={(v) => setDraft(d => ({ ...d, target: v }))}
-                            placeholder="e.g. Build a new landing page"
-                            placeholderTextColor={theme.colors.input.placeholder}
-                            autoCapitalize="sentences"
-                            autoCorrect={false}
-                        />
-
-                        {/* Machine */}
-                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                            {t('agents.selectMachine')}
-                        </Text>
-                        {machines.length === 0 ? (
-                            <Text style={[styles.hint, { color: theme.colors.textSecondary }]}>
-                                {t('agents.noMachinesHint')}
+                        <View style={styles.section}>
+                            <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
+                                {t('newTeam.teamNameLabel')}
                             </Text>
-                        ) : (
-                            <View style={styles.machineList}>
-                                {machines.map(machine => {
+                            <TextInput
+                                style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
+                                value={draft.title}
+                                onChangeText={(value) => setDraft((current) => ({ ...current, title: value }))}
+                                placeholder="例如：增长实验军团"
+                                placeholderTextColor={theme.colors.input.placeholder}
+                                autoCapitalize="words"
+                                autoCorrect={false}
+                            />
+                        </View>
+
+                        <View style={styles.section}>
+                            <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
+                                {t('newTeam.teamGoalLabel')}
+                            </Text>
+                            <TextInput
+                                style={[styles.input, styles.multilineInput, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
+                                value={draft.target}
+                                onChangeText={(value) => setDraft((current) => ({ ...current, target: value }))}
+                                placeholder="例如：在本周内完成一个落地页、投放文案和数据回收链路"
+                                placeholderTextColor={theme.colors.input.placeholder}
+                                multiline
+                            />
+                        </View>
+
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                                默认运行设置
+                            </Text>
+
+                            <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
+                                默认机器
+                            </Text>
+                            <View style={styles.machineWrap}>
+                                {machines.map((machine) => {
+                                    const selected = machine.id === defaultMachineId;
                                     const online = isMachineOnline(machine);
-                                    const selected = machine.id === selectedMachineId;
+
                                     return (
                                         <Pressable
                                             key={machine.id}
                                             style={[
                                                 styles.machineChip,
-                                                { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface },
-                                                selected && { borderColor: theme.colors.button.primary.background, backgroundColor: theme.colors.groupped.background },
+                                                {
+                                                    borderColor: selected ? theme.colors.button.primary.background : theme.colors.divider,
+                                                    backgroundColor: selected ? theme.colors.groupped.background : theme.colors.surface,
+                                                },
                                                 !online && styles.machineChipOffline,
                                             ]}
-                                            onPress={() => online ? setSelectedMachineId(machine.id) : undefined}
+                                            onPress={() => {
+                                                if (!online) {
+                                                    return;
+                                                }
+                                                setDefaultMachineId(machine.id);
+                                                setDefaultWorkspaceEdited(false);
+                                                setShowDefaultPathDropdown(false);
+                                            }}
                                         >
                                             <View style={[styles.statusDot, online ? styles.statusOnline : styles.statusOffline]} />
-                                            <Text style={[styles.machineName, { color: theme.colors.text }]} numberOfLines={1}>
-                                                {machine.metadata?.displayName ?? machine.metadata?.host ?? machine.id.slice(0, 8)}
+                                            <Text style={[styles.machineChipText, { color: theme.colors.text }]} numberOfLines={1}>
+                                                {getMachineName(machine)}
                                             </Text>
                                         </Pressable>
                                     );
                                 })}
                             </View>
-                        )}
 
-                        {/* Working Directory */}
-                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                            {t('agents.workingDirectory')}
-                        </Text>
-                        <TextInput
-                            style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
-                            value={cwd}
-                            onChangeText={(v) => { setCwd(v); setShowPathDropdown(false); }}
-                            placeholder={t('agents.directoryPlaceholder')}
-                            placeholderTextColor={theme.colors.input.placeholder}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                        {knownPaths.length > 0 ? (
-                            <>
-                                <Pressable
-                                    style={[styles.dropdownToggle, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}
-                                    onPress={() => setShowPathDropdown(v => !v)}
-                                >
-                                    <Text style={[styles.dropdownToggleText, { color: theme.colors.textSecondary }]}>
-                                        {t('agents.recentPaths')}
-                                    </Text>
-                                    <Ionicons name={showPathDropdown ? 'chevron-up' : 'chevron-down'} size={14} color={theme.colors.textSecondary} />
-                                </Pressable>
-                                {showPathDropdown ? (
-                                    <View style={[styles.dropdown, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}>
-                                        {knownPaths.map(path => (
-                                            <Pressable
-                                                key={path}
-                                                style={[styles.dropdownItem, { borderBottomColor: theme.colors.divider }]}
-                                                onPress={() => { setCwd(path); setShowPathDropdown(false); }}
-                                            >
-                                                <Text style={[styles.dropdownItemText, { color: theme.colors.text }]} numberOfLines={1}>
-                                                    {path}
-                                                </Text>
-                                            </Pressable>
-                                        ))}
-                                    </View>
-                                ) : null}
-                            </>
-                        ) : null}
-
-                        {/* Seats */}
-                        <View style={[styles.seatsHeader, { marginTop: 20 }]}>
-                            <Text style={[styles.label, { color: theme.colors.textSecondary, marginTop: 0, marginBottom: 0 }]}>
-                                {t('agents.members')} ({totalMemberCount})
+                            <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
+                                默认目录
                             </Text>
-                            <Pressable
-                                style={[styles.addSeatBtn, { backgroundColor: theme.colors.button.primary.background }]}
-                                onPress={addSeat}
-                            >
-                                <Ionicons name="add" size={14} color={theme.colors.button.primary.tint} />
-                                <Text style={[styles.addSeatBtnText, { color: theme.colors.button.primary.tint }]}>
-                                    {t('agents.buildCorpsAddRole')}
-                                </Text>
-                            </Pressable>
+                            <TextInput
+                                style={[styles.input, { color: theme.colors.text, backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
+                                value={defaultWorkspacePath}
+                                onChangeText={(value) => {
+                                    setDefaultWorkspacePath(value);
+                                    setDefaultWorkspaceEdited(true);
+                                    setShowDefaultPathDropdown(false);
+                                }}
+                                placeholder="/Users/you/project"
+                                placeholderTextColor={theme.colors.input.placeholder}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            {knownDefaultPaths.length > 0 ? (
+                                <>
+                                    <Pressable
+                                        style={[styles.advancedToggle, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surface }]}
+                                        onPress={() => setShowDefaultPathDropdown((previous) => !previous)}
+                                    >
+                                        <Text style={[styles.advancedToggleText, { color: theme.colors.text }]}>
+                                            最近目录
+                                        </Text>
+                                        <Ionicons
+                                            name={showDefaultPathDropdown ? 'chevron-up' : 'chevron-down'}
+                                            size={14}
+                                            color={theme.colors.textSecondary}
+                                        />
+                                    </Pressable>
+                                    {showDefaultPathDropdown ? (
+                                        <View style={[styles.dropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                                            {knownDefaultPaths.map((path, index) => (
+                                                <Pressable
+                                                    key={`${path}-${index}`}
+                                                    style={[
+                                                        styles.dropdownItem,
+                                                        { borderBottomColor: theme.colors.divider },
+                                                        index === knownDefaultPaths.length - 1 && styles.dropdownItemLast,
+                                                    ]}
+                                                    onPress={() => {
+                                                        setDefaultWorkspacePath(path);
+                                                        setDefaultWorkspaceEdited(true);
+                                                        setShowDefaultPathDropdown(false);
+                                                    }}
+                                                >
+                                                    <Text style={[styles.dropdownItemText, { color: theme.colors.text }]} numberOfLines={1}>
+                                                        {path}
+                                                    </Text>
+                                                </Pressable>
+                                            ))}
+                                        </View>
+                                    ) : null}
+                                </>
+                            ) : null}
                         </View>
 
-                        {draft.seats.length === 0 ? (
-                            <View style={[styles.emptySeats, { borderColor: theme.colors.divider }]}>
-                                <Ionicons name="people-outline" size={28} color={theme.colors.textSecondary} />
-                                <Text style={[styles.emptySeatsText, { color: theme.colors.textSecondary }]}>
-                                    {t('agents.buildCorpsEmptyHint')}
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeaderRow}>
+                                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                                    已选成员
                                 </Text>
+                                <Pressable
+                                    style={[styles.primaryInlineButton, { backgroundColor: theme.colors.button.primary.background }]}
+                                    onPress={() => setShowRolePicker((previous) => !previous)}
+                                >
+                                    <Ionicons name="add" size={14} color={theme.colors.button.primary.tint} />
+                                    <Text style={[styles.primaryInlineButtonText, { color: theme.colors.button.primary.tint }]}>
+                                        {t('agents.buildCorpsAddRole')}
+                                    </Text>
+                                </Pressable>
                             </View>
-                        ) : (
-                            <View style={{ gap: 10, marginBottom: 16 }}>
-                                {draft.seats.map(seat => (
-                                    <SeatRow
-                                        key={seat.id}
-                                        seat={seat}
-                                        onChange={(patch) => updateSeat(seat.id, patch)}
-                                        onRemove={() => removeSeat(seat.id)}
-                                        theme={theme}
-                                    />
-                                ))}
+
+                            {selectedMembers.length > 0 ? (
+                                <View style={styles.memberPreviewWrap}>
+                                    {selectedMembers.map((member) => (
+                                        <View
+                                            key={member.id}
+                                            style={[styles.memberPreviewItem, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}
+                                        >
+                                            <RoleAvatar roleId={member.roleId} displayName={member.label} size={28} />
+                                            <Text style={[styles.memberPreviewLabel, { color: theme.colors.text }]} numberOfLines={1}>
+                                                {member.label}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            ) : (
+                                <View style={[styles.emptyState, { borderColor: theme.colors.divider }]}>
+                                    <Ionicons name="people-outline" size={28} color={theme.colors.textSecondary} />
+                                    <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+                                        {t('agents.buildCorpsEmptyHint')}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {showRolePicker ? (
+                                <RolePickerPanel
+                                    roles={LOCALIZED_TEAM_ROLES}
+                                    query={roleQuery}
+                                    onQueryChange={setRoleQuery}
+                                    roleGenomes={roleGenomes}
+                                    onPickRole={handleAddRole}
+                                    theme={theme}
+                                />
+                            ) : null}
+                        </View>
+
+                        {draft.seats.length > 0 ? (
+                            <View style={styles.section}>
+                                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                                    成员卡片
+                                </Text>
+                                <View style={styles.seatList}>
+                                    {draft.seats.map((seat) => (
+                                        <SeatCard
+                                            key={seat.id}
+                                            seat={seat}
+                                            role={LOCALIZED_TEAM_ROLES.find((role) => role.id === seat.roleId)}
+                                            roleGenome={roleGenomes[seat.roleId]}
+                                            machines={machines}
+                                            defaultMachineId={defaultMachineId}
+                                            defaultWorkspacePath={defaultWorkspacePath}
+                                            onChange={(patch) => updateSeat(seat.id, patch)}
+                                            onRemove={() => removeSeat(seat.id)}
+                                            theme={theme}
+                                        />
+                                    ))}
+                                </View>
                             </View>
-                        )}
+                        ) : null}
                     </ScrollView>
 
                     <View style={[styles.footer, { borderTopColor: theme.colors.divider }]}>
                         <Pressable
-                            style={[styles.btn, styles.btnCancel, { borderColor: theme.colors.divider }]}
+                            style={[styles.footerButton, styles.footerButtonSecondary, { borderColor: theme.colors.divider }]}
                             onPress={onClose}
                         >
-                            <Text style={[styles.btnText, { color: theme.colors.text }]}>
+                            <Text style={[styles.footerButtonText, { color: theme.colors.text }]}>
                                 {t('common.cancel')}
                             </Text>
                         </Pressable>
+
                         <Pressable
                             style={[
-                                styles.btn,
-                                styles.btnPrimary,
-                                { backgroundColor: theme.colors.button.primary.background },
-                                (!canStart || deploying) && styles.btnDisabled,
+                                styles.footerButton,
+                                styles.footerButtonSecondary,
+                                { borderColor: theme.colors.divider },
+                                (!canSavePreset || savingPreset) && styles.footerButtonDisabled,
                             ]}
-                            onPress={canStart && !deploying ? handleStart : undefined}
+                            onPress={canSavePreset && !savingPreset ? handleSavePreset : undefined}
                         >
-                            {deploying ? (
+                            {savingPreset ? (
+                                <ActivityIndicator size="small" color={theme.colors.text} />
+                            ) : (
+                                <>
+                                    <Ionicons name="bookmark-outline" size={14} color={theme.colors.text} />
+                                    <Text style={[styles.footerButtonText, { color: theme.colors.text }]}>
+                                        {t('common.save')}
+                                    </Text>
+                                </>
+                            )}
+                        </Pressable>
+
+                        <Pressable
+                            style={[
+                                styles.footerButton,
+                                styles.footerButtonPrimary,
+                                { backgroundColor: theme.colors.button.primary.background },
+                                (!canRunCorps || runningCorps) && styles.footerButtonDisabled,
+                            ]}
+                            onPress={canRunCorps && !runningCorps ? handleRunCorps : undefined}
+                        >
+                            {runningCorps ? (
                                 <ActivityIndicator size="small" color={theme.colors.button.primary.tint} />
                             ) : (
                                 <>
-                                    <Ionicons name="rocket-outline" size={14} color={theme.colors.button.primary.tint} style={{ marginRight: 6 }} />
-                                    <Text style={[styles.btnText, { color: theme.colors.button.primary.tint }]}>
+                                    <Ionicons name="rocket-outline" size={14} color={theme.colors.button.primary.tint} />
+                                    <Text style={[styles.footerButtonText, { color: theme.colors.button.primary.tint }]}>
                                         {t('agents.buildCorpsStart')}
                                     </Text>
                                 </>
@@ -620,56 +1088,105 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.45)',
+        backgroundColor: 'rgba(0, 0, 0, 0.46)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
     },
     sheet: {
         width: '100%',
-        maxWidth: 580,
-        maxHeight: '90%',
-        borderRadius: 18,
+        maxWidth: 880,
+        maxHeight: '92%',
+        borderRadius: 22,
         borderWidth: StyleSheet.hairlineWidth,
         overflow: 'hidden',
     },
     header: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 18,
-        paddingBottom: 14,
+        gap: 16,
+        paddingHorizontal: 22,
+        paddingTop: 20,
+        paddingBottom: 16,
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
+    headerCopy: {
+        flex: 1,
+        gap: 6,
+    },
     title: {
-        fontSize: 19,
+        fontSize: 20,
         fontWeight: '700',
     },
-    body: {
-        paddingHorizontal: 20,
+    subtitle: {
+        fontSize: 13,
+        lineHeight: 20,
     },
-    label: {
-        fontSize: 12,
-        fontWeight: '600',
+    body: {
+        paddingHorizontal: 22,
+    },
+    section: {
+        marginTop: 18,
+        gap: 10,
+    },
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    fieldLabel: {
+        fontSize: 11,
+        fontWeight: '700',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
-        marginBottom: 8,
-        marginTop: 16,
-    },
-    hint: {
-        fontSize: 13,
-        lineHeight: 18,
-        marginVertical: 6,
     },
     input: {
         borderRadius: 12,
         borderWidth: StyleSheet.hairlineWidth,
         paddingHorizontal: 14,
-        paddingVertical: 12,
+        paddingVertical: 11,
         fontSize: 15,
     },
-    machineList: {
+    multilineInput: {
+        minHeight: 96,
+        textAlignVertical: 'top',
+        paddingTop: 12,
+    },
+    presetRow: {
+        flexDirection: 'row',
+        gap: 10,
+        paddingRight: 12,
+    },
+    presetCard: {
+        minWidth: 180,
+        maxWidth: 240,
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        gap: 6,
+    },
+    presetCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    presetTitle: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    presetMeta: {
+        fontSize: 12,
+    },
+    machineWrap: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 10,
@@ -678,93 +1195,228 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        borderWidth: 1,
-        borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        maxWidth: '100%',
     },
-    machineChipOffline: { opacity: 0.45 },
-    statusDot: { width: 8, height: 8, borderRadius: 4 },
-    statusOnline: { backgroundColor: '#22c55e' },
-    statusOffline: { backgroundColor: '#ef4444' },
-    machineName: { fontSize: 14, fontWeight: '500', maxWidth: 220 },
-    dropdownToggle: {
-        marginTop: 10,
-        borderRadius: 10,
+    machineChipOffline: {
+        opacity: 0.45,
+    },
+    machineChipText: {
+        fontSize: 13,
+        fontWeight: '500',
+        maxWidth: 180,
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    statusOnline: {
+        backgroundColor: '#22c55e',
+    },
+    statusOffline: {
+        backgroundColor: '#ef4444',
+    },
+    advancedToggle: {
+        borderRadius: 12,
         borderWidth: StyleSheet.hairlineWidth,
-        paddingHorizontal: 12,
+        paddingHorizontal: 14,
         paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
     },
-    dropdownToggleText: { fontSize: 13 },
+    advancedToggleText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
     dropdown: {
-        marginTop: 8,
         borderRadius: 12,
         borderWidth: StyleSheet.hairlineWidth,
         overflow: 'hidden',
     },
     dropdownItem: {
-        paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 11,
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    dropdownItemText: { fontSize: 13 },
-    seatsHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    dropdownItemLast: {
+        borderBottomWidth: 0,
     },
-    addSeatBtn: {
+    dropdownItemText: {
+        fontSize: 13,
+    },
+    primaryInlineButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        borderRadius: 10,
+        gap: 6,
+        borderRadius: 999,
         paddingHorizontal: 12,
-        paddingVertical: 7,
+        paddingVertical: 8,
     },
-    addSeatBtnText: { fontSize: 13, fontWeight: '600' },
-    emptySeats: {
-        alignItems: 'center',
-        paddingVertical: 28,
-        borderRadius: 14,
+    primaryInlineButtonText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    emptyState: {
+        borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
         borderStyle: 'dashed',
-        marginTop: 10,
-        marginBottom: 16,
+        paddingVertical: 28,
+        alignItems: 'center',
         gap: 8,
     },
-    emptySeatsText: { fontSize: 13 },
-    seatCard: {
-        borderRadius: 14,
+    emptyStateText: {
+        fontSize: 13,
+    },
+    memberPreviewWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    memberPreviewItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+        maxWidth: '100%',
+    },
+    memberPreviewLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        maxWidth: 160,
+    },
+    rolePickerPanel: {
+        marginTop: 4,
+        borderRadius: 18,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 14,
+        gap: 12,
+    },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 14,
+    },
+    rolePickerScroll: {
+        maxHeight: 320,
+    },
+    rolePickerGrid: {
+        gap: 10,
+    },
+    roleCard: {
+        borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
         padding: 14,
         gap: 10,
     },
-    seatHeader: {
+    roleCardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: 10,
     },
-    seatLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-    seatRow: { flexDirection: 'row', gap: 10 },
-    seatFieldHalf: { flex: 1, gap: 6 },
-    seatInput: {
-        borderRadius: 10,
-        borderWidth: StyleSheet.hairlineWidth,
+    roleCardHeaderText: {
+        flex: 1,
+        gap: 2,
+    },
+    roleCardTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    roleCardSubtle: {
+        fontSize: 12,
+    },
+    roleCardSummary: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    roleCardFooter: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    metricPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        borderRadius: 999,
         paddingHorizontal: 10,
-        paddingVertical: 8,
-        fontSize: 14,
-    },
-    runtimeRow: { flexDirection: 'row', gap: 8 },
-    runtimeChip: {
-        borderRadius: 8,
-        borderWidth: 1,
-        paddingHorizontal: 12,
         paddingVertical: 6,
     },
-    runtimeChipText: { fontSize: 13, fontWeight: '500' },
+    metricPillText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    seatList: {
+        gap: 12,
+        paddingBottom: 16,
+    },
+    seatCard: {
+        borderRadius: 18,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 16,
+        gap: 12,
+    },
+    seatCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    seatIdentity: {
+        flex: 1,
+        flexDirection: 'row',
+        gap: 12,
+    },
+    seatIdentityText: {
+        flex: 1,
+        gap: 4,
+    },
+    seatTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    seatSummary: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    metricRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    inlineSection: {
+        gap: 8,
+    },
+    runtimeRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    runtimeChip: {
+        borderRadius: 10,
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    runtimeChipText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
     quantityRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -776,68 +1428,56 @@ const styles = StyleSheet.create({
     quantityBtn: {
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderWidth: 0,
+        borderLeftWidth: StyleSheet.hairlineWidth,
+        borderRightWidth: StyleSheet.hairlineWidth,
     },
-    quantityValue: { fontSize: 14, fontWeight: '600', paddingHorizontal: 4, minWidth: 20, textAlign: 'center' },
-    pickerBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        borderRadius: 10,
+    quantityValue: {
+        minWidth: 28,
+        textAlign: 'center',
+        fontSize: 14,
+        fontWeight: '700',
+        paddingHorizontal: 8,
+    },
+    inlineHint: {
+        fontSize: 12,
+    },
+    advancedPanel: {
+        borderRadius: 14,
         borderWidth: StyleSheet.hairlineWidth,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-    },
-    pickerBtnText: { flex: 1, fontSize: 14 },
-    pickerDropdown: {
-        marginTop: 6,
-        borderRadius: 12,
-        borderWidth: StyleSheet.hairlineWidth,
-        overflow: 'hidden',
-        zIndex: 999,
-    },
-    pickerSearchRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        padding: 12,
         gap: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    pickerSearchInput: { flex: 1, fontSize: 14 },
-    pickerResultRow: {
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        gap: 2,
-    },
-    pickerResultName: { fontSize: 14, fontWeight: '500' },
-    pickerResultDesc: { fontSize: 12 },
-    pickerCloseBtn: {
-        paddingVertical: 10,
+    avatarCircle: {
         alignItems: 'center',
-        borderTopWidth: StyleSheet.hairlineWidth,
+        justifyContent: 'center',
     },
-    pickerCloseBtnText: { fontSize: 13 },
     footer: {
-        paddingHorizontal: 20,
-        paddingVertical: 16,
         borderTopWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 22,
+        paddingVertical: 16,
         flexDirection: 'row',
         justifyContent: 'flex-end',
         gap: 10,
     },
-    btn: {
+    footerButton: {
         minHeight: 42,
-        borderRadius: 12,
+        minWidth: 118,
         paddingHorizontal: 16,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
-        minWidth: 120,
+        gap: 6,
     },
-    btnCancel: { borderWidth: StyleSheet.hairlineWidth },
-    btnPrimary: {},
-    btnDisabled: { opacity: 0.45 },
-    btnText: { fontSize: 14, fontWeight: '600' },
+    footerButtonSecondary: {
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    footerButtonPrimary: {},
+    footerButtonDisabled: {
+        opacity: 0.45,
+    },
+    footerButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
 });

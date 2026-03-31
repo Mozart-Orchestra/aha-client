@@ -313,9 +313,9 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             }))}
             agentHeaderAction={() => router.push('/agents/new' as never)}
             agentHeaderActionLabel="+新建Agent"
-            corpsHeaderAction={() => router.push('/agents' as never)}
-            corpsHeaderActionLabel="+新建军团"
             conversationSectionLabel={t('sidebar.workspace')}
+            conversationHeaderAction={() => router.push('/teams/new' as never)}
+            conversationHeaderActionLabel={t('teams.newTeamButton')}
             conversationItems={teams.map((team) => ({
                 ...team,
                 avatarIcon: 'grid-outline',
@@ -328,7 +328,6 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     }
                 },
             }))}
-            conversationHeaderAction={() => router.push('/teams/new' as never)}
             conversationEmptyText={t('sidebar.noTeamsYet')}
         />
     );

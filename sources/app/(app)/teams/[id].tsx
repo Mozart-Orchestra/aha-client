@@ -1575,10 +1575,6 @@ export default function TeamDashboardScreen() {
                 setShowWorkspaceDrawer(false);
                 setShowAgentsPopover(true);
             }}
-            onAddCorps={() => {
-                setShowWorkspaceDrawer(false);
-                router.push('/agents');
-            }}
         />
     );
 

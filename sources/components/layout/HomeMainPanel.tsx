@@ -545,10 +545,10 @@ function NewUserPanel() {
 
     const restoreKeyCommand = React.useMemo(() => {
         const credentials = require('@/auth/AuthContext').getCurrentAuth()?.credentials;
-        if (!credentials?.secret) return 'npx aha-v12';
+        if (!credentials?.secret) return 'npx aha-v13';
         const { formatSecretKeyForBackup } = require('@/auth/secretKeyBackup');
         const formatted = formatSecretKeyForBackup(credentials.secret);
-        return `npx aha-v12 auth restore --code ${formatted}`;
+        return `npx aha-v13 auth restore --code ${formatted}`;
     }, []);
 
     const handleCopyCommand = React.useCallback(async () => {
@@ -654,10 +654,10 @@ function ExperiencedUserPanel() {
 
     const restoreKeyCommand = React.useMemo(() => {
         const credentials = require('@/auth/AuthContext').getCurrentAuth()?.credentials;
-        if (!credentials?.secret) return 'npx aha-v12';
+        if (!credentials?.secret) return 'npx aha-v13';
         const { formatSecretKeyForBackup } = require('@/auth/secretKeyBackup');
         const formatted = formatSecretKeyForBackup(credentials.secret);
-        return `npx aha-v12 auth restore --code ${formatted}`;
+        return `npx aha-v13 auth restore --code ${formatted}`;
     }, []);
 
     const handleCopyDeviceCommand = React.useCallback(async () => {

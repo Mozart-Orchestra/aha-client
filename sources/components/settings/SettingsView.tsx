@@ -27,7 +27,7 @@ export const SettingsView = React.memo(function SettingsView() {
     const bio = getBio(profile);
 
     const handleReportIssue = async () => {
-        const url = 'https://github.com/aha-reborn/aha/issues';
+        const url = 'https://github.com/Shiyao-Huang/aha/issues/new/choose';
         const supported = await Linking.canOpenURL(url);
         if (supported) {
             await Linking.openURL(url);

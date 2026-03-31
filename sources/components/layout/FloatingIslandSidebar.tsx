@@ -95,6 +95,7 @@ interface FloatingIslandSidebarProps {
     conversationItems?: FloatingIslandConversationItem[];
     conversationSectionLabel?: string;
     conversationHeaderAction?: () => void;
+    conversationHeaderActionLabel?: string;
     agentEmptyText?: string;
     conversationEmptyText?: string;
 }
@@ -954,6 +955,7 @@ export function FloatingIslandSidebar({
     conversationItems = [],
     conversationSectionLabel = t('sidebar.conversations'),
     conversationHeaderAction,
+    conversationHeaderActionLabel,
     agentEmptyText = t('sidebar.noActiveAgents'),
     conversationEmptyText = t('sidebar.noConversationsYet'),
 }: FloatingIslandSidebarProps) {
@@ -1062,6 +1064,19 @@ export function FloatingIslandSidebar({
                         ) : null}
                     </View>
                 </View>
+                {conversationHeaderAction && conversationHeaderActionLabel ? (
+                    <View style={styles.actionButtonRow}>
+                        <Pressable
+                            onPress={conversationHeaderAction}
+                            style={styles.prominentActionButton}
+                        >
+                            <Ionicons name="add" size={14} color="#FFFFFF" />
+                            <Text style={styles.prominentActionText}>
+                                {conversationHeaderActionLabel}
+                            </Text>
+                        </Pressable>
+                    </View>
+                ) : null}
                 <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
                     {conversationItems.length > 0 ? (
                         conversationItems.map((item) => (
