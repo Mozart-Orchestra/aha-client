@@ -7,6 +7,7 @@ import {
     Pressable,
     ScrollView,
     Text,
+    TextInput,
     View,
     useWindowDimensions,
 } from 'react-native';
@@ -15,9 +16,13 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import * as Clipboard from 'expo-clipboard';
 
-import { useAuth } from '@/auth/AuthContext';
+import { useAuth, getNeedsRestore, setNeedsRestore } from '@/auth/AuthContext';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
+import { normalizeSecretKey } from '@/auth/secretKeyBackup';
+import { decodeBase64 } from '@/encryption/base64';
+import { signInWithGoogle, signInWithEmail, verifyEmailOtp, exchangeSupabaseSession, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
+import { supabase } from '@/auth/supabase';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
@@ -135,6 +140,53 @@ const styles = StyleSheet.create((theme) => ({
         flexWrap: 'wrap',
         gap: 12,
         marginTop: 28,
+    },
+    landingInput: {
+        minHeight: 48,
+        borderRadius: 24,
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        color: theme.colors.text,
+        fontSize: 15,
+        width: '100%',
+    },
+    landingOtpInput: {
+        minHeight: 56,
+        borderRadius: 16,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderWidth: 2,
+        borderColor: theme.colors.text,
+        backgroundColor: theme.colors.surface,
+        color: theme.colors.text,
+        fontSize: 28,
+        fontFamily: 'IBMPlexMono-SemiBold',
+        letterSpacing: 12,
+        textAlign: 'center',
+        width: '100%',
+    },
+    landingOtpHint: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        marginBottom: 4,
+    },
+    landingResendRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+    },
+    landingResendText: {
+        fontSize: 13,
+        color: theme.colors.text,
+        textDecorationLine: 'underline',
+    },
+    landingResendTextDisabled: {
+        color: theme.colors.textSecondary,
+        textDecorationLine: 'none',
     },
     landingButton: {
         minHeight: 48,
@@ -414,6 +466,133 @@ function NotAuthenticated() {
         );
     }, []);
 
+    // Show restore key input if account exists but local secret is missing
+    const initialNeedsRestore = React.useMemo(() => getNeedsRestore(), []);
+    const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp' | 'restore'>(initialNeedsRestore ? 'restore' : 'idle');
+    const [restoreKey, setRestoreKey] = React.useState('');
+
+    const handleRestoreKeySubmit = React.useCallback(async () => {
+        if (!restoreKey.trim()) return;
+        setEmailLoading(true);
+        try {
+            const secretBase64 = normalizeSecretKey(restoreKey.trim());
+            const secretBytes = decodeBase64(secretBase64, 'base64url');
+            const token = await authGetToken(secretBytes);
+            await auth.login(token, secretBase64);
+            setNeedsRestore(false);
+            if (hasPendingTerminalConnectRequest()) {
+                router.replace('/terminal/connect');
+            }
+        } catch (error) {
+            Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
+        } finally {
+            setEmailLoading(false);
+        }
+    }, [restoreKey, auth, router]);
+
+    // Email OTP login state
+    const [email, setEmail] = React.useState('');
+    const [otp, setOtp] = React.useState('');
+    const [emailLoading, setEmailLoading] = React.useState(false);
+    const [resendCooldown, setResendCooldown] = React.useState(0);
+
+    // 60s resend cooldown timer
+    React.useEffect(() => {
+        if (resendCooldown <= 0) return;
+        const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [resendCooldown]);
+
+    const handleEmailLogin = React.useCallback(() => {
+        setEmailLoginStep('email');
+    }, []);
+
+    const handleSendOtp = React.useCallback(async () => {
+        if (!email.trim() || resendCooldown > 0) return;
+        setEmailLoading(true);
+        try {
+            await signInWithEmail(email.trim());
+            setEmailLoginStep('otp');
+            setResendCooldown(60);
+        } catch (error) {
+            Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
+        } finally {
+            setEmailLoading(false);
+        }
+    }, [email, resendCooldown]);
+
+    const handleResendOtp = React.useCallback(async () => {
+        if (resendCooldown > 0) return;
+        setEmailLoading(true);
+        try {
+            await signInWithEmail(email.trim());
+            setResendCooldown(60);
+        } catch (error) {
+            Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
+        } finally {
+            setEmailLoading(false);
+        }
+    }, [email, resendCooldown]);
+
+    /**
+     * After Supabase session is obtained (Google or Email OTP),
+     * generate a client-side secret, register with server, and login.
+     * If account already exists (RESTORE_REQUIRED), prompt for restore key.
+     */
+    const completeSupabaseLogin = React.useCallback(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        const secret = await getRandomBytesAsync(32);
+        const result = await exchangeSupabaseSession(session.access_token, secret);
+        await auth.login(result.token, encodeBase64(secret, 'base64url'));
+        if (hasPendingTerminalConnectRequest()) {
+            router.replace('/terminal/connect');
+        }
+    }, [auth, router]);
+
+    const handleVerifyOtp = React.useCallback(async () => {
+        if (!otp.trim()) return;
+        setEmailLoading(true);
+        try {
+            await verifyEmailOtp(email.trim(), otp.trim());
+            await completeSupabaseLogin();
+        } catch (error) {
+            if (error instanceof SupabaseRestoreRequiredError) {
+                Modal.alert(
+                    t('welcome.restoreRequired'),
+                    t('welcome.restoreRequiredMessage'),
+                );
+                setEmailLoginStep('idle');
+            } else {
+                Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
+            }
+        } finally {
+            setEmailLoading(false);
+        }
+    }, [email, otp, completeSupabaseLogin]);
+
+    const handleGoogleLogin = React.useCallback(async () => {
+        try {
+            await signInWithGoogle();
+
+            // On web, signInWithOAuth redirects the page — session is picked up on reload.
+            // On native, the session is set after the browser returns.
+            if (Platform.OS !== 'web') {
+                await completeSupabaseLogin();
+            }
+        } catch (error) {
+            if (error instanceof SupabaseRestoreRequiredError) {
+                Modal.alert(
+                    t('welcome.restoreRequired'),
+                    t('welcome.restoreRequiredMessage'),
+                );
+            } else {
+                Modal.alert('Error', 'Google sign-in failed. Please try again.');
+            }
+        }
+    }, [completeSupabaseLogin]);
+
     const previewPanel = (
         <View style={styles.landingPreviewPanel}>
             <View style={styles.landingPreviewHeader}>
@@ -459,7 +638,7 @@ function NotAuthenticated() {
                     <View style={styles.landingDesktopHeader}>
                         <View style={styles.landingDesktopBrand}>
                             <View style={[styles.landingIconShell, styles.landingIconShellDark]}>
-                                <Ionicons name="terminal-outline" size={16} color={theme.colors.surface} />
+                                <Text style={{ color: theme.colors.surface, fontSize: 16, fontWeight: '700' }}>A</Text>
                             </View>
                             <Text style={styles.landingDesktopBrandText}>{t('landing.brand')}</Text>
                         </View>
@@ -481,25 +660,114 @@ function NotAuthenticated() {
                             <Text style={styles.landingTitle}>{t('welcome.title')}</Text>
                             <Text style={styles.landingSubtitle}>{t('welcome.subtitle')}</Text>
 
-                            <View style={styles.landingActionsRow}>
-                                <LandingButton
-                                    icon="copy-outline"
-                                    title={t('landing.cliCommand')}
-                                    onPress={handleCopyCliCommand}
-                                    tone="primary"
-                                />
-                                <LandingButton
-                                    title={t('welcome.createAccount')}
-                                    onPress={handleCreateAccount}
-                                    tone="secondary"
-                                />
-                                <LandingButton
-                                    icon="key-outline"
-                                    title={t('welcome.linkOrRestoreAccount')}
-                                    onPress={handleRestore}
-                                    tone="ghost"
-                                />
-                            </View>
+                            {emailLoginStep === 'restore' ? (
+                                <View style={styles.landingActionsRow}>
+                                    <Text style={styles.landingOtpHint}>{t('welcome.restoreRequiredMessage')}</Text>
+                                    <TextInput
+                                        style={styles.landingInput}
+                                        placeholder={t('welcome.restoreKeyPlaceholder')}
+                                        placeholderTextColor={theme.colors.textSecondary}
+                                        value={restoreKey}
+                                        onChangeText={setRestoreKey}
+                                        autoCapitalize="characters"
+                                        autoFocus
+                                        onSubmitEditing={handleRestoreKeySubmit}
+                                    />
+                                    <LandingButton
+                                        title={emailLoading ? t('common.loading') : t('welcome.restoreSubmit')}
+                                        onPress={handleRestoreKeySubmit}
+                                        tone="primary"
+                                    />
+                                    <LandingButton
+                                        title={t('common.back')}
+                                        onPress={() => setEmailLoginStep('idle')}
+                                        tone="ghost"
+                                    />
+                                </View>
+                            ) : emailLoginStep === 'idle' ? (
+                                <View style={styles.landingActionsRow}>
+                                    <LandingButton
+                                        icon="logo-google"
+                                        title={t('welcome.signInWithGoogle')}
+                                        onPress={handleGoogleLogin}
+                                        tone="primary"
+                                    />
+                                    <LandingButton
+                                        icon="mail-outline"
+                                        title={t('welcome.signInWithEmail')}
+                                        onPress={handleEmailLogin}
+                                        tone="secondary"
+                                    />
+                                    <LandingButton
+                                        icon="key-outline"
+                                        title={t('welcome.linkOrRestoreAccount')}
+                                        onPress={() => setEmailLoginStep('restore')}
+                                        tone="ghost"
+                                    />
+                                </View>
+                            ) : emailLoginStep === 'email' ? (
+                                <View style={styles.landingActionsRow}>
+                                    <TextInput
+                                        style={styles.landingInput}
+                                        placeholder={t('welcome.emailPlaceholder')}
+                                        placeholderTextColor={theme.colors.textSecondary}
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
+                                        autoFocus
+                                        onSubmitEditing={handleSendOtp}
+                                    />
+                                    <LandingButton
+                                        title={emailLoading ? t('common.loading') : t('welcome.sendCode')}
+                                        onPress={handleSendOtp}
+                                        tone="primary"
+                                    />
+                                    <LandingButton
+                                        title={t('common.back')}
+                                        onPress={() => setEmailLoginStep('idle')}
+                                        tone="ghost"
+                                    />
+                                </View>
+                            ) : (
+                                <View style={styles.landingActionsRow}>
+                                    <Text style={styles.landingOtpHint}>{t('welcome.otpSentTo', { email })}</Text>
+                                    <TextInput
+                                        style={styles.landingOtpInput}
+                                        placeholder={t('welcome.otpPlaceholder')}
+                                        placeholderTextColor={theme.colors.textSecondary}
+                                        value={otp}
+                                        onChangeText={setOtp}
+                                        keyboardType="number-pad"
+                                        maxLength={6}
+                                        autoFocus
+                                        onSubmitEditing={handleVerifyOtp}
+                                    />
+                                    <LandingButton
+                                        title={emailLoading ? t('common.loading') : t('welcome.verifyCode')}
+                                        onPress={handleVerifyOtp}
+                                        tone="primary"
+                                    />
+                                    <View style={styles.landingResendRow}>
+                                        <Pressable
+                                            onPress={handleResendOtp}
+                                            disabled={resendCooldown > 0}
+                                        >
+                                            <Text style={[
+                                                styles.landingResendText,
+                                                resendCooldown > 0 && styles.landingResendTextDisabled,
+                                            ]}>
+                                                {resendCooldown > 0
+                                                    ? t('welcome.resendIn', { seconds: resendCooldown })
+                                                    : t('welcome.resendCode')}
+                                            </Text>
+                                        </Pressable>
+                                        <Pressable onPress={() => setEmailLoginStep('email')}>
+                                            <Text style={styles.landingResendText}>{t('welcome.changeEmail')}</Text>
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            )}
 
                             <View style={styles.landingTrustRow}>
                                 <TrustItem icon="lock-closed-outline" label={t('landing.trustEncrypted')} />
@@ -552,29 +820,114 @@ function NotAuthenticated() {
                 <Text style={styles.landingMobileTitle}>{t('welcome.title')}</Text>
                 <Text style={styles.landingMobileSubtitle}>{t('welcome.subtitle')}</Text>
 
-                <View style={styles.landingMobileActions}>
-                    <LandingButton
-                        icon={Platform.OS === 'android' || Platform.OS === 'ios' ? undefined : 'copy-outline'}
-                        title={Platform.OS === 'android' || Platform.OS === 'ios'
-                            ? t('welcome.createAccount')
-                            : t('landing.cliCommand')}
-                        onPress={Platform.OS === 'android' || Platform.OS === 'ios' ? handleCreateAccount : handleCopyCliCommand}
-                        tone="primary"
-                    />
-                    <LandingButton
-                        title={secondaryTitle}
-                        onPress={secondaryAction}
-                        tone="secondary"
-                    />
-                    {Platform.OS === 'web' ? (
+                {emailLoginStep === 'restore' ? (
+                    <View style={styles.landingMobileActions}>
+                        <Text style={styles.landingOtpHint}>{t('welcome.restoreRequiredMessage')}</Text>
+                        <TextInput
+                            style={styles.landingInput}
+                            placeholder={t('welcome.restoreKeyPlaceholder')}
+                            placeholderTextColor={theme.colors.textSecondary}
+                            value={restoreKey}
+                            onChangeText={setRestoreKey}
+                            autoCapitalize="characters"
+                            autoFocus
+                            onSubmitEditing={handleRestoreKeySubmit}
+                        />
+                        <LandingButton
+                            title={emailLoading ? t('common.loading') : t('welcome.restoreSubmit')}
+                            onPress={handleRestoreKeySubmit}
+                            tone="primary"
+                        />
+                        <LandingButton
+                            title={t('common.back')}
+                            onPress={() => setEmailLoginStep('idle')}
+                            tone="ghost"
+                        />
+                    </View>
+                ) : emailLoginStep === 'idle' ? (
+                    <View style={styles.landingMobileActions}>
+                        <LandingButton
+                            icon="logo-google"
+                            title={t('welcome.signInWithGoogle')}
+                            onPress={handleGoogleLogin}
+                            tone="primary"
+                        />
+                        <LandingButton
+                            icon="mail-outline"
+                            title={t('welcome.signInWithEmail')}
+                            onPress={handleEmailLogin}
+                            tone="secondary"
+                        />
                         <LandingButton
                             icon="key-outline"
                             title={t('welcome.linkOrRestoreAccount')}
-                            onPress={handleRestore}
+                            onPress={() => setEmailLoginStep('restore')}
                             tone="ghost"
                         />
-                    ) : null}
-                </View>
+                    </View>
+                ) : emailLoginStep === 'email' ? (
+                    <View style={styles.landingMobileActions}>
+                        <TextInput
+                            style={styles.landingInput}
+                            placeholder={t('welcome.emailPlaceholder')}
+                            placeholderTextColor={theme.colors.textSecondary}
+                            value={email}
+                            onChangeText={setEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoFocus
+                            onSubmitEditing={handleSendOtp}
+                        />
+                        <LandingButton
+                            title={emailLoading ? t('common.loading') : t('welcome.sendCode')}
+                            onPress={handleSendOtp}
+                            tone="primary"
+                        />
+                        <LandingButton
+                            title={t('common.back')}
+                            onPress={() => setEmailLoginStep('idle')}
+                            tone="ghost"
+                        />
+                    </View>
+                ) : (
+                    <View style={styles.landingMobileActions}>
+                        <Text style={styles.landingOtpHint}>{t('welcome.otpSentTo', { email })}</Text>
+                        <TextInput
+                            style={styles.landingOtpInput}
+                            placeholder={t('welcome.otpPlaceholder')}
+                            placeholderTextColor={theme.colors.textSecondary}
+                            value={otp}
+                            onChangeText={setOtp}
+                            keyboardType="number-pad"
+                            maxLength={6}
+                            autoFocus
+                            onSubmitEditing={handleVerifyOtp}
+                        />
+                        <LandingButton
+                            title={emailLoading ? t('common.loading') : t('welcome.verifyCode')}
+                            onPress={handleVerifyOtp}
+                            tone="primary"
+                        />
+                        <View style={styles.landingResendRow}>
+                            <Pressable
+                                onPress={handleResendOtp}
+                                disabled={resendCooldown > 0}
+                            >
+                                <Text style={[
+                                    styles.landingResendText,
+                                    resendCooldown > 0 && styles.landingResendTextDisabled,
+                                ]}>
+                                    {resendCooldown > 0
+                                        ? t('welcome.resendIn', { seconds: resendCooldown })
+                                        : t('welcome.resendCode')}
+                                </Text>
+                            </Pressable>
+                            <Pressable onPress={() => setEmailLoginStep('email')}>
+                                <Text style={styles.landingResendText}>{t('welcome.changeEmail')}</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                )}
 
                 <View style={styles.landingTrustRow}>
                     <TrustItem icon="lock-closed-outline" label={t('landing.trustEncrypted')} />

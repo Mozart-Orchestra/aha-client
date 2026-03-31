@@ -5,7 +5,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Fonts from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
 import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
-import { AuthProvider } from '@/auth/AuthContext';
+import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
+import { supabase } from '@/auth/supabase';
+import { exchangeSupabaseSession, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
+import { getRandomBytesAsync } from 'expo-crypto';
+import { persistPendingTerminalConnectRequestStorage, readPendingTerminalConnectRequestStorage } from '@/auth/pendingTerminalConnect';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { initialWindowMetrics, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -155,15 +159,63 @@ export default function RootLayout() {
     //
     // Init sequence
     //
-    const [initState, setInitState] = React.useState<{ credentials: AuthCredentials | null; initError?: string } | null>(null);
+    const [initState, setInitState] = React.useState<{ credentials: AuthCredentials | null; initError?: string; needsRestore?: boolean } | null>(null);
     React.useEffect(() => {
+        // Preserve terminal connect hash before OAuth redirect can lose it
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const hash = window.location.hash;
+            if (hash && hash.includes('key=') && window.location.pathname.includes('terminal/connect')) {
+                persistPendingTerminalConnectRequestStorage(JSON.stringify({
+                    publicKey: new URLSearchParams(hash.slice(1)).get('key'),
+                    nextPath: new URLSearchParams(hash.slice(1)).get('next') || null,
+                    machineId: new URLSearchParams(hash.slice(1)).get('machineId') || null,
+                    serverUrl: new URLSearchParams(hash.slice(1)).get('serverUrl') || null,
+                    autoApprove: true,
+                    authMode: new URLSearchParams(hash.slice(1)).get('mode') || 'auto',
+                }));
+            }
+        }
+
         (async () => {
             try {
                 await loadFonts();
                 await sodium.ready;
                 await initializeTextLanguage();
                 await initializeI18n();
-                const credentials = await TokenStorage.getCredentials();
+
+                // Check existing stored credentials first
+                let credentials = await TokenStorage.getCredentials();
+
+                // If no stored credentials, check if we have a Supabase session
+                // (e.g. from OAuth callback redirect with #access_token=...)
+                if (!credentials) {
+                    // Wait for Supabase to process URL hash if present
+                    let session = (await supabase.auth.getSession()).data.session;
+                    if (!session && Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+                        // Hash present but session not ready — wait for auth state change
+                        session = await new Promise((resolve) => {
+                            const timeout = setTimeout(() => resolve(null), 5000);
+                            const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+                                clearTimeout(timeout);
+                                subscription.unsubscribe();
+                                resolve(s);
+                            });
+                        });
+                    }
+                    if (session?.access_token) {
+                        try {
+                            // Generate secret client-side, register/update with server
+                            const secret = await getRandomBytesAsync(32);
+                            const result = await exchangeSupabaseSession(session.access_token, secret);
+                            const { encodeBase64: b64 } = await import('@/encryption/base64');
+                            credentials = { token: result.token, secret: b64(secret, 'base64url') };
+                            await TokenStorage.setCredentials(credentials);
+                        } catch {
+                            // Failed: continue unauthenticated
+                        }
+                    }
+                }
+
                 if (credentials) {
                     await syncRestore(credentials);
                 }

@@ -9,9 +9,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { Image } from 'expo-image';
-
-import { useArtifacts, useAllSessions, useIsDataReady } from '@/sync/storage';
+import { useArtifacts, useAllSessions, useAllMachines, useIsDataReady } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import { useAuth } from '@/auth/AuthContext';
 import type { DecryptedArtifact } from '@/sync/artifactTypes';
@@ -24,6 +22,7 @@ import { UsageBar } from '@/components/usage/UsageBar';
 import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
 import { getSessionName } from '@/utils/sessionUtils';
+import { isMachineOnline } from '@/utils/machineUtils';
 
 function useIsExperiencedUser(): boolean {
     const artifacts = useArtifacts();
@@ -486,18 +485,84 @@ function WorkspaceStatsCard() {
     );
 }
 
+function OnboardingStep({
+    step,
+    title,
+    subtitle,
+    done,
+    active,
+    children,
+}: {
+    step: number;
+    title: string;
+    subtitle: string;
+    done: boolean;
+    active: boolean;
+    children?: React.ReactNode;
+}) {
+    const { theme } = useUnistyles();
+    const styles = stylesheet;
+
+    return (
+        <View style={[styles.onboardingStep, active && styles.onboardingStepActive]}>
+            <View style={styles.onboardingStepHeader}>
+                <View style={[
+                    styles.onboardingStepBadge,
+                    done && styles.onboardingStepBadgeDone,
+                    active && !done && styles.onboardingStepBadgeActive,
+                ]}>
+                    {done ? (
+                        <Ionicons name="checkmark" size={14} color="#fff" />
+                    ) : (
+                        <Text style={[
+                            styles.onboardingStepNumber,
+                            active && styles.onboardingStepNumberActive,
+                        ]}>{step}</Text>
+                    )}
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.onboardingStepTitle, done && styles.onboardingStepTitleDone]}>{title}</Text>
+                    <Text style={styles.onboardingStepSubtitle}>{subtitle}</Text>
+                </View>
+            </View>
+            {active && children ? (
+                <View style={styles.onboardingStepContent}>
+                    {children}
+                </View>
+            ) : null}
+        </View>
+    );
+}
+
 function NewUserPanel() {
     const router = useRouter();
     const styles = stylesheet;
     const { theme, rt } = useUnistyles();
     const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
+    const sessions = useAllSessions();
+    const machines = useAllMachines();
+    const hasMachine = machines.length > 0;
+
+    const restoreKeyCommand = React.useMemo(() => {
+        const credentials = require('@/auth/AuthContext').getCurrentAuth()?.credentials;
+        if (!credentials?.secret) return 'npx aha-v12';
+        const { formatSecretKeyForBackup } = require('@/auth/secretKeyBackup');
+        const formatted = formatSecretKeyForBackup(credentials.secret);
+        return `npx aha-v12 auth restore --code ${formatted}`;
+    }, []);
+
+    const handleCopyCommand = React.useCallback(async () => {
+        const Clipboard = await import('expo-clipboard');
+        await Clipboard.setStringAsync(restoreKeyCommand);
+        const { Modal } = await import('@/modal');
+        Modal.alert(
+            t('home.onboarding.commandCopiedTitle'),
+            t('home.onboarding.commandCopiedMessage'),
+        );
+    }, [restoreKeyCommand]);
 
     const handleCreateTeam = React.useCallback(() => {
         router.push('/teams/new' as never);
-    }, [router]);
-
-    const handleSync = React.useCallback(() => {
-        router.push('/restore' as never);
     }, [router]);
 
     return (
@@ -507,43 +572,75 @@ function NewUserPanel() {
             showsVerticalScrollIndicator={false}
         >
             <View style={styles.header}>
-                <View style={styles.logoWrap}>
-                    <Image
-                        source={require('@/assets/images/logo-black.png')}
-                        contentFit="contain"
-                        style={{ width: 28, height: 28 }}
-                        tintColor={theme.colors.header.tint}
-                    />
+                <View style={styles.logoWrapAha}>
+                    <Text style={styles.logoTextAha}>A</Text>
                 </View>
                 <View style={styles.headerText}>
-                    <Text style={styles.headerTitle}>{t('home.welcome')}</Text>
-                    <Text style={styles.headerSubtitle}>{t('home.welcomeSubtitle')}</Text>
+                    <Text style={styles.headerTitle}>{t('home.onboarding.title')}</Text>
+                    <Text style={styles.headerSubtitle}>{t('home.onboarding.subtitle')}</Text>
                 </View>
             </View>
 
-            <HelpCard />
-
-            <ActionCard
-                icon="add"
-                title={t('home.createTeamTitle')}
-                subtitle={t('home.createTeamSubtitle')}
-                onPress={handleCreateTeam}
-                accent
+            <OnboardingStep
+                step={1}
+                title={t('home.onboarding.step1Title')}
+                subtitle={t('home.onboarding.step1Subtitle')}
+                done={true}
+                active={false}
             />
 
-            <ActionCard
-                icon="book-outline"
-                title={t('home.docsTitle')}
-                subtitle={t('home.docsSubtitle')}
-                onPress={() => router.push('/agents' as never)}
-            />
+            <OnboardingStep
+                step={2}
+                title={t('home.onboarding.step2Title')}
+                subtitle={t('home.onboarding.step2Subtitle')}
+                done={hasMachine}
+                active={true}
+            >
+                <View style={styles.onboardingCommandBox}>
+                    <Text style={styles.onboardingCommandText} numberOfLines={1} ellipsizeMode="middle">{restoreKeyCommand}</Text>
+                    <Pressable style={styles.onboardingCopyButton} onPress={handleCopyCommand}>
+                        <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
+                    </Pressable>
+                </View>
+                {machines.length > 0 ? (
+                    <View style={{ marginTop: 12, gap: 8 }}>
+                        {machines.map((machine) => (
+                            <View key={machine.id} style={styles.machineItem}>
+                                <Ionicons
+                                    name={isMachineOnline(machine) ? 'hardware-chip' : 'hardware-chip-outline'}
+                                    size={18}
+                                    color={isMachineOnline(machine) ? '#2BC866' : theme.colors.textSecondary}
+                                />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.machineItemName}>{machine.metadata?.host ?? machine.id.slice(0, 8)}</Text>
+                                    <Text style={styles.machineItemMeta}>
+                                        {machine.metadata?.platform ?? ''}
+                                        {isMachineOnline(machine) ? ' · online' : ' · offline'}
+                                    </Text>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                ) : (
+                    <Text style={styles.onboardingHint}>{t('home.onboarding.step2Hint')}</Text>
+                )}
+            </OnboardingStep>
 
-            <ActionCard
-                icon="phone-portrait-outline"
-                title={t('home.syncDeviceTitle')}
-                subtitle={t('home.syncDeviceSubtitle')}
-                onPress={handleSync}
-            />
+            <OnboardingStep
+                step={3}
+                title={t('home.onboarding.step3Title')}
+                subtitle={t('home.onboarding.step3Subtitle')}
+                done={false}
+                active={true}
+            >
+                <ActionCard
+                    icon="add"
+                    title={t('home.createTeamTitle')}
+                    subtitle={t('home.createTeamSubtitle')}
+                    onPress={handleCreateTeam}
+                    accent
+                />
+            </OnboardingStep>
         </ScrollView>
     );
 }
@@ -551,8 +648,27 @@ function NewUserPanel() {
 function ExperiencedUserPanel() {
     const router = useRouter();
     const styles = stylesheet;
-    const { rt } = useUnistyles();
+    const { theme, rt } = useUnistyles();
     const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
+    const machines = useAllMachines();
+
+    const restoreKeyCommand = React.useMemo(() => {
+        const credentials = require('@/auth/AuthContext').getCurrentAuth()?.credentials;
+        if (!credentials?.secret) return 'npx aha-v12';
+        const { formatSecretKeyForBackup } = require('@/auth/secretKeyBackup');
+        const formatted = formatSecretKeyForBackup(credentials.secret);
+        return `npx aha-v12 auth restore --code ${formatted}`;
+    }, []);
+
+    const handleCopyDeviceCommand = React.useCallback(async () => {
+        const Clipboard = await import('expo-clipboard');
+        await Clipboard.setStringAsync(restoreKeyCommand);
+        const { Modal } = await import('@/modal');
+        Modal.alert(
+            t('home.onboarding.commandCopiedTitle'),
+            t('home.onboarding.commandCopiedMessage'),
+        );
+    }, [restoreKeyCommand]);
 
     const handleReport = React.useCallback(() => {
         router.push('/teams' as never);
@@ -560,10 +676,6 @@ function ExperiencedUserPanel() {
 
     const handleCreateTeam = React.useCallback(() => {
         router.push('/teams/new' as never);
-    }, [router]);
-
-    const handleSync = React.useCallback(() => {
-        router.push('/restore' as never);
     }, [router]);
 
     const handleMarketplace = React.useCallback(() => {
@@ -591,12 +703,46 @@ function ExperiencedUserPanel() {
                 onPress={handleReport}
             />
 
-            <ActionCard
-                icon="phone-portrait-outline"
-                title={t('home.syncDeviceTitle')}
-                subtitle={t('home.syncDeviceSubtitle')}
-                onPress={handleSync}
-            />
+            {/* Add New Device — show restore key command */}
+            <View style={styles.onboardingStep}>
+                <View style={styles.onboardingStepHeader}>
+                    <Ionicons name="laptop-outline" size={22} color={theme.colors.text} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.onboardingStepTitle}>{t('home.addDeviceTitle')}</Text>
+                        <Text style={styles.onboardingStepSubtitle}>{t('home.addDeviceSubtitle')}</Text>
+                    </View>
+                </View>
+                <View style={styles.onboardingStepContent}>
+                    <View style={styles.onboardingCommandBox}>
+                        <Text style={styles.onboardingCommandText} numberOfLines={1} ellipsizeMode="middle">{restoreKeyCommand}</Text>
+                        <Pressable style={styles.onboardingCopyButton} onPress={handleCopyDeviceCommand}>
+                            <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
+                        </Pressable>
+                    </View>
+                    {machines.length > 0 ? (
+                        <View style={{ marginTop: 10, gap: 6 }}>
+                            {machines.map((machine) => (
+                                <View key={machine.id} style={styles.machineItem}>
+                                    <Ionicons
+                                        name={isMachineOnline(machine) ? 'hardware-chip' : 'hardware-chip-outline'}
+                                        size={18}
+                                        color={isMachineOnline(machine) ? '#2BC866' : theme.colors.textSecondary}
+                                    />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.machineItemName}>{machine.metadata?.host ?? machine.id.slice(0, 8)}</Text>
+                                        <Text style={styles.machineItemMeta}>
+                                            {machine.metadata?.platform ?? ''}
+                                            {isMachineOnline(machine) ? ' · online' : ' · offline'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    ) : (
+                        <Text style={styles.onboardingHint}>{t('home.addDeviceHint')}</Text>
+                    )}
+                </View>
+            </View>
 
             <ActionCard
                 icon="storefront-outline"
@@ -645,6 +791,19 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderColor: theme.colors.divider,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    logoWrapAha: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: theme.colors.text,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    logoTextAha: {
+        color: theme.colors.surface,
+        fontSize: 24,
+        fontWeight: '700',
     },
     headerText: {
         flex: 1,
@@ -881,6 +1040,115 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 13,
         lineHeight: 19,
         color: theme.colors.textSecondary,
+        ...Typography.default(),
+    },
+    onboardingStep: {
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        padding: 16,
+        marginBottom: 12,
+    },
+    onboardingStepActive: {
+        borderColor: theme.colors.text,
+        borderWidth: 2,
+    },
+    onboardingStepHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    onboardingStepBadge: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.groupped.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    onboardingStepBadgeDone: {
+        backgroundColor: '#2BC866',
+        borderColor: '#2BC866',
+    },
+    onboardingStepBadgeActive: {
+        backgroundColor: theme.colors.text,
+        borderColor: theme.colors.text,
+    },
+    onboardingStepNumber: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: theme.colors.textSecondary,
+    },
+    onboardingStepNumberActive: {
+        color: theme.colors.surface,
+    },
+    onboardingStepTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    onboardingStepTitleDone: {
+        color: theme.colors.textSecondary,
+    },
+    onboardingStepSubtitle: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        marginTop: 2,
+        ...Typography.default(),
+    },
+    onboardingStepContent: {
+        marginTop: 14,
+    },
+    onboardingCommandBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.colors.groupped.background,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    onboardingCommandText: {
+        flex: 1,
+        fontSize: 15,
+        fontFamily: 'IBMPlexMono-SemiBold',
+        color: theme.colors.text,
+    },
+    onboardingCopyButton: {
+        padding: 6,
+    },
+    onboardingHint: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        marginTop: 8,
+        ...Typography.default(),
+    },
+    machineItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        backgroundColor: theme.colors.groupped.background,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+    },
+    machineItemName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.text,
+        ...Typography.default('semiBold'),
+    },
+    machineItemMeta: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        marginTop: 1,
         ...Typography.default(),
     },
 }));

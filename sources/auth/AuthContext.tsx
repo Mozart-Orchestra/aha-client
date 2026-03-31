@@ -6,6 +6,7 @@ import * as Updates from 'expo-updates';
 import { clearPersistence } from '@/sync/persistence';
 import { Platform } from 'react-native';
 import { trackLogout } from '@/track';
+import { signOutSupabase } from '@/auth/supabaseAuth';
 
 interface AuthContextType {
     isAuthenticated: boolean;
@@ -99,11 +100,12 @@ export function AuthProvider({ children, initialCredentials }: { children: React
         trackLogout();
         clearPersistence();
         await TokenStorage.removeCredentials();
-        
+        await signOutSupabase();
+
         // Update React state to ensure UI consistency
         setCredentials(null);
         setIsAuthenticated(false);
-        
+
         if (Platform.OS === 'web') {
             window.location.reload();
         } else {
@@ -111,7 +113,6 @@ export function AuthProvider({ children, initialCredentials }: { children: React
                 await Updates.reloadAsync();
             } catch (error) {
                 // In dev mode, reloadAsync will throw ERR_UPDATES_DISABLED
-                console.log('Reload failed (expected in dev mode):', error);
             }
         }
     };
@@ -147,4 +148,15 @@ export function setCurrentAuth(auth: AuthContextType | null) {
 
 export function getCurrentAuth(): AuthContextType | null {
     return currentAuthState;
+}
+
+// Flag: Supabase account exists but local secret is missing
+let needsRestoreFlag = false;
+
+export function setNeedsRestore(value: boolean) {
+    needsRestoreFlag = value;
+}
+
+export function getNeedsRestore(): boolean {
+    return needsRestoreFlag;
 }

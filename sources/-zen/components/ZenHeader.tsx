@@ -131,12 +131,7 @@ function HeaderLeft() {
             alignItems: 'center',
             justifyContent: 'center',
         }}>
-            <Image
-                source={require('@/assets/images/logo-black.png')}
-                contentFit="contain"
-                style={[{ width: 24, height: 24 }]}
-                tintColor={theme.colors.header.tint}
-            />
+            <Text style={{ color: theme.colors.surface, fontSize: 16, fontWeight: '700' }}>A</Text>
         </View>
     );
 }
