@@ -4,6 +4,44 @@ import * as z from 'zod';
 // Schema
 //
 
+const RecentMachinePathSchema = z.object({
+    machineId: z.string(),
+    path: z.string(),
+});
+
+export const ManualCorpsSeatConfigSchema = z.object({
+    id: z.string(),
+    genomeId: z.string().nullable(),
+    genomeName: z.string().nullable(),
+    genomeNamespace: z.string().nullable(),
+    genomeVersion: z.number().int().positive().nullable(),
+    genomeDisplayName: z.string().nullable(),
+    roleId: z.string(),
+    displayName: z.string(),
+    runtimeType: z.enum(['claude', 'codex']),
+    machineId: z.string().nullable(),
+    workspacePath: z.string(),
+    quantity: z.number().int().min(1).max(24),
+    customPrompt: z.string(),
+});
+
+export const ManualCorpsDraftSchema = z.object({
+    title: z.string(),
+    target: z.string(),
+    seats: z.array(ManualCorpsSeatConfigSchema),
+});
+
+export const ManualCorpsPresetSchema = z.object({
+    id: z.string(),
+    label: z.string(),
+    updatedAt: z.number(),
+    draft: ManualCorpsDraftSchema,
+});
+
+export type ManualCorpsSeatConfig = z.infer<typeof ManualCorpsSeatConfigSchema>;
+export type ManualCorpsDraft = z.infer<typeof ManualCorpsDraftSchema>;
+export type ManualCorpsPreset = z.infer<typeof ManualCorpsPresetSchema>;
+
 export const SettingsSchema = z.object({
     viewInline: z.boolean().describe('Whether to view inline tool calls'),
     inferenceOpenAIKey: z.string().nullish().describe('OpenAI API key for inference'),
@@ -12,6 +50,7 @@ export const SettingsSchema = z.object({
     showLineNumbersInToolViews: z.boolean().describe('Whether to show line numbers in tool view diffs'),
     wrapLinesInDiffs: z.boolean().describe('Whether to wrap long lines in diff views'),
     analyticsOptOut: z.boolean().describe('Whether to opt out of anonymous product analytics'),
+    professionalMode: z.boolean().describe('Whether to reveal detailed agent configuration in the marketplace and related views'),
     experiments: z.boolean().describe('Whether to enable experimental features'),
     alwaysShowContextSize: z.boolean().describe('Always show context size in agent input'),
     avatarStyle: z.string().describe('Avatar display style'),
@@ -22,13 +61,12 @@ export const SettingsSchema = z.object({
     reviewPromptLikedApp: z.boolean().nullish().describe('Whether user liked the app when asked'),
     voiceAssistantLanguage: z.string().nullable().describe('Preferred language for voice assistant (null for auto-detect)'),
     preferredLanguage: z.string().nullable().describe('Preferred UI language (null for auto-detect from device locale)'),
-    recentMachinePaths: z.array(z.object({
-        machineId: z.string(),
-        path: z.string()
-    })).describe('Last 10 machine-path combinations, ordered by most recent first'),
+    recentMachinePaths: z.array(RecentMachinePathSchema).describe('Last 10 machine-path combinations, ordered by most recent first'),
     lastUsedAgent: z.string().nullable().describe('Last selected agent type for new sessions'),
     lastUsedPermissionMode: z.string().nullable().describe('Last selected permission mode for new sessions'),
     lastUsedModelMode: z.string().nullable().describe('Last selected model mode for new sessions'),
+    manualCorpsDraft: ManualCorpsDraftSchema.nullable().describe('Cached manual corps builder draft'),
+    manualCorpsPresets: z.array(ManualCorpsPresetSchema).describe('Saved manual corps configurations for quick reuse'),
 });
 
 //
@@ -58,6 +96,7 @@ export const settingsDefaults: Settings = {
     showLineNumbersInToolViews: false,
     wrapLinesInDiffs: false,
     analyticsOptOut: false,
+    professionalMode: false,
     experiments: false,
     alwaysShowContextSize: false,
     avatarStyle: 'gradient',
@@ -72,6 +111,8 @@ export const settingsDefaults: Settings = {
     lastUsedAgent: null,
     lastUsedPermissionMode: null,
     lastUsedModelMode: null,
+    manualCorpsDraft: null,
+    manualCorpsPresets: [],
 };
 Object.freeze(settingsDefaults);
 

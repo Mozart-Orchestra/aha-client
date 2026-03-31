@@ -99,6 +99,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -114,6 +115,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             };
             const delta: Partial<Settings> = {
                 viewInline: true
@@ -125,6 +128,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -140,6 +144,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             });
         });
 
@@ -151,6 +157,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -166,6 +173,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             };
             const delta: Partial<Settings> = {};
             expect(applySettings(currentSettings, delta)).toEqual({
@@ -182,6 +191,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -197,6 +207,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             };
             const delta: Partial<Settings> = {
                 viewInline: false
@@ -208,6 +220,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -223,6 +236,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             });
         });
 
@@ -234,6 +249,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -249,6 +265,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             };
             expect(applySettings(currentSettings, {})).toEqual({
                 ...settingsDefaults,
@@ -279,6 +297,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -294,6 +313,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             };
             const delta: any = {
                 viewInline: false,
@@ -333,6 +354,7 @@ describe('settings', () => {
                 showLineNumbersInToolViews: false,
                 wrapLinesInDiffs: false,
                 analyticsOptOut: false,
+                professionalMode: false,
                 inferenceOpenAIKey: null,
                 experiments: false,
                 alwaysShowContextSize: false,
@@ -348,6 +370,8 @@ describe('settings', () => {
                 lastUsedAgent: null,
                 lastUsedPermissionMode: null,
                 lastUsedModelMode: null,
+                manualCorpsDraft: null,
+                manualCorpsPresets: [],
             });
         });
 

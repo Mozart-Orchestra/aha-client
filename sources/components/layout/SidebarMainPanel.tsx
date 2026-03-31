@@ -266,28 +266,6 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
     const activeCount = agents.filter((agent) => !agent.inactive).length;
     const totalCount = agents.length;
 
-    const statusCounts = React.useMemo(() => {
-        return agents.reduce((acc, agent) => {
-            if (agent.inactive) return acc;
-
-            const hasPendingRequests = !!agent.session?.agentState?.requests && Object.keys(agent.session.agentState.requests).length > 0;
-
-            if (hasPendingRequests) {
-                acc.needsDecision += 1;
-            } else if (agent.session?.thinking) {
-                acc.working += 1;
-            } else {
-                acc.online += 1;
-            }
-
-            return acc;
-        }, {
-            needsDecision: 0,
-            working: 0,
-            online: 0,
-        });
-    }, [agents]);
-
     return (
         <FloatingIslandSidebar
             variant={variant}
@@ -333,34 +311,10 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     }
                 },
             }))}
-            statusItems={[
-                {
-                    id: 'needs-decision',
-                    icon: 'radio-button-on',
-                    label: t('sidebar.needsDecision'),
-                    color: '#FF3B30',
-                    backgroundColor: '#FF3B300D',
-                    count: statusCounts.needsDecision || undefined,
-                },
-                {
-                    id: 'working',
-                    icon: 'pulse',
-                    label: t('sidebar.working'),
-                    color: '#FF9500',
-                    backgroundColor: '#FF950012',
-                    count: statusCounts.working || undefined,
-                },
-                {
-                    id: 'online',
-                    icon: 'checkmark-circle',
-                    label: t('sidebar.online'),
-                    color: '#34C759',
-                    backgroundColor: '#34C75912',
-                    count: statusCounts.online || undefined,
-                },
-            ]}
             agentHeaderAction={() => router.push('/agents/new' as never)}
-            agentHeaderActionLabel={t('agents.createAgent')}
+            agentHeaderActionLabel="+新建Agent"
+            corpsHeaderAction={() => router.push('/agents' as never)}
+            corpsHeaderActionLabel="+新建军团"
             conversationSectionLabel={t('sidebar.workspace')}
             conversationItems={teams.map((team) => ({
                 ...team,

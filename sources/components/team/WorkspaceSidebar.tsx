@@ -28,12 +28,6 @@ type RosterEntry = {
     activeTask?: { title?: string; startedAt?: number } | null;
 };
 
-type StatusSummary = {
-    decision: number;
-    working: number;
-    review: number;
-};
-
 type ArtifactLike = { id: string; title?: string | null; type?: string };
 
 interface WorkspaceSidebarProps {
@@ -48,8 +42,9 @@ interface WorkspaceSidebarProps {
     teamReturnTo: string;
     teamId: string;
     handleAgentLongPress: (sessionId: string, displayName: string) => void;
-    statusSummary: StatusSummary;
     allTeams: ArtifactLike[];
+    onAddAgent?: () => void;
+    onAddCorps?: () => void;
 }
 
 export function WorkspaceSidebar({
@@ -64,8 +59,9 @@ export function WorkspaceSidebar({
     teamReturnTo,
     teamId,
     handleAgentLongPress,
-    statusSummary,
     allTeams,
+    onAddAgent,
+    onAddCorps,
 }: WorkspaceSidebarProps) {
     const router = useRouter();
 
@@ -74,7 +70,7 @@ export function WorkspaceSidebar({
             variant="default"
             header={{
                 title: myDisplayName,
-                subtitle: `${myRoleTitle} · Online`,
+                subtitle: myRoleTitle,
                 iconLabel: myDisplayName.slice(0, 1).toUpperCase(),
                 iconGradientColors: ['#314658', '#1E2D3C'],
                 trailingIcon: 'chevron-down',
@@ -115,32 +111,10 @@ export function WorkspaceSidebar({
                     },
                 };
             })}
-            statusItems={[
-                {
-                    id: 'decision',
-                    icon: 'radio-button-on',
-                    label: 'Needs Decision',
-                    color: '#FF3B30',
-                    backgroundColor: '#FF3B300D',
-                    count: statusSummary.decision,
-                },
-                {
-                    id: 'working',
-                    icon: 'pulse',
-                    label: 'Working',
-                    color: '#FF9500',
-                    backgroundColor: '#FF950012',
-                    count: statusSummary.working,
-                },
-                {
-                    id: 'review',
-                    icon: 'people',
-                    label: 'Team Review',
-                    color: '#8A7F74',
-                    backgroundColor: '#00000000',
-                    count: statusSummary.review,
-                },
-            ]}
+            agentHeaderAction={onAddAgent}
+            agentHeaderActionLabel="+新建Agent"
+            corpsHeaderAction={onAddCorps}
+            corpsHeaderActionLabel="+新建军团"
             conversationItems={allTeams.map((team, index) => ({
                 id: team.id,
                 name: team.title || 'Team',

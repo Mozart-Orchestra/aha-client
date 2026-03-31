@@ -7,7 +7,7 @@ import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
 import { Avatar } from '@/components/avatar/Avatar';
-import { useSession, useIsDataReady, useArtifact } from '@/sync/storage';
+import { useSession, useIsDataReady, useArtifact, useSetting } from '@/sync/storage';
 import { getSessionName, useSessionStatus, formatOSPlatform, formatPathRelativeToHome, getSessionAvatarId } from '@/utils/sessionUtils';
 import * as Clipboard from 'expo-clipboard';
 import { Modal } from '@/modal';
@@ -177,6 +177,7 @@ function ExpandableText({ text, maxChars = 200, style }: { text: string; maxChar
 function GenomeInfoPanel({ session }: { session: Session }) {
     const { theme } = useUnistyles();
     const router = useRouter();
+    const professionalMode = useSetting('professionalMode');
     const { genome, spec, loading } = useGenomeForSession(session);
 
     const genomeId = genome?.id;
@@ -186,6 +187,7 @@ function GenomeInfoPanel({ session }: { session: Session }) {
     const version = versionIdentity.displayVersion;
     const learnings = spec?.memory?.learnings ?? [];
     const fullSpecJson = genome?.spec ? stringifyGenomeSpec(genome.spec) : null;
+    const hasProfessionalDetails = Boolean(spec?.systemPrompt || learnings.length > 0 || spec?.allowedTools?.length || fullSpecJson);
     const { avgScore, evaluationCount } = React.useMemo(
         () => getGenomeScoreSummary(genome, spec),
         [genome, spec]
@@ -267,7 +269,7 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                     )}
 
                     {/* System Prompt (collapsed by default) */}
-                    {spec?.systemPrompt && (
+                    {professionalMode && spec?.systemPrompt && (
                         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
                             <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
                                 System Prompt
@@ -276,7 +278,7 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                         </View>
                     )}
 
-                    {learnings.length > 0 && (
+                    {professionalMode && learnings.length > 0 && (
                         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
                             <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
                                 Learnings
@@ -291,7 +293,7 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                     )}
 
                     {/* Allowed Tools */}
-                    {spec?.allowedTools && spec.allowedTools.length > 0 && (
+                    {professionalMode && spec?.allowedTools && spec.allowedTools.length > 0 && (
                         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
                             <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
                                 Allowed Tools ({spec.allowedTools.length})
@@ -306,13 +308,22 @@ function GenomeInfoPanel({ session }: { session: Session }) {
                         </View>
                     )}
 
-                    {fullSpecJson ? (
+                    {professionalMode && fullSpecJson ? (
                         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
                             <Text style={{ color: theme.colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase', ...Typography.default() }}>
                                 Full Spec Mirror
                             </Text>
                             <CodeView code={fullSpecJson} />
                         </View>
+                    ) : null}
+
+                    {!professionalMode && hasProfessionalDetails ? (
+                        <Item
+                            title={t('settingsAccount.professionalMode')}
+                            subtitle={t('settingsAccount.professionalModeLocked')}
+                            icon={<Ionicons name="options-outline" size={29} color="#5856D6" />}
+                            onPress={() => router.push('/settings/account')}
+                        />
                     ) : null}
 
                     {/* View full genome button */}

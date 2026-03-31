@@ -597,14 +597,16 @@ export default function TeamDashboardScreen() {
                             parentSessionId: member.parentSessionId,
                             executionPlane: member.executionPlane,
                             runtimeType,
+                            machineId: member.machineId,
+                            workspacePath: member.workspacePath,
                         });
                     }
                     skipped += 1;
                     continue;
                 }
 
-                const machineId = session?.metadata?.machineId;
-                const directory = session?.metadata?.path;
+                const machineId = member.machineId || session?.metadata?.machineId;
+                const directory = member.workspacePath || session?.metadata?.path;
                 if (!machineId) {
                     issues.push(`${label}: missing machine binding`);
                     continue;
@@ -653,6 +655,8 @@ export default function TeamDashboardScreen() {
                         parentSessionId: member.parentSessionId,
                         executionPlane: member.executionPlane,
                         runtimeType,
+                        machineId,
+                        workspacePath: directory,
                     });
                     trackAgentDeployed(recoveredSessionId, {
                         source: 'team_recovery',
@@ -1261,20 +1265,6 @@ export default function TeamDashboardScreen() {
         return roster.filter((entry) => entry.session?.active).length;
     }, [roster]);
 
-    const statusSummary = React.useMemo(() => {
-        const reviewCount = approvedTasks.filter((task) => normalizeStatus(task.status) === 'review').length;
-        const workingCount = approvedTasks.filter((task) => {
-            const status = normalizeStatus(task.status);
-            return status === 'todo' || status === 'in-progress' || status === 'blocked';
-        }).length;
-
-        return {
-            decision: pendingTasks.length || 0,
-            working: workingCount || 0,
-            review: reviewCount || 0,
-        };
-    }, [approvedTasks, normalizeStatus, pendingTasks.length]);
-
     const recentConversations = React.useMemo(() => {
         const deduped = new Set<string>();
         const rows: {
@@ -1580,8 +1570,15 @@ export default function TeamDashboardScreen() {
             teamReturnTo={teamReturnTo}
             teamId={teamId}
             handleAgentLongPress={handleAgentLongPress}
-            statusSummary={statusSummary}
             allTeams={allTeams}
+            onAddAgent={() => {
+                setShowWorkspaceDrawer(false);
+                setShowAgentsPopover(true);
+            }}
+            onAddCorps={() => {
+                setShowWorkspaceDrawer(false);
+                router.push('/agents');
+            }}
         />
     );
 

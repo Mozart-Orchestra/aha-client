@@ -31,6 +31,7 @@ export default React.memo(() => {
     const [copiedRecently, setCopiedRecently] = useState(false);
     const [copiedCommandRecently, setCopiedCommandRecently] = useState(false);
     const [analyticsOptOut, setAnalyticsOptOut] = useSettingMutable('analyticsOptOut');
+    const [professionalMode, setProfessionalMode] = useSettingMutable('professionalMode');
     const profile = useProfile();
 
     // Get the current secret key
@@ -143,6 +144,18 @@ export default React.memo(() => {
                         subtitle={t('settingsAccount.linkNewDeviceSubtitle')}
                         icon={<Ionicons name="link-outline" size={29} color="#007AFF" />}
                         onPress={() => router.push('/restore')}
+                    />
+                    <Item
+                        title={t('settingsAccount.professionalMode')}
+                        subtitle={t('settingsAccount.professionalModeSubtitle')}
+                        icon={<Ionicons name="options-outline" size={29} color="#5856D6" />}
+                        rightElement={
+                            <Switch
+                                value={professionalMode}
+                                onValueChange={setProfessionalMode}
+                            />
+                        }
+                        showChevron={false}
                     />
                 </ItemGroup>
 

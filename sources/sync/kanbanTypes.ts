@@ -255,6 +255,8 @@ export interface KanbanTeamMember {
     parentSessionId?: string;
     executionPlane?: string;
     runtimeType?: string;
+    machineId?: string;
+    workspacePath?: string;
     /**
      * Truth-layer lifecycle timestamps for spawned agents.
      *

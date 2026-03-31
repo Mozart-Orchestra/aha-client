@@ -1,5 +1,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
+ARG NODE_OPTIONS=--max-old-space-size=12288
+ENV NODE_OPTIONS=${NODE_OPTIONS}
 
 COPY package.json yarn.lock ./
 COPY patches ./patches

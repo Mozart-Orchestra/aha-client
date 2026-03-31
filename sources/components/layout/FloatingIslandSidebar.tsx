@@ -89,6 +89,8 @@ interface FloatingIslandSidebarProps {
     agentSectionLabel?: string;
     agentHeaderAction?: () => void;
     agentHeaderActionLabel?: string;
+    corpsHeaderAction?: () => void;
+    corpsHeaderActionLabel?: string;
     statusItems?: FloatingIslandStatusItem[];
     conversationItems?: FloatingIslandConversationItem[];
     conversationSectionLabel?: string;
@@ -265,6 +267,26 @@ const styles = StyleSheet.create(() => ({
     sectionActionText: {
         fontSize: 12,
         fontWeight: '600',
+    },
+    actionButtonRow: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 8,
+    },
+    prominentActionButton: {
+        flex: 1,
+        minHeight: 34,
+        borderRadius: 10,
+        backgroundColor: '#000000',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    prominentActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFFFFF',
     },
     sectionScroll: {
         flex: 1,
@@ -926,6 +948,8 @@ export function FloatingIslandSidebar({
     agentSectionLabel = t('sidebar.agents'),
     agentHeaderAction,
     agentHeaderActionLabel,
+    corpsHeaderAction,
+    corpsHeaderActionLabel,
     statusItems = [],
     conversationItems = [],
     conversationSectionLabel = t('sidebar.conversations'),
@@ -1021,25 +1045,38 @@ export function FloatingIslandSidebar({
 
             <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
 
-            <View style={styles.monitoringSection}>
-                <View style={styles.sectionFixed}>
-                    <View style={styles.sectionLabelRow}>
-                        <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>Status</Text>
-                        {statusItems.reduce((sum, item) => sum + (item.count || 0), 0) > 0 ? (
-                            <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
-                                <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
-                                    {statusItems.reduce((sum, item) => sum + (item.count || 0), 0)}
-                                </Text>
-                            </View>
+            {/* Teams section (above agents) */}
+            <View style={styles.workspaceSection}>
+                <View style={styles.sectionLabelRow}>
+                    <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>{conversationSectionLabel}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
+                            <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
+                                {conversationItems.length}
+                            </Text>
+                        </View>
+                        {conversationHeaderAction ? (
+                            <Pressable onPress={conversationHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
+                                <Ionicons name="add" size={16} color={tokens.panelEyebrow} />
+                            </Pressable>
                         ) : null}
                     </View>
-                    {statusItems.map((item) => (
-                        <StatusRow key={item.id} item={item} maxCount={maxStatusCount} />
-                    ))}
                 </View>
+                <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
+                    {conversationItems.length > 0 ? (
+                        conversationItems.map((item) => (
+                            <ConversationRow key={item.id} item={item} tokens={tokens} />
+                        ))
+                    ) : (
+                        <Text style={[styles.emptyText, { color: tokens.panelTextSecondary }]}>{conversationEmptyText}</Text>
+                    )}
+                </ScrollView>
+            </View>
 
-                <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
+            <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
 
+            {/* Agents section (below teams) */}
+            <View style={styles.monitoringSection}>
                 <View style={styles.sectionExpanded}>
                     <View style={styles.sectionLabelRow}>
                         <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>{agentSectionLabel}</Text>
@@ -1056,38 +1093,35 @@ export function FloatingIslandSidebar({
                             ) : null}
                         </View>
                     </View>
-                    {agentHeaderAction && agentHeaderActionLabel ? (
-                        <Pressable
-                            onPress={agentHeaderAction}
-                            style={[
-                                styles.sectionActionButton,
-                                {
-                                    borderColor: tokens.panelDivider,
-                                    backgroundColor: tokens.chipBackground,
-                                },
-                            ]}
-                        >
-                            <Ionicons name="add" size={14} color={tokens.panelTitle} />
-                            <Text style={[styles.sectionActionText, { color: tokens.panelTitle }]}>
-                                {agentHeaderActionLabel}
-                            </Text>
-                        </Pressable>
-                    ) : null}
+                    <View style={styles.actionButtonRow}>
+                        {agentHeaderAction && agentHeaderActionLabel ? (
+                            <Pressable
+                                onPress={agentHeaderAction}
+                                style={styles.prominentActionButton}
+                            >
+                                <Ionicons name="add" size={14} color="#FFFFFF" />
+                                <Text style={styles.prominentActionText}>
+                                    {agentHeaderActionLabel}
+                                </Text>
+                            </Pressable>
+                        ) : null}
+                        {corpsHeaderAction && corpsHeaderActionLabel ? (
+                            <Pressable
+                                onPress={corpsHeaderAction}
+                                style={styles.prominentActionButton}
+                            >
+                                <Ionicons name="add" size={14} color="#FFFFFF" />
+                                <Text style={styles.prominentActionText}>
+                                    {corpsHeaderActionLabel}
+                                </Text>
+                            </Pressable>
+                        ) : null}
+                    </View>
                     <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
                         {agentItems.length > 0 ? (
                             <>
                                 {activeAgentItems.length > 0 ? (
                                     <>
-                                        <View style={styles.subsectionLabelRow}>
-                                            <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>
-                                                {t('status.online')}
-                                            </Text>
-                                            <View style={[styles.sectionCountBadge, { backgroundColor: '#EAF8EF' }]}>
-                                                <Text style={[styles.sectionCountText, { color: '#22C55E' }]}>
-                                                    {activeAgentItems.length}
-                                                </Text>
-                                            </View>
-                                        </View>
                                         {activeAgentItems.map((item) => (
                                             <AgentRow key={item.id} item={item} tokens={tokens} />
                                         ))}
@@ -1143,35 +1177,6 @@ export function FloatingIslandSidebar({
                         )}
                     </ScrollView>
                 </View>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: tokens.panelDivider }]} />
-
-            <View style={styles.workspaceSection}>
-                <View style={styles.sectionLabelRow}>
-                    <Text style={[styles.sectionLabel, { color: tokens.panelEyebrow }]}>{conversationSectionLabel}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={[styles.sectionCountBadge, { backgroundColor: tokens.chipBackground }]}>
-                            <Text style={[styles.sectionCountText, { color: tokens.panelTitle }]}>
-                                {conversationItems.length}
-                            </Text>
-                        </View>
-                        {conversationHeaderAction ? (
-                            <Pressable onPress={conversationHeaderAction} hitSlop={8} style={styles.sectionAddButton}>
-                                <Ionicons name="add" size={16} color={tokens.panelEyebrow} />
-                            </Pressable>
-                        ) : null}
-                    </View>
-                </View>
-                <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={true}>
-                    {conversationItems.length > 0 ? (
-                        conversationItems.map((item) => (
-                            <ConversationRow key={item.id} item={item} tokens={tokens} />
-                        ))
-                    ) : (
-                        <Text style={[styles.emptyText, { color: tokens.panelTextSecondary }]}>{conversationEmptyText}</Text>
-                    )}
-                </ScrollView>
             </View>
         </View>
     );

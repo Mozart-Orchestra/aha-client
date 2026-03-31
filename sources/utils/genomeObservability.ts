@@ -1,6 +1,7 @@
 import type {
     AgentImage,
     AgentPlug,
+    DiffLedgerEntry,
     GenomeRecord,
 } from '@/utils/genomeHub';
 
@@ -68,6 +69,20 @@ export interface GenomeObservedHookEntry {
 export interface GenomeObservedHookDisplay {
     visibility: 'visible' | 'security-trimmed' | 'absent';
     entries: GenomeObservedHookEntry[];
+}
+
+export interface GenomeReplayAlignment {
+    status: 'aligned' | 'drift' | 'unavailable';
+    available: boolean;
+    matchesCanonical: boolean;
+}
+
+export interface GenomeClosureState {
+    controlPlaneClosure: 'open' | 'established';
+    downstreamClosure: 'open' | 'partial' | 'established';
+    replaceStatus: 'not-started' | 'spawned' | 'tasks-migrated' | 'old-session-archived' | 'verified';
+    rosterExitStatus: 'unknown' | 'pending' | 'removed';
+    behaviorDeltaStatus: 'unknown' | 'not-proven' | 'proven';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -380,6 +395,18 @@ function formatValue(value: unknown): string {
     }
 }
 
+function formatStoredValue(value?: string | null): string {
+    if (value == null || value === '') {
+        return '—';
+    }
+
+    try {
+        return formatValue(JSON.parse(value));
+    } catch {
+        return value;
+    }
+}
+
 export function describeGenomeDiffChange(change: GenomeObservedDiffChange): string {
     if (change.type === 'kv') {
         const prefix = change.from === undefined
@@ -399,4 +426,125 @@ export function getGenomeDiffChangeKindLabel(change: GenomeObservedDiffChange): 
     if (change.type === 'kv') return 'KV';
     if (change.type === 'string') return 'STRING';
     return 'NARRATIVE';
+}
+
+export function describeGenomeLedgerEntry(entry: DiffLedgerEntry): string {
+    if (entry.diffType === 'kv') {
+        const path = entry.path ? `${entry.path}: ` : '';
+        return `${path}${formatStoredValue(entry.oldValue)} → ${formatStoredValue(entry.newValue)}`;
+    }
+
+    if (entry.diffType === 'string') {
+        return `${entry.op ?? 'append'} ${entry.path ?? '(pathless)'}: ${entry.content ?? formatStoredValue(entry.newValue)}`;
+    }
+
+    return entry.content ?? 'Narrative context recorded.';
+}
+
+export function getGenomeLedgerEntryKindLabel(entry: DiffLedgerEntry): 'KV' | 'STRING' | 'NARRATIVE' {
+    if (entry.diffType === 'kv') return 'KV';
+    if (entry.diffType === 'string') return 'STRING';
+    return 'NARRATIVE';
+}
+
+function normalizeJsonText(specText?: string | null): string | null {
+    if (!specText) {
+        return null;
+    }
+
+    try {
+        const normalizeJsonValue = (value: unknown): unknown => {
+            if (Array.isArray(value)) {
+                return value.map(normalizeJsonValue);
+            }
+            if (isRecord(value)) {
+                return Object.fromEntries(
+                    Object.keys(value)
+                        .sort((left, right) => left.localeCompare(right))
+                        .map((key) => [key, normalizeJsonValue(value[key])]),
+                );
+            }
+            return value;
+        };
+
+        return JSON.stringify(normalizeJsonValue(JSON.parse(specText)));
+    } catch {
+        return specText.trim();
+    }
+}
+
+export function getGenomeReplayAlignment(
+    canonicalSpec?: string | null,
+    replayedSpec?: string | null,
+): GenomeReplayAlignment {
+    const canonical = normalizeJsonText(canonicalSpec);
+    const replayed = normalizeJsonText(replayedSpec);
+
+    if (!canonical || !replayed) {
+        return {
+            status: 'unavailable',
+            available: false,
+            matchesCanonical: false,
+        };
+    }
+
+    const matchesCanonical = canonical === replayed;
+    return {
+        status: matchesCanonical ? 'aligned' : 'drift',
+        available: true,
+        matchesCanonical,
+    };
+}
+
+export function getGenomeClosureState(input: {
+    versionIdentity: GenomeVersionIdentity;
+    diffs?: AgentPlug[];
+    ledger?: DiffLedgerEntry[];
+    replayAlignment?: GenomeReplayAlignment | null;
+    agentStatus?: 'active' | 'paused' | 'archived' | null;
+    sessionActive?: boolean | null;
+}): GenomeClosureState {
+    const {
+        versionIdentity,
+        diffs = [],
+        ledger = [],
+        replayAlignment,
+        agentStatus = null,
+        sessionActive = null,
+    } = input;
+
+    const hasControlPlaneEvidence = diffs.length > 0
+        || ledger.length > 0
+        || (versionIdentity.hubVersion ?? 0) > 1;
+    const replayAligned = replayAlignment?.status === 'aligned';
+    const versionAligned = versionIdentity.status === 'aligned';
+
+    let downstreamClosure: GenomeClosureState['downstreamClosure'] = 'open';
+    if (hasControlPlaneEvidence && replayAligned && versionAligned) {
+        downstreamClosure = 'established';
+    } else if (hasControlPlaneEvidence && (replayAlignment?.available || versionAligned || ledger.length > 0)) {
+        downstreamClosure = 'partial';
+    }
+
+    let replaceStatus: GenomeClosureState['replaceStatus'] = 'not-started';
+    if (hasControlPlaneEvidence) {
+        replaceStatus = downstreamClosure === 'established' ? 'verified' : 'spawned';
+        if (agentStatus === 'archived' || sessionActive === false) {
+            replaceStatus = 'old-session-archived';
+        }
+    }
+
+    const rosterExitStatus: GenomeClosureState['rosterExitStatus'] = agentStatus === 'archived' || sessionActive === false
+        ? 'removed'
+        : hasControlPlaneEvidence
+            ? 'pending'
+            : 'unknown';
+
+    return {
+        controlPlaneClosure: hasControlPlaneEvidence ? 'established' : 'open',
+        downstreamClosure,
+        replaceStatus,
+        rosterExitStatus,
+        behaviorDeltaStatus: hasControlPlaneEvidence ? 'not-proven' : 'unknown',
+    };
 }

@@ -29,7 +29,8 @@ import {
 import { useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSession, useArtifact } from '@/sync/storage';
+import { useSession, useArtifact, useSetting } from '@/sync/storage';
+import { t } from '@/text';
 import { type KanbanBoard } from '@/sync/kanbanTypes';
 import { CodeView } from '@/components/session/CodeView';
 import {
@@ -298,10 +299,12 @@ function Divider() {
 function GenomeDetails({
     genome,
     spec,
+    professionalMode,
     onViewMarketplace,
 }: {
     genome: GenomeRecord;
     spec: AgentImage | null;
+    professionalMode: boolean;
     onViewMarketplace: () => void;
 }) {
     const { theme } = useUnistyles();
@@ -357,6 +360,17 @@ function GenomeDetails({
         ...(spec?.hooks?.postToolUse ?? []).map(h => `⬇ ${h.matcher} → ${h.description ?? h.command}`),
         ...(spec?.hooks?.stop ?? []).map(h => `■ stop → ${h.description ?? h.command}`),
     ];
+    const hasProfessionalDetails = facts.length > 0
+        || versionIdentity.mismatch
+        || learnings.length > 0
+        || messagingFacts.length > 0
+        || behaviorFacts.length > 0
+        || authorities.length > 0
+        || protocol.length > 0
+        || skills.length > 0
+        || mcpServers.length > 0
+        || hookEntries.length > 0
+        || Boolean(fullSpecJson);
 
     return (
         <>
@@ -390,7 +404,7 @@ function GenomeDetails({
             ) : null}
 
             {/* Configuration facts */}
-            {facts.length > 0 && (
+            {professionalMode && facts.length > 0 && (
                 <>
                     <Divider />
                     <SectionLabel label="Configuration" />
@@ -439,7 +453,7 @@ function GenomeDetails({
                 </>
             )}
 
-            {versionIdentity.mismatch ? (
+            {professionalMode && versionIdentity.mismatch ? (
                 <>
                     <Divider />
                     <SectionLabel label="Version Identity" />
@@ -468,7 +482,7 @@ function GenomeDetails({
                 </>
             )}
 
-            {learnings.length > 0 && (
+            {professionalMode && learnings.length > 0 && (
                 <>
                     <Divider />
                     <SectionLabel label={`Memory & Learnings (${learnings.length})`} />
@@ -482,7 +496,7 @@ function GenomeDetails({
             )}
 
             {/* Messaging & behavior */}
-            {(messagingFacts.length > 0 || behaviorFacts.length > 0) && (
+            {professionalMode && (messagingFacts.length > 0 || behaviorFacts.length > 0) && (
                 <>
                     <Divider />
                     {messagingFacts.length > 0 && (
@@ -510,7 +524,7 @@ function GenomeDetails({
             )}
 
             {/* Authorities */}
-            {authorities.length > 0 && (
+            {professionalMode && authorities.length > 0 && (
                 <>
                     <Divider />
                     <SectionLabel label="Authorities" />
@@ -523,7 +537,7 @@ function GenomeDetails({
             )}
 
             {/* Protocol */}
-            {protocol.length > 0 && (
+            {professionalMode && protocol.length > 0 && (
                 <>
                     <Divider />
                     <SectionLabel label={`Protocol (${protocol.length} steps)`} />
@@ -546,7 +560,7 @@ function GenomeDetails({
             )}
 
             {/* Skills / MCP */}
-            {(skills.length > 0 || mcpServers.length > 0) && (
+            {professionalMode && (skills.length > 0 || mcpServers.length > 0) && (
                 <>
                     <Divider />
                     {skills.length > 0 && (
@@ -574,7 +588,7 @@ function GenomeDetails({
             )}
 
             {/* Hooks */}
-            {hookEntries.length > 0 && (
+            {professionalMode && hookEntries.length > 0 && (
                 <>
                     <Divider />
                     <SectionLabel label="Hooks" />
@@ -607,9 +621,20 @@ function GenomeDetails({
                 </>
             )}
 
-            <Divider />
-            <SectionLabel label="Spec Mirror" />
-            <CodeView code={fullSpecJson} />
+            {professionalMode ? (
+                <>
+                    <Divider />
+                    <SectionLabel label="Spec Mirror" />
+                    <CodeView code={fullSpecJson} />
+                </>
+            ) : hasProfessionalDetails ? (
+                <>
+                    <Divider />
+                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, lineHeight: 18 }}>
+                        {t('settingsAccount.professionalModeLocked')}
+                    </Text>
+                </>
+            ) : null}
 
             {/* View in Marketplace CTA */}
             <View style={{ marginTop: 20 }}>
@@ -736,6 +761,7 @@ function AgentInfoCardContent({
         sourceLabel,
         avatarId,
     } = useResolvedAgentInfo(sessionId, specId);
+    const professionalMode = useSetting('professionalMode');
 
     const handleViewMarketplace = React.useCallback(() => {
         if (genome?.id) {
@@ -834,6 +860,7 @@ function AgentInfoCardContent({
                 <GenomeDetails
                     genome={genome}
                     spec={spec}
+                    professionalMode={professionalMode}
                     onViewMarketplace={handleViewMarketplace}
                 />
             )}

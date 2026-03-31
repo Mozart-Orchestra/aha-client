@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    describeGenomeLedgerEntry,
     describeGenomeDiffChange,
+    getGenomeClosureState,
     getGenomeEnvDeclaration,
     getGenomeHookDisplay,
     getGenomeInlineFileEntries,
+    getGenomeLedgerEntryKindLabel,
+    getGenomeReplayAlignment,
     getGenomeMcpServerList,
     getGenomeSkillEntries,
     getGenomeVersionIdentity,
@@ -48,6 +52,65 @@ describe('genomeObservability', () => {
     it('drops malformed diff entries instead of throwing', () => {
         expect(() => parseGenomeDiffChanges('{"nope":true}')).toThrow('Genome diff payload must be an array.');
         expect(() => parseGenomeDiffChanges(JSON.stringify([{ type: 'kv', nope: true }]))).toThrow('Genome diff entry 1 has an unsupported shape.');
+    });
+
+    it('compares canonical replay output against the current spec', () => {
+        const replayAlignment = getGenomeReplayAlignment(
+            '{"version":4,"behavior":{"onIdle":"ask"}}',
+            '{"behavior":{"onIdle":"ask"},"version":4}',
+        );
+
+        expect(replayAlignment).toEqual({
+            status: 'aligned',
+            available: true,
+            matchesCanonical: true,
+        });
+    });
+
+    it('derives closure state conservatively from ledger, replay, and runtime hints', () => {
+        const versionIdentity = getGenomeVersionIdentity(
+            { version: 4 } as any,
+            { version: 4 } as any,
+        );
+        const replayAlignment = getGenomeReplayAlignment('{"version":4}', '{"version":4}');
+        const closure = getGenomeClosureState({
+            versionIdentity,
+            diffs: [{ changes: '[]' }] as any,
+            ledger: [{ id: 'row-1' }] as any,
+            replayAlignment,
+            agentStatus: 'active',
+            sessionActive: true,
+        });
+
+        expect(closure).toEqual({
+            controlPlaneClosure: 'established',
+            downstreamClosure: 'established',
+            replaceStatus: 'verified',
+            rosterExitStatus: 'pending',
+            behaviorDeltaStatus: 'not-proven',
+        });
+    });
+
+    it('marks roster exit once the linked runtime has already been archived', () => {
+        const closure = getGenomeClosureState({
+            versionIdentity: getGenomeVersionIdentity({ version: 3 } as any, { version: 2 } as any),
+            diffs: [{ changes: '[]' }] as any,
+            agentStatus: 'archived',
+            sessionActive: false,
+        });
+
+        expect(closure.replaceStatus).toBe('old-session-archived');
+        expect(closure.rosterExitStatus).toBe('removed');
+    });
+
+    it('describes canonical ledger rows', () => {
+        expect(getGenomeLedgerEntryKindLabel({ diffType: 'string' } as any)).toBe('STRING');
+        expect(describeGenomeLedgerEntry({
+            diffType: 'kv',
+            path: 'behavior.onIdle',
+            oldValue: '"wait"',
+            newValue: '"ask"',
+        } as any)).toBe('behavior.onIdle: wait → ask');
     });
 
     it('reads canonical agent.json package fields for workspace, env, skills, mcp servers, and files', () => {

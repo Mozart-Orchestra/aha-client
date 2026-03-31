@@ -63,7 +63,7 @@ import {
 } from '@/utils/favoriteGenomesStorage';
 import { isFavoriteGenomeId } from '@/utils/favoriteGenomes';
 import { sync } from '@/sync/sync';
-import { useProfile, useSession } from '@/sync/storage';
+import { useProfile, useSession, useSetting } from '@/sync/storage';
 import { DeployCorpsModal } from './DeployCorpsModal';
 import { RunStandaloneModal } from './RunStandaloneModal';
 import { JoinTeamModal } from './JoinTeamModal';
@@ -192,6 +192,7 @@ export default React.memo(function AgentDetailScreen() {
     const router = useRouter();
     const { theme } = useUnistyles();
     const profile = useProfile();
+    const professionalMode = useSetting('professionalMode');
     const actorId = profile.id || null;
     const desktopShell = React.useContext(DesktopShellContext);
 
@@ -436,6 +437,26 @@ export default React.memo(function AgentDetailScreen() {
         || Boolean(replayedSpec)
         || diffs.length > 0
         || ledgerEntries.length > 0;
+    const hasProfessionalDetails = Boolean(
+        agentDetail
+        || spec?.protocol?.length
+        || spec?.operations?.commonPatterns?.length
+        || spec?.handoffProtocol?.length
+        || spec?.operations?.recentChanges?.length
+        || spec?.memory?.learnings?.length
+        || spec?.memory?.iterationGuide
+        || spec?.memory?.knowledgeBase?.length
+        || hasEvolutionEvidence
+        || formattedSpecJson
+        || spec?.allowedTools?.length
+        || spec?.disallowedTools?.length
+        || hasAgentJsonKernelObservability
+        || spec?.messaging
+        || spec?.behavior
+        || legionSpec?.members?.length
+        || legionLayerFacts.length > 0
+        || corpsTeamPrompt
+    );
 
     const toggleFavorite = React.useCallback(async () => {
         if (!genome) return;
@@ -683,7 +704,19 @@ export default React.memo(function AgentDetailScreen() {
                 </View>
 
                 <ItemList>
-                    {agentDetail ? (
+                    {!professionalMode && hasProfessionalDetails ? (
+                        <ItemGroup title={t('settingsAccount.professionalMode')}>
+                            <Item
+                                title={t('settingsAccount.professionalMode')}
+                                subtitle={t('settingsAccount.professionalModeLocked')}
+                                subtitleLines={0}
+                                icon={<Ionicons name="options-outline" size={18} color="#5856D6" />}
+                                onPress={() => router.push('/settings/account')}
+                            />
+                        </ItemGroup>
+                    ) : null}
+
+                    {professionalMode && agentDetail ? (
                         <ItemGroup title="Instance">
                             <Item title="Status" detail={agentDetail.status} />
                             {agentDetail.sessionId ? <Item title="Session ID" detail={agentDetail.sessionId} /> : null}
@@ -719,33 +752,35 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {/* ── Configuration ── */}
-                    <ItemGroup title={t('agents.configuration')}>
-                        {spec?.runtimeType ? <Item title="Runtime" detail={spec.runtimeType} /> : null}
-                        {versionIdentity.hubVersion != null ? <Item title="Canonical Version" detail={`v${versionIdentity.hubVersion}`} /> : null}
-                        {versionIdentity.hubVersion == null && versionIdentity.specVersion != null ? <Item title="Spec Snapshot Version" detail={`v${versionIdentity.specVersion}`} /> : null}
-                        {versionIdentity.mismatch ? (
-                            <Item
-                                title="Legacy Embedded Version"
-                                subtitle={`Embedded spec still reports v${versionIdentity.specVersion}; canonical runtime identity is entity version v${versionIdentity.hubVersion}.`}
-                                detail={`v${versionIdentity.specVersion}`}
-                                detailStyle={{ color: '#FF9500', fontWeight: '700' }}
-                                showChevron={false}
-                            />
-                        ) : versionIdentity.hubVersion != null ? (
-                            <Item
-                                title="Version Source"
-                                subtitle="Runtime version is sourced from the genome entity row."
-                                detail="Entity"
-                                detailStyle={{ color: '#22c55e', fontWeight: '700' }}
-                                showChevron={false}
-                            />
-                        ) : null}
-                        <Item title={t('agents.model')} detail={spec?.modelId ?? 'Default'} />
-                        <Item title={t('agents.executionPlane')} detail={spec?.executionPlane ?? 'mainline'} />
-                        <Item title={t('agents.permissionMode')} detail={spec?.permissionMode ?? 'default'} />
-                        <Item title={t('agents.accessLevel')} detail={spec?.accessLevel ?? 'full-access'} />
-                        {spec?.maxTurns ? <Item title={t('agents.maxTurns')} detail={String(spec.maxTurns)} /> : null}
-                    </ItemGroup>
+                    {professionalMode ? (
+                        <ItemGroup title={t('agents.configuration')}>
+                            {spec?.runtimeType ? <Item title="Runtime" detail={spec.runtimeType} /> : null}
+                            {versionIdentity.hubVersion != null ? <Item title="Canonical Version" detail={`v${versionIdentity.hubVersion}`} /> : null}
+                            {versionIdentity.hubVersion == null && versionIdentity.specVersion != null ? <Item title="Spec Snapshot Version" detail={`v${versionIdentity.specVersion}`} /> : null}
+                            {versionIdentity.mismatch ? (
+                                <Item
+                                    title="Legacy Embedded Version"
+                                    subtitle={`Embedded spec still reports v${versionIdentity.specVersion}; canonical runtime identity is entity version v${versionIdentity.hubVersion}.`}
+                                    detail={`v${versionIdentity.specVersion}`}
+                                    detailStyle={{ color: '#FF9500', fontWeight: '700' }}
+                                    showChevron={false}
+                                />
+                            ) : versionIdentity.hubVersion != null ? (
+                                <Item
+                                    title="Version Source"
+                                    subtitle="Runtime version is sourced from the genome entity row."
+                                    detail="Entity"
+                                    detailStyle={{ color: '#22c55e', fontWeight: '700' }}
+                                    showChevron={false}
+                                />
+                            ) : null}
+                            <Item title={t('agents.model')} detail={spec?.modelId ?? 'Default'} />
+                            <Item title={t('agents.executionPlane')} detail={spec?.executionPlane ?? 'mainline'} />
+                            <Item title={t('agents.permissionMode')} detail={spec?.permissionMode ?? 'default'} />
+                            <Item title={t('agents.accessLevel')} detail={spec?.accessLevel ?? 'full-access'} />
+                            {spec?.maxTurns ? <Item title={t('agents.maxTurns')} detail={String(spec.maxTurns)} /> : null}
+                        </ItemGroup>
+                    ) : null}
 
                     {/* ── Capabilities ── */}
                     {(spec?.responsibilities?.length || spec?.capabilities?.length) ? (
@@ -760,7 +795,7 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {/* ── Protocol ── */}
-                    {spec?.protocol?.length ? (
+                    {professionalMode && spec?.protocol?.length ? (
                         <ItemGroup title={t('agents.protocolRules')}>
                             {spec.protocol.map((p, i) => (
                                 <Item key={`p-${i}`} title={p} subtitle="" />
@@ -768,7 +803,7 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    {(spec?.operations?.commonPatterns?.length || spec?.handoffProtocol?.length || spec?.operations?.recentChanges?.length) ? (
+                    {professionalMode && (spec?.operations?.commonPatterns?.length || spec?.handoffProtocol?.length || spec?.operations?.recentChanges?.length) ? (
                         <ItemGroup title="Operational Patterns">
                             {spec?.operations?.commonPatterns?.map((pattern, index) => (
                                 <Item key={`pattern-${index}`} title={pattern} subtitle="" />
@@ -782,7 +817,7 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    {(spec?.memory?.learnings?.length || spec?.memory?.iterationGuide || spec?.memory?.knowledgeBase?.length) ? (
+                    {professionalMode && (spec?.memory?.learnings?.length || spec?.memory?.iterationGuide || spec?.memory?.knowledgeBase?.length) ? (
                         <ItemGroup title="Memory & Learning">
                             {spec?.memory?.learnings?.map((learning, index) => (
                                 <Item key={`learning-${index}`} title={learning} subtitle="" />
@@ -802,52 +837,54 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    <ItemGroup title="Closure State">
-                        <Item
-                            title="Control-plane closure"
-                            subtitle={`Diff chain ${diffs.length} · canonical ledger ${ledgerEntries.length} row${ledgerEntries.length === 1 ? '' : 's'}`}
-                            subtitleLines={0}
-                            detail={formatStatusLabel(closureState.controlPlaneClosure)}
-                            detailStyle={{ color: getStatusTone(closureState.controlPlaneClosure).text, fontWeight: '700' }}
-                            icon={<Ionicons name="git-branch-outline" size={18} color={getStatusTone(closureState.controlPlaneClosure).text} />}
-                        />
-                        <Item
-                            title="Downstream closure"
-                            subtitle={`Version identity ${versionIdentity.status} · canonical replay ${replayAlignment.status}`}
-                            subtitleLines={0}
-                            detail={formatStatusLabel(closureState.downstreamClosure)}
-                            detailStyle={{ color: getStatusTone(closureState.downstreamClosure).text, fontWeight: '700' }}
-                            icon={<Ionicons name="analytics-outline" size={18} color={getStatusTone(closureState.downstreamClosure).text} />}
-                        />
-                        <Item
-                            title="Replace status"
-                            subtitle={agentDetail
-                                ? `Agent ${agentDetail.status}${standaloneSession?.active != null ? ` · session ${standaloneSession.active ? 'active' : 'inactive'}` : ''}`
-                                : 'No live runtime is attached on this screen.'}
-                            subtitleLines={0}
-                            detail={formatStatusLabel(closureState.replaceStatus)}
-                            detailStyle={{ color: getStatusTone(closureState.replaceStatus).text, fontWeight: '700' }}
-                            icon={<Ionicons name="swap-horizontal-outline" size={18} color={getStatusTone(closureState.replaceStatus).text} />}
-                        />
-                        <Item
-                            title="Roster exit"
-                            subtitle="Requires replace/archive evidence from the team roster layer."
-                            subtitleLines={0}
-                            detail={formatStatusLabel(closureState.rosterExitStatus)}
-                            detailStyle={{ color: getStatusTone(closureState.rosterExitStatus).text, fontWeight: '700' }}
-                            icon={<Ionicons name="people-outline" size={18} color={getStatusTone(closureState.rosterExitStatus).text} />}
-                        />
-                        <Item
-                            title="Behavior delta"
-                            subtitle="Trial / verdict / materialization evidence is not wired into this page yet."
-                            subtitleLines={0}
-                            detail={formatStatusLabel(closureState.behaviorDeltaStatus)}
-                            detailStyle={{ color: getStatusTone(closureState.behaviorDeltaStatus).text, fontWeight: '700' }}
-                            icon={<Ionicons name="pulse-outline" size={18} color={getStatusTone(closureState.behaviorDeltaStatus).text} />}
-                        />
-                    </ItemGroup>
+                    {professionalMode ? (
+                        <ItemGroup title="Closure State">
+                            <Item
+                                title="Control-plane closure"
+                                subtitle={`Diff chain ${diffs.length} · canonical ledger ${ledgerEntries.length} row${ledgerEntries.length === 1 ? '' : 's'}`}
+                                subtitleLines={0}
+                                detail={formatStatusLabel(closureState.controlPlaneClosure)}
+                                detailStyle={{ color: getStatusTone(closureState.controlPlaneClosure).text, fontWeight: '700' }}
+                                icon={<Ionicons name="git-branch-outline" size={18} color={getStatusTone(closureState.controlPlaneClosure).text} />}
+                            />
+                            <Item
+                                title="Downstream closure"
+                                subtitle={`Version identity ${versionIdentity.status} · canonical replay ${replayAlignment.status}`}
+                                subtitleLines={0}
+                                detail={formatStatusLabel(closureState.downstreamClosure)}
+                                detailStyle={{ color: getStatusTone(closureState.downstreamClosure).text, fontWeight: '700' }}
+                                icon={<Ionicons name="analytics-outline" size={18} color={getStatusTone(closureState.downstreamClosure).text} />}
+                            />
+                            <Item
+                                title="Replace status"
+                                subtitle={agentDetail
+                                    ? `Agent ${agentDetail.status}${standaloneSession?.active != null ? ` · session ${standaloneSession.active ? 'active' : 'inactive'}` : ''}`
+                                    : 'No live runtime is attached on this screen.'}
+                                subtitleLines={0}
+                                detail={formatStatusLabel(closureState.replaceStatus)}
+                                detailStyle={{ color: getStatusTone(closureState.replaceStatus).text, fontWeight: '700' }}
+                                icon={<Ionicons name="swap-horizontal-outline" size={18} color={getStatusTone(closureState.replaceStatus).text} />}
+                            />
+                            <Item
+                                title="Roster exit"
+                                subtitle="Requires replace/archive evidence from the team roster layer."
+                                subtitleLines={0}
+                                detail={formatStatusLabel(closureState.rosterExitStatus)}
+                                detailStyle={{ color: getStatusTone(closureState.rosterExitStatus).text, fontWeight: '700' }}
+                                icon={<Ionicons name="people-outline" size={18} color={getStatusTone(closureState.rosterExitStatus).text} />}
+                            />
+                            <Item
+                                title="Behavior delta"
+                                subtitle="Trial / verdict / materialization evidence is not wired into this page yet."
+                                subtitleLines={0}
+                                detail={formatStatusLabel(closureState.behaviorDeltaStatus)}
+                                detailStyle={{ color: getStatusTone(closureState.behaviorDeltaStatus).text, fontWeight: '700' }}
+                                icon={<Ionicons name="pulse-outline" size={18} color={getStatusTone(closureState.behaviorDeltaStatus).text} />}
+                            />
+                        </ItemGroup>
+                    ) : null}
 
-                    {hasEvolutionEvidence ? (
+                    {professionalMode && hasEvolutionEvidence ? (
                         <ItemGroup title="Evolution Evidence">
                             {historyLoading ? (
                                 <Item
@@ -1024,7 +1061,7 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    {formattedSpecJson ? (
+                    {professionalMode && formattedSpecJson ? (
                         <ItemGroup title={getGenomeImageMirrorTitle(imageKind)}>
                             <View style={styles.ledgerSection}>
                                 <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
@@ -1036,7 +1073,7 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {/* ── Tools allow/deny ── */}
-                    {(spec?.allowedTools?.length || spec?.disallowedTools?.length) ? (
+                    {professionalMode && (spec?.allowedTools?.length || spec?.disallowedTools?.length) ? (
                         <ItemGroup title={t('agents.toolsAndMcps')}>
                             {spec?.allowedTools?.length ? (
                                 <Item title={t('agents.allowedTools')} subtitle={spec.allowedTools.join(', ')} subtitleLines={0} />
@@ -1048,7 +1085,7 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {/* ── agent.json kernel observability ── */}
-                    {hasAgentJsonKernelObservability ? (
+                    {professionalMode && hasAgentJsonKernelObservability ? (
                         <ItemGroup title={getGenomeImageSurfaceTitle(imageKind)}>
                             <View style={styles.ledgerSection}>
                                 <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
@@ -1224,7 +1261,7 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {/* ── Behavior ── */}
-                    {(spec?.messaging || spec?.behavior) ? (
+                    {professionalMode && (spec?.messaging || spec?.behavior) ? (
                         <ItemGroup title={t('agents.behaviorSection')}>
                             {spec?.messaging?.replyMode ? (
                                 <Item title={t('agents.replyMode')} detail={spec.messaging.replyMode} />
@@ -1242,7 +1279,7 @@ export default React.memo(function AgentDetailScreen() {
                     ) : null}
 
                     {/* ── Corps Members ── */}
-                    {legionSpec?.members?.length ? (
+                    {professionalMode && legionSpec?.members?.length ? (
                         <ItemGroup title="LegionImage Members">
                             {legionSpec.members.map((m, i) => (
                                 <Item
@@ -1256,7 +1293,7 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    {legionLayerFacts.length > 0 ? (
+                    {professionalMode && legionLayerFacts.length > 0 ? (
                         <ItemGroup title="LegionLayer · Coordination">
                             {legionLayerFacts.map((fact) => (
                                 <Item
@@ -1269,7 +1306,7 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    {corpsTeamPrompt ? (
+                    {professionalMode && corpsTeamPrompt ? (
                         <ItemGroup title="LegionLayer · Boot Context">
                             <View style={[styles.promptShowcaseCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
                                 <Text style={[styles.promptShowcaseEyebrow, { color: theme.colors.textSecondary }]}>
