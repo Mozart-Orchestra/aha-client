@@ -35,7 +35,7 @@ import {
     SupabaseSecretMismatchError,
 } from '@/auth/supabaseAuth';
 import { supabase } from '@/auth/supabase';
-import { TokenStorage, getStoredSecretForReauth } from '@/auth/tokenStorage';
+import { TokenStorage } from '@/auth/tokenStorage';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
@@ -532,7 +532,7 @@ function NotAuthenticated() {
         );
     }, []);
 
-    // Show restore key input if account exists but local secret is missing
+    // Show fallback recovery UI only when automatic Google/email recovery cannot complete.
     const initialRestoreReason = React.useMemo(() => getNeedsRestoreReason(), []);
     const initialNeedsRestore = React.useMemo(() => getNeedsRestore(), []);
     const [restoreRequired, setRestoreRequired] = React.useState(initialNeedsRestore);
@@ -707,14 +707,14 @@ function NotAuthenticated() {
 
     /**
      * After Supabase session is obtained (Google or Email OTP),
-     * generate a client-side secret, register with server, and login.
-     * If account already exists (RESTORE_REQUIRED), prompt for restore key.
+     * finish the canonical account flow via /v1/auth/supabase/complete.
+     * Existing accounts recover the canonical secret; new accounts create one in memory.
      */
     const completeSupabaseLogin = React.useCallback(async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) return;
 
-        const result = await completeSupabaseSession(session.access_token, getStoredSecretForReauth());
+        const result = await completeSupabaseSession(session.access_token);
         await auth.login(result.token, result.secretBase64);
         if (hasPendingTerminalConnectRequest()) {
             router.replace('/terminal/connect');

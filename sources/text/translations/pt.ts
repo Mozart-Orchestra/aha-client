@@ -678,7 +678,7 @@ export const pt: TranslationStructure = {
         tapToDisconnect: 'Toque para desconectar',
         server: 'Servidor',
         backup: 'Backup',
-        backupDescription: 'Sua chave secreta é a única forma de recuperar sua conta. Salve-a em um local seguro como um gerenciador de senhas.',
+        backupDescription: 'O caminho normal de volta para sua conta e o login com Google e comandos unicos de entrada. Guarde esta chave apenas como backup de emergencia.',
         secretKey: 'Chave secreta',
         tapToReveal: 'Toque para revelar',
         tapToHide: 'Toque para ocultar',

@@ -678,7 +678,7 @@ export const ca: TranslationStructure = {
         tapToDisconnect: 'Toca per desconnectar',
         server: 'Servidor',
         backup: 'Còpia de seguretat',
-        backupDescription: 'La teva clau secreta és l\'única manera de recuperar el teu compte. Desa-la en un lloc segur com un gestor de contrasenyes.',
+        backupDescription: 'La via normal per tornar al compte es amb Google i ordres d unio d un sol us. Desa aquesta clau nomes com a copia d emergencia.',
         secretKey: 'Clau secreta',
         tapToReveal: 'Toca per revelar',
         tapToHide: 'Toca per ocultar',

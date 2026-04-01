@@ -2633,6 +2633,7 @@ class Sync {
             const sessionId = result?.sessionId || (result?.type === 'success' ? result?.sessionId : null);
             if (result?.type === 'requestToApproveDirectoryCreation') {
                 console.warn(`Directory creation approval required for: ${result.directory}`);
+                throw new Error(`Directory does not exist on the selected machine yet: ${result.directory}`);
             }
             if (sessionId) {
                 log.log(`Spawned session ${sessionId} on machine ${machineId}`);

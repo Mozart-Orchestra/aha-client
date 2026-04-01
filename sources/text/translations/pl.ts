@@ -688,7 +688,7 @@ export const pl: TranslationStructure = {
         tapToDisconnect: 'Dotknij, aby rozłączyć',
         server: 'Serwer',
         backup: 'Kopia zapasowa',
-        backupDescription: 'Twój klucz tajny to jedyny sposób na odzyskanie konta. Zapisz go w bezpiecznym miejscu, takim jak menedżer haseł.',
+        backupDescription: 'Normalna droga powrotu do konta to logowanie Google i jednorazowe komendy dolaczenia. Zachowaj ten klucz tylko jako awaryjna kopie.',
         secretKey: 'Klucz tajny',
         tapToReveal: 'Dotknij, aby pokazać',
         tapToHide: 'Dotknij, aby ukryć',

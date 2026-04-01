@@ -23,7 +23,6 @@ import { Image } from 'expo-image';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { disconnectGitHub } from '@/sync/apiGithub';
 import { disconnectService } from '@/sync/apiServices';
-import { getStoredSecretForReauth } from '@/auth/tokenStorage';
 import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
 
 export default React.memo(() => {
@@ -40,7 +39,7 @@ export default React.memo(() => {
     const profile = useProfile();
 
     // Get the current secret key
-    const currentSecret = auth.credentials?.secret || getStoredSecretForReauth() || '';
+    const currentSecret = auth.credentials?.secret || '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
     const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
 
@@ -148,7 +147,7 @@ export default React.memo(() => {
             { confirmText: t('common.logout'), destructive: true }
         );
         if (confirmed) {
-            auth.logout();
+            await auth.logout();
         }
     };
 

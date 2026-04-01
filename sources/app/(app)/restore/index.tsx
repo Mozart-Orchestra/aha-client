@@ -19,7 +19,6 @@ import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
-import { getStoredSecretForReauth } from '@/auth/tokenStorage';
 import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
 
 export default memo(function Restore() {
@@ -36,11 +35,11 @@ export default memo(function Restore() {
     const [copiedRestoreCommandRecently, setCopiedRestoreCommandRecently] = useState(false);
     const [joinCommand, setJoinCommand] = useState('');
 
-    const currentSecret = auth.credentials?.secret ?? getStoredSecretForReauth() ?? '';
+    const currentSecret = auth.credentials?.secret ?? '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
     const loginCommand = getCliInstallAndLoginCommand();
     const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
-    const primaryCommand = joinCommand || restoreCommand || loginCommand;
+    const primaryCommand = joinCommand || loginCommand;
 
     const loadJoinCommand = React.useCallback(async () => {
         if (!auth.credentials?.token) {
@@ -129,13 +128,11 @@ export default memo(function Restore() {
                 <Text style={styles.subtitle}>{t('settings.syncDeviceSubtitle')}</Text>
             </View>
 
-            <ItemGroup footer={joinCommand ? t('home.addDeviceHint') : restoreCommand ? t('settingsAccount.backupDescription') : t('home.addDeviceHint')}>
+            <ItemGroup footer={t('home.addDeviceHint')}>
                 <Pressable onPress={handleCopyCommand}>
                     <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
                         <View style={styles.secretKeyHeader}>
-                            <Text style={styles.secretKeyLabel}>
-                                {joinCommand ? t('home.addDeviceTitle') : restoreCommand ? t('settingsAccount.restoreCommandLabel') : t('home.addDeviceTitle')}
-                            </Text>
+                            <Text style={styles.secretKeyLabel}>{t('home.addDeviceTitle')}</Text>
                             <Ionicons
                                 name={copiedCommandRecently ? 'checkmark-circle' : 'copy-outline'}
                                 size={18}
@@ -149,7 +146,7 @@ export default memo(function Restore() {
                 </Pressable>
             </ItemGroup>
 
-            {joinCommand && restoreCommand && (
+            {restoreCommand && (
                 <ItemGroup footer={t('settingsAccount.backupDescription')}>
                     <Pressable onPress={handleCopyRestoreCommand}>
                         <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>

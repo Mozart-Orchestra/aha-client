@@ -729,7 +729,7 @@ export const en = {
         tapToDisconnect: 'Tap to disconnect',
         server: 'Server',
         backup: 'Backup',
-        backupDescription: 'Your secret key is the only way to recover your account. Save it in a secure place like a password manager.',
+        backupDescription: 'Google sign-in and one-time join commands are the normal way back into your account. Keep this secret key only as an emergency backup.',
         secretKey: 'Secret Key',
         tapToReveal: 'Tap to reveal',
         tapToHide: 'Tap to hide',

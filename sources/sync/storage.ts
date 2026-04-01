@@ -4,7 +4,7 @@ import { Session, Machine, GitStatus } from "./storageTypes";
 import { createReducer, reducer, ReducerState } from "./reducer/reducer";
 import { Message } from "./typesMessage";
 import { NormalizedMessage } from "./typesRaw";
-import { isMachineOnline } from '@/utils/machineUtils';
+import { dedupeMachinesForDisplay, isMachineOnline } from '@/utils/machineUtils';
 import { applySettings, Settings } from "./settings";
 import { LocalSettings, applyLocalSettings } from "./localSettings";
 import { Purchases, customerInfoToPurchases } from "./purchases";
@@ -1412,7 +1412,8 @@ export function useAllMachines(): Machine[] {
     return storage(useShallow((state) => {
         if (!state.isDataReady) return [];
         // Keep offline machines visible so UI can show status/CTA guidance
-        return Object.values(state.machines).sort((a, b) => b.createdAt - a.createdAt);
+        return dedupeMachinesForDisplay(Object.values(state.machines))
+            .sort((a, b) => b.createdAt - a.createdAt);
     }));
 }
 

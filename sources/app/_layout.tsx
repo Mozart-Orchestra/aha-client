@@ -4,7 +4,7 @@ import * as React from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Fonts from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
-import { AuthCredentials, TokenStorage, getStoredSecretForReauth } from '@/auth/tokenStorage';
+import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import { supabase } from '@/auth/supabase';
 import { completeSupabaseSession, SupabaseRecoveryNotReadyError, SupabaseRestoreRequiredError, SupabaseSecretMismatchError } from '@/auth/supabaseAuth';
@@ -203,7 +203,7 @@ export default function RootLayout() {
                     }
                     if (session?.access_token) {
                         try {
-                            const result = await completeSupabaseSession(session.access_token, getStoredSecretForReauth());
+                            const result = await completeSupabaseSession(session.access_token);
                             credentials = { token: result.token, secret: result.secretBase64 };
                             await TokenStorage.setCredentials(credentials);
                         } catch (error) {

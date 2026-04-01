@@ -22,6 +22,13 @@ interface SupabaseRecoveryResult {
     secret: Uint8Array;
 }
 
+interface SupabaseCompleteResponse {
+    state: 'existing_recovered' | 'new_account_created' | 'migration_required';
+    token: string | null;
+    userId: string | null;
+    encryptedContentSecretKey?: string | null;
+}
+
 export class SupabaseRestoreRequiredError extends Error {
     constructor(message = 'This account already exists. Restore the existing key to continue.') {
         super(message);
@@ -67,6 +74,9 @@ export async function signInWithGoogle(): Promise<void> {
             provider: 'google',
             options: {
                 redirectTo: window.location.origin,
+                queryParams: {
+                    prompt: 'select_account',
+                },
             },
         });
     } else {
@@ -75,6 +85,9 @@ export async function signInWithGoogle(): Promise<void> {
             provider: 'google',
             options: {
                 redirectTo: redirectUrl,
+                queryParams: {
+                    prompt: 'select_account',
+                },
             },
         });
 
@@ -211,51 +224,68 @@ export async function recoverSupabaseSession(accessToken: string): Promise<Supab
     }
 }
 
-export async function completeSupabaseSession(accessToken: string, storedSecretBase64?: string | null): Promise<{
+export async function completeSupabaseSession(accessToken: string): Promise<{
     token: string;
     userId: string;
     secretBase64: string;
     recoveryReady: boolean;
 }> {
-    if (storedSecretBase64) {
-        const storedSecret = decodeBase64(storedSecretBase64, 'base64url');
-        try {
-            const result = await exchangeSupabaseSession(accessToken, storedSecret);
-            return {
-                token: result.token,
-                userId: result.userId,
-                secretBase64: storedSecretBase64,
-                recoveryReady: result.recoveryReady,
-            };
-        } catch (error) {
-            if (!(error instanceof SupabaseSecretMismatchError)) {
-                throw error;
-            }
-        }
-    }
+    const serverUrl = getServerUrl();
+    const keypair = generateAuthKeyPair();
+    const newSecret = await getRandomBytesAsync(32);
 
     try {
-        const recovered = await recoverSupabaseSession(accessToken);
+        const response = await axios.post<SupabaseCompleteResponse>(`${serverUrl}/v1/auth/supabase/complete`, {
+            accessToken,
+            recoveryPublicKey: encodeBase64(keypair.publicKey),
+            newContentSecretKey: encodeBase64(newSecret),
+        });
+
+        if (response.data.state === 'existing_recovered') {
+            const encryptedContentSecretKey = response.data.encryptedContentSecretKey
+                ? decodeBase64(response.data.encryptedContentSecretKey)
+                : null;
+            const secret = encryptedContentSecretKey
+                ? decryptBox(encryptedContentSecretKey, keypair.secretKey)
+                : null;
+            if (!secret || !response.data.token || !response.data.userId) {
+                throw new Error('Failed to recover canonical account secret');
+            }
+
+            return {
+                token: response.data.token,
+                userId: response.data.userId,
+                secretBase64: encodeBase64(secret, 'base64url'),
+                recoveryReady: true,
+            };
+        }
+
+        if (response.data.state === 'migration_required') {
+            throw new SupabaseRecoveryNotReadyError();
+        }
+
+        if (!response.data.token || !response.data.userId) {
+            throw new Error('Supabase login completed without an account token');
+        }
+
         return {
-            token: recovered.token,
-            userId: recovered.userId,
-            secretBase64: encodeBase64(recovered.secret, 'base64url'),
+            token: response.data.token,
+            userId: response.data.userId,
+            secretBase64: encodeBase64(newSecret, 'base64url'),
             recoveryReady: true,
         };
     } catch (error) {
-        if (!(error instanceof SupabaseAccountNotFoundError)) {
-            throw error;
+        if (axios.isAxiosError(error) && error.response?.status === 409) {
+            const code = error.response.data?.code;
+            if (code === 'ACCOUNT_LINK_CONFLICT') {
+                throw new SupabaseAccountLinkConflictError();
+            }
+            if (code === 'secret-proof-mismatch' || code === 'secret-proof-required') {
+                throw new SupabaseSecretMismatchError();
+            }
         }
+        throw error;
     }
-
-    const newSecret = await getRandomBytesAsync(32);
-    const created = await exchangeSupabaseSession(accessToken, newSecret);
-    return {
-        token: created.token,
-        userId: created.userId,
-        secretBase64: encodeBase64(newSecret, 'base64url'),
-        recoveryReady: created.recoveryReady,
-    };
 }
 
 export async function bootstrapRecoveryMaterial(token: string, secretBase64: string): Promise<void> {

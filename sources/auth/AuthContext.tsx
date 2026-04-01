@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { TokenStorage, AuthCredentials, subscribeToWebAuthSync, applyExternalWebCredentials, clearExternalWebCredentials } from '@/auth/tokenStorage';
+import { TokenStorage, AuthCredentials, subscribeToWebAuthSync } from '@/auth/tokenStorage';
 import { autoDownloadRestoreKeyBackup } from '@/auth/restoreKeyDownload';
 import { syncCreate, syncReinitialize } from '@/sync/sync';
 import * as Updates from 'expo-updates';
@@ -18,15 +18,6 @@ interface AuthContextType {
 export type RestoreReason = 'restore_required' | 'secret_mismatch' | 'recovery_not_ready';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-function isSameCredentials(a: AuthCredentials | null, b: AuthCredentials | null): boolean {
-    if (!a || !b) {
-        return a === b;
-    }
-
-    return a.token === b.token && a.secret === b.secret;
-}
-
 
 export function AuthProvider({ children, initialCredentials }: { children: ReactNode; initialCredentials: AuthCredentials | null }) {
     const [isAuthenticated, setIsAuthenticated] = useState(!!initialCredentials);
@@ -72,31 +63,13 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             return;
         }
 
-        return subscribeToWebAuthSync((event) => {
-            if (event.type === 'login') {
-                if (isSameCredentials(credentials, event.credentials)) {
-                    return;
-                }
-
-                applyExternalWebCredentials(event.credentials);
-                clearPersistence();
-                setCredentials(event.credentials);
-                setIsAuthenticated(true);
-                window.location.reload();
-                return;
-            }
-
-            if (!credentials) {
-                return;
-            }
-
-            clearExternalWebCredentials();
+        return subscribeToWebAuthSync((_event) => {
             clearPersistence();
             setCredentials(null);
             setIsAuthenticated(false);
             window.location.reload();
         });
-    }, [credentials]);
+    }, []);
 
     const login = async (token: string, secret: string) => {
         const newCredentials: AuthCredentials = { token, secret };
@@ -118,10 +91,7 @@ export function AuthProvider({ children, initialCredentials }: { children: React
     const logout = async () => {
         trackLogout();
         clearPersistence();
-        // Use clearToken() instead of removeCredentials() to preserve the secret.
-        // The secret is the permanent account identity — keeping it means the next
-        // Google/email login will reuse the same secret and restore key unchanged.
-        await TokenStorage.clearToken();
+        await TokenStorage.removeCredentials();
         await signOutSupabase();
 
         // Update React state to ensure UI consistency

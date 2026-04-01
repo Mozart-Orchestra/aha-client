@@ -24,8 +24,7 @@ import { Typography } from '@/constants/Typography';
 import { getSessionName } from '@/utils/sessionUtils';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
-import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
-import { getStoredSecretForReauth } from '@/auth/tokenStorage';
+import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
 
 function useIsExperiencedUser(): boolean {
     const artifacts = useArtifacts();
@@ -651,13 +650,8 @@ function ExperiencedUserPanel() {
     const machines = useAllMachines();
     const [joinCommand, setJoinCommand] = React.useState('');
 
-    const currentSecret = auth.credentials?.secret ?? getStoredSecretForReauth() ?? '';
-    const restoreCommand = React.useMemo(
-        () => (currentSecret ? getCliRestoreCommand(currentSecret) : ''),
-        [currentSecret],
-    );
     const fallbackCommand = React.useMemo(() => getCliInstallAndLoginCommand(), []);
-    const primaryCommand = joinCommand || restoreCommand || fallbackCommand;
+    const primaryCommand = joinCommand || fallbackCommand;
 
     const loadJoinCommand = React.useCallback(async () => {
         if (!auth.credentials?.token) {
@@ -720,7 +714,7 @@ function ExperiencedUserPanel() {
                 onPress={handleReport}
             />
 
-            {/* Add New Device — prefer a join ticket, then fall back to restore if needed. */}
+            {/* Add New Device uses the one-time join ticket as the primary machine-entry path. */}
             <View style={styles.onboardingStep}>
                 <View style={styles.onboardingStepHeader}>
                     <Ionicons name="laptop-outline" size={22} color={theme.colors.text} />
