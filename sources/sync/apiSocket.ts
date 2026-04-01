@@ -28,6 +28,8 @@ const AUTH_FAILURE_PATTERNS = [
     'missing authentication token',
 ];
 
+const RPC_ERROR_FLAG = '__ahaRpcError';
+
 function getErrorText(error: unknown): string {
     if (typeof error === 'string') {
         return error;
@@ -58,6 +60,21 @@ function isWebSocketTransportFailure(error: unknown): boolean {
     return message.includes('websocket')
         || message.includes('transport error')
         || message.includes('xhr poll error');
+}
+
+function getRpcErrorMessage(payload: unknown): string | null {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+
+    const record = payload as Record<string, unknown>;
+    if (record[RPC_ERROR_FLAG] !== true) {
+        return null;
+    }
+
+    return typeof record.message === 'string' && record.message.trim().length > 0
+        ? record.message
+        : 'RPC call failed';
 }
 
 //
@@ -180,7 +197,12 @@ export class ApiSocket {
         });
         
         if (result.ok) {
-            return await sessionEncryption.decryptRaw(result.result) as R;
+            const payload = await sessionEncryption.decryptRaw(result.result);
+            const rpcError = getRpcErrorMessage(payload);
+            if (rpcError) {
+                throw new Error(rpcError);
+            }
+            return payload as R;
         }
         throw new Error(result.error || 'RPC call failed');
     }
@@ -200,7 +222,12 @@ export class ApiSocket {
         });
         
         if (result.ok) {
-            return await machineEncryption.decryptRaw(result.result) as R;
+            const payload = await machineEncryption.decryptRaw(result.result);
+            const rpcError = getRpcErrorMessage(payload);
+            if (rpcError) {
+                throw new Error(rpcError);
+            }
+            return payload as R;
         }
         throw new Error(result.error || 'RPC call failed');
     }

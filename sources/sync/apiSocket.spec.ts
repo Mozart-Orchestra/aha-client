@@ -83,9 +83,9 @@ describe('ApiSocket reconnect', () => {
         consoleLogSpy.mockRestore();
     });
 
-    function createSocket() {
+    function createSocket(encryption: any = {}) {
         const apiSocket = new ApiSocket();
-        apiSocket.initialize({ endpoint: 'https://example.com/api/v3', token: 'token-123' }, {} as any);
+        apiSocket.initialize({ endpoint: 'https://example.com/api/v3', token: 'token-123' }, encryption);
         return {
             apiSocket,
             socket: sockets[0]!,
@@ -174,5 +174,77 @@ describe('ApiSocket reconnect', () => {
         socket.trigger('update', { id: 'evt-2' });
 
         expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw the daemon rpc error from machineRPC', async () => {
+        const machineEncryption = {
+            encryptRaw: vi.fn().mockResolvedValue('encrypted-request'),
+            decryptRaw: vi.fn().mockResolvedValue({
+                __ahaRpcError: true,
+                message: 'spawn failed'
+            })
+        };
+        const { apiSocket, socket } = createSocket({
+            getMachineEncryption: vi.fn().mockReturnValue(machineEncryption)
+        });
+
+        socket.emitWithAck.mockResolvedValue({
+            ok: true,
+            result: 'encrypted-response'
+        });
+
+        await expect(
+            apiSocket.machineRPC('machine-1', 'spawn-aha-session', { cwd: '/tmp' })
+        ).rejects.toThrow('spawn failed');
+
+        expect(machineEncryption.encryptRaw).toHaveBeenCalledWith({ cwd: '/tmp' });
+        expect(machineEncryption.decryptRaw).toHaveBeenCalledWith('encrypted-response');
+    });
+
+    it('should throw the daemon rpc error from sessionRPC', async () => {
+        const sessionEncryption = {
+            encryptRaw: vi.fn().mockResolvedValue('encrypted-request'),
+            decryptRaw: vi.fn().mockResolvedValue({
+                __ahaRpcError: true,
+                message: 'permission denied'
+            })
+        };
+        const { apiSocket, socket } = createSocket({
+            getSessionEncryption: vi.fn().mockReturnValue(sessionEncryption)
+        });
+
+        socket.emitWithAck.mockResolvedValue({
+            ok: true,
+            result: 'encrypted-response'
+        });
+
+        await expect(
+            apiSocket.sessionRPC('session-1', 'permission', { action: 'approve' })
+        ).rejects.toThrow('permission denied');
+    });
+
+    it('should preserve non-sentinel business error payloads', async () => {
+        const machineEncryption = {
+            encryptRaw: vi.fn().mockResolvedValue('encrypted-request'),
+            decryptRaw: vi.fn().mockResolvedValue({
+                success: false,
+                error: 'No saved WeChat credentials found'
+            })
+        };
+        const { apiSocket, socket } = createSocket({
+            getMachineEncryption: vi.fn().mockReturnValue(machineEncryption)
+        });
+
+        socket.emitWithAck.mockResolvedValue({
+            ok: true,
+            result: 'encrypted-response'
+        });
+
+        await expect(
+            apiSocket.machineRPC('machine-1', 'wechat-credentials', {})
+        ).resolves.toEqual({
+            success: false,
+            error: 'No saved WeChat credentials found'
+        });
     });
 });
