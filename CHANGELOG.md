@@ -1,5 +1,14 @@
 # Changelog
 
+## Version 6 - 2026-04-02
+
+This release makes account recovery much more legible when Google sign-in cannot immediately restore the existing account. Instead of dropping every failure into the same generic fallback, the app now explains the actual recovery state and points users to the right next action.
+
+- Improved Google/email account recovery UX by showing distinct guidance for restore-required, secret-mismatch, and recovery-not-ready states.
+- Updated the restore screen so manual restore no longer looks like a failed Google login path.
+- Added clearer “existing signed-in device” instructions so users understand when to use Restore Key versus “Add New Device”.
+- Added internal walkthrough docs for the auth and account-device journey to support future fixes and reviews.
+
 ## Version 5 - 2026-01-19 (Dev-1119 UI Beautification)
 
 This release delivers the P0 phase of the UI beautification initiative, introducing modern shadow systems and enhanced elevation across core components. The implementation establishes a cohesive visual foundation with cross-platform consistency.

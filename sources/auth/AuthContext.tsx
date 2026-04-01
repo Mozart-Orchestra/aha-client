@@ -15,6 +15,8 @@ interface AuthContextType {
     logout: () => Promise<void>;
 }
 
+export type RestoreReason = 'restore_required' | 'secret_mismatch' | 'recovery_not_ready';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function isSameCredentials(a: AuthCredentials | null, b: AuthCredentials | null): boolean {
@@ -171,12 +173,26 @@ export function getCurrentAuth(): AuthContextType | null {
 }
 
 // Flag: Supabase account exists but local secret is missing
-let needsRestoreFlag = false;
+let needsRestoreReason: RestoreReason | null = null;
 
-export function setNeedsRestore(value: boolean) {
-    needsRestoreFlag = value;
+export function setNeedsRestore(value: boolean | RestoreReason | null) {
+    if (value === true) {
+        needsRestoreReason = 'restore_required';
+        return;
+    }
+
+    if (value === false) {
+        needsRestoreReason = null;
+        return;
+    }
+
+    needsRestoreReason = value;
 }
 
 export function getNeedsRestore(): boolean {
-    return needsRestoreFlag;
+    return needsRestoreReason !== null;
+}
+
+export function getNeedsRestoreReason(): RestoreReason | null {
+    return needsRestoreReason;
 }

@@ -18,7 +18,8 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import * as Clipboard from 'expo-clipboard';
 
-import { useAuth, getNeedsRestore, setNeedsRestore } from '@/auth/AuthContext';
+import { useAuth, getNeedsRestore, getNeedsRestoreReason, setNeedsRestore } from '@/auth/AuthContext';
+import type { RestoreReason } from '@/auth/AuthContext';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
@@ -46,6 +47,47 @@ import { trackAccountCreated } from '@/track';
 
 const DESKTOP_BREAKPOINT = 1180;
 const LANDING_HERO_ARTWORK_ASPECT_RATIO = 2814 / 1536;
+
+function getRestoreReasonFromError(error: unknown): RestoreReason | null {
+    if (error instanceof SupabaseRestoreRequiredError) {
+        return 'restore_required';
+    }
+    if (error instanceof SupabaseSecretMismatchError) {
+        return 'secret_mismatch';
+    }
+    if (error instanceof SupabaseRecoveryNotReadyError) {
+        return 'recovery_not_ready';
+    }
+    return null;
+}
+
+function getRestoreCopy(reason: RestoreReason | null): {
+    title: string;
+    message: string;
+    existingDeviceHelp: string;
+} {
+    if (reason === 'secret_mismatch') {
+        return {
+            title: t('welcome.restoreSecretMismatchTitle'),
+            message: t('welcome.restoreSecretMismatchMessage'),
+            existingDeviceHelp: t('welcome.loggedInDeviceHelpSecretMismatch'),
+        };
+    }
+
+    if (reason === 'recovery_not_ready') {
+        return {
+            title: t('welcome.restoreRecoveryNotReadyTitle'),
+            message: t('welcome.restoreRecoveryNotReadyMessage'),
+            existingDeviceHelp: t('welcome.loggedInDeviceHelpRecoveryNotReady'),
+        };
+    }
+
+    return {
+        title: t('welcome.restoreRequired'),
+        message: t('welcome.restoreRequiredMessage'),
+        existingDeviceHelp: t('welcome.loggedInDeviceHelp'),
+    };
+}
 
 const styles = StyleSheet.create((theme) => ({
     shellContent: {
@@ -491,9 +533,11 @@ function NotAuthenticated() {
     }, []);
 
     // Show restore key input if account exists but local secret is missing
+    const initialRestoreReason = React.useMemo(() => getNeedsRestoreReason(), []);
     const initialNeedsRestore = React.useMemo(() => getNeedsRestore(), []);
     const [restoreRequired, setRestoreRequired] = React.useState(initialNeedsRestore);
     const [showExistingDeviceHelp, setShowExistingDeviceHelp] = React.useState(initialNeedsRestore);
+    const [restoreReason, setRestoreReason] = React.useState<RestoreReason | null>(initialRestoreReason);
     const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp' | 'restore'>(initialNeedsRestore ? 'restore' : 'idle');
     const [restoreKey, setRestoreKey] = React.useState('');
     const hasRestoreKeyInput = restoreKey.trim().length > 0;
@@ -502,10 +546,26 @@ function NotAuthenticated() {
         return `npm i aha-agi && npx aha auth restore --code ${normalizedRestoreKey}`;
     }, [restoreKey]);
 
-    const enterRestoreRequiredFlow = React.useCallback(() => {
-        setNeedsRestore(true);
+    const restoreCopy = getRestoreCopy(restoreReason);
+    const restoreTitle = restoreCopy.title;
+    const restoreMessage = restoreCopy.message;
+    const existingDeviceHelp = restoreCopy.existingDeviceHelp;
+    const pageTitle = emailLoginStep === 'restore'
+        ? restoreRequired
+            ? restoreTitle
+            : t('navigation.restoreWithSecretKey')
+        : t('welcome.title');
+    const pageSubtitle = emailLoginStep === 'restore'
+        ? restoreRequired
+            ? restoreMessage
+            : t('connect.restoreDescription')
+        : t('welcome.subtitle');
+
+    const enterRestoreRequiredFlow = React.useCallback((reason: RestoreReason) => {
+        setNeedsRestore(reason);
         setRestoreRequired(true);
         setShowExistingDeviceHelp(true);
+        setRestoreReason(reason);
         setEmailLoginStep('restore');
     }, []);
 
@@ -520,6 +580,7 @@ function NotAuthenticated() {
             setNeedsRestore(false);
             setRestoreRequired(false);
             setShowExistingDeviceHelp(false);
+            setRestoreReason(null);
             if (hasPendingTerminalConnectRequest()) {
                 router.replace('/terminal/connect');
             }
@@ -554,6 +615,7 @@ function NotAuthenticated() {
         setNeedsRestore(false);
         setRestoreRequired(false);
         setShowExistingDeviceHelp(false);
+        setRestoreReason(null);
         setEmailLoginStep('restore');
     }, []);
 
@@ -561,6 +623,7 @@ function NotAuthenticated() {
         setNeedsRestore(false);
         setRestoreRequired(false);
         setShowExistingDeviceHelp(false);
+        setRestoreReason(null);
         setEmailLoginStep('idle');
     }, []);
 
@@ -577,6 +640,7 @@ function NotAuthenticated() {
             setNeedsRestore(false);
             setRestoreRequired(false);
             setShowExistingDeviceHelp(false);
+            setRestoreReason(null);
             setRestoreKey('');
             setEmail('');
             setOtp('');
@@ -664,15 +728,13 @@ function NotAuthenticated() {
             await verifyEmailOtp(email.trim(), otp.trim());
             await completeSupabaseLogin();
         } catch (error) {
-            if (
-                error instanceof SupabaseRestoreRequiredError
-                || error instanceof SupabaseSecretMismatchError
-                || error instanceof SupabaseRecoveryNotReadyError
-            ) {
-                enterRestoreRequiredFlow();
+            const restoreFlowReason = getRestoreReasonFromError(error);
+            if (restoreFlowReason) {
+                const restoreFlowCopy = getRestoreCopy(restoreFlowReason);
+                enterRestoreRequiredFlow(restoreFlowReason);
                 Modal.alert(
-                    t('welcome.restoreRequired'),
-                    t('welcome.restoreRequiredMessage'),
+                    restoreFlowCopy.title,
+                    restoreFlowCopy.message,
                 );
             } else {
                 Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
@@ -692,15 +754,13 @@ function NotAuthenticated() {
                 await completeSupabaseLogin();
             }
         } catch (error) {
-            if (
-                error instanceof SupabaseRestoreRequiredError
-                || error instanceof SupabaseSecretMismatchError
-                || error instanceof SupabaseRecoveryNotReadyError
-            ) {
-                enterRestoreRequiredFlow();
+            const restoreFlowReason = getRestoreReasonFromError(error);
+            if (restoreFlowReason) {
+                const restoreFlowCopy = getRestoreCopy(restoreFlowReason);
+                enterRestoreRequiredFlow(restoreFlowReason);
                 Modal.alert(
-                    t('welcome.restoreRequired'),
-                    t('welcome.restoreRequiredMessage'),
+                    restoreFlowCopy.title,
+                    restoreFlowCopy.message,
                 );
             } else {
                 Modal.alert('Error', 'Google sign-in failed. Please try again.');
@@ -710,7 +770,6 @@ function NotAuthenticated() {
 
     const restoreActions = (
         <>
-            <Text style={styles.landingOtpHint}>{t('welcome.restoreRequiredMessage')}</Text>
             <TextInput
                 style={styles.landingInput}
                 placeholder={t('welcome.restoreKeyPlaceholder')}
@@ -740,8 +799,8 @@ function NotAuthenticated() {
                     />
                     {showExistingDeviceHelp ? (
                         <View style={styles.landingRestoreAssistCard}>
-                            <Text style={styles.landingRestoreAssistTitle}>{t('welcome.haveAnotherLoggedInDevice')}</Text>
-                            <Text style={styles.landingRestoreAssistText}>{t('welcome.loggedInDeviceHelp')}</Text>
+                            <Text style={styles.landingRestoreAssistTitle}>{t('welcome.restoreWhyTitle')}</Text>
+                            <Text style={styles.landingRestoreAssistText}>{existingDeviceHelp}</Text>
                         </View>
                     ) : null}
                     <LandingButton
@@ -804,8 +863,8 @@ function NotAuthenticated() {
                                 <View style={styles.landingEyebrowDot} />
                                 <Text style={styles.landingEyebrowText}>{t('landing.eyebrow')}</Text>
                             </View>
-                            <Text style={styles.landingTitle}>{t('welcome.title')}</Text>
-                            <Text style={styles.landingSubtitle}>{t('welcome.subtitle')}</Text>
+                            <Text style={styles.landingTitle}>{pageTitle}</Text>
+                            <Text style={styles.landingSubtitle}>{pageSubtitle}</Text>
 
                             {emailLoginStep === 'restore' ? (
                                 <View style={styles.landingActionsRow}>
@@ -937,8 +996,8 @@ function NotAuthenticated() {
                     <View style={styles.landingEyebrowDot} />
                     <Text style={styles.landingEyebrowText}>{t('landing.eyebrow')}</Text>
                 </View>
-                <Text style={styles.landingMobileTitle}>{t('welcome.title')}</Text>
-                <Text style={styles.landingMobileSubtitle}>{t('welcome.subtitle')}</Text>
+                <Text style={styles.landingMobileTitle}>{pageTitle}</Text>
+                <Text style={styles.landingMobileSubtitle}>{pageSubtitle}</Text>
 
                 {emailLoginStep === 'restore' ? (
                     <View style={styles.landingMobileActions}>

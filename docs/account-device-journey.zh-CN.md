@@ -15,14 +15,16 @@
 
 - `Google / Supabase 身份`：负责“你是谁”
 - `contentSecretKey / restore key`：负责“这个账户真正的根身份”
-- `join ticket`：负责“把一台新机器加入当前账户”的一次性入场券
-- `Account.publicKey`：负责“具体某台设备 / 某次 CLI 身份”的公钥标识
+- `Account.publicKey`：负责“这个账户的唯一根身份公钥”
+- `machineId + machine metadata`：负责“这个账户下的某一台具体机器”
+- `join ticket`：负责“把 canonical secret 一次性发给一台新机器”的入场券
 
 关键点：
 
-- 现在服务端持久化的是账户绑定关系，不是浏览器里的私钥本体
-- 所以 “Google 登录成功” 不等于 “服务端自动把旧 secret 发回新设备”
-- 当前推荐路径是：已登录设备生成 `join ticket`，新机器执行一条命令接入
+- `Account.publicKey` 不是设备公钥，也不是某一次 CLI 登录态
+- 同一个账户下可以有很多台机器，但只能有一个 canonical `contentSecretKey`
+- 服务端现在已经具备加密托管 canonical secret 的能力
+- 所以 “Google 登录成功” 的目标不应只是鉴权成功，而应是自动回到同一个 canonical 账户
 
 ## 推荐用户旅程
 
@@ -36,7 +38,7 @@
 
 ### 2. 已有账户，新增一台机器
 
-1. 用户在任意已登录设备打开“加入新设备”
+1. 用户在一台已登录设备打开“加入新设备”
 2. 系统生成一次性 `join ticket`
 3. 用户复制命令并在新机器执行：
 
@@ -47,16 +49,20 @@ npm i aha-agi && npx aha auth login --code <join-ticket>
 4. 新机器用该 ticket 加入同一个账户
 5. 新机器出现在设备列表，加入同一套 team / agent 协作体系
 
-这是默认主路径。
+这是最低阻力的“加设备”路径。
 
 ### 3. 原机器还在，但新设备误走了 Google 登录
 
 1. 新设备单独走 Google 登录
-2. 如果没有旧 secret，同机会生成一个新的本地 secret
-3. 这时它不一定能自动拿回原账户的根身份
-4. 正确做法仍然是回到已登录设备，使用“加入新设备”命令接入
+2. 系统应优先按 `recover-first` 自动拿回该 Google 对应账户的 canonical secret
+3. 如果自动恢复尚未就绪，才退回到：
+   - 去另一台已登录设备复制 `join ticket` 命令
+   - 或输入 `Restore Key`
 
-这不是推荐路径。
+这条链路的目标是：
+
+- 同一个 Google，在新浏览器 / 新机器上应尽可能直接回到同一个账户
+- `join ticket` 是加设备捷径，不是替代 Google 身份本身
 
 ### 4. 所有设备都丢了，只剩备份码
 
@@ -91,6 +97,12 @@ npm i aha-agi && npx aha auth login --code <join-ticket>
 - 不允许用户在同一个页面里继续误点 Google 登录，造成“为什么又进不去”的循环
 - 给“我还有老设备”和“我登错 Google 了”这两个高频分支明确出口
 - 把 `Restore Key` 保持为恢复路径，而不是继续和“新增设备”混在一起
+
+这个状态真正表达的是：
+
+- 已确认这是你的 Google 身份
+- 但当前设备还没拿到这个账户的 canonical secret
+- 所以现在卡住的不是登录，而是账户恢复
 
 ### 已登录态
 
@@ -138,18 +150,29 @@ flowchart TD
 - 登录页强制恢复态补齐“复制恢复命令 / 我有另一台已登录设备 / 切换 Google 账号”
 - 桌面左栏新增“设备”一级入口
 
+## 经验教训
+
+- 绝不能在 Google 重登时覆盖 `Account.publicKey`。它是账户根身份，不是可随手替换的设备公钥。
+- Web 端把 secret 保存在 `localStorage` 不是偶然实现，而是为了保证同浏览器重登时 restore key 稳定。
+- `Restore Key` 不能再被当成“默认加设备命令”。它是灾难恢复，不是日常扩容。
+- `join ticket` 解决的是“从已登录设备复制一条命令接入新机器”，不是“Google 自动恢复账户”本身。
+- CLI 上的 `restore` / `reconnect` / `join` 成功后，必须顺手把 recovery material 补回服务端，否则会出现“CLI 已经好了，但 Web 还是卡 Restore Key”。
+- 对用户来说，群聊、teams、machines 连续性比“某个局部登录动作成功”更重要；只要账户根身份漂移，后续协作一定出问题。
+
 ## 仍然存在的实现边界
 
-- 当前系统还不是“任意新机器只靠 Google 登录就自动拿回旧 secret”
-- 也就是说，Google 目前更像身份认证入口，不是完整的 server-side secret recovery
-- 如果未来要实现“同一 Google 在任意新机器自动恢复同一账户根身份”，需要服务端托管或封装可恢复的账户主密钥体系
+- 服务端 recovery 体系已经存在，但仍依赖 canonical secret 曾被正确 bootstrap 到服务端
+- 历史账户如果没有有效的 recovery material，仍可能在新浏览器掉进 `Restore Key`
+- 所以当前真正的收尾重点是：
+  - 保证所有成功恢复过的客户端都会反向补齐 recovery material
+  - 审计并修复历史账户的 recovery readiness
 
 ## 结论
 
 现在的产品主叙事应该是：
 
-- `Google 登录` 用来进入账户
-- `加入新设备` 用来扩展到账户下的更多机器
-- `Restore Key` 用来兜底恢复
+- `Google 登录` 是主入口，目标是自动回到同一个 canonical 账户
+- `加入新设备` 是已登录设备向新机器复制一条命令的捷径
+- `Restore Key` 是灾难恢复兜底
 
 不要再把这三件事混成一个入口。

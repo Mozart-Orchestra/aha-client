@@ -207,12 +207,12 @@ export default function RootLayout() {
                             credentials = { token: result.token, secret: result.secretBase64 };
                             await TokenStorage.setCredentials(credentials);
                         } catch (error) {
-                            if (
-                                error instanceof SupabaseRestoreRequiredError
-                                || error instanceof SupabaseSecretMismatchError
-                                || error instanceof SupabaseRecoveryNotReadyError
-                            ) {
-                                setNeedsRestore(true);
+                            if (error instanceof SupabaseRestoreRequiredError) {
+                                setNeedsRestore('restore_required');
+                            } else if (error instanceof SupabaseSecretMismatchError) {
+                                setNeedsRestore('secret_mismatch');
+                            } else if (error instanceof SupabaseRecoveryNotReadyError) {
+                                setNeedsRestore('recovery_not_ready');
                             }
                             // Failed: continue unauthenticated
                         }
