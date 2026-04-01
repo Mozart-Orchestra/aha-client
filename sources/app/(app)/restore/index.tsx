@@ -20,6 +20,7 @@ import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
 import { getStoredSecretForReauth } from '@/auth/tokenStorage';
+import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
 
 export default memo(function Restore() {
     const { theme } = useUnistyles();
@@ -33,11 +34,31 @@ export default memo(function Restore() {
     const [copiedRecently, setCopiedRecently] = useState(false);
     const [copiedCommandRecently, setCopiedCommandRecently] = useState(false);
     const [copiedRestoreCommandRecently, setCopiedRestoreCommandRecently] = useState(false);
+    const [joinCommand, setJoinCommand] = useState('');
 
     const currentSecret = auth.credentials?.secret ?? getStoredSecretForReauth() ?? '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
     const loginCommand = getCliInstallAndLoginCommand();
     const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
+    const primaryCommand = joinCommand || restoreCommand || loginCommand;
+
+    const loadJoinCommand = React.useCallback(async () => {
+        if (!auth.credentials?.token) {
+            setJoinCommand('');
+            return;
+        }
+
+        try {
+            const { ticket } = await createAccountJoinTicket(auth.credentials.token);
+            setJoinCommand(getCliInstallAndLoginCommand(ticket));
+        } catch {
+            setJoinCommand('');
+        }
+    }, [auth.credentials?.token]);
+
+    React.useEffect(() => {
+        void loadJoinCommand();
+    }, [loadJoinCommand]);
 
     const handleCopySecret = async () => {
         try {
@@ -52,7 +73,7 @@ export default memo(function Restore() {
 
     const handleCopyCommand = async () => {
         try {
-            await Clipboard.setStringAsync(loginCommand);
+            await Clipboard.setStringAsync(primaryCommand);
             setCopiedCommandRecently(true);
             setTimeout(() => setCopiedCommandRecently(false), 2000);
             Modal.alert(t('home.onboarding.commandCopiedTitle'), t('home.onboarding.commandCopiedMessage'));
@@ -108,29 +129,27 @@ export default memo(function Restore() {
                 <Text style={styles.subtitle}>{t('home.syncDeviceSubtitle')}</Text>
             </View>
 
-            {!restoreCommand && (
-                <ItemGroup footer={t('home.addDeviceHint')}>
-                    <Pressable onPress={handleCopyCommand}>
-                        <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
-                            <View style={styles.secretKeyHeader}>
-                                <Text style={styles.secretKeyLabel}>
-                                    {t('home.addDeviceTitle')}
-                                </Text>
-                                <Ionicons
-                                    name={copiedCommandRecently ? 'checkmark-circle' : 'copy-outline'}
-                                    size={18}
-                                    color={copiedCommandRecently ? '#34C759' : theme.colors.textSecondary}
-                                />
-                            </View>
-                            <Text style={styles.secretKeyText}>
-                                {loginCommand}
+            <ItemGroup footer={joinCommand ? t('home.addDeviceHint') : restoreCommand ? t('settingsAccount.backupDescription') : t('home.addDeviceHint')}>
+                <Pressable onPress={handleCopyCommand}>
+                    <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
+                        <View style={styles.secretKeyHeader}>
+                            <Text style={styles.secretKeyLabel}>
+                                {joinCommand ? t('home.addDeviceTitle') : restoreCommand ? t('settingsAccount.restoreCommandLabel') : t('home.addDeviceTitle')}
                             </Text>
+                            <Ionicons
+                                name={copiedCommandRecently ? 'checkmark-circle' : 'copy-outline'}
+                                size={18}
+                                color={copiedCommandRecently ? '#34C759' : theme.colors.textSecondary}
+                            />
                         </View>
-                    </Pressable>
-                </ItemGroup>
-            )}
+                        <Text style={styles.secretKeyText}>
+                            {primaryCommand}
+                        </Text>
+                    </View>
+                </Pressable>
+            </ItemGroup>
 
-            {restoreCommand && (
+            {joinCommand && restoreCommand && (
                 <ItemGroup footer={t('settingsAccount.backupDescription')}>
                     <Pressable onPress={handleCopyRestoreCommand}>
                         <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>

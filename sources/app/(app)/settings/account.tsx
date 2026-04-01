@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Typography } from '@/constants/Typography';
 import { formatSecretKeyForBackup } from '@/auth/secretKeyBackup';
-import { getCliRestoreCommand } from '@/auth/cliCommands';
+import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
@@ -18,12 +18,13 @@ import { sync } from '@/sync/sync';
 import { getServerInfo } from '@/sync/serverConfig';
 import { useUnistyles } from 'react-native-unistyles';
 import { Switch } from '@/components/ui/Switch';
-import { getDisplayName, getAvatarUrl } from '@/sync/profile';
+import { getDisplayName } from '@/sync/profile';
 import { Image } from 'expo-image';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { disconnectGitHub } from '@/sync/apiGithub';
 import { disconnectService } from '@/sync/apiServices';
 import { getStoredSecretForReauth } from '@/auth/tokenStorage';
+import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
 
 export default React.memo(() => {
     const { theme } = useUnistyles();
@@ -31,7 +32,9 @@ export default React.memo(() => {
     const router = useRouter();
     const [showSecret, setShowSecret] = useState(false);
     const [copiedRecently, setCopiedRecently] = useState(false);
+    const [copiedJoinCommandRecently, setCopiedJoinCommandRecently] = useState(false);
     const [copiedCommandRecently, setCopiedCommandRecently] = useState(false);
+    const [joinCommand, setJoinCommand] = useState('');
     const [analyticsOptOut, setAnalyticsOptOut] = useSettingMutable('analyticsOptOut');
     const [professionalMode, setProfessionalMode] = useSettingMutable('professionalMode');
     const profile = useProfile();
@@ -40,6 +43,21 @@ export default React.memo(() => {
     const currentSecret = auth.credentials?.secret || getStoredSecretForReauth() || '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
     const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
+
+    React.useEffect(() => {
+        if (!auth.credentials?.token) {
+            setJoinCommand('');
+            return;
+        }
+
+        createAccountJoinTicket(auth.credentials.token)
+            .then(({ ticket }) => {
+                setJoinCommand(getCliInstallAndLoginCommand(ticket));
+            })
+            .catch(() => {
+                setJoinCommand('');
+            });
+    }, [auth.credentials?.token]);
 
     // Get server info
     const serverInfo = getServerInfo();
@@ -102,6 +120,21 @@ export default React.memo(() => {
             await Clipboard.setStringAsync(restoreCommand);
             setCopiedCommandRecently(true);
             setTimeout(() => setCopiedCommandRecently(false), 2000);
+            Modal.alert(t('common.success'), t('settingsAccount.restoreCommandCopied'));
+        } catch (error) {
+            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
+        }
+    };
+
+    const handleCopyJoinCommand = async () => {
+        try {
+            if (!joinCommand) {
+                return;
+            }
+
+            await Clipboard.setStringAsync(joinCommand);
+            setCopiedJoinCommandRecently(true);
+            setTimeout(() => setCopiedJoinCommandRecently(false), 2000);
             Modal.alert(t('common.success'), t('settingsAccount.restoreCommandCopied'));
         } catch (error) {
             Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
@@ -305,6 +338,46 @@ export default React.memo(() => {
                                 </Text>
                             </View>
                         </Pressable>
+                        {joinCommand && (
+                            <Pressable onPress={handleCopyJoinCommand}>
+                                <View style={{
+                                    backgroundColor: theme.colors.surface,
+                                    paddingHorizontal: 16,
+                                    paddingVertical: 14,
+                                    borderTopWidth: 1,
+                                    borderTopColor: theme.colors.divider,
+                                    width: '100%',
+                                    maxWidth: layout.maxWidth,
+                                    alignSelf: 'center'
+                                }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                        <Text style={{
+                                            fontSize: 11,
+                                            color: theme.colors.textSecondary,
+                                            letterSpacing: 0.5,
+                                            textTransform: 'uppercase',
+                                            ...Typography.default('semiBold')
+                                        }}>
+                                            {t('home.addDeviceTitle')}
+                                        </Text>
+                                        <Ionicons
+                                            name={copiedJoinCommandRecently ? "checkmark-circle" : "copy-outline"}
+                                            size={18}
+                                            color={copiedJoinCommandRecently ? "#34C759" : theme.colors.textSecondary}
+                                        />
+                                    </View>
+                                    <Text style={{
+                                        fontSize: 13,
+                                        letterSpacing: 0.5,
+                                        lineHeight: 20,
+                                        color: theme.colors.text,
+                                        ...Typography.mono()
+                                    }}>
+                                        {joinCommand}
+                                    </Text>
+                                </View>
+                            </Pressable>
+                        )}
                         <Pressable onPress={handleCopyRestoreCommand}>
                             <View style={{
                                 backgroundColor: theme.colors.surface,
