@@ -23,6 +23,7 @@ import { Image } from 'expo-image';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { disconnectGitHub } from '@/sync/apiGithub';
 import { disconnectService } from '@/sync/apiServices';
+import { getStoredSecretForReauth } from '@/auth/tokenStorage';
 
 export default React.memo(() => {
     const { theme } = useUnistyles();
@@ -36,7 +37,7 @@ export default React.memo(() => {
     const profile = useProfile();
 
     // Get the current secret key
-    const currentSecret = auth.credentials?.secret || '';
+    const currentSecret = auth.credentials?.secret || getStoredSecretForReauth() || '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
     const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
 

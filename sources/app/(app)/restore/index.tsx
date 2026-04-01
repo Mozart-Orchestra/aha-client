@@ -19,6 +19,7 @@ import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
+import { getStoredSecretForReauth } from '@/auth/tokenStorage';
 
 export default memo(function Restore() {
     const { theme } = useUnistyles();
@@ -33,7 +34,7 @@ export default memo(function Restore() {
     const [copiedCommandRecently, setCopiedCommandRecently] = useState(false);
     const [copiedRestoreCommandRecently, setCopiedRestoreCommandRecently] = useState(false);
 
-    const currentSecret = auth.credentials?.secret ?? '';
+    const currentSecret = auth.credentials?.secret ?? getStoredSecretForReauth() ?? '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
     const loginCommand = getCliInstallAndLoginCommand();
     const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
@@ -107,25 +108,27 @@ export default memo(function Restore() {
                 <Text style={styles.subtitle}>{t('home.syncDeviceSubtitle')}</Text>
             </View>
 
-            <ItemGroup footer={t('home.addDeviceHint')}>
-                <Pressable onPress={handleCopyCommand}>
-                    <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
-                        <View style={styles.secretKeyHeader}>
-                            <Text style={styles.secretKeyLabel}>
-                                {t('home.addDeviceTitle')}
+            {!restoreCommand && (
+                <ItemGroup footer={t('home.addDeviceHint')}>
+                    <Pressable onPress={handleCopyCommand}>
+                        <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
+                            <View style={styles.secretKeyHeader}>
+                                <Text style={styles.secretKeyLabel}>
+                                    {t('home.addDeviceTitle')}
+                                </Text>
+                                <Ionicons
+                                    name={copiedCommandRecently ? 'checkmark-circle' : 'copy-outline'}
+                                    size={18}
+                                    color={copiedCommandRecently ? '#34C759' : theme.colors.textSecondary}
+                                />
+                            </View>
+                            <Text style={styles.secretKeyText}>
+                                {loginCommand}
                             </Text>
-                            <Ionicons
-                                name={copiedCommandRecently ? 'checkmark-circle' : 'copy-outline'}
-                                size={18}
-                                color={copiedCommandRecently ? '#34C759' : theme.colors.textSecondary}
-                            />
                         </View>
-                        <Text style={styles.secretKeyText}>
-                            {loginCommand}
-                        </Text>
-                    </View>
-                </Pressable>
-            </ItemGroup>
+                    </Pressable>
+                </ItemGroup>
+            )}
 
             {restoreCommand && (
                 <ItemGroup footer={t('settingsAccount.backupDescription')}>
