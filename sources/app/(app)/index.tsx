@@ -19,7 +19,6 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import * as Clipboard from 'expo-clipboard';
 
 import { useAuth, getNeedsRestore, setNeedsRestore } from '@/auth/AuthContext';
-import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
@@ -267,20 +266,6 @@ const styles = StyleSheet.create((theme) => ({
         lineHeight: 20,
         color: theme.colors.textSecondary,
     },
-    landingRestoreCommandBox: {
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.colors.divider,
-        backgroundColor: theme.colors.surface,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-    },
-    landingRestoreCommandText: {
-        fontSize: 12,
-        lineHeight: 18,
-        color: theme.colors.text,
-        fontFamily: 'IBMPlexMono-SemiBold',
-    },
     landingTrustRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -511,10 +496,6 @@ function NotAuthenticated() {
     const [showExistingDeviceHelp, setShowExistingDeviceHelp] = React.useState(initialNeedsRestore);
     const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp' | 'restore'>(initialNeedsRestore ? 'restore' : 'idle');
     const [restoreKey, setRestoreKey] = React.useState('');
-    const joinCommandTemplate = React.useMemo(
-        () => getCliInstallAndLoginCommand('<aha_join_...>'),
-        [],
-    );
     const restoreCommandTemplate = React.useMemo(() => {
         const normalizedRestoreKey = restoreKey.trim() || t('welcome.restoreKeyPlaceholder');
         return `npm i aha-agi && npx aha auth restore --code ${normalizedRestoreKey}`;
@@ -559,18 +540,6 @@ function NotAuthenticated() {
             Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
         }
     }, [restoreCommandTemplate]);
-
-    const handleCopyJoinCommandTemplate = React.useCallback(async () => {
-        try {
-            await Clipboard.setStringAsync(joinCommandTemplate);
-            Modal.alert(
-                t('home.onboarding.commandCopiedTitle'),
-                t('welcome.joinDeviceCommandCopiedMessage'),
-            );
-        } catch {
-            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
-        }
-    }, [joinCommandTemplate]);
 
     const handleOpenManualRestore = React.useCallback(() => {
         setNeedsRestore(false);
@@ -764,14 +733,6 @@ function NotAuthenticated() {
                         <View style={styles.landingRestoreAssistCard}>
                             <Text style={styles.landingRestoreAssistTitle}>{t('welcome.haveAnotherLoggedInDevice')}</Text>
                             <Text style={styles.landingRestoreAssistText}>{t('welcome.loggedInDeviceHelp')}</Text>
-                            <View style={styles.landingRestoreCommandBox}>
-                                <Text style={styles.landingRestoreCommandText}>{joinCommandTemplate}</Text>
-                            </View>
-                            <LandingButton
-                                title={t('welcome.copyJoinCommand')}
-                                onPress={handleCopyJoinCommandTemplate}
-                                tone="ghost"
-                            />
                         </View>
                     ) : null}
                     <LandingButton
