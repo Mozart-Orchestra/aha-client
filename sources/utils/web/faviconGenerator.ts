@@ -2,13 +2,26 @@
  * Simple utility for switching between normal and active favicons
  */
 
-const FAVICON_NORMAL = '/favicon.ico';
-const FAVICON_ACTIVE = '/favicon-active.ico';
+const FAVICON_NORMAL = 'favicon.ico';
+const FAVICON_ACTIVE = 'favicon-active.ico';
+
+function resolveFaviconUrl(fileName: string) {
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+        return '/' + fileName;
+    }
+
+    const currentHref =
+        document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.getAttribute('href') ?? '/favicon.ico';
+    const currentUrl = new URL(currentHref, window.location.origin);
+    const basePath = currentUrl.pathname.replace(/[^/]+$/, '');
+
+    return `${basePath}${fileName}`;
+}
 
 /**
  * Updates the favicon in the document
  */
-function setFavicon(url: string) {
+function setFavicon(fileName: string) {
     if (typeof document === 'undefined') return;
     
     let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
@@ -21,7 +34,7 @@ function setFavicon(url: string) {
     }
     
     // Force reload by adding timestamp
-    link.href = url + '?t=' + Date.now();
+    link.href = resolveFaviconUrl(fileName) + '?t=' + Date.now();
 }
 
 /**
