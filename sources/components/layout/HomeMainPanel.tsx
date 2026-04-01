@@ -23,7 +23,9 @@ import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
 import { getSessionName } from '@/utils/sessionUtils';
 import { isMachineOnline } from '@/utils/machineUtils';
-import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
+import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
+import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
+import { getStoredSecretForReauth } from '@/auth/tokenStorage';
 
 function useIsExperiencedUser(): boolean {
     const artifacts = useArtifacts();
@@ -645,19 +647,45 @@ function ExperiencedUserPanel() {
     const styles = stylesheet;
     const { theme, rt } = useUnistyles();
     const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
+    const auth = useAuth();
     const machines = useAllMachines();
+    const [joinCommand, setJoinCommand] = React.useState('');
 
-    const loginCommand = React.useMemo(() => getCliInstallAndLoginCommand(), []);
+    const currentSecret = auth.credentials?.secret ?? getStoredSecretForReauth() ?? '';
+    const restoreCommand = React.useMemo(
+        () => (currentSecret ? getCliRestoreCommand(currentSecret) : ''),
+        [currentSecret],
+    );
+    const fallbackCommand = React.useMemo(() => getCliInstallAndLoginCommand(), []);
+    const primaryCommand = joinCommand || restoreCommand || fallbackCommand;
+
+    const loadJoinCommand = React.useCallback(async () => {
+        if (!auth.credentials?.token) {
+            setJoinCommand('');
+            return;
+        }
+
+        try {
+            const { ticket } = await createAccountJoinTicket(auth.credentials.token);
+            setJoinCommand(getCliInstallAndLoginCommand(ticket));
+        } catch {
+            setJoinCommand('');
+        }
+    }, [auth.credentials?.token]);
+
+    React.useEffect(() => {
+        void loadJoinCommand();
+    }, [loadJoinCommand]);
 
     const handleCopyDeviceCommand = React.useCallback(async () => {
         const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(loginCommand);
+        await Clipboard.setStringAsync(primaryCommand);
         const { Modal } = await import('@/modal');
         Modal.alert(
             t('home.onboarding.commandCopiedTitle'),
             t('home.onboarding.commandCopiedMessage'),
         );
-    }, [loginCommand]);
+    }, [primaryCommand]);
 
     const handleReport = React.useCallback(() => {
         router.push('/teams' as never);
@@ -692,7 +720,7 @@ function ExperiencedUserPanel() {
                 onPress={handleReport}
             />
 
-            {/* Add New Device — show the direct-run login command and existing machines */}
+            {/* Add New Device — prefer a join ticket, then fall back to restore if needed. */}
             <View style={styles.onboardingStep}>
                 <View style={styles.onboardingStepHeader}>
                     <Ionicons name="laptop-outline" size={22} color={theme.colors.text} />
@@ -703,7 +731,7 @@ function ExperiencedUserPanel() {
                 </View>
                 <View style={styles.onboardingStepContent}>
                     <View style={styles.onboardingCommandBox}>
-                        <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{loginCommand.replace(' && ', '\n')}</Text>
+                        <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{primaryCommand.replace(' && ', '\n')}</Text>
                         <Pressable style={styles.onboardingCopyButton} onPress={handleCopyDeviceCommand}>
                             <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                         </Pressable>

@@ -39,7 +39,7 @@ import { MainView } from '@/components/layout/MainView';
 import { encodeBase64 } from '@/encryption/base64';
 import { Modal } from '@/modal';
 import { t } from '@/text';
-import { trackAccountCreated, trackAccountRestored } from '@/track';
+import { trackAccountCreated } from '@/track';
 
 const DESKTOP_BREAKPOINT = 1180;
 const LANDING_HERO_ARTWORK_ASPECT_RATIO = 2814 / 1536;
@@ -449,11 +449,6 @@ function NotAuthenticated() {
         }
     }, [auth, router]);
 
-    const handleRestore = React.useCallback(() => {
-        trackAccountRestored();
-        router.push('/restore');
-    }, [router]);
-
     const handleOpenServer = React.useCallback(() => {
         router.push('/server');
     }, [router]);
@@ -687,7 +682,7 @@ function NotAuthenticated() {
                                     />
                                     <LandingButton
                                         icon="key-outline"
-                                        title={t('welcome.linkOrRestoreAccount')}
+                                        title={t('navigation.restoreWithSecretKey')}
                                         onPress={() => setEmailLoginStep('restore')}
                                         tone="ghost"
                                     />
@@ -769,13 +764,6 @@ function NotAuthenticated() {
         );
     }
 
-    const secondaryTitle = Platform.OS === 'android' || Platform.OS === 'ios'
-        ? t('welcome.linkOrRestoreAccount')
-        : t('welcome.createAccount');
-    const secondaryAction = Platform.OS === 'android' || Platform.OS === 'ios'
-        ? handleRestore
-        : handleCreateAccount;
-
     return (
         <ScrollView
             style={styles.landingMobileScroll}
@@ -847,7 +835,7 @@ function NotAuthenticated() {
                         />
                         <LandingButton
                             icon="key-outline"
-                            title={t('welcome.linkOrRestoreAccount')}
+                            title={t('navigation.restoreWithSecretKey')}
                             onPress={() => setEmailLoginStep('restore')}
                             tone="ghost"
                         />

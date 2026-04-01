@@ -123,7 +123,7 @@ export default function RootLayout() {
                 name="restore/index"
                 options={{
                     headerShown: true,
-                    headerTitle: t('navigation.linkNewDevice'),
+                    headerTitle: t('home.addDeviceTitle'),
                     headerBackTitle: t('common.back'),
                 }}
             />

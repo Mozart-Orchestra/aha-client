@@ -12,6 +12,7 @@ export const DESKTOP_BREAKPOINT = 1180;
  *
  * - 'home'     -> sessions list / main landing
  * - 'agents'   -> agents screen (rail only)
+ * - 'devices'  -> add-device flow (rail only)
  * - 'teams'    -> teams screen
  * - 'settings' -> settings screen
  *
@@ -19,7 +20,7 @@ export const DESKTOP_BREAKPOINT = 1180;
  * only appears when `settings.experiments` is enabled, and is managed locally
  * inside TabBar / MainView.
  */
-export type NavTabKey = 'home' | 'agents' | 'teams' | 'channels' | 'settings';
+export type NavTabKey = 'home' | 'agents' | 'devices' | 'teams' | 'channels' | 'settings';
 
 export interface NavTabDefinition {
     /** Unique key for the tab. */
@@ -67,6 +68,16 @@ export const NAV_TABS: readonly NavTabDefinition[] = [
         showInTabBar: false,
     },
     {
+        key: 'devices',
+        route: '/restore',
+        railIcon: 'add-circle-outline',
+        tabIcon: null,
+        tabLabelKey: null,
+        showInRail: true,
+        showInDock: false,
+        showInTabBar: false,
+    },
+    {
         key: 'teams',
         route: '/teams',
         railIcon: 'chatbubbles-outline',
@@ -105,7 +116,7 @@ export const NAV_TABS: readonly NavTabDefinition[] = [
  */
 export function getActiveTabFromPathname(pathname: string): NavTabKey {
     if (pathname.startsWith('/restore')) {
-        return 'settings';
+        return 'devices';
     }
     if (pathname.startsWith('/settings')) {
         return 'settings';

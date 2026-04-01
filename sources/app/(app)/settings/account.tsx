@@ -175,9 +175,9 @@ export default React.memo(() => {
                         copy={!!sync.serverID}
                     />
                     <Item
-                        title={t('settingsAccount.linkNewDevice')}
-                        subtitle={t('settingsAccount.linkNewDeviceSubtitle')}
-                        icon={<Ionicons name="link-outline" size={29} color="#007AFF" />}
+                        title={t('home.addDeviceTitle')}
+                        subtitle={t('settings.syncDeviceSubtitle')}
+                        icon={<Ionicons name="add-circle-outline" size={29} color="#007AFF" />}
                         onPress={() => router.push('/restore')}
                     />
                     <Item

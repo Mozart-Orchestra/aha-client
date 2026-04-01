@@ -95,7 +95,7 @@ export default memo(function Restore() {
 
     const handleEnterUrlManually = async () => {
         const url = await Modal.prompt(
-            t('settingsAccount.linkNewDevice'),
+            t('home.addDeviceTitle'),
             undefined,
             {
                 placeholder: 'happy:///account?...',
@@ -125,8 +125,8 @@ export default memo(function Restore() {
         >
             <View style={styles.hero}>
                 <Text style={styles.eyebrow}>{t('home.devicesSection')}</Text>
-                <Text style={styles.title}>{t('navigation.linkNewDevice')}</Text>
-                <Text style={styles.subtitle}>{t('home.syncDeviceSubtitle')}</Text>
+                <Text style={styles.title}>{t('home.addDeviceTitle')}</Text>
+                <Text style={styles.subtitle}>{t('settings.syncDeviceSubtitle')}</Text>
             </View>
 
             <ItemGroup footer={joinCommand ? t('home.addDeviceHint') : restoreCommand ? t('settingsAccount.backupDescription') : t('home.addDeviceHint')}>
@@ -238,7 +238,7 @@ export default memo(function Restore() {
             <Stack.Screen
                 options={{
                     headerShown: !isDesktopShell,
-                    headerTitle: t('navigation.linkNewDevice'),
+                    headerTitle: t('home.addDeviceTitle'),
                     headerBackTitle: t('common.back'),
                 }}
             />

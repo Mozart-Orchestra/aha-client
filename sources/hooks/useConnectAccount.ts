@@ -79,8 +79,8 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
         Modal.show({
             component: QrScannerModal,
             props: {
-                title: t('settingsAccount.linkNewDevice'),
-                subtitle: t('settingsAccount.linkNewDeviceSubtitle'),
+                title: t('home.addDeviceTitle'),
+                subtitle: t('settings.syncDeviceSubtitle'),
                 permissionMessage: t('modals.cameraPermissionsRequiredToScanQr'),
                 onScan: async (data: string) => {
                     return await processAuthUrl(data);

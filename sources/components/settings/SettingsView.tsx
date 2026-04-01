@@ -121,9 +121,9 @@ export const SettingsView = React.memo(function SettingsView() {
                     onPress={() => router.push('/settings/account')}
                 />
                 <Item
-                    title={t('settings.syncDeviceTitle')}
+                    title={t('home.addDeviceTitle')}
                     subtitle={t('settings.syncDeviceSubtitle')}
-                    icon={<Ionicons name="link-outline" size={29} color="#FF9500" />}
+                    icon={<Ionicons name="add-circle-outline" size={29} color="#FF9500" />}
                     onPress={() => router.push('/restore')}
                 />
                 <Item
