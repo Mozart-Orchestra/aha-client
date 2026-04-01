@@ -99,7 +99,10 @@ export function AuthProvider({ children, initialCredentials }: { children: React
     const logout = async () => {
         trackLogout();
         clearPersistence();
-        await TokenStorage.removeCredentials();
+        // Use clearToken() instead of removeCredentials() to preserve the secret.
+        // The secret is the permanent account identity — keeping it means the next
+        // Google/email login will reuse the same secret and restore key unchanged.
+        await TokenStorage.clearToken();
         await signOutSupabase();
 
         // Update React state to ensure UI consistency

@@ -22,8 +22,9 @@ import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
 import { decodeBase64 } from '@/encryption/base64';
-import { signInWithGoogle, signInWithEmail, verifyEmailOtp, exchangeSupabaseSession, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
+import { signInWithGoogle, signInWithEmail, verifyEmailOtp, exchangeSupabaseSession, SupabaseRestoreRequiredError, SupabaseSecretMismatchError } from '@/auth/supabaseAuth';
 import { supabase } from '@/auth/supabase';
+import { getStoredSecretForReauth } from '@/auth/tokenStorage';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
@@ -534,7 +535,12 @@ function NotAuthenticated() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) return;
 
-        const secret = await getRandomBytesAsync(32);
+        // Reuse the stored secret so the backup key and CLI machine restore
+        // codes remain unchanged after Google login/logout cycles.
+        const storedSecretB64 = getStoredSecretForReauth();
+        const secret = storedSecretB64
+            ? decodeBase64(storedSecretB64, 'base64url')
+            : await getRandomBytesAsync(32);
         const result = await exchangeSupabaseSession(session.access_token, secret);
         await auth.login(result.token, encodeBase64(secret, 'base64url'));
         if (hasPendingTerminalConnectRequest()) {
@@ -549,7 +555,7 @@ function NotAuthenticated() {
             await verifyEmailOtp(email.trim(), otp.trim());
             await completeSupabaseLogin();
         } catch (error) {
-            if (error instanceof SupabaseRestoreRequiredError) {
+            if (error instanceof SupabaseRestoreRequiredError || error instanceof SupabaseSecretMismatchError) {
                 Modal.alert(
                     t('welcome.restoreRequired'),
                     t('welcome.restoreRequiredMessage'),
@@ -573,7 +579,7 @@ function NotAuthenticated() {
                 await completeSupabaseLogin();
             }
         } catch (error) {
-            if (error instanceof SupabaseRestoreRequiredError) {
+            if (error instanceof SupabaseRestoreRequiredError || error instanceof SupabaseSecretMismatchError) {
                 Modal.alert(
                     t('welcome.restoreRequired'),
                     t('welcome.restoreRequiredMessage'),

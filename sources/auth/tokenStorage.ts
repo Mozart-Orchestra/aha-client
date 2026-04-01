@@ -17,21 +17,24 @@ export type WebAuthSyncEvent =
     | { type: 'logout'; timestamp: number };
 
 /**
- * Web storage using sessionStorage only for better security.
- * Note: For production web apps, consider using HttpOnly cookies
- * or a more secure storage mechanism to protect against XSS attacks.
+ * Web storage using localStorage so credentials survive browser restarts.
+ * The secret is the permanent account identity and must not be lost on tab close.
  */
 const WebStorage = {
     getItem(key: string): string | null {
-        return sessionStorage.getItem(key);
+        return localStorage.getItem(key);
     },
     setItem(key: string, value: string): void {
-        sessionStorage.setItem(key, value);
+        localStorage.setItem(key, value);
     },
     removeItem(key: string): void {
-        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
     }
 };
+
+// Separate key that persists the secret across logouts, so Google re-login
+// can reuse the same secret instead of generating a new one.
+const AUTH_SECRET_REAUTH_KEY = 'auth_secret_v1';
 
 function broadcastWebAuthSyncEvent(event: WebAuthSyncEvent): void {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -85,6 +88,17 @@ export function clearExternalWebCredentials(): void {
     credentialsCache = null;
 }
 
+/**
+ * Returns the permanently stored secret for re-authentication (web only).
+ * This survives logout so Google re-login can reuse the same secret.
+ */
+export function getStoredSecretForReauth(): string | null {
+    if (Platform.OS !== 'web' || typeof localStorage === 'undefined') {
+        return null;
+    }
+    return localStorage.getItem(AUTH_SECRET_REAUTH_KEY);
+}
+
 export const TokenStorage = {
     async getCredentials(): Promise<AuthCredentials | null> {
         if (Platform.OS === 'web') {
@@ -113,6 +127,8 @@ export const TokenStorage = {
         if (Platform.OS === 'web') {
             try {
                 applyExternalWebCredentials(credentials);
+                // Persist secret permanently so Google re-login can reuse it
+                localStorage.setItem(AUTH_SECRET_REAUTH_KEY, credentials.secret);
                 broadcastWebAuthSyncEvent({
                     type: 'login',
                     credentials,
@@ -138,6 +154,7 @@ export const TokenStorage = {
     async removeCredentials(): Promise<boolean> {
         if (Platform.OS === 'web') {
             clearExternalWebCredentials();
+            localStorage.removeItem(AUTH_SECRET_REAUTH_KEY);
             broadcastWebAuthSyncEvent({
                 type: 'logout',
                 timestamp: Date.now(),
@@ -150,6 +167,33 @@ export const TokenStorage = {
             return true;
         } catch (error) {
             console.error('Error removing credentials:', error);
+            return false;
+        }
+    },
+
+    /**
+     * Clears the session token but preserves the secret (account identity).
+     * Use this for logout — the secret is kept so the next Google/email login
+     * can reuse it and avoid generating a new identity that would invalidate
+     * existing CLI machines and backup keys.
+     */
+    async clearToken(): Promise<boolean> {
+        if (Platform.OS === 'web') {
+            clearExternalWebCredentials();
+            broadcastWebAuthSyncEvent({
+                type: 'logout',
+                timestamp: Date.now(),
+            });
+            return true;
+        }
+        try {
+            // On native, SecureStore persists across restarts, so simply remove
+            // the full credentials. The user will re-authenticate via QR/backup key.
+            await SecureStore.deleteItemAsync(AUTH_KEY);
+            credentialsCache = null;
+            return true;
+        } catch (error) {
+            console.error('Error clearing token:', error);
             return false;
         }
     },

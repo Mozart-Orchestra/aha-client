@@ -4,7 +4,7 @@ import * as React from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Fonts from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
-import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
+import { AuthCredentials, TokenStorage, getStoredSecretForReauth } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import { supabase } from '@/auth/supabase';
 import { exchangeSupabaseSession, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
@@ -204,10 +204,14 @@ export default function RootLayout() {
                     }
                     if (session?.access_token) {
                         try {
-                            // Generate secret client-side, register/update with server
-                            const secret = await getRandomBytesAsync(32);
+                            // Reuse existing secret if available so the backup key
+                            // and all CLI machine restore codes remain valid.
+                            const { encodeBase64: b64, decodeBase64 } = await import('@/encryption/base64');
+                            const storedSecretB64 = getStoredSecretForReauth();
+                            const secret = storedSecretB64
+                                ? decodeBase64(storedSecretB64, 'base64url')
+                                : await getRandomBytesAsync(32);
                             const result = await exchangeSupabaseSession(session.access_token, secret);
-                            const { encodeBase64: b64 } = await import('@/encryption/base64');
                             credentials = { token: result.token, secret: b64(secret, 'base64url') };
                             await TokenStorage.setCredentials(credentials);
                         } catch {

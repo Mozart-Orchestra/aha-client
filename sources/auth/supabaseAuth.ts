@@ -26,6 +26,13 @@ export class SupabaseAccountLinkConflictError extends Error {
     }
 }
 
+export class SupabaseSecretMismatchError extends Error {
+    constructor(message = 'This Google account is bound to a different device secret. Use your backup key or QR link to restore access.') {
+        super(message);
+        this.name = 'SupabaseSecretMismatchError';
+    }
+}
+
 /**
  * Initiates Google OAuth sign-in via Supabase.
  * On web: redirects in-page. On native: opens system browser.
@@ -114,7 +121,7 @@ export async function exchangeSupabaseSession(accessToken: string, secret: Uint8
     const { challenge, publicKey, signature } = authChallenge(secret);
 
     try {
-        const response = await axios.post(`${serverUrl}/v1/auth/supabase`, {
+        const response = await axios.post(`${serverUrl}/v1/auth/supabase/exchange`, {
             accessToken,
             challenge: encodeBase64(challenge),
             publicKey: encodeBase64(publicKey),
@@ -133,6 +140,11 @@ export async function exchangeSupabaseSession(accessToken: string, secret: Uint8
             }
             if (code === 'ACCOUNT_LINK_CONFLICT') {
                 throw new SupabaseAccountLinkConflictError();
+            }
+            // v3-online-001: secret proof doesn't match the bound account.
+            // User must restore via backup key or QR link first.
+            if (code === 'secret-proof-mismatch' || code === 'secret-proof-required') {
+                throw new SupabaseSecretMismatchError();
             }
         }
         throw error;
