@@ -23,6 +23,7 @@ import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
 import { getSessionName } from '@/utils/sessionUtils';
 import { isMachineOnline } from '@/utils/machineUtils';
+import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
 
 function useIsExperiencedUser(): boolean {
     const artifacts = useArtifacts();
@@ -543,23 +544,17 @@ function NewUserPanel() {
     const machines = useAllMachines();
     const hasMachine = machines.length > 0;
 
-    const restoreKeyCommand = React.useMemo(() => {
-        const credentials = require('@/auth/AuthContext').getCurrentAuth()?.credentials;
-        if (!credentials?.secret) return 'npx aha-v13';
-        const { formatSecretKeyForBackup } = require('@/auth/secretKeyBackup');
-        const formatted = formatSecretKeyForBackup(credentials.secret);
-        return `npx aha-v13 auth restore --code ${formatted}`;
-    }, []);
+    const loginCommand = React.useMemo(() => getCliInstallAndLoginCommand(), []);
 
     const handleCopyCommand = React.useCallback(async () => {
         const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(restoreKeyCommand);
+        await Clipboard.setStringAsync(loginCommand);
         const { Modal } = await import('@/modal');
         Modal.alert(
             t('home.onboarding.commandCopiedTitle'),
             t('home.onboarding.commandCopiedMessage'),
         );
-    }, [restoreKeyCommand]);
+    }, [loginCommand]);
 
     const handleCreateTeam = React.useCallback(() => {
         router.push('/teams/new' as never);
@@ -597,7 +592,7 @@ function NewUserPanel() {
                 active={true}
             >
                 <View style={styles.onboardingCommandBox}>
-                    <Text style={styles.onboardingCommandText} numberOfLines={1} ellipsizeMode="middle">{restoreKeyCommand}</Text>
+                    <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{loginCommand.replace(' && ', '\n')}</Text>
                     <Pressable style={styles.onboardingCopyButton} onPress={handleCopyCommand}>
                         <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                     </Pressable>
@@ -652,23 +647,17 @@ function ExperiencedUserPanel() {
     const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
     const machines = useAllMachines();
 
-    const restoreKeyCommand = React.useMemo(() => {
-        const credentials = require('@/auth/AuthContext').getCurrentAuth()?.credentials;
-        if (!credentials?.secret) return 'npx aha-v13';
-        const { formatSecretKeyForBackup } = require('@/auth/secretKeyBackup');
-        const formatted = formatSecretKeyForBackup(credentials.secret);
-        return `npx aha-v13 auth restore --code ${formatted}`;
-    }, []);
+    const loginCommand = React.useMemo(() => getCliInstallAndLoginCommand(), []);
 
     const handleCopyDeviceCommand = React.useCallback(async () => {
         const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(restoreKeyCommand);
+        await Clipboard.setStringAsync(loginCommand);
         const { Modal } = await import('@/modal');
         Modal.alert(
             t('home.onboarding.commandCopiedTitle'),
             t('home.onboarding.commandCopiedMessage'),
         );
-    }, [restoreKeyCommand]);
+    }, [loginCommand]);
 
     const handleReport = React.useCallback(() => {
         router.push('/teams' as never);
@@ -703,7 +692,7 @@ function ExperiencedUserPanel() {
                 onPress={handleReport}
             />
 
-            {/* Add New Device — show restore key command */}
+            {/* Add New Device — show the direct-run login command and existing machines */}
             <View style={styles.onboardingStep}>
                 <View style={styles.onboardingStepHeader}>
                     <Ionicons name="laptop-outline" size={22} color={theme.colors.text} />
@@ -714,7 +703,7 @@ function ExperiencedUserPanel() {
                 </View>
                 <View style={styles.onboardingStepContent}>
                     <View style={styles.onboardingCommandBox}>
-                        <Text style={styles.onboardingCommandText} numberOfLines={1} ellipsizeMode="middle">{restoreKeyCommand}</Text>
+                        <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{loginCommand.replace(' && ', '\n')}</Text>
                         <Pressable style={styles.onboardingCopyButton} onPress={handleCopyDeviceCommand}>
                             <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                         </Pressable>
@@ -729,10 +718,17 @@ function ExperiencedUserPanel() {
                                         color={isMachineOnline(machine) ? '#2BC866' : theme.colors.textSecondary}
                                     />
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.machineItemName}>{machine.metadata?.host ?? machine.id.slice(0, 8)}</Text>
+                                        <Text style={styles.machineItemName}>
+                                            {machine.metadata?.displayName || machine.metadata?.host || machine.id.slice(0, 8)}
+                                        </Text>
                                         <Text style={styles.machineItemMeta}>
-                                            {machine.metadata?.platform ?? ''}
-                                            {isMachineOnline(machine) ? ' · online' : ' · offline'}
+                                            {[
+                                                machine.metadata?.displayName && machine.metadata?.host !== machine.metadata?.displayName
+                                                    ? machine.metadata.host
+                                                    : null,
+                                                machine.metadata?.platform,
+                                                isMachineOnline(machine) ? 'online' : 'offline',
+                                            ].filter(Boolean).join(' · ')}
                                         </Text>
                                     </View>
                                 </View>

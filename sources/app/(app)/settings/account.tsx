@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Typography } from '@/constants/Typography';
 import { formatSecretKeyForBackup } from '@/auth/secretKeyBackup';
+import { getCliRestoreCommand } from '@/auth/cliCommands';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
@@ -37,7 +38,7 @@ export default React.memo(() => {
     // Get the current secret key
     const currentSecret = auth.credentials?.secret || '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
-    const restoreCommand = formattedSecret ? `aha auth restore --code ${formattedSecret}` : '';
+    const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
 
     // Get server info
     const serverInfo = getServerInfo();

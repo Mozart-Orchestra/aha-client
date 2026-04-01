@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import 'react-native-reanimated';
 import * as React from 'react';
 import { Typography } from '@/constants/Typography';
@@ -7,6 +7,7 @@ import { Platform, TouchableOpacity, Text } from 'react-native';
 import { isRunningOnMac } from '@/utils/platform';
 import { useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
+import { useAuth } from '@/auth/AuthContext';
 
 export const unstable_settings = {
     initialRouteName: 'index',
@@ -16,6 +17,15 @@ export default function RootLayout() {
     // Use custom header on Android and Mac Catalyst, native header on iOS (non-Catalyst)
     const shouldUseCustomHeader = Platform.OS === 'android' || isRunningOnMac() || Platform.OS === 'web';
     const { theme } = useUnistyles();
+    const auth = useAuth();
+    const router = useRouter();
+    const pathname = usePathname();
+
+    React.useEffect(() => {
+        if (!auth.isAuthenticated && pathname !== '/') {
+            router.replace('/');
+        }
+    }, [auth.isAuthenticated, pathname]);
 
     return (
         <Stack

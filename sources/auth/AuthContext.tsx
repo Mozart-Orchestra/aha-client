@@ -6,7 +6,7 @@ import * as Updates from 'expo-updates';
 import { clearPersistence } from '@/sync/persistence';
 import { Platform } from 'react-native';
 import { trackLogout } from '@/track';
-import { signOutSupabase } from '@/auth/supabaseAuth';
+import { bootstrapRecoveryMaterial, signOutSupabase } from '@/auth/supabaseAuth';
 
 interface AuthContextType {
     isAuthenticated: boolean;
@@ -30,6 +30,7 @@ export function AuthProvider({ children, initialCredentials }: { children: React
     const [isAuthenticated, setIsAuthenticated] = useState(!!initialCredentials);
     const [credentials, setCredentials] = useState<AuthCredentials | null>(initialCredentials);
     const downloadedSecretRef = React.useRef<string | null>(null);
+    const bootstrappedRecoveryRef = React.useRef<string | null>(null);
 
     // Update global auth state when local state changes
     useEffect(() => {
@@ -47,6 +48,22 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             console.warn('Failed to auto-download restore key backup:', error);
         });
     }, [credentials?.secret]);
+
+    useEffect(() => {
+        if (!credentials?.token || !credentials.secret) {
+            return;
+        }
+
+        const cacheKey = `${credentials.token}:${credentials.secret}`;
+        if (bootstrappedRecoveryRef.current === cacheKey) {
+            return;
+        }
+
+        bootstrappedRecoveryRef.current = cacheKey;
+        bootstrapRecoveryMaterial(credentials.token, credentials.secret).catch((error) => {
+            console.warn('Failed to bootstrap account recovery material:', error);
+        });
+    }, [credentials?.token, credentials?.secret]);
 
     useEffect(() => {
         if (Platform.OS !== 'web') {

@@ -1794,7 +1794,7 @@ export const zhHans: TranslationStructure = {
         teamAgent4: 'DevOps',
         teamAgent4Task: 'CI/CD 流水线 & 部署',
         teamAgent4Machine: 'GPU 云',
-        cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
+        cliCommand: 'npm i aha-agi && npx aha auth login',
         activeCount: ({ count }: { count: number }) => `${count} 个活跃`,
         cliCopiedTitle: '已复制',
         cliCopiedMessage: '命令已复制到剪贴板，请打开终端粘贴运行。',

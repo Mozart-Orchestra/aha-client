@@ -1,15 +1,25 @@
 import { supabase } from '@/auth/supabase';
 import { authChallenge } from '@/auth/authChallenge';
-import { encodeBase64 } from '@/encryption/base64';
+import { decodeBase64, encodeBase64 } from '@/encryption/base64';
+import { decryptBox } from '@/encryption/libsodium';
+import { generateAuthKeyPair } from '@/auth/authQRStart';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { getServerUrl } from '@/sync/serverConfig';
 import axios from 'axios';
+import { getRandomBytesAsync } from 'expo-crypto';
 
 interface SupabaseLoginResult {
     token: string;
     userId: string;
+    recoveryReady: boolean;
+}
+
+interface SupabaseRecoveryResult {
+    token: string;
+    userId: string;
+    secret: Uint8Array;
 }
 
 export class SupabaseRestoreRequiredError extends Error {
@@ -30,6 +40,20 @@ export class SupabaseSecretMismatchError extends Error {
     constructor(message = 'This Google account is bound to a different device secret. Use your backup key or QR link to restore access.') {
         super(message);
         this.name = 'SupabaseSecretMismatchError';
+    }
+}
+
+export class SupabaseRecoveryNotReadyError extends Error {
+    constructor(message = 'Automatic recovery is not ready for this account yet. Use your backup key or an existing device once to finish the upgrade.') {
+        super(message);
+        this.name = 'SupabaseRecoveryNotReadyError';
+    }
+}
+
+export class SupabaseAccountNotFoundError extends Error {
+    constructor(message = 'No account is linked to this sign-in identity yet.') {
+        super(message);
+        this.name = 'SupabaseAccountNotFoundError';
     }
 }
 
@@ -126,11 +150,13 @@ export async function exchangeSupabaseSession(accessToken: string, secret: Uint8
             challenge: encodeBase64(challenge),
             publicKey: encodeBase64(publicKey),
             signature: encodeBase64(signature),
+            contentSecretKey: encodeBase64(secret),
         });
 
         return {
             token: response.data.token,
             userId: response.data.userId,
+            recoveryReady: !!response.data.recoveryReady,
         };
     } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 409) {
@@ -149,6 +175,99 @@ export async function exchangeSupabaseSession(accessToken: string, secret: Uint8
         }
         throw error;
     }
+}
+
+export async function recoverSupabaseSession(accessToken: string): Promise<SupabaseRecoveryResult> {
+    const serverUrl = getServerUrl();
+    const keypair = generateAuthKeyPair();
+
+    try {
+        const response = await axios.post(`${serverUrl}/v1/auth/supabase/recover`, {
+            accessToken,
+            recoveryPublicKey: encodeBase64(keypair.publicKey),
+        });
+
+        const encryptedContentSecretKey = decodeBase64(response.data.encryptedContentSecretKey);
+        const secret = decryptBox(encryptedContentSecretKey, keypair.secretKey);
+        if (!secret) {
+            throw new Error('Failed to decrypt recovered account secret');
+        }
+
+        return {
+            token: response.data.token,
+            userId: response.data.userId,
+            secret,
+        };
+    } catch (error) {
+        if (axios.isAxiosError(error)) {
+            if (error.response?.status === 404 && error.response.data?.code === 'ACCOUNT_NOT_FOUND') {
+                throw new SupabaseAccountNotFoundError();
+            }
+            if (error.response?.status === 409 && error.response.data?.code === 'RECOVERY_NOT_READY') {
+                throw new SupabaseRecoveryNotReadyError();
+            }
+        }
+        throw error;
+    }
+}
+
+export async function completeSupabaseSession(accessToken: string, storedSecretBase64?: string | null): Promise<{
+    token: string;
+    userId: string;
+    secretBase64: string;
+    recoveryReady: boolean;
+}> {
+    if (storedSecretBase64) {
+        const storedSecret = decodeBase64(storedSecretBase64, 'base64url');
+        try {
+            const result = await exchangeSupabaseSession(accessToken, storedSecret);
+            return {
+                token: result.token,
+                userId: result.userId,
+                secretBase64: storedSecretBase64,
+                recoveryReady: result.recoveryReady,
+            };
+        } catch (error) {
+            if (!(error instanceof SupabaseSecretMismatchError)) {
+                throw error;
+            }
+        }
+    }
+
+    try {
+        const recovered = await recoverSupabaseSession(accessToken);
+        return {
+            token: recovered.token,
+            userId: recovered.userId,
+            secretBase64: encodeBase64(recovered.secret, 'base64url'),
+            recoveryReady: true,
+        };
+    } catch (error) {
+        if (!(error instanceof SupabaseAccountNotFoundError)) {
+            throw error;
+        }
+    }
+
+    const newSecret = await getRandomBytesAsync(32);
+    const created = await exchangeSupabaseSession(accessToken, newSecret);
+    return {
+        token: created.token,
+        userId: created.userId,
+        secretBase64: encodeBase64(newSecret, 'base64url'),
+        recoveryReady: created.recoveryReady,
+    };
+}
+
+export async function bootstrapRecoveryMaterial(token: string, secretBase64: string): Promise<void> {
+    const serverUrl = getServerUrl();
+    const contentSecretKey = encodeBase64(decodeBase64(secretBase64, 'base64url'));
+    await axios.post(`${serverUrl}/v1/account/recovery-material`, {
+        contentSecretKey,
+    }, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
 }
 
 /**

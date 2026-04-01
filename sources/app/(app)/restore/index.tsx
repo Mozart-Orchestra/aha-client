@@ -18,6 +18,7 @@ import { goBackOrReturn } from '@/utils/returnNavigation';
 import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
+import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
 
 export default memo(function Restore() {
     const { theme } = useUnistyles();
@@ -29,9 +30,13 @@ export default memo(function Restore() {
     const { connectWithUrl, isLoading: isConnecting } = useConnectAccount();
     const [showSecret, setShowSecret] = useState(false);
     const [copiedRecently, setCopiedRecently] = useState(false);
+    const [copiedCommandRecently, setCopiedCommandRecently] = useState(false);
+    const [copiedRestoreCommandRecently, setCopiedRestoreCommandRecently] = useState(false);
 
     const currentSecret = auth.credentials?.secret ?? '';
     const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
+    const loginCommand = getCliInstallAndLoginCommand();
+    const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
 
     const handleCopySecret = async () => {
         try {
@@ -41,6 +46,28 @@ export default memo(function Restore() {
             Modal.alert(t('common.success'), t('settingsAccount.secretKeyCopied'));
         } catch {
             Modal.alert(t('common.error'), t('settingsAccount.secretKeyCopyFailed'));
+        }
+    };
+
+    const handleCopyCommand = async () => {
+        try {
+            await Clipboard.setStringAsync(loginCommand);
+            setCopiedCommandRecently(true);
+            setTimeout(() => setCopiedCommandRecently(false), 2000);
+            Modal.alert(t('home.onboarding.commandCopiedTitle'), t('home.onboarding.commandCopiedMessage'));
+        } catch {
+            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
+        }
+    };
+
+    const handleCopyRestoreCommand = async () => {
+        try {
+            await Clipboard.setStringAsync(restoreCommand);
+            setCopiedRestoreCommandRecently(true);
+            setTimeout(() => setCopiedRestoreCommandRecently(false), 2000);
+            Modal.alert(t('common.success'), t('settingsAccount.restoreCommandCopied'));
+        } catch {
+            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
         }
     };
 
@@ -79,6 +106,48 @@ export default memo(function Restore() {
                 <Text style={styles.title}>{t('navigation.linkNewDevice')}</Text>
                 <Text style={styles.subtitle}>{t('home.syncDeviceSubtitle')}</Text>
             </View>
+
+            <ItemGroup footer={t('home.addDeviceHint')}>
+                <Pressable onPress={handleCopyCommand}>
+                    <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
+                        <View style={styles.secretKeyHeader}>
+                            <Text style={styles.secretKeyLabel}>
+                                {t('home.addDeviceTitle')}
+                            </Text>
+                            <Ionicons
+                                name={copiedCommandRecently ? 'checkmark-circle' : 'copy-outline'}
+                                size={18}
+                                color={copiedCommandRecently ? '#34C759' : theme.colors.textSecondary}
+                            />
+                        </View>
+                        <Text style={styles.secretKeyText}>
+                            {loginCommand}
+                        </Text>
+                    </View>
+                </Pressable>
+            </ItemGroup>
+
+            {restoreCommand && (
+                <ItemGroup footer={t('settingsAccount.backupDescription')}>
+                    <Pressable onPress={handleCopyRestoreCommand}>
+                        <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
+                            <View style={styles.secretKeyHeader}>
+                                <Text style={styles.secretKeyLabel}>
+                                    {t('settingsAccount.restoreCommandLabel')}
+                                </Text>
+                                <Ionicons
+                                    name={copiedRestoreCommandRecently ? 'checkmark-circle' : 'copy-outline'}
+                                    size={18}
+                                    color={copiedRestoreCommandRecently ? '#34C759' : theme.colors.textSecondary}
+                                />
+                            </View>
+                            <Text style={styles.secretKeyText}>
+                                {restoreCommand}
+                            </Text>
+                        </View>
+                    </Pressable>
+                </ItemGroup>
+            )}
 
             <ItemGroup footer={t('settings.syncDeviceSubtitle')}>
                 <Item

@@ -1800,7 +1800,7 @@ export const en = {
         teamAgent4: 'DevOps',
         teamAgent4Task: 'CI/CD pipeline & deployment',
         teamAgent4Machine: 'GPU Cloud',
-        cliCommand: 'npm i -g cc-aha-cli-v3@latest && aha-v3 auth login --force',
+        cliCommand: 'npm i aha-agi && npx aha auth login',
         activeCount: ({ count }: { count: number }) => `${count} active`,
         cliCopiedTitle: 'Copied',
         cliCopiedMessage: 'Command copied to clipboard. Paste it in your terminal to get started.',

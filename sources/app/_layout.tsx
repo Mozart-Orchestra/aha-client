@@ -7,8 +7,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { AuthCredentials, TokenStorage, getStoredSecretForReauth } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import { supabase } from '@/auth/supabase';
-import { exchangeSupabaseSession, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
-import { getRandomBytesAsync } from 'expo-crypto';
+import { completeSupabaseSession, SupabaseRecoveryNotReadyError, SupabaseRestoreRequiredError, SupabaseSecretMismatchError } from '@/auth/supabaseAuth';
 import { persistPendingTerminalConnectRequestStorage, readPendingTerminalConnectRequestStorage } from '@/auth/pendingTerminalConnect';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -204,17 +203,17 @@ export default function RootLayout() {
                     }
                     if (session?.access_token) {
                         try {
-                            // Reuse existing secret if available so the backup key
-                            // and all CLI machine restore codes remain valid.
-                            const { encodeBase64: b64, decodeBase64 } = await import('@/encryption/base64');
-                            const storedSecretB64 = getStoredSecretForReauth();
-                            const secret = storedSecretB64
-                                ? decodeBase64(storedSecretB64, 'base64url')
-                                : await getRandomBytesAsync(32);
-                            const result = await exchangeSupabaseSession(session.access_token, secret);
-                            credentials = { token: result.token, secret: b64(secret, 'base64url') };
+                            const result = await completeSupabaseSession(session.access_token, getStoredSecretForReauth());
+                            credentials = { token: result.token, secret: result.secretBase64 };
                             await TokenStorage.setCredentials(credentials);
-                        } catch {
+                        } catch (error) {
+                            if (
+                                error instanceof SupabaseRestoreRequiredError
+                                || error instanceof SupabaseSecretMismatchError
+                                || error instanceof SupabaseRecoveryNotReadyError
+                            ) {
+                                setNeedsRestore(true);
+                            }
                             // Failed: continue unauthenticated
                         }
                     }
