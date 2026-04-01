@@ -496,6 +496,7 @@ function NotAuthenticated() {
     const [showExistingDeviceHelp, setShowExistingDeviceHelp] = React.useState(initialNeedsRestore);
     const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp' | 'restore'>(initialNeedsRestore ? 'restore' : 'idle');
     const [restoreKey, setRestoreKey] = React.useState('');
+    const hasRestoreKeyInput = restoreKey.trim().length > 0;
     const restoreCommandTemplate = React.useMemo(() => {
         const normalizedRestoreKey = restoreKey.trim() || t('welcome.restoreKeyPlaceholder');
         return `npm i aha-agi && npx aha auth restore --code ${normalizedRestoreKey}`;
@@ -530,6 +531,14 @@ function NotAuthenticated() {
     }, [restoreKey, auth, router]);
 
     const handleCopyRestoreCommand = React.useCallback(async () => {
+        if (!hasRestoreKeyInput) {
+            Modal.alert(
+                t('welcome.restoreRequired'),
+                t('welcome.restoreCommandNeedsKeyMessage'),
+            );
+            return;
+        }
+
         try {
             await Clipboard.setStringAsync(restoreCommandTemplate);
             Modal.alert(
@@ -539,7 +548,7 @@ function NotAuthenticated() {
         } catch {
             Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
         }
-    }, [restoreCommandTemplate]);
+    }, [hasRestoreKeyInput, restoreCommandTemplate]);
 
     const handleOpenManualRestore = React.useCallback(() => {
         setNeedsRestore(false);
@@ -718,7 +727,7 @@ function NotAuthenticated() {
                 tone="primary"
             />
             <LandingButton
-                title={t('welcome.copyRestoreCommand')}
+                title={hasRestoreKeyInput ? t('welcome.copyRestoreCommand') : t('welcome.enterRestoreKeyFirst')}
                 onPress={handleCopyRestoreCommand}
                 tone="secondary"
             />
