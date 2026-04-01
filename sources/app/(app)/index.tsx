@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getRandomBytesAsync } from 'expo-crypto';
+import * as Updates from 'expo-updates';
 import {
     Image as RNImage,
     Platform,
@@ -18,11 +19,13 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import * as Clipboard from 'expo-clipboard';
 
 import { useAuth, getNeedsRestore, setNeedsRestore } from '@/auth/AuthContext';
+import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
 import { decodeBase64 } from '@/encryption/base64';
 import {
+    signOutSupabase,
     completeSupabaseSession,
     signInWithGoogle,
     signInWithEmail,
@@ -32,12 +35,13 @@ import {
     SupabaseSecretMismatchError,
 } from '@/auth/supabaseAuth';
 import { supabase } from '@/auth/supabase';
-import { getStoredSecretForReauth } from '@/auth/tokenStorage';
+import { TokenStorage, getStoredSecretForReauth } from '@/auth/tokenStorage';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
 import { encodeBase64 } from '@/encryption/base64';
 import { Modal } from '@/modal';
+import { clearPersistence } from '@/sync/persistence';
 import { t } from '@/text';
 import { trackAccountCreated } from '@/track';
 
@@ -239,6 +243,44 @@ const styles = StyleSheet.create((theme) => ({
         fontWeight: '700',
         color: theme.colors.text,
     },
+    landingButtonDangerText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: theme.colors.textDestructive,
+    },
+    landingRestoreAssistCard: {
+        width: '100%',
+        gap: 12,
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surfaceHigh,
+    },
+    landingRestoreAssistTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: theme.colors.text,
+    },
+    landingRestoreAssistText: {
+        fontSize: 13,
+        lineHeight: 20,
+        color: theme.colors.textSecondary,
+    },
+    landingRestoreCommandBox: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.divider,
+        backgroundColor: theme.colors.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    landingRestoreCommandText: {
+        fontSize: 12,
+        lineHeight: 18,
+        color: theme.colors.text,
+        fontFamily: 'IBMPlexMono-SemiBold',
+    },
     landingTrustRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -370,7 +412,9 @@ function LandingButton({
                 : styles.landingButtonGhost;
     const textStyle = tone === 'primary'
         ? styles.landingButtonPrimaryText
-        : styles.landingButtonSecondaryText;
+        : tone === 'danger'
+            ? styles.landingButtonDangerText
+            : styles.landingButtonSecondaryText;
     const iconColor = tone === 'primary' ? theme.colors.surface : tone === 'danger' ? theme.colors.textDestructive : theme.colors.text;
 
     return (
@@ -463,8 +507,25 @@ function NotAuthenticated() {
 
     // Show restore key input if account exists but local secret is missing
     const initialNeedsRestore = React.useMemo(() => getNeedsRestore(), []);
+    const [restoreRequired, setRestoreRequired] = React.useState(initialNeedsRestore);
+    const [showExistingDeviceHelp, setShowExistingDeviceHelp] = React.useState(initialNeedsRestore);
     const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp' | 'restore'>(initialNeedsRestore ? 'restore' : 'idle');
     const [restoreKey, setRestoreKey] = React.useState('');
+    const joinCommandTemplate = React.useMemo(
+        () => getCliInstallAndLoginCommand('<aha_join_...>'),
+        [],
+    );
+    const restoreCommandTemplate = React.useMemo(() => {
+        const normalizedRestoreKey = restoreKey.trim() || t('welcome.restoreKeyPlaceholder');
+        return `npm i aha-agi && npx aha auth restore --code ${normalizedRestoreKey}`;
+    }, [restoreKey]);
+
+    const enterRestoreRequiredFlow = React.useCallback(() => {
+        setNeedsRestore(true);
+        setRestoreRequired(true);
+        setShowExistingDeviceHelp(true);
+        setEmailLoginStep('restore');
+    }, []);
 
     const handleRestoreKeySubmit = React.useCallback(async () => {
         if (!restoreKey.trim()) return;
@@ -475,6 +536,8 @@ function NotAuthenticated() {
             const token = await authGetToken(secretBytes);
             await auth.login(token, secretBase64);
             setNeedsRestore(false);
+            setRestoreRequired(false);
+            setShowExistingDeviceHelp(false);
             if (hasPendingTerminalConnectRequest()) {
                 router.replace('/terminal/connect');
             }
@@ -484,6 +547,77 @@ function NotAuthenticated() {
             setEmailLoading(false);
         }
     }, [restoreKey, auth, router]);
+
+    const handleCopyRestoreCommand = React.useCallback(async () => {
+        try {
+            await Clipboard.setStringAsync(restoreCommandTemplate);
+            Modal.alert(
+                t('home.onboarding.commandCopiedTitle'),
+                t('welcome.restoreCommandCopiedMessage'),
+            );
+        } catch {
+            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
+        }
+    }, [restoreCommandTemplate]);
+
+    const handleCopyJoinCommandTemplate = React.useCallback(async () => {
+        try {
+            await Clipboard.setStringAsync(joinCommandTemplate);
+            Modal.alert(
+                t('home.onboarding.commandCopiedTitle'),
+                t('welcome.joinDeviceCommandCopiedMessage'),
+            );
+        } catch {
+            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
+        }
+    }, [joinCommandTemplate]);
+
+    const handleOpenManualRestore = React.useCallback(() => {
+        setNeedsRestore(false);
+        setRestoreRequired(false);
+        setShowExistingDeviceHelp(false);
+        setEmailLoginStep('restore');
+    }, []);
+
+    const handleLeaveRestore = React.useCallback(() => {
+        setNeedsRestore(false);
+        setRestoreRequired(false);
+        setShowExistingDeviceHelp(false);
+        setEmailLoginStep('idle');
+    }, []);
+
+    const handleSwitchGoogleAccount = React.useCallback(async () => {
+        try {
+            clearPersistence();
+            await TokenStorage.removeCredentials();
+            try {
+                await signOutSupabase();
+            } catch (error) {
+                console.warn('Failed to sign out Supabase during account switch:', error);
+            }
+
+            setNeedsRestore(false);
+            setRestoreRequired(false);
+            setShowExistingDeviceHelp(false);
+            setRestoreKey('');
+            setEmail('');
+            setOtp('');
+            setEmailLoginStep('idle');
+
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                window.location.reload();
+                return;
+            }
+
+            try {
+                await Updates.reloadAsync();
+            } catch {
+                // ignore in development where updates are disabled
+            }
+        } catch (error) {
+            Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
+        }
+    }, []);
 
     // Email OTP login state
     const [email, setEmail] = React.useState('');
@@ -557,18 +691,18 @@ function NotAuthenticated() {
                 || error instanceof SupabaseSecretMismatchError
                 || error instanceof SupabaseRecoveryNotReadyError
             ) {
+                enterRestoreRequiredFlow();
                 Modal.alert(
                     t('welcome.restoreRequired'),
                     t('welcome.restoreRequiredMessage'),
                 );
-                setEmailLoginStep('idle');
             } else {
                 Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
             }
         } finally {
             setEmailLoading(false);
         }
-    }, [email, otp, completeSupabaseLogin]);
+    }, [email, otp, completeSupabaseLogin, enterRestoreRequiredFlow]);
 
     const handleGoogleLogin = React.useCallback(async () => {
         try {
@@ -585,6 +719,7 @@ function NotAuthenticated() {
                 || error instanceof SupabaseSecretMismatchError
                 || error instanceof SupabaseRecoveryNotReadyError
             ) {
+                enterRestoreRequiredFlow();
                 Modal.alert(
                     t('welcome.restoreRequired'),
                     t('welcome.restoreRequiredMessage'),
@@ -593,7 +728,67 @@ function NotAuthenticated() {
                 Modal.alert('Error', 'Google sign-in failed. Please try again.');
             }
         }
-    }, [completeSupabaseLogin]);
+    }, [completeSupabaseLogin, enterRestoreRequiredFlow]);
+
+    const restoreActions = (
+        <>
+            <Text style={styles.landingOtpHint}>{t('welcome.restoreRequiredMessage')}</Text>
+            <TextInput
+                style={styles.landingInput}
+                placeholder={t('welcome.restoreKeyPlaceholder')}
+                placeholderTextColor={theme.colors.textSecondary}
+                value={restoreKey}
+                onChangeText={setRestoreKey}
+                autoCapitalize="characters"
+                autoFocus
+                onSubmitEditing={handleRestoreKeySubmit}
+            />
+            <LandingButton
+                title={emailLoading ? t('common.loading') : t('welcome.restoreSubmit')}
+                onPress={handleRestoreKeySubmit}
+                tone="primary"
+            />
+            <LandingButton
+                title={t('welcome.copyRestoreCommand')}
+                onPress={handleCopyRestoreCommand}
+                tone="secondary"
+            />
+            {restoreRequired ? (
+                <>
+                    <LandingButton
+                        title={t('welcome.haveAnotherLoggedInDevice')}
+                        onPress={() => setShowExistingDeviceHelp(value => !value)}
+                        tone="ghost"
+                    />
+                    {showExistingDeviceHelp ? (
+                        <View style={styles.landingRestoreAssistCard}>
+                            <Text style={styles.landingRestoreAssistTitle}>{t('welcome.haveAnotherLoggedInDevice')}</Text>
+                            <Text style={styles.landingRestoreAssistText}>{t('welcome.loggedInDeviceHelp')}</Text>
+                            <View style={styles.landingRestoreCommandBox}>
+                                <Text style={styles.landingRestoreCommandText}>{joinCommandTemplate}</Text>
+                            </View>
+                            <LandingButton
+                                title={t('welcome.copyJoinCommand')}
+                                onPress={handleCopyJoinCommandTemplate}
+                                tone="ghost"
+                            />
+                        </View>
+                    ) : null}
+                    <LandingButton
+                        title={t('welcome.switchGoogleAccount')}
+                        onPress={handleSwitchGoogleAccount}
+                        tone="danger"
+                    />
+                </>
+            ) : (
+                <LandingButton
+                    title={t('common.back')}
+                    onPress={handleLeaveRestore}
+                    tone="ghost"
+                />
+            )}
+        </>
+    );
 
     const previewPanel = (
         <View style={[styles.landingPreviewPanel, { maxWidth: previewPanelMaxWidth }]}>
@@ -644,27 +839,7 @@ function NotAuthenticated() {
 
                             {emailLoginStep === 'restore' ? (
                                 <View style={styles.landingActionsRow}>
-                                    <Text style={styles.landingOtpHint}>{t('welcome.restoreRequiredMessage')}</Text>
-                                    <TextInput
-                                        style={styles.landingInput}
-                                        placeholder={t('welcome.restoreKeyPlaceholder')}
-                                        placeholderTextColor={theme.colors.textSecondary}
-                                        value={restoreKey}
-                                        onChangeText={setRestoreKey}
-                                        autoCapitalize="characters"
-                                        autoFocus
-                                        onSubmitEditing={handleRestoreKeySubmit}
-                                    />
-                                    <LandingButton
-                                        title={emailLoading ? t('common.loading') : t('welcome.restoreSubmit')}
-                                        onPress={handleRestoreKeySubmit}
-                                        tone="primary"
-                                    />
-                                    <LandingButton
-                                        title={t('common.back')}
-                                        onPress={() => setEmailLoginStep('idle')}
-                                        tone="ghost"
-                                    />
+                                    {restoreActions}
                                 </View>
                             ) : emailLoginStep === 'idle' ? (
                                 <View style={styles.landingActionsRow}>
@@ -683,7 +858,7 @@ function NotAuthenticated() {
                                     <LandingButton
                                         icon="key-outline"
                                         title={t('navigation.restoreWithSecretKey')}
-                                        onPress={() => setEmailLoginStep('restore')}
+                                        onPress={handleOpenManualRestore}
                                         tone="ghost"
                                     />
                                 </View>
@@ -797,27 +972,7 @@ function NotAuthenticated() {
 
                 {emailLoginStep === 'restore' ? (
                     <View style={styles.landingMobileActions}>
-                        <Text style={styles.landingOtpHint}>{t('welcome.restoreRequiredMessage')}</Text>
-                        <TextInput
-                            style={styles.landingInput}
-                            placeholder={t('welcome.restoreKeyPlaceholder')}
-                            placeholderTextColor={theme.colors.textSecondary}
-                            value={restoreKey}
-                            onChangeText={setRestoreKey}
-                            autoCapitalize="characters"
-                            autoFocus
-                            onSubmitEditing={handleRestoreKeySubmit}
-                        />
-                        <LandingButton
-                            title={emailLoading ? t('common.loading') : t('welcome.restoreSubmit')}
-                            onPress={handleRestoreKeySubmit}
-                            tone="primary"
-                        />
-                        <LandingButton
-                            title={t('common.back')}
-                            onPress={() => setEmailLoginStep('idle')}
-                            tone="ghost"
-                        />
+                        {restoreActions}
                     </View>
                 ) : emailLoginStep === 'idle' ? (
                     <View style={styles.landingMobileActions}>
@@ -836,7 +991,7 @@ function NotAuthenticated() {
                         <LandingButton
                             icon="key-outline"
                             title={t('navigation.restoreWithSecretKey')}
-                            onPress={() => setEmailLoginStep('restore')}
+                            onPress={handleOpenManualRestore}
                             tone="ghost"
                         />
                     </View>
