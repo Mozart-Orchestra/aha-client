@@ -18,16 +18,18 @@ export class Encryption {
 
         // Derive content data key keypair
         const contentKeyPair = sodium.crypto_box_seed_keypair(contentDataKey);
+        const legacyCliContentKeyPair = sodium.crypto_box_seed_keypair(masterSecret);
 
         // Derive anonymous ID
         const anonID = encodeHex((await deriveKey(masterSecret, 'Happy Coder', ['analytics', 'id']))).slice(0, 16).toLowerCase();
 
         // Create encryption
-        return new Encryption(anonID, masterSecret, contentKeyPair, contentDataKey);
+        return new Encryption(anonID, masterSecret, contentKeyPair, legacyCliContentKeyPair, contentDataKey);
     }
 
     private readonly legacyEncryption: SecretBoxEncryption;
     private readonly contentKeyPair: sodium.KeyPair;
+    private readonly legacyCliContentKeyPair: sodium.KeyPair;
     readonly anonID: string;
     readonly contentDataKey: Uint8Array;
 
@@ -36,9 +38,16 @@ export class Encryption {
     private machineEncryptions = new Map<string, MachineEncryption>();
     private cache: EncryptionCache;
 
-    private constructor(anonID: string, masterSecret: Uint8Array, contentKeyPair: sodium.KeyPair, contentDataKey: Uint8Array) {
+    private constructor(
+        anonID: string,
+        masterSecret: Uint8Array,
+        contentKeyPair: sodium.KeyPair,
+        legacyCliContentKeyPair: sodium.KeyPair,
+        contentDataKey: Uint8Array
+    ) {
         this.anonID = anonID;
         this.contentKeyPair = contentKeyPair;
+        this.legacyCliContentKeyPair = legacyCliContentKeyPair;
         this.legacyEncryption = new SecretBoxEncryption(masterSecret);
         this.cache = new EncryptionCache();
         this.contentDataKey = contentDataKey;
@@ -222,7 +231,11 @@ export class Encryption {
             return null;
         }
 
-        const decrypted = decryptBox(encryptedKey.slice(1), this.contentKeyPair.privateKey);
+        let decrypted = decryptBox(encryptedKey.slice(1), this.contentKeyPair.privateKey);
+        if (!decrypted) {
+            // Compatibility fallback for data keys wrapped by older CLI builds
+            decrypted = decryptBox(encryptedKey.slice(1), this.legacyCliContentKeyPair.privateKey);
+        }
         if (!decrypted) {
             return null;
         }
