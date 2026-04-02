@@ -160,7 +160,10 @@ async function tryMigrateLegacyWebSecret(
  */
 export async function signInWithGoogle(): Promise<void> {
     if (Platform.OS === 'web') {
-        const redirectTo = getWebSupabaseRedirectUrl();
+        // Use origin only — Supabase redirect URL allowlist is configured per-origin.
+        // Using the full pathname (e.g. /webappv3/) causes Supabase to reject the
+        // redirect and fall back to its default (localhost), breaking production login.
+        const redirectTo = typeof window !== 'undefined' ? window.location.origin : getWebSupabaseRedirectUrl();
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
