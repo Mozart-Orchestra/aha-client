@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 const AUTH_KEY = 'auth_credentials';
 const AUTH_SYNC_EVENT_KEY = 'auth_credentials_sync';
+const LEGACY_AUTH_SECRET_REAUTH_KEY = 'auth_secret_v1';
 
 // Cache for synchronous access
 let credentialsCache: string | null = null;
@@ -63,6 +64,22 @@ export function clearExternalWebCredentials(): void {
     }
 
     credentialsCache = null;
+}
+
+export function getLegacyStoredSecretForMigration(): string | null {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return null;
+    }
+
+    return localStorage.getItem(LEGACY_AUTH_SECRET_REAUTH_KEY);
+}
+
+export function clearLegacyStoredSecretForMigration(): void {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+    }
+
+    localStorage.removeItem(LEGACY_AUTH_SECRET_REAUTH_KEY);
 }
 
 export const TokenStorage = {

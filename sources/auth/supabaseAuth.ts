@@ -1,8 +1,11 @@
 import { supabase } from '@/auth/supabase';
 import { authChallenge } from '@/auth/authChallenge';
+import { authGetToken } from '@/auth/authGetToken';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { decryptBox } from '@/encryption/libsodium';
 import { generateAuthKeyPair } from '@/auth/authQRStart';
+import { clearLegacyStoredSecretForMigration, getLegacyStoredSecretForMigration } from '@/auth/tokenStorage';
+import sodium from '@/encryption/libsodium.lib';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -27,7 +30,16 @@ interface SupabaseCompleteResponse {
     token: string | null;
     userId: string | null;
     encryptedContentSecretKey?: string | null;
+    canonicalPublicKey?: string | null;
+    reason?: string;
 }
+
+type SupabaseCompleteSessionResult = {
+    token: string;
+    userId: string;
+    secretBase64: string;
+    recoveryReady: boolean;
+};
 
 export class SupabaseRestoreRequiredError extends Error {
     constructor(message = 'This account already exists. Restore the existing key to continue.') {
@@ -51,9 +63,15 @@ export class SupabaseSecretMismatchError extends Error {
 }
 
 export class SupabaseRecoveryNotReadyError extends Error {
-    constructor(message = 'Automatic recovery is not ready for this account yet. Use your backup key or an existing device once to finish the upgrade.') {
+    readonly canonicalPublicKey: string | null;
+
+    constructor(
+        message = 'Automatic recovery is not ready for this account yet. Use your backup key or an existing device once to finish the upgrade.',
+        canonicalPublicKey: string | null = null,
+    ) {
         super(message);
         this.name = 'SupabaseRecoveryNotReadyError';
+        this.canonicalPublicKey = canonicalPublicKey;
     }
 }
 
@@ -61,6 +79,55 @@ export class SupabaseAccountNotFoundError extends Error {
     constructor(message = 'No account is linked to this sign-in identity yet.') {
         super(message);
         this.name = 'SupabaseAccountNotFoundError';
+    }
+}
+
+function encodeHex(bytes: Uint8Array): string {
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function publicKeyHexFromSecret(secret: Uint8Array): string {
+    return encodeHex(sodium.crypto_sign_seed_keypair(secret).publicKey);
+}
+
+async function tryMigrateLegacyWebSecret(
+    accessToken: string,
+    canonicalPublicKey: string | null,
+): Promise<SupabaseCompleteSessionResult | null> {
+    if (Platform.OS !== 'web' || !canonicalPublicKey) {
+        return null;
+    }
+
+    const legacySecretBase64 = getLegacyStoredSecretForMigration();
+    if (!legacySecretBase64) {
+        return null;
+    }
+
+    try {
+        const legacySecret = decodeBase64(legacySecretBase64, 'base64url');
+        if (legacySecret.length !== 32) {
+            return null;
+        }
+
+        if (publicKeyHexFromSecret(legacySecret) !== canonicalPublicKey.toLowerCase()) {
+            return null;
+        }
+
+        const bootstrapToken = await authGetToken(legacySecret, 'reconnect');
+        await bootstrapRecoveryMaterial(bootstrapToken, legacySecretBase64);
+
+        const recovered = await recoverSupabaseSession(accessToken);
+        clearLegacyStoredSecretForMigration();
+
+        return {
+            token: recovered.token,
+            userId: recovered.userId,
+            secretBase64: encodeBase64(recovered.secret, 'base64url'),
+            recoveryReady: true,
+        };
+    } catch (error) {
+        console.warn('Failed to migrate legacy web secret into recovery material:', error);
+        return null;
     }
 }
 
@@ -224,12 +291,7 @@ export async function recoverSupabaseSession(accessToken: string): Promise<Supab
     }
 }
 
-export async function completeSupabaseSession(accessToken: string): Promise<{
-    token: string;
-    userId: string;
-    secretBase64: string;
-    recoveryReady: boolean;
-}> {
+export async function completeSupabaseSession(accessToken: string): Promise<SupabaseCompleteSessionResult> {
     const serverUrl = getServerUrl();
     const keypair = generateAuthKeyPair();
     const newSecret = await getRandomBytesAsync(32);
@@ -261,7 +323,18 @@ export async function completeSupabaseSession(accessToken: string): Promise<{
         }
 
         if (response.data.state === 'migration_required') {
-            throw new SupabaseRecoveryNotReadyError();
+            const migrated = await tryMigrateLegacyWebSecret(
+                accessToken,
+                response.data.canonicalPublicKey ?? null,
+            );
+            if (migrated) {
+                return migrated;
+            }
+
+            throw new SupabaseRecoveryNotReadyError(
+                undefined,
+                response.data.canonicalPublicKey ?? null,
+            );
         }
 
         if (!response.data.token || !response.data.userId) {

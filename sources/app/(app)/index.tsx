@@ -538,6 +538,9 @@ function NotAuthenticated() {
     const [restoreRequired, setRestoreRequired] = React.useState(initialNeedsRestore);
     const [showExistingDeviceHelp, setShowExistingDeviceHelp] = React.useState(initialNeedsRestore);
     const [restoreReason, setRestoreReason] = React.useState<RestoreReason | null>(initialRestoreReason);
+    const [showManualRestoreEntry, setShowManualRestoreEntry] = React.useState(
+        !(initialNeedsRestore && initialRestoreReason === 'recovery_not_ready'),
+    );
     const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp' | 'restore'>(initialNeedsRestore ? 'restore' : 'idle');
     const [restoreKey, setRestoreKey] = React.useState('');
     const hasRestoreKeyInput = restoreKey.trim().length > 0;
@@ -566,6 +569,7 @@ function NotAuthenticated() {
         setRestoreRequired(true);
         setShowExistingDeviceHelp(true);
         setRestoreReason(reason);
+        setShowManualRestoreEntry(reason !== 'recovery_not_ready');
         setEmailLoginStep('restore');
     }, []);
 
@@ -616,6 +620,7 @@ function NotAuthenticated() {
         setRestoreRequired(false);
         setShowExistingDeviceHelp(false);
         setRestoreReason(null);
+        setShowManualRestoreEntry(true);
         setEmailLoginStep('restore');
     }, []);
 
@@ -624,6 +629,7 @@ function NotAuthenticated() {
         setRestoreRequired(false);
         setShowExistingDeviceHelp(false);
         setRestoreReason(null);
+        setShowManualRestoreEntry(true);
         setEmailLoginStep('idle');
     }, []);
 
@@ -641,6 +647,7 @@ function NotAuthenticated() {
             setRestoreRequired(false);
             setShowExistingDeviceHelp(false);
             setRestoreReason(null);
+            setShowManualRestoreEntry(true);
             setRestoreKey('');
             setEmail('');
             setOtp('');
@@ -768,8 +775,12 @@ function NotAuthenticated() {
         }
     }, [completeSupabaseLogin, enterRestoreRequiredFlow]);
 
+    const showRestoreKeyInput = !restoreRequired || restoreReason !== 'recovery_not_ready' || showManualRestoreEntry;
+
     const restoreActions = (
         <>
+            {showRestoreKeyInput ? (
+                <>
             <TextInput
                 style={styles.landingInput}
                 placeholder={t('welcome.restoreKeyPlaceholder')}
@@ -790,13 +801,23 @@ function NotAuthenticated() {
                 onPress={handleCopyRestoreCommand}
                 tone="secondary"
             />
+                </>
+            ) : (
+                <LandingButton
+                    title={t('navigation.restoreWithSecretKey')}
+                    onPress={() => setShowManualRestoreEntry(true)}
+                    tone="secondary"
+                />
+            )}
             {restoreRequired ? (
                 <>
-                    <LandingButton
-                        title={t('welcome.haveAnotherLoggedInDevice')}
-                        onPress={() => setShowExistingDeviceHelp(value => !value)}
-                        tone="ghost"
-                    />
+                    {showRestoreKeyInput ? (
+                        <LandingButton
+                            title={t('welcome.haveAnotherLoggedInDevice')}
+                            onPress={() => setShowExistingDeviceHelp(value => !value)}
+                            tone="ghost"
+                        />
+                    ) : null}
                     {showExistingDeviceHelp ? (
                         <View style={styles.landingRestoreAssistCard}>
                             <Text style={styles.landingRestoreAssistTitle}>{t('welcome.restoreWhyTitle')}</Text>
