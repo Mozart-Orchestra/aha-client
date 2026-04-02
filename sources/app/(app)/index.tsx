@@ -550,7 +550,10 @@ function NotAuthenticated() {
                 await completeSupabaseLogin();
             }
         } catch (error) {
-            Modal.alert('Error', String(error instanceof Error ? error.message : 'Google sign-in failed. Please try again.'));
+            Modal.alert(
+                t('welcome.googleCallbackFailedTitle'),
+                String(error instanceof Error ? error.message : t('welcome.googleSignInFailedFallback')),
+            );
         }
     }, [completeSupabaseLogin]);
 

@@ -6,6 +6,7 @@ import * as Fonts from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
 import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
+import { clearSupabaseOAuthCallbackHash, readSupabaseOAuthCallbackState } from '@/auth/supabaseCallback';
 import { supabase } from '@/auth/supabase';
 import { completeSupabaseSession, SupabaseRecoveryNotReadyError, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
 import { persistPendingTerminalConnectRequestStorage, readPendingTerminalConnectRequestStorage } from '@/auth/pendingTerminalConnect';
@@ -15,13 +16,13 @@ import { initialWindowMetrics, SafeAreaProvider, useSafeAreaInsets } from 'react
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SidebarNavigator } from '@/components/layout/SidebarNavigator';
 import sodium from '@/encryption/libsodium.lib';
-import { View, Text, Pressable, Platform } from 'react-native';
+import { View, Text, Pressable, Platform, Alert } from 'react-native';
 import { ModalProvider } from '@/modal';
 import { PostHogProvider } from 'posthog-react-native';
 import { tracking } from '@/track/tracking';
 import { syncRestore } from '@/sync/sync';
 import { initializeI18n } from '@/i18n';
-import { initializeTextLanguage } from '@/text';
+import { initializeTextLanguage, t } from '@/text';
 import { useTrackScreens } from '@/track/useTrackScreens';
 import { RealtimeProvider } from '@/realtime/RealtimeProvider';
 import { FaviconPermissionIndicator } from '@/components/web/FaviconPermissionIndicator';
@@ -158,8 +159,17 @@ export default function RootLayout() {
     //
     // Init sequence
     //
-    const [initState, setInitState] = React.useState<{ credentials: AuthCredentials | null; initError?: string; needsRestore?: boolean } | null>(null);
+    const [initState, setInitState] = React.useState<{
+        credentials: AuthCredentials | null;
+        initError?: string;
+        needsRestore?: boolean;
+        oauthCallbackError?: string;
+    } | null>(null);
     React.useEffect(() => {
+        const callbackState = Platform.OS === 'web' && typeof window !== 'undefined'
+            ? readSupabaseOAuthCallbackState(window.location.hash)
+            : null;
+
         // Preserve terminal connect hash before OAuth redirect can lose it
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             const hash = window.location.hash;
@@ -182,6 +192,15 @@ export default function RootLayout() {
                 await initializeTextLanguage();
                 await initializeI18n();
 
+                let oauthCallbackError: string | undefined;
+                if (callbackState?.error || callbackState?.errorCode || callbackState?.errorDescription) {
+                    oauthCallbackError = callbackState.errorDescription
+                        ?? callbackState.error
+                        ?? callbackState.errorCode
+                        ?? undefined;
+                    clearSupabaseOAuthCallbackHash();
+                }
+
                 // Check existing stored credentials first
                 let credentials = await TokenStorage.getCredentials();
 
@@ -190,7 +209,7 @@ export default function RootLayout() {
                 if (!credentials) {
                     // Wait for Supabase to process URL hash if present
                     let session = (await supabase.auth.getSession()).data.session;
-                    if (!session && Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+                    if (!session && callbackState?.accessToken) {
                         // Hash present but session not ready — wait for auth state change
                         session = await new Promise((resolve) => {
                             const timeout = setTimeout(() => resolve(null), 5000);
@@ -221,12 +240,23 @@ export default function RootLayout() {
                     await syncRestore(credentials);
                 }
 
-                setInitState({ credentials });
+                setInitState({ credentials, oauthCallbackError });
             } catch (error) {
                 setInitState({ credentials: null, initError: String(error) });
             }
         })();
     }, []);
+
+    React.useEffect(() => {
+        if (!initState?.oauthCallbackError) {
+            return;
+        }
+
+        Alert.alert(
+            t('welcome.googleCallbackFailedTitle'),
+            t('welcome.googleCallbackFailedMessage', { reason: initState.oauthCallbackError }),
+        );
+    }, [initState?.oauthCallbackError]);
 
     React.useEffect(() => {
         if (initState) {

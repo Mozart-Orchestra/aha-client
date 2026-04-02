@@ -1,6 +1,7 @@
 import { supabase } from '@/auth/supabase';
 import { authChallenge } from '@/auth/authChallenge';
 import { authGetToken } from '@/auth/authGetToken';
+import { getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { decryptBox } from '@/encryption/libsodium';
 import { generateAuthKeyPair } from '@/auth/authQRStart';
@@ -159,15 +160,20 @@ async function tryMigrateLegacyWebSecret(
  */
 export async function signInWithGoogle(): Promise<void> {
     if (Platform.OS === 'web') {
-        await supabase.auth.signInWithOAuth({
+        const redirectTo = getWebSupabaseRedirectUrl();
+        const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin,
+                redirectTo: redirectTo ?? undefined,
                 queryParams: {
                     prompt: 'select_account',
                 },
             },
         });
+
+        if (error) {
+            throw new Error(`Google sign-in failed: ${error.message}`);
+        }
     } else {
         const redirectUrl = Linking.createURL('auth/callback');
         const { data, error } = await supabase.auth.signInWithOAuth({
