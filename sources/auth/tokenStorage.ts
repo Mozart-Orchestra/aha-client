@@ -14,8 +14,23 @@ export interface AuthCredentials {
 }
 
 export type WebAuthSyncEvent =
-    | { type: 'login'; timestamp: number }
+    | { type: 'login'; timestamp: number; secretDigest: string | null }
     | { type: 'logout'; timestamp: number };
+
+async function digestWebAuthSecret(secret: string): Promise<string | null> {
+    if (Platform.OS !== 'web' || typeof crypto === 'undefined' || !crypto.subtle || typeof TextEncoder === 'undefined') {
+        return null;
+    }
+
+    try {
+        const encodedSecret = new TextEncoder().encode(secret);
+        const digest = await crypto.subtle.digest('SHA-256', encodedSecret);
+        return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
+    } catch (error) {
+        console.warn('Failed to hash web auth secret for sync event:', error);
+        return null;
+    }
+}
 
 function broadcastWebAuthSyncEvent(event: WebAuthSyncEvent): void {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -48,6 +63,30 @@ export function subscribeToWebAuthSync(listener: (event: WebAuthSyncEvent) => vo
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
+}
+
+export async function shouldReloadForWebAuthSyncEvent(
+    currentCredentials: AuthCredentials | null,
+    event: WebAuthSyncEvent,
+): Promise<boolean> {
+    if (event.type === 'logout') {
+        return currentCredentials !== null;
+    }
+
+    if (!currentCredentials) {
+        return true;
+    }
+
+    if (!event.secretDigest) {
+        return true;
+    }
+
+    const currentDigest = await digestWebAuthSecret(currentCredentials.secret);
+    if (!currentDigest) {
+        return true;
+    }
+
+    return currentDigest !== event.secretDigest;
 }
 
 export function applyExternalWebCredentials(credentials: AuthCredentials): void {
@@ -110,9 +149,11 @@ export const TokenStorage = {
         if (Platform.OS === 'web') {
             try {
                 applyExternalWebCredentials(credentials);
+                const secretDigest = await digestWebAuthSecret(credentials.secret);
                 broadcastWebAuthSyncEvent({
                     type: 'login',
                     timestamp: Date.now(),
+                    secretDigest,
                 });
                 return true;
             } catch (error) {
@@ -134,6 +175,7 @@ export const TokenStorage = {
     async removeCredentials(): Promise<boolean> {
         if (Platform.OS === 'web') {
             clearExternalWebCredentials();
+            clearLegacyStoredSecretForMigration();
             broadcastWebAuthSyncEvent({
                 type: 'logout',
                 timestamp: Date.now(),

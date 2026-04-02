@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { TokenStorage, AuthCredentials, subscribeToWebAuthSync } from '@/auth/tokenStorage';
-import { autoDownloadRestoreKeyBackup } from '@/auth/restoreKeyDownload';
+import { TokenStorage, AuthCredentials, clearLegacyStoredSecretForMigration, shouldReloadForWebAuthSyncEvent, subscribeToWebAuthSync } from '@/auth/tokenStorage';
 import { syncCreate, syncReinitialize } from '@/sync/sync';
 import * as Updates from 'expo-updates';
 import { clearPersistence } from '@/sync/persistence';
@@ -22,25 +21,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children, initialCredentials }: { children: ReactNode; initialCredentials: AuthCredentials | null }) {
     const [isAuthenticated, setIsAuthenticated] = useState(!!initialCredentials);
     const [credentials, setCredentials] = useState<AuthCredentials | null>(initialCredentials);
-    const downloadedSecretRef = React.useRef<string | null>(null);
     const bootstrappedRecoveryRef = React.useRef<string | null>(null);
+    const credentialsRef = React.useRef<AuthCredentials | null>(initialCredentials);
 
     // Update global auth state when local state changes
     useEffect(() => {
         setCurrentAuth(credentials ? { isAuthenticated, credentials, login, logout } : null);
+        credentialsRef.current = credentials;
     }, [isAuthenticated, credentials]);
-
-    useEffect(() => {
-        const secret = credentials?.secret;
-        if (!secret || downloadedSecretRef.current === secret) {
-            return;
-        }
-
-        downloadedSecretRef.current = secret;
-        autoDownloadRestoreKeyBackup(secret).catch((error) => {
-            console.warn('Failed to auto-download restore key backup:', error);
-        });
-    }, [credentials?.secret]);
 
     useEffect(() => {
         if (!credentials?.token || !credentials.secret) {
@@ -63,11 +51,18 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             return;
         }
 
-        return subscribeToWebAuthSync((_event) => {
-            clearPersistence();
-            setCredentials(null);
-            setIsAuthenticated(false);
-            window.location.reload();
+        return subscribeToWebAuthSync((event) => {
+            void (async () => {
+                const shouldReload = await shouldReloadForWebAuthSyncEvent(credentialsRef.current, event);
+                if (!shouldReload) {
+                    return;
+                }
+
+                clearPersistence();
+                setCredentials(null);
+                setIsAuthenticated(false);
+                window.location.reload();
+            })();
         });
     }, []);
 
@@ -83,6 +78,9 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             }
             setCredentials(newCredentials);
             setIsAuthenticated(true);
+            if (Platform.OS === 'web') {
+                clearLegacyStoredSecretForMigration();
+            }
         } else {
             throw new Error('Failed to save credentials');
         }

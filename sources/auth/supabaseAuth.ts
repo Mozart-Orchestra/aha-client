@@ -42,23 +42,16 @@ type SupabaseCompleteSessionResult = {
 };
 
 export class SupabaseRestoreRequiredError extends Error {
-    constructor(message = 'This account already exists. Restore the existing key to continue.') {
+    constructor(message = 'This account already exists. Use another signed-in device to finish linking this machine.') {
         super(message);
         this.name = 'SupabaseRestoreRequiredError';
     }
 }
 
 export class SupabaseAccountLinkConflictError extends Error {
-    constructor(message = 'This restore key is already linked to a different sign-in account.') {
+    constructor(message = 'This account is already linked to a different sign-in identity.') {
         super(message);
         this.name = 'SupabaseAccountLinkConflictError';
-    }
-}
-
-export class SupabaseSecretMismatchError extends Error {
-    constructor(message = 'This Google account is bound to a different device secret. Use your backup key or QR link to restore access.') {
-        super(message);
-        this.name = 'SupabaseSecretMismatchError';
     }
 }
 
@@ -66,7 +59,7 @@ export class SupabaseRecoveryNotReadyError extends Error {
     readonly canonicalPublicKey: string | null;
 
     constructor(
-        message = 'Automatic recovery is not ready for this account yet. Use your backup key or an existing device once to finish the upgrade.',
+        message = 'Automatic recovery is not ready for this account yet. Open "Add New Device" on another signed-in device to continue.',
         canonicalPublicKey: string | null = null,
     ) {
         super(message);
@@ -88,6 +81,35 @@ function encodeHex(bytes: Uint8Array): string {
 
 function publicKeyHexFromSecret(secret: Uint8Array): string {
     return encodeHex(sodium.crypto_sign_seed_keypair(secret).publicKey);
+}
+
+async function getLegacyLinkProofForSupabaseComplete(): Promise<{
+    legacyAuthToken: string;
+    legacyPublicKey: string;
+} | null> {
+    if (Platform.OS !== 'web') {
+        return null;
+    }
+
+    const legacySecretBase64 = getLegacyStoredSecretForMigration();
+    if (!legacySecretBase64) {
+        return null;
+    }
+
+    try {
+        const legacySecret = decodeBase64(legacySecretBase64, 'base64url');
+        if (legacySecret.length !== 32) {
+            return null;
+        }
+
+        const legacyAuthToken = await authGetToken(legacySecret, 'reconnect');
+        return {
+            legacyAuthToken,
+            legacyPublicKey: publicKeyHexFromSecret(legacySecret).toUpperCase(),
+        };
+    } catch {
+        return null;
+    }
 }
 
 async function tryMigrateLegacyWebSecret(
@@ -248,9 +270,9 @@ export async function exchangeSupabaseSession(accessToken: string, secret: Uint8
                 throw new SupabaseAccountLinkConflictError();
             }
             // v3-online-001: secret proof doesn't match the bound account.
-            // User must restore via backup key or QR link first.
+            // Ask the user to finish linking from another signed-in device.
             if (code === 'secret-proof-mismatch' || code === 'secret-proof-required') {
-                throw new SupabaseSecretMismatchError();
+                throw new SupabaseRecoveryNotReadyError();
             }
         }
         throw error;
@@ -295,12 +317,15 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
     const serverUrl = getServerUrl();
     const keypair = generateAuthKeyPair();
     const newSecret = await getRandomBytesAsync(32);
+    const legacyLinkProof = await getLegacyLinkProofForSupabaseComplete();
 
     try {
         const response = await axios.post<SupabaseCompleteResponse>(`${serverUrl}/v1/auth/supabase/complete`, {
             accessToken,
             recoveryPublicKey: encodeBase64(keypair.publicKey),
             newContentSecretKey: encodeBase64(newSecret),
+            legacyPublicKey: legacyLinkProof?.legacyPublicKey ?? null,
+            legacyAuthToken: legacyLinkProof?.legacyAuthToken ?? null,
         });
 
         if (response.data.state === 'existing_recovered') {
@@ -313,6 +338,8 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
             if (!secret || !response.data.token || !response.data.userId) {
                 throw new Error('Failed to recover canonical account secret');
             }
+
+            clearLegacyStoredSecretForMigration();
 
             return {
                 token: response.data.token,
@@ -341,6 +368,8 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
             throw new Error('Supabase login completed without an account token');
         }
 
+        clearLegacyStoredSecretForMigration();
+
         return {
             token: response.data.token,
             userId: response.data.userId,
@@ -354,7 +383,7 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
                 throw new SupabaseAccountLinkConflictError();
             }
             if (code === 'secret-proof-mismatch' || code === 'secret-proof-required') {
-                throw new SupabaseSecretMismatchError();
+                throw new SupabaseRecoveryNotReadyError();
             }
         }
         throw error;

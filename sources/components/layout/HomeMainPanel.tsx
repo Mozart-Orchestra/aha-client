@@ -23,8 +23,8 @@ import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
 import { getSessionName } from '@/utils/sessionUtils';
 import { isMachineOnline } from '@/utils/machineUtils';
-import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
 import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
+import { formatJoinTicketTimeRemaining, useAccountJoinCommand } from '@/auth/useAccountJoinCommand';
 
 function useIsExperiencedUser(): boolean {
     const artifacts = useArtifacts();
@@ -648,38 +648,49 @@ function ExperiencedUserPanel() {
     const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
     const auth = useAuth();
     const machines = useAllMachines();
-    const [joinCommand, setJoinCommand] = React.useState('');
-
-    const fallbackCommand = React.useMemo(() => getCliInstallAndLoginCommand(), []);
-    const primaryCommand = joinCommand || fallbackCommand;
-
-    const loadJoinCommand = React.useCallback(async () => {
-        if (!auth.credentials?.token) {
-            setJoinCommand('');
-            return;
+    const {
+        ensureFreshJoinCommand,
+        hasRefreshError,
+        isExpired,
+        isRefreshing,
+        primaryCommand,
+        refreshJoinCommand,
+        secondsRemaining,
+    } = useAccountJoinCommand(auth.credentials?.token);
+    const displayedJoinCommand = primaryCommand || (isRefreshing ? t('common.loading') : hasRefreshError ? t('common.error') : t('common.loading'));
+    const joinCommandStatus = React.useMemo(() => {
+        if (isRefreshing) {
+            return t('common.loading');
         }
-
-        try {
-            const { ticket } = await createAccountJoinTicket(auth.credentials.token);
-            setJoinCommand(getCliInstallAndLoginCommand(ticket));
-        } catch {
-            setJoinCommand('');
+        if (!primaryCommand && hasRefreshError) {
+            return t('common.error');
         }
-    }, [auth.credentials?.token]);
-
-    React.useEffect(() => {
-        void loadJoinCommand();
-    }, [loadJoinCommand]);
+        if (secondsRemaining === null) {
+            return null;
+        }
+        if (isExpired) {
+            return t('home.joinCommandExpired');
+        }
+        return t('home.joinCommandExpiresIn', {
+            time: formatJoinTicketTimeRemaining(secondsRemaining),
+        });
+    }, [hasRefreshError, isExpired, isRefreshing, primaryCommand, secondsRemaining]);
 
     const handleCopyDeviceCommand = React.useCallback(async () => {
-        const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(primaryCommand);
-        const { Modal } = await import('@/modal');
-        Modal.alert(
-            t('home.onboarding.commandCopiedTitle'),
-            t('home.onboarding.commandCopiedMessage'),
-        );
-    }, [primaryCommand]);
+        try {
+            const Clipboard = await import('expo-clipboard');
+            const commandToCopy = await ensureFreshJoinCommand();
+            await Clipboard.setStringAsync(commandToCopy);
+            const { Modal } = await import('@/modal');
+            Modal.alert(
+                t('home.onboarding.commandCopiedTitle'),
+                t('home.onboarding.commandCopiedMessage'),
+            );
+        } catch {
+            const { Modal } = await import('@/modal');
+            Modal.alert(t('common.error'), t('home.addDeviceHint'));
+        }
+    }, [ensureFreshJoinCommand]);
 
     const handleReport = React.useCallback(() => {
         router.push('/teams' as never);
@@ -725,11 +736,23 @@ function ExperiencedUserPanel() {
                 </View>
                 <View style={styles.onboardingStepContent}>
                     <View style={styles.onboardingCommandBox}>
-                        <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{primaryCommand.replace(' && ', '\n')}</Text>
+                        <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{displayedJoinCommand.replace(' && ', '\n')}</Text>
                         <Pressable style={styles.onboardingCopyButton} onPress={handleCopyDeviceCommand}>
                             <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                         </Pressable>
                     </View>
+                    {joinCommandStatus ? (
+                        <View style={styles.joinCommandStatusRow}>
+                            <Text style={styles.onboardingHint}>{joinCommandStatus}</Text>
+                            {isExpired || (!primaryCommand && hasRefreshError) ? (
+                                <Pressable onPress={() => { void refreshJoinCommand(); }}>
+                                    <Text style={styles.joinCommandStatusAction}>
+                                        {isRefreshing ? t('common.loading') : t('common.retry')}
+                                    </Text>
+                                </Pressable>
+                            ) : null}
+                        </View>
+                    ) : null}
                     {machines.length > 0 ? (
                         <View style={{ marginTop: 10, gap: 6 }}>
                             {machines.map((machine) => (
@@ -1145,6 +1168,18 @@ const stylesheet = StyleSheet.create((theme) => ({
         color: theme.colors.textSecondary,
         marginTop: 8,
         ...Typography.default(),
+    },
+    joinCommandStatusRow: {
+        marginTop: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    joinCommandStatusAction: {
+        fontSize: 12,
+        color: theme.colors.textLink,
+        ...Typography.default('semiBold'),
     },
     machineItem: {
         flexDirection: 'row',

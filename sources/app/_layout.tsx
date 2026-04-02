@@ -7,7 +7,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import { supabase } from '@/auth/supabase';
-import { completeSupabaseSession, SupabaseRecoveryNotReadyError, SupabaseRestoreRequiredError, SupabaseSecretMismatchError } from '@/auth/supabaseAuth';
+import { completeSupabaseSession, SupabaseRecoveryNotReadyError, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
 import { persistPendingTerminalConnectRequestStorage, readPendingTerminalConnectRequestStorage } from '@/auth/pendingTerminalConnect';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -209,8 +209,6 @@ export default function RootLayout() {
                         } catch (error) {
                             if (error instanceof SupabaseRestoreRequiredError) {
                                 setNeedsRestore('restore_required');
-                            } else if (error instanceof SupabaseSecretMismatchError) {
-                                setNeedsRestore('secret_mismatch');
                             } else if (error instanceof SupabaseRecoveryNotReadyError) {
                                 setNeedsRestore('recovery_not_ready');
                             }

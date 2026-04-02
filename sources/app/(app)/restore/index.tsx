@@ -1,10 +1,9 @@
-import React, { memo, useState } from 'react';
+import React, { memo } from 'react';
 import { View, Text, Pressable, Platform, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { formatSecretKeyForBackup } from '@/auth/secretKeyBackup';
 import { ItemList } from '@/components/ui/ItemList';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { Item } from '@/components/ui/Item';
@@ -18,8 +17,7 @@ import { goBackOrReturn } from '@/utils/returnNavigation';
 import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
-import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
+import { formatJoinTicketTimeRemaining, useAccountJoinCommand } from '@/auth/useAccountJoinCommand';
 
 export default memo(function Restore() {
     const { theme } = useUnistyles();
@@ -29,66 +27,44 @@ export default memo(function Restore() {
     const { width: windowWidth } = useWindowDimensions();
     const isDesktopShell = Platform.OS === 'web' && windowWidth >= DESKTOP_BREAKPOINT;
     const { connectWithUrl, isLoading: isConnecting } = useConnectAccount();
-    const [showSecret, setShowSecret] = useState(false);
-    const [copiedRecently, setCopiedRecently] = useState(false);
-    const [copiedCommandRecently, setCopiedCommandRecently] = useState(false);
-    const [copiedRestoreCommandRecently, setCopiedRestoreCommandRecently] = useState(false);
-    const [joinCommand, setJoinCommand] = useState('');
-
-    const currentSecret = auth.credentials?.secret ?? '';
-    const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
-    const loginCommand = getCliInstallAndLoginCommand();
-    const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
-    const primaryCommand = joinCommand || loginCommand;
-
-    const loadJoinCommand = React.useCallback(async () => {
-        if (!auth.credentials?.token) {
-            setJoinCommand('');
-            return;
+    const [copiedCommandRecently, setCopiedCommandRecently] = React.useState(false);
+    const {
+        ensureFreshJoinCommand,
+        hasRefreshError,
+        isExpired,
+        isRefreshing,
+        primaryCommand,
+        refreshJoinCommand,
+        secondsRemaining,
+    } = useAccountJoinCommand(auth.credentials?.token);
+    const displayedJoinCommand = primaryCommand || (isRefreshing ? t('common.loading') : hasRefreshError ? t('common.error') : t('common.loading'));
+    const joinCommandStatus = React.useMemo(() => {
+        if (isRefreshing) {
+            return t('common.loading');
         }
-
-        try {
-            const { ticket } = await createAccountJoinTicket(auth.credentials.token);
-            setJoinCommand(getCliInstallAndLoginCommand(ticket));
-        } catch {
-            setJoinCommand('');
+        if (!primaryCommand && hasRefreshError) {
+            return t('common.error');
         }
-    }, [auth.credentials?.token]);
-
-    React.useEffect(() => {
-        void loadJoinCommand();
-    }, [loadJoinCommand]);
-
-    const handleCopySecret = async () => {
-        try {
-            await Clipboard.setStringAsync(formattedSecret);
-            setCopiedRecently(true);
-            setTimeout(() => setCopiedRecently(false), 2000);
-            Modal.alert(t('common.success'), t('settingsAccount.secretKeyCopied'));
-        } catch {
-            Modal.alert(t('common.error'), t('settingsAccount.secretKeyCopyFailed'));
+        if (secondsRemaining === null) {
+            return null;
         }
-    };
+        if (isExpired) {
+            return t('home.joinCommandExpired');
+        }
+        return t('home.joinCommandExpiresIn', {
+            time: formatJoinTicketTimeRemaining(secondsRemaining),
+        });
+    }, [hasRefreshError, isExpired, isRefreshing, primaryCommand, secondsRemaining]);
 
     const handleCopyCommand = async () => {
         try {
-            await Clipboard.setStringAsync(primaryCommand);
+            const commandToCopy = await ensureFreshJoinCommand();
+            await Clipboard.setStringAsync(commandToCopy);
             setCopiedCommandRecently(true);
             setTimeout(() => setCopiedCommandRecently(false), 2000);
             Modal.alert(t('home.onboarding.commandCopiedTitle'), t('home.onboarding.commandCopiedMessage'));
         } catch {
-            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
-        }
-    };
-
-    const handleCopyRestoreCommand = async () => {
-        try {
-            await Clipboard.setStringAsync(restoreCommand);
-            setCopiedRestoreCommandRecently(true);
-            setTimeout(() => setCopiedRestoreCommandRecently(false), 2000);
-            Modal.alert(t('common.success'), t('settingsAccount.restoreCommandCopied'));
-        } catch {
-            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
+            Modal.alert(t('common.error'), t('home.addDeviceHint'));
         }
     };
 
@@ -140,33 +116,23 @@ export default memo(function Restore() {
                             />
                         </View>
                         <Text style={styles.secretKeyText}>
-                            {primaryCommand}
+                            {displayedJoinCommand}
                         </Text>
+                        {joinCommandStatus ? (
+                            <View style={styles.commandStatusRow}>
+                                <Text style={styles.commandStatusText}>{joinCommandStatus}</Text>
+                                {isExpired || (!primaryCommand && hasRefreshError) ? (
+                                    <Pressable onPress={() => { void refreshJoinCommand(); }}>
+                                        <Text style={styles.commandStatusAction}>
+                                            {isRefreshing ? t('common.loading') : t('common.retry')}
+                                        </Text>
+                                    </Pressable>
+                                ) : null}
+                            </View>
+                        ) : null}
                     </View>
                 </Pressable>
             </ItemGroup>
-
-            {restoreCommand && (
-                <ItemGroup footer={t('settingsAccount.backupDescription')}>
-                    <Pressable onPress={handleCopyRestoreCommand}>
-                        <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
-                            <View style={styles.secretKeyHeader}>
-                                <Text style={styles.secretKeyLabel}>
-                                    {t('settingsAccount.restoreCommandLabel')}
-                                </Text>
-                                <Ionicons
-                                    name={copiedRestoreCommandRecently ? 'checkmark-circle' : 'copy-outline'}
-                                    size={18}
-                                    color={copiedRestoreCommandRecently ? '#34C759' : theme.colors.textSecondary}
-                                />
-                            </View>
-                            <Text style={styles.secretKeyText}>
-                                {restoreCommand}
-                            </Text>
-                        </View>
-                    </Pressable>
-                </ItemGroup>
-            )}
 
             <ItemGroup footer={t('settings.syncDeviceSubtitle')}>
                 <Item
@@ -183,50 +149,7 @@ export default memo(function Restore() {
                     disabled={isConnecting}
                     showChevron={false}
                 />
-                <Item
-                    title={t('navigation.restoreWithSecretKey')}
-                    subtitle={t('connect.restoreDescription')}
-                    icon={<Ionicons name="key-outline" size={29} color="#FF9500" />}
-                    onPress={() => router.push('/restore/manual' as never)}
-                />
             </ItemGroup>
-
-            {auth.isAuthenticated && (
-                <ItemGroup
-                    title={t('connect.myKey')}
-                    footer={t('connect.myKeyDescription')}
-                >
-                    <Item
-                        title={t('settingsAccount.secretKey')}
-                        subtitle={showSecret ? t('settingsAccount.tapToHide') : t('settingsAccount.tapToReveal')}
-                        icon={<Ionicons name={showSecret ? 'eye-off-outline' : 'eye-outline'} size={29} color="#FF9500" />}
-                        onPress={() => setShowSecret(value => !value)}
-                        showChevron={false}
-                    />
-                </ItemGroup>
-            )}
-
-            {auth.isAuthenticated && showSecret && (
-                <ItemGroup>
-                    <Pressable onPress={handleCopySecret}>
-                        <View style={[styles.secretKeyContainer, { maxWidth: layout.maxWidth }]}>
-                            <View style={styles.secretKeyHeader}>
-                                <Text style={styles.secretKeyLabel}>
-                                    {t('settingsAccount.secretKeyLabel')}
-                                </Text>
-                                <Ionicons
-                                    name={copiedRecently ? 'checkmark-circle' : 'copy-outline'}
-                                    size={18}
-                                    color={copiedRecently ? '#34C759' : theme.colors.textSecondary}
-                                />
-                            </View>
-                            <Text style={styles.secretKeyText}>
-                                {formattedSecret}
-                            </Text>
-                        </View>
-                    </Pressable>
-                </ItemGroup>
-            )}
         </ItemList>
     );
 
@@ -304,5 +227,23 @@ const stylesheet = StyleSheet.create((theme) => ({
         lineHeight: 20,
         color: theme.colors.text,
         ...Typography.mono(),
+    },
+    commandStatusRow: {
+        marginTop: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    commandStatusText: {
+        flex: 1,
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        ...Typography.default(),
+    },
+    commandStatusAction: {
+        fontSize: 12,
+        color: theme.colors.textLink,
+        ...Typography.default('semiBold'),
     },
 }));

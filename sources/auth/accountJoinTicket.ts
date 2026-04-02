@@ -9,8 +9,10 @@ export async function createAccountJoinTicket(token: string): Promise<{ ticket: 
         },
     });
 
+    // Server returns both `code` (new) and `ticket` (alias for backward compat). Prefer `code`.
+    const ticket: string = response.data.code ?? response.data.ticket;
     return {
-        ticket: response.data.ticket,
+        ticket,
         expiresAt: response.data.expiresAt,
     };
 }

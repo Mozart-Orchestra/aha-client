@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getRandomBytesAsync } from 'expo-crypto';
-import * as Updates from 'expo-updates';
+import * as Clipboard from 'expo-clipboard';
 import {
     Image as RNImage,
     Platform,
@@ -16,78 +16,26 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
-import * as Clipboard from 'expo-clipboard';
-
-import { useAuth, getNeedsRestore, getNeedsRestoreReason, setNeedsRestore } from '@/auth/AuthContext';
-import type { RestoreReason } from '@/auth/AuthContext';
+import { useAuth } from '@/auth/AuthContext';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
-import { normalizeSecretKey } from '@/auth/secretKeyBackup';
-import { decodeBase64 } from '@/encryption/base64';
 import {
-    signOutSupabase,
     completeSupabaseSession,
     signInWithGoogle,
     signInWithEmail,
     verifyEmailOtp,
-    SupabaseRecoveryNotReadyError,
-    SupabaseRestoreRequiredError,
-    SupabaseSecretMismatchError,
 } from '@/auth/supabaseAuth';
 import { supabase } from '@/auth/supabase';
-import { TokenStorage } from '@/auth/tokenStorage';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
 import { encodeBase64 } from '@/encryption/base64';
 import { Modal } from '@/modal';
-import { clearPersistence } from '@/sync/persistence';
 import { t } from '@/text';
 import { trackAccountCreated } from '@/track';
 
 const DESKTOP_BREAKPOINT = 1180;
 const LANDING_HERO_ARTWORK_ASPECT_RATIO = 2814 / 1536;
-
-function getRestoreReasonFromError(error: unknown): RestoreReason | null {
-    if (error instanceof SupabaseRestoreRequiredError) {
-        return 'restore_required';
-    }
-    if (error instanceof SupabaseSecretMismatchError) {
-        return 'secret_mismatch';
-    }
-    if (error instanceof SupabaseRecoveryNotReadyError) {
-        return 'recovery_not_ready';
-    }
-    return null;
-}
-
-function getRestoreCopy(reason: RestoreReason | null): {
-    title: string;
-    message: string;
-    existingDeviceHelp: string;
-} {
-    if (reason === 'secret_mismatch') {
-        return {
-            title: t('welcome.restoreSecretMismatchTitle'),
-            message: t('welcome.restoreSecretMismatchMessage'),
-            existingDeviceHelp: t('welcome.loggedInDeviceHelpSecretMismatch'),
-        };
-    }
-
-    if (reason === 'recovery_not_ready') {
-        return {
-            title: t('welcome.restoreRecoveryNotReadyTitle'),
-            message: t('welcome.restoreRecoveryNotReadyMessage'),
-            existingDeviceHelp: t('welcome.loggedInDeviceHelpRecoveryNotReady'),
-        };
-    }
-
-    return {
-        title: t('welcome.restoreRequired'),
-        message: t('welcome.restoreRequiredMessage'),
-        existingDeviceHelp: t('welcome.loggedInDeviceHelp'),
-    };
-}
 
 const styles = StyleSheet.create((theme) => ({
     shellContent: {
@@ -288,25 +236,6 @@ const styles = StyleSheet.create((theme) => ({
         fontSize: 14,
         fontWeight: '700',
         color: theme.colors.textDestructive,
-    },
-    landingRestoreAssistCard: {
-        width: '100%',
-        gap: 12,
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: theme.colors.divider,
-        backgroundColor: theme.colors.surfaceHigh,
-    },
-    landingRestoreAssistTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: theme.colors.text,
-    },
-    landingRestoreAssistText: {
-        fontSize: 13,
-        lineHeight: 20,
-        color: theme.colors.textSecondary,
     },
     landingTrustRow: {
         flexDirection: 'row',
@@ -533,140 +462,10 @@ function NotAuthenticated() {
     }, []);
 
     // Show fallback recovery UI only when automatic Google/email recovery cannot complete.
-    const initialRestoreReason = React.useMemo(() => getNeedsRestoreReason(), []);
-    const initialNeedsRestore = React.useMemo(() => getNeedsRestore(), []);
-    const [restoreRequired, setRestoreRequired] = React.useState(initialNeedsRestore);
-    const [showExistingDeviceHelp, setShowExistingDeviceHelp] = React.useState(initialNeedsRestore);
-    const [restoreReason, setRestoreReason] = React.useState<RestoreReason | null>(initialRestoreReason);
-    const [showManualRestoreEntry, setShowManualRestoreEntry] = React.useState(
-        !(initialNeedsRestore && initialRestoreReason === 'recovery_not_ready'),
-    );
-    const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp' | 'restore'>(initialNeedsRestore ? 'restore' : 'idle');
-    const [restoreKey, setRestoreKey] = React.useState('');
-    const hasRestoreKeyInput = restoreKey.trim().length > 0;
-    const restoreCommandTemplate = React.useMemo(() => {
-        const normalizedRestoreKey = restoreKey.trim() || t('welcome.restoreKeyPlaceholder');
-        return `npm i aha-agi && npx aha auth restore --code ${normalizedRestoreKey}`;
-    }, [restoreKey]);
+    const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp'>('idle');
 
-    const restoreCopy = getRestoreCopy(restoreReason);
-    const restoreTitle = restoreCopy.title;
-    const restoreMessage = restoreCopy.message;
-    const existingDeviceHelp = restoreCopy.existingDeviceHelp;
-    const pageTitle = emailLoginStep === 'restore'
-        ? restoreRequired
-            ? restoreTitle
-            : t('navigation.restoreWithSecretKey')
-        : t('welcome.title');
-    const pageSubtitle = emailLoginStep === 'restore'
-        ? restoreRequired
-            ? restoreMessage
-            : t('connect.restoreDescription')
-        : t('welcome.subtitle');
-
-    const enterRestoreRequiredFlow = React.useCallback((reason: RestoreReason) => {
-        setNeedsRestore(reason);
-        setRestoreRequired(true);
-        setShowExistingDeviceHelp(true);
-        setRestoreReason(reason);
-        setShowManualRestoreEntry(reason !== 'recovery_not_ready');
-        setEmailLoginStep('restore');
-    }, []);
-
-    const handleRestoreKeySubmit = React.useCallback(async () => {
-        if (!restoreKey.trim()) return;
-        setEmailLoading(true);
-        try {
-            const secretBase64 = normalizeSecretKey(restoreKey.trim());
-            const secretBytes = decodeBase64(secretBase64, 'base64url');
-            const token = await authGetToken(secretBytes);
-            await auth.login(token, secretBase64);
-            setNeedsRestore(false);
-            setRestoreRequired(false);
-            setShowExistingDeviceHelp(false);
-            setRestoreReason(null);
-            if (hasPendingTerminalConnectRequest()) {
-                router.replace('/terminal/connect');
-            }
-        } catch (error) {
-            Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
-        } finally {
-            setEmailLoading(false);
-        }
-    }, [restoreKey, auth, router]);
-
-    const handleCopyRestoreCommand = React.useCallback(async () => {
-        if (!hasRestoreKeyInput) {
-            Modal.alert(
-                t('welcome.restoreRequired'),
-                t('welcome.restoreCommandNeedsKeyMessage'),
-            );
-            return;
-        }
-
-        try {
-            await Clipboard.setStringAsync(restoreCommandTemplate);
-            Modal.alert(
-                t('home.onboarding.commandCopiedTitle'),
-                t('welcome.restoreCommandCopiedMessage'),
-            );
-        } catch {
-            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
-        }
-    }, [hasRestoreKeyInput, restoreCommandTemplate]);
-
-    const handleOpenManualRestore = React.useCallback(() => {
-        setNeedsRestore(false);
-        setRestoreRequired(false);
-        setShowExistingDeviceHelp(false);
-        setRestoreReason(null);
-        setShowManualRestoreEntry(true);
-        setEmailLoginStep('restore');
-    }, []);
-
-    const handleLeaveRestore = React.useCallback(() => {
-        setNeedsRestore(false);
-        setRestoreRequired(false);
-        setShowExistingDeviceHelp(false);
-        setRestoreReason(null);
-        setShowManualRestoreEntry(true);
-        setEmailLoginStep('idle');
-    }, []);
-
-    const handleSwitchGoogleAccount = React.useCallback(async () => {
-        try {
-            clearPersistence();
-            await TokenStorage.removeCredentials();
-            try {
-                await signOutSupabase();
-            } catch (error) {
-                console.warn('Failed to sign out Supabase during account switch:', error);
-            }
-
-            setNeedsRestore(false);
-            setRestoreRequired(false);
-            setShowExistingDeviceHelp(false);
-            setRestoreReason(null);
-            setShowManualRestoreEntry(true);
-            setRestoreKey('');
-            setEmail('');
-            setOtp('');
-            setEmailLoginStep('idle');
-
-            if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                window.location.reload();
-                return;
-            }
-
-            try {
-                await Updates.reloadAsync();
-            } catch {
-                // ignore in development where updates are disabled
-            }
-        } catch (error) {
-            Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
-        }
-    }, []);
+    const pageTitle = t('welcome.title');
+    const pageSubtitle = t('welcome.subtitle');
 
     // Email OTP login state
     const [email, setEmail] = React.useState('');
@@ -735,21 +534,11 @@ function NotAuthenticated() {
             await verifyEmailOtp(email.trim(), otp.trim());
             await completeSupabaseLogin();
         } catch (error) {
-            const restoreFlowReason = getRestoreReasonFromError(error);
-            if (restoreFlowReason) {
-                const restoreFlowCopy = getRestoreCopy(restoreFlowReason);
-                enterRestoreRequiredFlow(restoreFlowReason);
-                Modal.alert(
-                    restoreFlowCopy.title,
-                    restoreFlowCopy.message,
-                );
-            } else {
-                Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
-            }
+            Modal.alert(t('common.error'), String(error instanceof Error ? error.message : error));
         } finally {
             setEmailLoading(false);
         }
-    }, [email, otp, completeSupabaseLogin, enterRestoreRequiredFlow]);
+    }, [email, otp, completeSupabaseLogin]);
 
     const handleGoogleLogin = React.useCallback(async () => {
         try {
@@ -761,84 +550,9 @@ function NotAuthenticated() {
                 await completeSupabaseLogin();
             }
         } catch (error) {
-            const restoreFlowReason = getRestoreReasonFromError(error);
-            if (restoreFlowReason) {
-                const restoreFlowCopy = getRestoreCopy(restoreFlowReason);
-                enterRestoreRequiredFlow(restoreFlowReason);
-                Modal.alert(
-                    restoreFlowCopy.title,
-                    restoreFlowCopy.message,
-                );
-            } else {
-                Modal.alert('Error', 'Google sign-in failed. Please try again.');
-            }
+            Modal.alert('Error', String(error instanceof Error ? error.message : 'Google sign-in failed. Please try again.'));
         }
-    }, [completeSupabaseLogin, enterRestoreRequiredFlow]);
-
-    const showRestoreKeyInput = !restoreRequired || restoreReason !== 'recovery_not_ready' || showManualRestoreEntry;
-
-    const restoreActions = (
-        <>
-            {showRestoreKeyInput ? (
-                <>
-            <TextInput
-                style={styles.landingInput}
-                placeholder={t('welcome.restoreKeyPlaceholder')}
-                placeholderTextColor={theme.colors.textSecondary}
-                value={restoreKey}
-                onChangeText={setRestoreKey}
-                autoCapitalize="characters"
-                autoFocus
-                onSubmitEditing={handleRestoreKeySubmit}
-            />
-            <LandingButton
-                title={emailLoading ? t('common.loading') : t('welcome.restoreSubmit')}
-                onPress={handleRestoreKeySubmit}
-                tone="primary"
-            />
-            <LandingButton
-                title={hasRestoreKeyInput ? t('welcome.copyRestoreCommand') : t('welcome.enterRestoreKeyFirst')}
-                onPress={handleCopyRestoreCommand}
-                tone="secondary"
-            />
-                </>
-            ) : (
-                <LandingButton
-                    title={t('navigation.restoreWithSecretKey')}
-                    onPress={() => setShowManualRestoreEntry(true)}
-                    tone="secondary"
-                />
-            )}
-            {restoreRequired ? (
-                <>
-                    {showRestoreKeyInput ? (
-                        <LandingButton
-                            title={t('welcome.haveAnotherLoggedInDevice')}
-                            onPress={() => setShowExistingDeviceHelp(value => !value)}
-                            tone="ghost"
-                        />
-                    ) : null}
-                    {showExistingDeviceHelp ? (
-                        <View style={styles.landingRestoreAssistCard}>
-                            <Text style={styles.landingRestoreAssistTitle}>{t('welcome.restoreWhyTitle')}</Text>
-                            <Text style={styles.landingRestoreAssistText}>{existingDeviceHelp}</Text>
-                        </View>
-                    ) : null}
-                    <LandingButton
-                        title={t('welcome.switchGoogleAccount')}
-                        onPress={handleSwitchGoogleAccount}
-                        tone="danger"
-                    />
-                </>
-            ) : (
-                <LandingButton
-                    title={t('common.back')}
-                    onPress={handleLeaveRestore}
-                    tone="ghost"
-                />
-            )}
-        </>
-    );
+    }, [completeSupabaseLogin]);
 
     const previewPanel = (
         <View style={[styles.landingPreviewPanel, { maxWidth: previewPanelMaxWidth }]}>
@@ -887,11 +601,7 @@ function NotAuthenticated() {
                             <Text style={styles.landingTitle}>{pageTitle}</Text>
                             <Text style={styles.landingSubtitle}>{pageSubtitle}</Text>
 
-                            {emailLoginStep === 'restore' ? (
-                                <View style={styles.landingActionsRow}>
-                                    {restoreActions}
-                                </View>
-                            ) : emailLoginStep === 'idle' ? (
+                            {emailLoginStep === 'idle' ? (
                                 <View style={styles.landingActionsRow}>
                                     <LandingButton
                                         icon="logo-google"
@@ -904,12 +614,6 @@ function NotAuthenticated() {
                                         title={t('welcome.signInWithEmail')}
                                         onPress={handleEmailLogin}
                                         tone="secondary"
-                                    />
-                                    <LandingButton
-                                        icon="key-outline"
-                                        title={t('navigation.restoreWithSecretKey')}
-                                        onPress={handleOpenManualRestore}
-                                        tone="ghost"
                                     />
                                 </View>
                             ) : emailLoginStep === 'email' ? (
@@ -1020,11 +724,7 @@ function NotAuthenticated() {
                 <Text style={styles.landingMobileTitle}>{pageTitle}</Text>
                 <Text style={styles.landingMobileSubtitle}>{pageSubtitle}</Text>
 
-                {emailLoginStep === 'restore' ? (
-                    <View style={styles.landingMobileActions}>
-                        {restoreActions}
-                    </View>
-                ) : emailLoginStep === 'idle' ? (
+                {emailLoginStep === 'idle' ? (
                     <View style={styles.landingMobileActions}>
                         <LandingButton
                             icon="logo-google"
@@ -1037,12 +737,6 @@ function NotAuthenticated() {
                             title={t('welcome.signInWithEmail')}
                             onPress={handleEmailLogin}
                             tone="secondary"
-                        />
-                        <LandingButton
-                            icon="key-outline"
-                            title={t('navigation.restoreWithSecretKey')}
-                            onPress={handleOpenManualRestore}
-                            tone="ghost"
                         />
                     </View>
                 ) : emailLoginStep === 'email' ? (

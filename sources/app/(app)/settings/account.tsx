@@ -5,8 +5,6 @@ import { useAuth } from '@/auth/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Typography } from '@/constants/Typography';
-import { formatSecretKeyForBackup } from '@/auth/secretKeyBackup';
-import { getCliInstallAndLoginCommand, getCliRestoreCommand } from '@/auth/cliCommands';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
@@ -23,40 +21,44 @@ import { Image } from 'expo-image';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { disconnectGitHub } from '@/sync/apiGithub';
 import { disconnectService } from '@/sync/apiServices';
-import { createAccountJoinTicket } from '@/auth/accountJoinTicket';
+import { formatJoinTicketTimeRemaining, useAccountJoinCommand } from '@/auth/useAccountJoinCommand';
 
 export default React.memo(() => {
     const { theme } = useUnistyles();
     const auth = useAuth();
     const router = useRouter();
-    const [showSecret, setShowSecret] = useState(false);
-    const [copiedRecently, setCopiedRecently] = useState(false);
     const [copiedJoinCommandRecently, setCopiedJoinCommandRecently] = useState(false);
-    const [copiedCommandRecently, setCopiedCommandRecently] = useState(false);
-    const [joinCommand, setJoinCommand] = useState('');
     const [analyticsOptOut, setAnalyticsOptOut] = useSettingMutable('analyticsOptOut');
     const [professionalMode, setProfessionalMode] = useSettingMutable('professionalMode');
     const profile = useProfile();
 
-    // Get the current secret key
-    const currentSecret = auth.credentials?.secret || '';
-    const formattedSecret = currentSecret ? formatSecretKeyForBackup(currentSecret) : '';
-    const restoreCommand = currentSecret ? getCliRestoreCommand(currentSecret) : '';
-
-    React.useEffect(() => {
-        if (!auth.credentials?.token) {
-            setJoinCommand('');
-            return;
+    const {
+        ensureFreshJoinCommand,
+        hasRefreshError,
+        isExpired,
+        isRefreshing,
+        primaryCommand,
+        refreshJoinCommand,
+        secondsRemaining,
+    } = useAccountJoinCommand(auth.credentials?.token);
+    const displayedJoinCommand = primaryCommand || (isRefreshing ? t('common.loading') : hasRefreshError ? t('common.error') : t('common.loading'));
+    const joinCommandStatus = React.useMemo(() => {
+        if (isRefreshing) {
+            return t('common.loading');
         }
-
-        createAccountJoinTicket(auth.credentials.token)
-            .then(({ ticket }) => {
-                setJoinCommand(getCliInstallAndLoginCommand(ticket));
-            })
-            .catch(() => {
-                setJoinCommand('');
-            });
-    }, [auth.credentials?.token]);
+        if (!primaryCommand && hasRefreshError) {
+            return t('common.error');
+        }
+        if (secondsRemaining === null) {
+            return null;
+        }
+        if (isExpired) {
+            return t('home.joinCommandExpired');
+        }
+        return t('home.joinCommandExpiresIn', {
+            time: formatJoinTicketTimeRemaining(secondsRemaining),
+        });
+    }, [hasRefreshError, isExpired, isRefreshing, primaryCommand, secondsRemaining]);
 
     // Get server info
     const serverInfo = getServerInfo();
@@ -99,44 +101,15 @@ export default React.memo(() => {
         }
     };
 
-    const handleShowSecret = () => {
-        setShowSecret(!showSecret);
-    };
-
-    const handleCopySecret = async () => {
-        try {
-            await Clipboard.setStringAsync(formattedSecret);
-            setCopiedRecently(true);
-            setTimeout(() => setCopiedRecently(false), 2000);
-            Modal.alert(t('common.success'), t('settingsAccount.secretKeyCopied'));
-        } catch (error) {
-            Modal.alert(t('common.error'), t('settingsAccount.secretKeyCopyFailed'));
-        }
-    };
-
-    const handleCopyRestoreCommand = async () => {
-        try {
-            await Clipboard.setStringAsync(restoreCommand);
-            setCopiedCommandRecently(true);
-            setTimeout(() => setCopiedCommandRecently(false), 2000);
-            Modal.alert(t('common.success'), t('settingsAccount.restoreCommandCopied'));
-        } catch (error) {
-            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
-        }
-    };
-
     const handleCopyJoinCommand = async () => {
         try {
-            if (!joinCommand) {
-                return;
-            }
-
-            await Clipboard.setStringAsync(joinCommand);
+            const commandToCopy = await ensureFreshJoinCommand();
+            await Clipboard.setStringAsync(commandToCopy);
             setCopiedJoinCommandRecently(true);
             setTimeout(() => setCopiedJoinCommandRecently(false), 2000);
-            Modal.alert(t('common.success'), t('settingsAccount.restoreCommandCopied'));
+            Modal.alert(t('home.onboarding.commandCopiedTitle'), t('home.onboarding.commandCopiedMessage'));
         } catch (error) {
-            Modal.alert(t('common.error'), t('settingsAccount.restoreCommandCopyFailed'));
+            Modal.alert(t('common.error'), t('home.addDeviceHint'));
         }
     };
 
@@ -284,139 +257,67 @@ export default React.memo(() => {
                     />
                 </ItemGroup>
 
-                {/* Backup Section */}
-                <ItemGroup
-                    title={t('settingsAccount.backup')}
-                    footer={t('settingsAccount.backupDescription')}
-                >
-                    <Item
-                        title={t('settingsAccount.secretKey')}
-                        subtitle={showSecret ? t('settingsAccount.tapToHide') : t('settingsAccount.tapToReveal')}
-                        icon={<Ionicons name={showSecret ? "eye-off-outline" : "eye-outline"} size={29} color="#FF9500" />}
-                        onPress={handleShowSecret}
-                        showChevron={false}
-                    />
+                <ItemGroup title={t('home.addDeviceTitle')} footer={t('home.addDeviceHint')}>
+                    <Pressable onPress={handleCopyJoinCommand}>
+                        <View style={{
+                            backgroundColor: theme.colors.surface,
+                            paddingHorizontal: 16,
+                            paddingVertical: 14,
+                            width: '100%',
+                            maxWidth: layout.maxWidth,
+                            alignSelf: 'center'
+                        }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                <Text style={{
+                                    fontSize: 11,
+                                    color: theme.colors.textSecondary,
+                                    letterSpacing: 0.5,
+                                    textTransform: 'uppercase',
+                                    ...Typography.default('semiBold')
+                                }}>
+                                    {t('home.addDeviceTitle')}
+                                </Text>
+                                <Ionicons
+                                    name={copiedJoinCommandRecently ? "checkmark-circle" : "copy-outline"}
+                                    size={18}
+                                    color={copiedJoinCommandRecently ? "#34C759" : theme.colors.textSecondary}
+                                />
+                            </View>
+                            <Text style={{
+                                fontSize: 13,
+                                letterSpacing: 0.5,
+                                lineHeight: 20,
+                                color: theme.colors.text,
+                                ...Typography.mono()
+                            }}>
+                                {displayedJoinCommand}
+                            </Text>
+                            {joinCommandStatus ? (
+                                <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                                    <Text style={{
+                                        flex: 1,
+                                        fontSize: 12,
+                                        color: theme.colors.textSecondary,
+                                        ...Typography.default()
+                                    }}>
+                                        {joinCommandStatus}
+                                    </Text>
+                                    {isExpired || (!primaryCommand && hasRefreshError) ? (
+                                        <Pressable onPress={() => { void refreshJoinCommand(); }}>
+                                            <Text style={{
+                                                fontSize: 12,
+                                                color: theme.colors.textLink,
+                                                ...Typography.default('semiBold')
+                                            }}>
+                                                {isRefreshing ? t('common.loading') : t('common.retry')}
+                                            </Text>
+                                        </Pressable>
+                                    ) : null}
+                                </View>
+                            ) : null}
+                        </View>
+                    </Pressable>
                 </ItemGroup>
-
-                {/* Secret Key Display */}
-                {showSecret && (
-                    <ItemGroup>
-                        <Pressable onPress={handleCopySecret}>
-                            <View style={{
-                                backgroundColor: theme.colors.surface,
-                                paddingHorizontal: 16,
-                                paddingVertical: 14,
-                                width: '100%',
-                                maxWidth: layout.maxWidth,
-                                alignSelf: 'center'
-                            }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                    <Text style={{
-                                        fontSize: 11,
-                                        color: theme.colors.textSecondary,
-                                        letterSpacing: 0.5,
-                                        textTransform: 'uppercase',
-                                        ...Typography.default('semiBold')
-                                    }}>
-                                        {t('settingsAccount.secretKeyLabel')}
-                                    </Text>
-                                    <Ionicons
-                                        name={copiedRecently ? "checkmark-circle" : "copy-outline"}
-                                        size={18}
-                                        color={copiedRecently ? "#34C759" : theme.colors.textSecondary}
-                                    />
-                                </View>
-                                <Text style={{
-                                    fontSize: 13,
-                                    letterSpacing: 0.5,
-                                    lineHeight: 20,
-                                    color: theme.colors.text,
-                                    ...Typography.mono()
-                                }}>
-                                    {formattedSecret}
-                                </Text>
-                            </View>
-                        </Pressable>
-                        {joinCommand && (
-                            <Pressable onPress={handleCopyJoinCommand}>
-                                <View style={{
-                                    backgroundColor: theme.colors.surface,
-                                    paddingHorizontal: 16,
-                                    paddingVertical: 14,
-                                    borderTopWidth: 1,
-                                    borderTopColor: theme.colors.divider,
-                                    width: '100%',
-                                    maxWidth: layout.maxWidth,
-                                    alignSelf: 'center'
-                                }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                        <Text style={{
-                                            fontSize: 11,
-                                            color: theme.colors.textSecondary,
-                                            letterSpacing: 0.5,
-                                            textTransform: 'uppercase',
-                                            ...Typography.default('semiBold')
-                                        }}>
-                                            {t('home.addDeviceTitle')}
-                                        </Text>
-                                        <Ionicons
-                                            name={copiedJoinCommandRecently ? "checkmark-circle" : "copy-outline"}
-                                            size={18}
-                                            color={copiedJoinCommandRecently ? "#34C759" : theme.colors.textSecondary}
-                                        />
-                                    </View>
-                                    <Text style={{
-                                        fontSize: 13,
-                                        letterSpacing: 0.5,
-                                        lineHeight: 20,
-                                        color: theme.colors.text,
-                                        ...Typography.mono()
-                                    }}>
-                                        {joinCommand}
-                                    </Text>
-                                </View>
-                            </Pressable>
-                        )}
-                        <Pressable onPress={handleCopyRestoreCommand}>
-                            <View style={{
-                                backgroundColor: theme.colors.surface,
-                                paddingHorizontal: 16,
-                                paddingVertical: 14,
-                                borderTopWidth: 1,
-                                borderTopColor: theme.colors.divider,
-                                width: '100%',
-                                maxWidth: layout.maxWidth,
-                                alignSelf: 'center'
-                            }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                    <Text style={{
-                                        fontSize: 11,
-                                        color: theme.colors.textSecondary,
-                                        letterSpacing: 0.5,
-                                        textTransform: 'uppercase',
-                                        ...Typography.default('semiBold')
-                                    }}>
-                                        {t('settingsAccount.restoreCommandLabel')}
-                                    </Text>
-                                    <Ionicons
-                                        name={copiedCommandRecently ? "checkmark-circle" : "copy-outline"}
-                                        size={18}
-                                        color={copiedCommandRecently ? "#34C759" : theme.colors.textSecondary}
-                                    />
-                                </View>
-                                <Text style={{
-                                    fontSize: 13,
-                                    letterSpacing: 0.5,
-                                    lineHeight: 20,
-                                    color: theme.colors.text,
-                                    ...Typography.mono()
-                                }}>
-                                    {restoreCommand}
-                                </Text>
-                            </View>
-                        </Pressable>
-                    </ItemGroup>
-                )}
 
                 {/* Analytics Section */}
                 <ItemGroup
