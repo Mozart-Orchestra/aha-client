@@ -11,6 +11,7 @@ import { ItemGroup } from '@/components/ui/ItemGroup';
 import { Item } from '@/components/ui/Item';
 import { useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
+import { buildTerminalConnectUrl } from '@/auth/deepLinkSchemes';
 
 export default function TerminalScreen() {
     const router = useRouter();
@@ -36,8 +37,7 @@ export default function TerminalScreen() {
 
     const handleConnect = async () => {
         if (publicKey) {
-            // Use the full happy:// URL format expected by the hook
-            const authUrl = `happy://terminal?${publicKey}`;
+            const authUrl = buildTerminalConnectUrl(publicKey);
             await processAuthUrl(authUrl);
         }
     };

@@ -16,6 +16,7 @@ import { getServerUrl, setServerUrl, validateServerUrl } from '@/sync/serverConf
 import { useAuth } from '@/auth/AuthContext';
 import { useIsDataReady, useMachine } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
+import { buildTerminalConnectUrl } from '@/auth/deepLinkSchemes';
 
 type AuthMode = 'auto' | 'create' | 'reconnect';
 
@@ -179,8 +180,7 @@ export default function TerminalConnectScreen() {
                 return;
             }
 
-            // Convert the hash key format to the expected happy:// URL format
-            const authUrl = `happy://terminal?${publicKey}`;
+            const authUrl = buildTerminalConnectUrl(publicKey);
             await processAuthUrl(authUrl);
         }
     }, [applyRequestedServerUrlIfNeeded, auth, authMode, nextPath, persistCurrentPendingRequest, processAuthUrl, publicKey, router, targetMachineId]);

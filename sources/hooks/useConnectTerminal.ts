@@ -14,6 +14,7 @@ import { authGetToken } from '@/auth/authGetToken';
 import { encodeBase64 } from '@/encryption/base64';
 import { getRandomBytesAsync } from 'expo-crypto';
 import { Encryption } from '@/sync/encryption/encryption';
+import { buildTerminalConnectUrl, isTerminalConnectUrl, parseTerminalConnectUrl, PRIMARY_TERMINAL_CONNECT_PREFIX } from '@/auth/deepLinkSchemes';
 
 interface UseConnectTerminalOptions {
     onSuccess?: () => void;
@@ -56,15 +57,15 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     const processAuthUrl = React.useCallback(async (url: string) => {
         console.log('[TERMINAL AUTH] 🔍 Processing terminal auth URL:', url);
 
-        if (!url.startsWith('happy://terminal?')) {
-            console.log('[TERMINAL AUTH] ❌ Invalid URL format - does not start with "happy://terminal?"');
+        const tail = parseTerminalConnectUrl(url);
+        if (!tail) {
+            console.log(`[TERMINAL AUTH] ❌ Invalid URL format - does not start with "${PRIMARY_TERMINAL_CONNECT_PREFIX}"`);
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
         }
 
         setIsLoading(true);
         try {
-            const tail = url.slice('happy://terminal?'.length);
             console.log('[TERMINAL AUTH] 📊 URL tail (base64url publicKey):', tail.substring(0, 20) + '...');
 
             const publicKey = decodeBase64(tail, 'base64url');
@@ -154,12 +155,12 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     React.useEffect(() => {
         if (CameraView.isModernBarcodeScannerAvailable) {
             const subscription = CameraView.onModernBarcodeScanned(async (event) => {
-                if (event.data.startsWith('happy://terminal?')) {
+                if (isTerminalConnectUrl(event.data)) {
                     // Dismiss scanner on Android is called automatically when barcode is scanned
                     if (Platform.OS === 'ios') {
                         await CameraView.dismissScanner();
                     }
-                    await processAuthUrl(event.data);
+                    await processAuthUrl(buildTerminalConnectUrl(parseTerminalConnectUrl(event.data)!));
                 }
             });
             return () => {

@@ -73,7 +73,7 @@ export default memo(function Restore() {
             t('home.addDeviceTitle'),
             undefined,
             {
-                placeholder: 'happy:///account?...',
+                placeholder: 'aha:///account?...',
                 cancelText: t('common.cancel'),
                 confirmText: t('common.authenticate'),
             }

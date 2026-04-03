@@ -9,6 +9,7 @@ import { useCheckScannerPermissions } from '@/hooks/useCheckCameraPermissions';
 import { QrScannerModal } from '@/components/qr/QrScannerModal';
 import { Modal } from '@/modal';
 import { t } from '@/text';
+import { isAccountConnectUrl, parseAccountConnectUrl, PRIMARY_ACCOUNT_CONNECT_PREFIX } from '@/auth/deepLinkSchemes';
 
 interface UseConnectAccountOptions {
     onSuccess?: () => void;
@@ -23,8 +24,9 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
     const processAuthUrl = React.useCallback(async (url: string) => {
         console.log('[AUTH] 🔍 Processing auth URL:', url);
 
-        if (!url.startsWith('happy:///account?')) {
-            console.log('[AUTH] ❌ Invalid URL format - does not start with "happy:///account?"');
+        const tail = parseAccountConnectUrl(url);
+        if (!tail) {
+            console.log(`[AUTH] ❌ Invalid URL format - does not start with "${PRIMARY_ACCOUNT_CONNECT_PREFIX}"`);
             console.log('[AUTH] URL received:', url);
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
@@ -32,7 +34,6 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
 
         setIsLoading(true);
         try {
-            const tail = url.slice('happy:///account?'.length);
             console.log('[AUTH] 📊 URL tail (base64url publicKey):', tail.substring(0, 20) + '...');
 
             const publicKey = decodeBase64(tail, 'base64url');
@@ -118,7 +119,7 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
     React.useEffect(() => {
         if (Platform.OS !== 'web' && CameraView.isModernBarcodeScannerAvailable) {
             const subscription = CameraView.onModernBarcodeScanned(async (event) => {
-                if (event.data.startsWith('happy:///account?')) {
+                if (isAccountConnectUrl(event.data)) {
                     // Dismiss scanner on Android is called automatically when barcode is scanned
                     if (Platform.OS === 'ios') {
                         await CameraView.dismissScanner();

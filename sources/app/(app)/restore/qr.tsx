@@ -16,6 +16,7 @@ import { goBackOrReturn } from '@/utils/returnNavigation';
 import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
+import { buildAccountConnectUrl } from '@/auth/deepLinkSchemes';
 
 export default memo(function RestoreQR() {
     const { theme } = useUnistyles();
@@ -29,7 +30,7 @@ export default memo(function RestoreQR() {
 
     const keypair = React.useMemo(() => generateAuthKeyPair(), []);
     const qrData = React.useMemo(
-        () => 'happy:///account?' + encodeBase64(keypair.publicKey, 'base64url'),
+        () => buildAccountConnectUrl(encodeBase64(keypair.publicKey, 'base64url')),
         [keypair],
     );
 
