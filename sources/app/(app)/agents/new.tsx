@@ -604,6 +604,7 @@ export default React.memo(function NewAgentScreen() {
         }
 
         setSaving(true);
+        let genomeId: string | null = null;
         try {
             const spec = buildManualAgentImage(manualDraft);
             const created = await createGenome(credentials, {
@@ -617,22 +618,30 @@ export default React.memo(function NewAgentScreen() {
                 origin: 'manual',
             });
 
-            let resolvedGenome = created.genome;
+            genomeId = created.genome.id;
             if (manualPublishNow) {
-                const published = await publishGenome(credentials, created.genome.id);
-                resolvedGenome = published.genome;
+                const published = await publishGenome(credentials, genomeId);
+                genomeId = published.genome.id;
             }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create agent';
+            await Modal.alert(t('common.error'), message);
+            setSaving(false);
+            return;
+        }
 
-            // If machine is selected, also spawn the agent immediately
-            if (selectedMachineId && cwd.trim()) {
+        // Spawn is best-effort — genome is already saved, navigate regardless
+        if (selectedMachineId && cwd.trim()) {
+            try {
                 const cwdValidationError = getConcatenatedPathErrorMessage(cwd.trim());
                 if (!cwdValidationError) {
+                    const spec = buildManualAgentImage(manualDraft);
                     const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
                         directory: cwd.trim(),
                         agent: manualDraft.runtime,
                         sessionTag: buildStandaloneSessionTag(),
                         role: spec.baseRoleId ?? manualDraft.roleId ?? 'agent',
-                        specId: resolvedGenome.id,
+                        specId: genomeId!,
                         sessionName: manualDraft.displayName.trim(),
                     });
                     if (sessionId) {
@@ -640,15 +649,13 @@ export default React.memo(function NewAgentScreen() {
                         sync.applySettings({ recentMachinePaths: updatedPaths });
                     }
                 }
+            } catch {
+                // Agent genome exists; user can spawn manually from agent detail page
             }
-
-            router.push({ pathname: '/agents/[id]', params: { id: resolvedGenome.id } } as any);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to create agent';
-            await Modal.alert(t('common.error'), message);
-        } finally {
-            setSaving(false);
         }
+
+        setSaving(false);
+        router.push({ pathname: '/agents/[id]', params: { id: genomeId! } } as any);
     }, [canCreateDraft, cwd, manualDraft, manualPublishNow, recentMachinePaths, router, saving, selectedMachineId]);
 
     const handleStartBuilderChat = React.useCallback(async () => {
@@ -829,6 +836,7 @@ export default React.memo(function NewAgentScreen() {
                                 key={machine.id}
                                 onPress={() => {
                                     if (!online) {
+                                        Modal.alert(t('common.error'), t('machine.offlineUnableToSpawn'));
                                         return;
                                     }
                                     setSelectedMachineId(machine.id);
@@ -1030,7 +1038,7 @@ export default React.memo(function NewAgentScreen() {
         </View>
     );
 
-    const desktopSecondaryPanel = isDesktopShell ? (
+    const desktopSecondaryPanel = isDesktopShell && mode !== 'market' ? (
         <View style={[styles.secondaryPanel, { backgroundColor: theme.colors.groupped.background }]}>
             <ScrollView
                 style={styles.secondaryScroll}
@@ -1263,6 +1271,7 @@ const styles = StyleSheet.create((theme) => ({
         gap: 8,
     },
     formRow: {
+        flexDirection: 'row',
         gap: 12,
     },
     formGroupHalf: {

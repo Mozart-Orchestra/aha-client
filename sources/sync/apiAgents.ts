@@ -19,6 +19,11 @@ export interface AgentRecord {
     status: 'active' | 'paused' | 'archived';
     metadata: Record<string, unknown>;
     type: 'standalone' | 'team';
+    lifecycle?: {
+        spawnRequestedAt?: number;
+        spawnedAt?: number;
+        runStatus?: string;
+    } | null;
     createdAt: number;
     updatedAt: number;
 }

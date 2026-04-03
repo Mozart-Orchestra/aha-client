@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import { useAuth } from '@/auth/AuthContext';
+import { getNeedsRestore, getNeedsRestoreReason } from '@/auth/AuthContext';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
 import {
@@ -236,6 +237,19 @@ const styles = StyleSheet.create((theme) => ({
         fontSize: 14,
         fontWeight: '700',
         color: theme.colors.textDestructive,
+    },
+    landingRestoreTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginTop: 8,
+    },
+    landingRestoreMessage: {
+        fontSize: 14,
+        lineHeight: 22,
+        color: theme.colors.textSecondary,
+        marginTop: 8,
+        marginBottom: 4,
     },
     landingTrustRow: {
         flexDirection: 'row',
@@ -463,6 +477,8 @@ function NotAuthenticated() {
 
     // Show fallback recovery UI only when automatic Google/email recovery cannot complete.
     const [emailLoginStep, setEmailLoginStep] = React.useState<'idle' | 'email' | 'otp'>('idle');
+    const [needsRestore, setNeedsRestoreState] = React.useState(getNeedsRestore());
+    const needsRestoreReason = needsRestore ? getNeedsRestoreReason() : null;
 
     const pageTitle = t('welcome.title');
     const pageSubtitle = t('welcome.subtitle');
@@ -604,7 +620,26 @@ function NotAuthenticated() {
                             <Text style={styles.landingTitle}>{pageTitle}</Text>
                             <Text style={styles.landingSubtitle}>{pageSubtitle}</Text>
 
-                            {emailLoginStep === 'idle' ? (
+                            {needsRestore ? (
+                                <View style={styles.landingActionsRow}>
+                                    <Text style={styles.landingRestoreTitle}>
+                                        {needsRestoreReason === 'recovery_not_ready'
+                                            ? t('welcome.restoreRecoveryNotReadyTitle')
+                                            : t('welcome.restoreRequired')}
+                                    </Text>
+                                    <Text style={styles.landingRestoreMessage}>
+                                        {needsRestoreReason === 'recovery_not_ready'
+                                            ? t('welcome.restoreRecoveryNotReadyMessage')
+                                            : t('welcome.restoreRequiredMessage')}
+                                    </Text>
+                                    <LandingButton
+                                        icon="logo-google"
+                                        title={t('welcome.switchGoogleAccount')}
+                                        onPress={handleGoogleLogin}
+                                        tone="secondary"
+                                    />
+                                </View>
+                            ) : emailLoginStep === 'idle' ? (
                                 <View style={styles.landingActionsRow}>
                                     <LandingButton
                                         icon="logo-google"
@@ -727,7 +762,26 @@ function NotAuthenticated() {
                 <Text style={styles.landingMobileTitle}>{pageTitle}</Text>
                 <Text style={styles.landingMobileSubtitle}>{pageSubtitle}</Text>
 
-                {emailLoginStep === 'idle' ? (
+                {needsRestore ? (
+                    <View style={styles.landingMobileActions}>
+                        <Text style={styles.landingRestoreTitle}>
+                            {needsRestoreReason === 'recovery_not_ready'
+                                ? t('welcome.restoreRecoveryNotReadyTitle')
+                                : t('welcome.restoreRequired')}
+                        </Text>
+                        <Text style={styles.landingRestoreMessage}>
+                            {needsRestoreReason === 'recovery_not_ready'
+                                ? t('welcome.restoreRecoveryNotReadyMessage')
+                                : t('welcome.restoreRequiredMessage')}
+                        </Text>
+                        <LandingButton
+                            icon="logo-google"
+                            title={t('welcome.switchGoogleAccount')}
+                            onPress={handleGoogleLogin}
+                            tone="secondary"
+                        />
+                    </View>
+                ) : emailLoginStep === 'idle' ? (
                     <View style={styles.landingMobileActions}>
                         <LandingButton
                             icon="logo-google"

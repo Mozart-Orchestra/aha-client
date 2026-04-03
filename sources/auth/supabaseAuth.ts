@@ -1,5 +1,4 @@
 import { supabase } from '@/auth/supabase';
-import { authChallenge } from '@/auth/authChallenge';
 import { authGetToken } from '@/auth/authGetToken';
 import { getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
@@ -13,12 +12,6 @@ import * as Linking from 'expo-linking';
 import { getServerUrl } from '@/sync/serverConfig';
 import axios from 'axios';
 import { getRandomBytesAsync } from 'expo-crypto';
-
-interface SupabaseLoginResult {
-    token: string;
-    userId: string;
-    recoveryReady: boolean;
-}
 
 interface SupabaseRecoveryResult {
     token: string;
@@ -251,41 +244,41 @@ export async function verifyEmailOtp(email: string, otp: string): Promise<void> 
  * Server verifies Supabase token + links/validates the account.
  * Returns only the happy-server token (secret never leaves client).
  */
-export async function exchangeSupabaseSession(accessToken: string, secret: Uint8Array): Promise<SupabaseLoginResult> {
+async function fetchWrappingPublicKey(token: string): Promise<Uint8Array | null> {
     const serverUrl = getServerUrl();
-    const { challenge, publicKey, signature } = authChallenge(secret);
-
     try {
-        const response = await axios.post(`${serverUrl}/v1/auth/supabase/exchange`, {
-            accessToken,
-            challenge: encodeBase64(challenge),
-            publicKey: encodeBase64(publicKey),
-            signature: encodeBase64(signature),
-            contentSecretKey: encodeBase64(secret),
-        });
-
-        return {
-            token: response.data.token,
-            userId: response.data.userId,
-            recoveryReady: !!response.data.recoveryReady,
-        };
-    } catch (error) {
-        if (axios.isAxiosError(error) && error.response?.status === 409) {
-            const code = error.response.data?.code;
-            if (code === 'RESTORE_REQUIRED') {
-                throw new SupabaseRestoreRequiredError();
-            }
-            if (code === 'ACCOUNT_LINK_CONFLICT') {
-                throw new SupabaseAccountLinkConflictError();
-            }
-            // v3-online-001: secret proof doesn't match the bound account.
-            // Ask the user to finish linking from another signed-in device.
-            if (code === 'secret-proof-mismatch' || code === 'secret-proof-required') {
-                throw new SupabaseRecoveryNotReadyError();
-            }
-        }
-        throw error;
+        const response = await axios.get<{ wrappingPublicKey: string }>(
+            `${serverUrl}/v1/auth/wrapping-key`,
+            { headers: { Authorization: `Bearer ${token}` } },
+        );
+        return decodeBase64(response.data.wrappingPublicKey);
+    } catch {
+        return null;
     }
+}
+
+async function buildSupabaseCompleteSecretPayload(accessToken: string, contentSecretKey: Uint8Array): Promise<Record<string, string>> {
+    const wrappingPublicKey = await fetchWrappingPublicKey(accessToken);
+    if (!wrappingPublicKey) {
+        return {
+            newContentSecretKey: encodeBase64(contentSecretKey),
+        };
+    }
+
+    const ephemeral = sodium.crypto_box_keypair();
+    const nonce = await getRandomBytesAsync(sodium.crypto_box_NONCEBYTES);
+    const ciphertext = sodium.crypto_box_easy(
+        contentSecretKey,
+        nonce,
+        wrappingPublicKey,
+        ephemeral.privateKey,
+    );
+
+    return {
+        newEncryptedContentSecretKey: encodeBase64(ciphertext),
+        newNonce: encodeBase64(nonce),
+        newEphemeralPublicKey: encodeBase64(ephemeral.publicKey),
+    };
 }
 
 export async function recoverSupabaseSession(accessToken: string): Promise<SupabaseRecoveryResult> {
@@ -327,15 +320,20 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
     const keypair = generateAuthKeyPair();
     const newSecret = await getRandomBytesAsync(32);
     const legacyLinkProof = await getLegacyLinkProofForSupabaseComplete();
+    const secretPayload = await buildSupabaseCompleteSecretPayload(accessToken, newSecret);
 
     try {
-        const response = await axios.post<SupabaseCompleteResponse>(`${serverUrl}/v1/auth/supabase/complete`, {
+        const requestBody: Record<string, unknown> = {
             accessToken,
             recoveryPublicKey: encodeBase64(keypair.publicKey),
-            newContentSecretKey: encodeBase64(newSecret),
-            legacyPublicKey: legacyLinkProof?.legacyPublicKey ?? null,
-            legacyAuthToken: legacyLinkProof?.legacyAuthToken ?? null,
-        });
+            ...secretPayload,
+            ...(legacyLinkProof ? {
+                legacyPublicKey: legacyLinkProof.legacyPublicKey ?? null,
+                legacyAuthToken: legacyLinkProof.legacyAuthToken ?? null,
+            } : {}),
+        };
+
+        const response = await axios.post<SupabaseCompleteResponse>(`${serverUrl}/v1/auth/supabase/complete`, requestBody);
 
         if (response.data.state === 'existing_recovered') {
             const encryptedContentSecretKey = response.data.encryptedContentSecretKey
@@ -401,14 +399,37 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
 
 export async function bootstrapRecoveryMaterial(token: string, secretBase64: string): Promise<void> {
     const serverUrl = getServerUrl();
-    const contentSecretKey = encodeBase64(decodeBase64(secretBase64, 'base64url'));
-    await axios.post(`${serverUrl}/v1/account/recovery-material`, {
-        contentSecretKey,
-    }, {
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
-    });
+    const contentSecretKey = decodeBase64(secretBase64, 'base64url');
+    const wrappingPublicKey = await fetchWrappingPublicKey(token);
+
+    if (wrappingPublicKey) {
+        const ephemeral = sodium.crypto_box_keypair();
+        const nonce = await getRandomBytesAsync(sodium.crypto_box_NONCEBYTES);
+        const ciphertext = sodium.crypto_box_easy(
+            contentSecretKey,
+            nonce,
+            wrappingPublicKey,
+            ephemeral.privateKey,
+        );
+
+        await axios.post(`${serverUrl}/v1/account/recovery-material`, {
+            encryptedContentSecretKey: encodeBase64(ciphertext),
+            nonce: encodeBase64(nonce),
+            ephemeralPublicKey: encodeBase64(ephemeral.publicKey),
+        }, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+    } else {
+        await axios.post(`${serverUrl}/v1/account/recovery-material`, {
+            contentSecretKey: encodeBase64(contentSecretKey),
+        }, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+    }
 }
 
 /**
