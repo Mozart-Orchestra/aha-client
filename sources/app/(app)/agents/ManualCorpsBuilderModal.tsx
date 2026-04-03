@@ -19,6 +19,7 @@ import type { Machine } from '@/sync/storageTypes';
 import { getLocalizedTeamRoles } from '@/team-config/i18n';
 import { t } from '@/text';
 import { fetchGenomeByName, parseAgentVerdict, type GenomeRecord } from '@/utils/genomeHub';
+import { resolveImageRef } from '@/utils/imageRef';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { getRoleVisual } from '@/utils/roleVisualUtils';
@@ -63,9 +64,11 @@ function buildSeatFromRole(
     return {
         id: randomUUID(),
         genomeId: genome?.id ?? null,
+        sourceImageId: genome?.id ?? null,
         genomeName: genome?.name ?? role.title,
         genomeNamespace: genome?.namespace ?? '@official',
         genomeVersion: genome?.version ?? null,
+        sourceImageVersion: genome?.version ?? null,
         genomeDisplayName: genome?.name ?? role.title,
         roleId: role.id,
         displayName: role.title,
@@ -554,9 +557,15 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
             const machineId = seat.machineId ?? defaultMachineId;
             const workspacePath = seat.workspacePath.trim() || defaultWorkspacePath.trim();
             const machine = machineId ? machines.find((item) => item.id === machineId) ?? null : null;
+            const imageRef = resolveImageRef({
+                sourceImageId: seat.sourceImageId ?? null,
+                sourceImageVersion: seat.sourceImageVersion ?? null,
+                genomeId: seat.genomeId,
+                genomeVersion: seat.genomeVersion,
+            });
 
             return Boolean(
-                seat.genomeId
+                imageRef?.id
                 && machineId
                 && workspacePath
                 && machine
@@ -665,21 +674,35 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
                 ...(draft.target.trim() ? { description: draft.target.trim(), target: draft.target.trim() } : {}),
                 machineId: defaultMachineId ?? undefined,
                 workspacePath: defaultWorkspacePath.trim() || undefined,
-                seats: draft.seats.map((seat) => ({
-                    id: seat.id,
-                    genomeId: seat.genomeId!,
-                    genomeName: seat.genomeName,
-                    genomeNamespace: seat.genomeNamespace,
-                    genomeVersion: seat.genomeVersion,
-                    genomeDisplayName: seat.genomeDisplayName,
-                    roleId: seat.roleId,
-                    displayName: seat.displayName || seat.roleId,
-                    runtimeType: seat.runtimeType,
-                    machineId: seat.machineId ?? defaultMachineId,
-                    workspacePath: seat.workspacePath.trim() || defaultWorkspacePath.trim(),
-                    quantity: seat.quantity,
-                    customPrompt: seat.customPrompt.trim() || undefined,
-                })),
+                seats: draft.seats.map((seat) => {
+                    const imageRef = resolveImageRef({
+                        sourceImageId: seat.sourceImageId ?? null,
+                        sourceImageVersion: seat.sourceImageVersion ?? null,
+                        genomeId: seat.genomeId,
+                        genomeVersion: seat.genomeVersion,
+                    });
+                    if (!imageRef) {
+                        throw new Error(`Missing image reference for seat ${seat.roleId}`);
+                    }
+
+                    return {
+                        id: seat.id,
+                        genomeId: imageRef.id,
+                        sourceImageId: imageRef.id,
+                        genomeName: seat.genomeName,
+                        genomeNamespace: seat.genomeNamespace,
+                        genomeVersion: imageRef.version ?? null,
+                        sourceImageVersion: imageRef.version ?? null,
+                        genomeDisplayName: seat.genomeDisplayName,
+                        roleId: seat.roleId,
+                        displayName: seat.displayName || seat.roleId,
+                        runtimeType: seat.runtimeType,
+                        machineId: seat.machineId ?? defaultMachineId,
+                        workspacePath: seat.workspacePath.trim() || defaultWorkspacePath.trim(),
+                        quantity: seat.quantity,
+                        customPrompt: seat.customPrompt.trim() || undefined,
+                    };
+                }),
             });
 
             const failures: string[] = [];
@@ -688,13 +711,22 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
 
             for (const plannedMember of result.plannedMembers) {
                 try {
+                    const imageRef = resolveImageRef({
+                        sourceImageId: plannedMember.sourceImageId,
+                        sourceImageVersion: plannedMember.sourceImageVersion ?? null,
+                        genomeId: plannedMember.genomeId,
+                    });
                     const spawnResult = await sync.spawnSessionOnMachine(plannedMember.machineId, {
                         directory: plannedMember.workspacePath,
                         agent: plannedMember.runtimeType,
                         sessionTag: plannedMember.sessionTag,
                         teamId: result.team.id,
                         role: plannedMember.roleId,
-                        specId: plannedMember.genomeId,
+                        ...(imageRef ? {
+                            specId: imageRef.id,
+                            sourceImageId: imageRef.id,
+                            sourceImageVersion: imageRef.version,
+                        } : {}),
                         sessionName: plannedMember.displayName,
                         sessionPath: plannedMember.workspacePath,
                         env: {
@@ -716,8 +748,11 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
                             memberId: plannedMember.memberId,
                             sessionTag: plannedMember.sessionTag,
                             candidateId: plannedMember.candidateId,
-                            specId: plannedMember.genomeId,
-                            sourceImageId: plannedMember.genomeId,
+                            ...(imageRef ? {
+                                specId: imageRef.id,
+                                sourceImageId: imageRef.id,
+                                sourceImageVersion: imageRef.version,
+                            } : {}),
                             runtimeType: plannedMember.runtimeType,
                             machineId: plannedMember.machineId,
                             workspacePath: plannedMember.workspacePath,

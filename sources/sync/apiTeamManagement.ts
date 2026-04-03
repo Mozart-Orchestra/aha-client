@@ -141,6 +141,8 @@ export interface CreateCorpsResponse {
         roleId: string;
         displayName: string;
         genomeId: string;
+        sourceImageId: string;
+        sourceImageVersion?: number | null;
         candidateId: string;
         runtimeType: 'claude' | 'codex';
         machineId: string;

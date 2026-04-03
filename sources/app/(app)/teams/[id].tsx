@@ -61,6 +61,7 @@ import { t } from '@/text';
 import { getActiveTaskForSession } from '@/utils/teamActiveTask';
 import { compareTeamRosterEntries } from '@/utils/teamRoster';
 import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
+import { resolveImageRef } from '@/utils/imageRef';
 import { getServerUrl } from '@/sync/serverConfig';
 import { fetchBypassAgents, type BypassAgent } from '@/sync/apiEvolution';
 import { stylesheet } from './teamStyles';
@@ -614,6 +615,13 @@ export default function TeamDashboardScreen() {
                 const sessionTag = member.sessionTag || buildTeamMemberSessionTag(teamId, memberId);
                 const runtimeType = member.runtimeType === 'codex' ? 'codex' : 'claude';
                 const sessionName = member.displayName || session?.metadata?.name || label;
+                const imageRef = resolveImageRef({
+                    sourceImageId: member.sourceImageId ?? null,
+                    sourceImageVersion: member.sourceImageVersion ?? null,
+                    genomeId: member.genomeId ?? null,
+                    genomeVersion: member.genomeVersion ?? null,
+                    specId: member.specId ?? null,
+                });
 
                 if (session?.active) {
                     if (!member.memberId || !member.sessionTag) {
@@ -621,7 +629,11 @@ export default function TeamDashboardScreen() {
                             memberId,
                             sessionTag,
                             candidateId: member.candidateId,
-                            specId: member.specId,
+                            ...(imageRef ? {
+                                specId: imageRef.id,
+                                sourceImageId: imageRef.id,
+                                sourceImageVersion: imageRef.version,
+                            } : {}),
                             customPrompt: member.customPrompt,
                             parentSessionId: member.parentSessionId,
                             executionPlane: member.executionPlane,
@@ -661,7 +673,11 @@ export default function TeamDashboardScreen() {
                         role: member.roleId,
                         sessionName,
                         sessionPath: directory,
-                        ...(member.specId ? { specId: member.specId } : {}),
+                        ...(imageRef ? {
+                            specId: imageRef.id,
+                            sourceImageId: imageRef.id,
+                            sourceImageVersion: imageRef.version,
+                        } : {}),
                         ...(member.parentSessionId ? { parentSessionId: member.parentSessionId } : {}),
                         ...(member.executionPlane ? { executionPlane: member.executionPlane as 'mainline' | 'bypass' } : {}),
                         env: {
@@ -680,7 +696,11 @@ export default function TeamDashboardScreen() {
                             memberId,
                             sessionTag,
                             candidateId: member.candidateId,
-                            specId: member.specId,
+                            ...(imageRef ? {
+                                specId: imageRef.id,
+                                sourceImageId: imageRef.id,
+                                sourceImageVersion: imageRef.version,
+                            } : {}),
                             customPrompt: member.customPrompt,
                             parentSessionId: member.parentSessionId,
                             executionPlane: member.executionPlane,
@@ -1675,31 +1695,41 @@ export default function TeamDashboardScreen() {
                                 return null;
                         }
                     })()}
-                    items={roster.map((entry) => ({
-                        presenceLabel: (() => {
-                            if (!entry.session) return 'Offline';
-                            const visual = getAgentPresenceVisual({ active: entry.session.active ?? false, activeAt: entry.session.activeAt ?? 0 });
-                            switch (visual.state) {
-                                case 'online':
-                                    return 'Online';
-                                case 'stale':
-                                    return 'Stale';
-                                case 'dead':
-                                    return 'Ended';
-                                default:
-                                    return 'Offline';
-                            }
-                        })(),
-                        sessionId: entry.member.sessionId,
-                        specId: entry.member.specId ?? null,
-                        displayName: entry.member.displayName || entry.session?.metadata?.name || entry.role?.title || entry.member.sessionId,
-                        roleLabel: entry.role?.title || entry.member.roleId || entry.session?.metadata?.role || undefined,
-                        runtimeType: entry.member.runtimeType || entry.session?.metadata?.flavor || null,
-                        modelLabel: entry.session?.metadata?.resolvedModel || null,
-                        sessionPath: entry.session?.metadata?.path || null,
-                        activeTaskTitle: entry.activeTask?.title || null,
-                        isOnline: !!entry.session?.active,
-                    }))}
+                    items={roster.map((entry) => {
+                        const imageRef = resolveImageRef({
+                            sourceImageId: entry.member.sourceImageId ?? null,
+                            sourceImageVersion: entry.member.sourceImageVersion ?? null,
+                            genomeId: entry.member.genomeId ?? null,
+                            genomeVersion: entry.member.genomeVersion ?? null,
+                            specId: entry.member.specId ?? null,
+                        });
+
+                        return {
+                            presenceLabel: (() => {
+                                if (!entry.session) return 'Offline';
+                                const visual = getAgentPresenceVisual({ active: entry.session.active ?? false, activeAt: entry.session.activeAt ?? 0 });
+                                switch (visual.state) {
+                                    case 'online':
+                                        return 'Online';
+                                    case 'stale':
+                                        return 'Stale';
+                                    case 'dead':
+                                        return 'Ended';
+                                    default:
+                                        return 'Offline';
+                                }
+                            })(),
+                            sessionId: entry.member.sessionId,
+                            specId: imageRef?.id ?? null,
+                            displayName: entry.member.displayName || entry.session?.metadata?.name || entry.role?.title || entry.member.sessionId,
+                            roleLabel: entry.role?.title || entry.member.roleId || entry.session?.metadata?.role || undefined,
+                            runtimeType: entry.member.runtimeType || entry.session?.metadata?.flavor || null,
+                            modelLabel: entry.session?.metadata?.resolvedModel || null,
+                            sessionPath: entry.session?.metadata?.path || null,
+                            activeTaskTitle: entry.activeTask?.title || null,
+                            isOnline: !!entry.session?.active,
+                        };
+                    })}
                     onAddAgent={handleOpenAgentLibrary}
                     onOpenSession={handleOpenAgentRosterSession}
                     onRenameSession={(sessionId, displayName) => {

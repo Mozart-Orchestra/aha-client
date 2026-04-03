@@ -12,9 +12,11 @@ const RecentMachinePathSchema = z.object({
 export const ManualCorpsSeatConfigSchema = z.object({
     id: z.string(),
     genomeId: z.string().nullable(),
+    sourceImageId: z.string().nullable().optional(),
     genomeName: z.string().nullable(),
     genomeNamespace: z.string().nullable(),
     genomeVersion: z.number().int().positive().nullable(),
+    sourceImageVersion: z.number().int().positive().nullable().optional(),
     genomeDisplayName: z.string().nullable(),
     roleId: z.string(),
     displayName: z.string(),

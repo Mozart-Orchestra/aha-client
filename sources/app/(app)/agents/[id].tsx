@@ -71,6 +71,7 @@ import { DeployCorpsModal } from './DeployCorpsModal';
 import { RunStandaloneModal } from './RunStandaloneModal';
 import { JoinTeamModal } from './JoinTeamModal';
 import { getAgent, type AgentDetailRecord } from '@/sync/apiAgents';
+import { resolveImageRef } from '@/utils/imageRef';
 import {
     fetchEntityTrials,
     fetchTrialVerdicts,
@@ -295,8 +296,16 @@ export default React.memo(function AgentDetailScreen() {
                     setLoading(false);
                 }
 
-                if (!cancelled && credentials && agent?.genomeId) {
-                    fetchAccessibleGenomeById(agent.genomeId, {
+                const agentImageRef = agent
+                    ? resolveImageRef({
+                        sourceImageId: agent.sourceImageId ?? null,
+                        sourceImageVersion: agent.sourceImageVersion ?? null,
+                        genomeId: agent.genomeId ?? null,
+                    })
+                    : null;
+
+                if (!cancelled && credentials && agentImageRef?.id) {
+                    fetchAccessibleGenomeById(agentImageRef.id, {
                         credentials,
                         fetchPublicGenomeById: fetchGenomeById,
                     }).then((resolvedGenome) => {

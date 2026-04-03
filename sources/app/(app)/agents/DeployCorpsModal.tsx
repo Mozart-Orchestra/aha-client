@@ -22,6 +22,7 @@ import {
     parseCorpsGenomeRef,
 } from '@/utils/corpsDeployment';
 import { fetchGenomeByName, parseLegionImage, parseAgentImage, type GenomeRecord } from '@/utils/genomeHub';
+import { resolveImageRef } from '@/utils/imageRef';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
@@ -132,6 +133,10 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
             for (const plan of memberPlans) {
                 const matchedGenome = genomesByRef.get(plan.genomeRef) ?? null;
                 const matchedSpec = matchedGenome ? parseAgentImage(matchedGenome.spec) : null;
+                const imageRef = resolveImageRef({
+                    sourceImageId: matchedGenome?.id ?? null,
+                    sourceImageVersion: matchedGenome?.version ?? null,
+                });
                 const runtimeType = matchedSpec?.runtimeType === 'codex' ? 'codex' : 'claude';
                 const memberId = randomUUID();
                 const sessionTag = buildTeamMemberSessionTag(teamId, memberId);
@@ -145,7 +150,11 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                         role: plan.roleId,
                         sessionName: plan.displayName,
                         sessionPath: cwd.trim(),
-                        ...(matchedGenome ? { specId: matchedGenome.id } : {}),
+                        ...(imageRef ? {
+                            specId: imageRef.id,
+                            sourceImageId: imageRef.id,
+                            sourceImageVersion: imageRef.version,
+                        } : {}),
                         env: {
                             AHA_TEAM_MEMBER_ID: memberId,
                         },
@@ -173,7 +182,13 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                                 },
                             }
                             : {}),
-                        ...(matchedGenome ? { specId: matchedGenome.id } : {}),
+                        ...(imageRef ? {
+                            specId: imageRef.id,
+                            sourceImageId: imageRef.id,
+                            sourceImageVersion: imageRef.version,
+                            genomeId: imageRef.id,
+                            genomeVersion: imageRef.version,
+                        } : {}),
                         runtimeType,
                         machineId: selectedMachineId,
                         workspacePath: cwd.trim(),

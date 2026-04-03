@@ -23,6 +23,7 @@ import { HappyError } from '@/utils/errors';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { getSingleRouteParam, goBackOrReturn } from '@/utils/returnNavigation';
 import { fetchGenomeById, parseAgentImage, type AgentImage, type GenomeRecord } from '@/utils/genomeHub';
+import { resolveImageRef } from '@/utils/imageRef';
 import { getGenomeScoreSummary } from '@/utils/genomeScoreSummary';
 import { getGenomeVersionIdentity, stringifyGenomeSpec } from '@/utils/genomeObservability';
 import { type KanbanBoard } from '@/sync/kanbanTypes';
@@ -81,13 +82,19 @@ function useGenomeForSession(session: Session): { genome: GenomeRecord | null; s
     const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
     const [loading, setLoading] = React.useState(false);
 
-    // Path 1: team kanban board member specId
-    const boardSpecId = React.useMemo(() => {
+    // Path 1: team kanban board member ImageRef
+    const boardImageRef = React.useMemo(() => {
         if (!artifact?.body) return null;
         try {
             const board = JSON.parse(artifact.body) as KanbanBoard;
             const member = board.team?.members?.find(m => m.sessionId === session.id);
-            return member?.specId ?? null;
+            return resolveImageRef({
+                sourceImageId: member?.sourceImageId ?? null,
+                sourceImageVersion: member?.sourceImageVersion ?? null,
+                genomeId: member?.genomeId ?? null,
+                genomeVersion: member?.genomeVersion ?? null,
+                specId: member?.specId ?? null,
+            });
         } catch {
             return null;
         }
@@ -97,12 +104,18 @@ function useGenomeForSession(session: Session): { genome: GenomeRecord | null; s
         let cancelled = false;
 
         const resolveSpecId = async (): Promise<string | null> => {
-            // Path 1: team kanban board member specId
-            if (boardSpecId) return boardSpecId;
+            // Path 1: team kanban board member ImageRef
+            if (boardImageRef?.id) return boardImageRef.id;
 
-            // Path 2: session.metadata.genomeId (set by daemon for standalone agents)
-            const metaGenomeId = (session.metadata as any)?.genomeId as string | undefined;
-            if (metaGenomeId) return metaGenomeId;
+            // Path 2: session metadata image identity
+            const metaImageRef = resolveImageRef({
+                sourceImageId: (session.metadata as any)?.sourceImageId as string | undefined,
+                sourceImageVersion: (session.metadata as any)?.sourceImageVersion as number | undefined,
+                genomeId: (session.metadata as any)?.genomeId as string | undefined,
+                genomeVersion: (session.metadata as any)?.genomeVersion as number | undefined,
+                specId: (session.metadata as any)?.specId as string | undefined,
+            });
+            if (metaImageRef?.id) return metaImageRef.id;
 
             // Path 3: listAgents fallback — find standalone agent by sessionId
             const creds = sync.getCredentials();
@@ -110,7 +123,11 @@ function useGenomeForSession(session: Session): { genome: GenomeRecord | null; s
             try {
                 const { agents } = await listAgents(creds, { type: 'standalone', limit: 100 });
                 const match = agents.find(a => a.sessionId === session.id);
-                return match?.genomeId ?? null;
+                return resolveImageRef({
+                    sourceImageId: match?.sourceImageId ?? null,
+                    sourceImageVersion: match?.sourceImageVersion ?? null,
+                    genomeId: match?.genomeId ?? null,
+                })?.id ?? null;
             } catch {
                 return null;
             }
@@ -143,7 +160,7 @@ function useGenomeForSession(session: Session): { genome: GenomeRecord | null; s
         });
 
         return () => { cancelled = true; };
-    }, [boardSpecId, session.id, session.metadata]);
+    }, [boardImageRef, session.id, session.metadata]);
 
     const spec = React.useMemo(() => {
         if (!genome?.spec) return null;
@@ -355,7 +372,14 @@ function InternalIdentityPanel({ session }: { session: Session }) {
     }, [artifact?.body, session.id]);
 
     const candidateId = member?.candidateId ?? (session.metadata as any)?.candidateId ?? null;
-    const specId = member?.specId ?? (session.metadata as any)?.genomeId ?? null;
+    const imageRef = resolveImageRef({
+        sourceImageId: member?.sourceImageId ?? null,
+        sourceImageVersion: member?.sourceImageVersion ?? ((session.metadata as any)?.sourceImageVersion as number | undefined) ?? null,
+        genomeId: member?.genomeId ?? (session.metadata as any)?.genomeId ?? null,
+        genomeVersion: member?.genomeVersion ?? ((session.metadata as any)?.genomeVersion as number | undefined) ?? null,
+        specId: member?.specId ?? (session.metadata as any)?.specId ?? null,
+    });
+    const specId = imageRef?.id ?? null;
     const parentSessionId = member?.parentSessionId ?? null;
 
     if (!candidateId && !specId && !parentSessionId) {

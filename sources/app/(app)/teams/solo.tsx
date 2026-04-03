@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { listAgents, AgentRecord } from '@/sync/apiAgents';
 import { t } from '@/text';
 import { getStandaloneAgentStatusVisual } from '@/utils/standaloneAgentStatus';
+import { resolveImageRef } from '@/utils/imageRef';
 
 /**
  * Solo Agents detail page — /teams/solo
@@ -59,8 +60,13 @@ export default React.memo(function SoloAgentsScreen() {
 
     const handleAgentPress = React.useCallback((agent: AgentRecord) => {
         if (agent.sessionId) {
-            const path = agent.genomeId
-                ? `/session/${agent.sessionId}?specId=${agent.genomeId}`
+            const imageRef = resolveImageRef({
+                sourceImageId: agent.sourceImageId ?? null,
+                sourceImageVersion: agent.sourceImageVersion ?? null,
+                genomeId: agent.genomeId ?? null,
+            });
+            const path = imageRef?.id
+                ? `/session/${agent.sessionId}?specId=${imageRef.id}`
                 : `/session/${agent.sessionId}`;
             router.push(path as any);
         }
