@@ -69,16 +69,188 @@ export interface SupervisorStateResponse {
     state: SupervisorStateSummary | null;
 }
 
+/**
+ * Compatibility projection of a stored genome spec.
+ *
+ * Canonical authoring truth is `agent.json v1`, but the server and UI still
+ * exchange a flattened AgentImage-style projection in many paths.
+ * Keep this surface broad enough that kanban does not silently erase fields
+ * that the builder/runtime/tooling already understand.
+ */
 export interface AgentImage {
+    // Tier 0 — identity
+    displayName?: string;
+    description?: string;
+    baseRoleId?: string;
+    namespace?: string;
+    version?: number;
+    tags?: string[];
+    category?: string;
+    runtimeType?: 'claude' | 'codex' | 'open-code';
+
+    // Legacy compatibility aliases still seen on older read paths.
     roleId?: string;
-    systemPrompt?: string;
-    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'read-only' | 'safe-yolo' | 'yolo';
     tools?: string[];
-    modelId?: string;
     workingDirectory?: string;
     customPrompts?: string[];
-    tags?: string[];
-    version?: number;
+
+    // Tier 1 — prompt / collaboration contract
+    systemPrompt?: string;
+    systemPromptSuffix?: string;
+    responsibilities?: string[];
+    protocol?: string[];
+    capabilities?: string[];
+    authorities?: string[];
+    contextInjections?: Array<{
+        trigger: 'on_join' | 'per_tool_call' | 'on_context_threshold' | 'on_resume';
+        threshold?: number;
+        content: string;
+    }>;
+    teamRole?: string;
+    handoffProtocol?: string[];
+    messaging?: {
+        listenFrom?: string[] | '*';
+        receiveUserMessages?: boolean;
+        replyMode?: 'proactive' | 'responsive' | 'passive';
+    };
+    behavior?: {
+        onIdle?: 'wait' | 'self-assign' | 'ask';
+        onBlocked?: 'report' | 'escalate' | 'retry';
+        canSpawnAgents?: boolean;
+        requireExplicitAssignment?: boolean;
+        lifecycle?: 'single-shot' | 'persistent' | 'on-demand';
+        autoRetireAfterComplete?: boolean;
+    };
+
+    // Tier 2 — model / routing
+    modelId?: string;
+    fallbackModelId?: string;
+    modelProvider?: 'anthropic' | 'zhipu' | 'openai' | 'local' | string;
+    preferredModel?: string;
+    modelScores?: Record<string, number>;
+
+    // Tier 3 — tool / runtime execution
+    allowedTools?: string[];
+    disallowedTools?: string[];
+    mcpServers?: string[];
+    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'read-only' | 'safe-yolo' | 'yolo';
+    accessLevel?: 'read-only' | 'full-access';
+    executionPlane?: 'mainline' | 'bypass';
+    maxTurns?: number;
+    hooks?: {
+        preToolUse?: Array<{ matcher: string; command: string; description?: string }>;
+        postToolUse?: Array<{ matcher: string; command: string; description?: string }>;
+        stop?: Array<{ command: string; description?: string }>;
+    };
+    skills?: string[];
+
+    // Tier 4 — memory / governance / validation
+    memory?: {
+        type?: 'session' | 'persistent' | 'shared';
+        learnings?: string[];
+        iterationGuide?: {
+            recentChanges?: string[];
+            discoveries?: string[];
+            improvements?: string[];
+        };
+        knowledgeBase?: string[];
+    };
+    scopeOfResponsibility?: {
+        ownedPaths?: string[];
+        forbiddenPaths?: string[];
+        outOfScope?: string[];
+    };
+    resume?: {
+        specialties?: string[];
+        workHistory?: Array<{
+            project?: string;
+            domain?: string;
+            tasksCompleted?: number;
+            avgScore?: number;
+            period?: string;
+        }>;
+        performanceRating?: number;
+        totalSessions?: number;
+        reviews?: string[];
+    };
+    operations?: {
+        commonPatterns?: string[];
+        recentChanges?: string[];
+        runtimeConfig?: string;
+    };
+    compatibility?: {
+        worksWellWith?: string[];
+        requiredMcpServers?: string[];
+        requiredEnvVars?: string[];
+        minContextTokens?: number;
+    };
+    validation?: {
+        smokeTest?: {
+            requiredTools?: string[];
+            requiredFiles?: string[];
+            healthChecks?: string[];
+        };
+        minVerifiedScore?: number;
+        minEvaluations?: number;
+    };
+    resourceBudget?: {
+        estimatedTokensPerTask?: number;
+        contextWindowSize?: 'small' | 'medium' | 'large';
+        concurrencyCapable?: boolean;
+    };
+
+    // Tier 5 — lifecycle / provenance / triggers
+    schedule?: {
+        interval?: string;
+        maxConcurrent?: number;
+        enabled?: boolean;
+    };
+    onMessage?: {
+        patterns?: string[];
+        senderRoles?: string[];
+        priority?: 'normal' | 'high' | 'urgent';
+    };
+    onTaskChange?: {
+        events?: Array<'created' | 'assigned' | 'blocked' | 'review' | 'completed'>;
+        assignedOnly?: boolean;
+    };
+    trigger?: {
+        mode: 'mention' | 'task-assign' | 'scheduled' | 'event';
+        conditions?: string[];
+    };
+    provenance?: {
+        parentId?: string;
+        mutationNote?: string;
+        origin?: 'original' | 'forked' | 'mutated';
+    };
+    evalCriteria?: string[];
+    costProfile?: {
+        typicalTokens?: number;
+        contextWindowReq?: number;
+    };
+    lifecycle?: 'experimental' | 'active' | 'deprecated';
+
+    // Canonical agent.json blocks preserved opaquely or semi-structured.
+    env?: {
+        requiredEnv?: string[];
+        optionalEnv?: string[];
+        required?: string[];
+        optional?: string[];
+        secretsPolicy?: string[];
+        [key: string]: unknown;
+    };
+    evaluation?: Record<string, unknown>;
+    evolution?: Record<string, unknown>;
+    market?: Record<string, unknown>;
+    package?: Record<string, unknown>;
+    files?: Record<string, string>;
+    workspace?: {
+        defaultMode?: 'shared' | 'isolated';
+        allowedModes?: Array<'shared' | 'isolated'>;
+        [key: string]: unknown;
+    };
+
+    meta?: Record<string, unknown>;
 }
 
 export type AgentSpec = AgentImage;
@@ -93,7 +265,7 @@ export interface Genome {
     status?: 'draft' | 'unverified' | 'verified' | 'official' | 'archived';
     description: string | null;
     spec: string;   // JSON string of AgentImage
-    parentSessionId: string;
+    parentSessionId: string | null;
     teamId: string | null;
     tags?: string | null;
     category?: string | null;

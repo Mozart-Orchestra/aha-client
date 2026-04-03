@@ -25,14 +25,16 @@ import { useAllMachines, useSessionMessages, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
+import { fetchGenomeByName } from '@/utils/genomeHub';
 import {
     buildManualAgentImage,
-    buildPrivateAgentBuilderImage,
     buildPrivateAgentBuilderKickoff,
+    getOfficialBuilderDisplayName,
+    getOfficialBuilderRoleId,
     mergeManualDraftUpdate,
+    parseAgentSpecSyncComment,
     parseManualDraftSyncComment,
     slugifyAgentName,
-    PRIVATE_AGENT_BUILDER_VERSION,
     type ManualAgentCategory,
     type ManualAgentDraft,
     type ManualAgentRuntime,
@@ -78,8 +80,6 @@ const DEFAULT_MANUAL_DRAFT: ManualAgentDraft = {
     kanbanBoardAuthority: false,
 };
 
-const PRIVATE_BUILDER_NAME = `Agent Creator V${PRIVATE_AGENT_BUILDER_VERSION}`;
-
 function buildStandaloneSessionTag() {
     return `standalone:${randomUUID()}`;
 }
@@ -89,6 +89,144 @@ function splitDraftList(value: string): string[] {
         .split(/\n|,/g)
         .map((entry) => entry.trim())
         .filter(Boolean);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function asStringList(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+
+    const items = value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean);
+
+    return items.length > 0 ? items : undefined;
+}
+
+function parseBuilderSpecJson(specJson: string | null): Record<string, unknown> | null {
+    if (!specJson) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(specJson);
+        return isRecord(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+function extractCreateMetadataFromSpec(specJson: string | null) {
+    const parsed = parseBuilderSpecJson(specJson);
+    const market = isRecord(parsed?.market) ? parsed.market : null;
+
+    return {
+        parsed,
+        name: asNonEmptyString(parsed?.name),
+        displayName: asNonEmptyString(parsed?.displayName) ?? asNonEmptyString(parsed?.name),
+        description: asNonEmptyString(parsed?.description),
+        category: asNonEmptyString(parsed?.category) ?? asNonEmptyString(market?.category),
+        tags: asStringList(parsed?.tags) ?? asStringList(market?.tags),
+        baseRoleId: asNonEmptyString(parsed?.baseRoleId),
+    };
+}
+
+type BuilderSpecChecklistKey =
+    | 'identity'
+    | 'prompt'
+    | 'tools'
+    | 'permissions'
+    | 'behavior'
+    | 'packaging'
+    | 'extras';
+
+type BuilderSpecStatus = {
+    hasSpec: boolean;
+    isCanonical: boolean;
+    runtime: string | null;
+    checks: Record<BuilderSpecChecklistKey, boolean>;
+};
+
+function hasStringArrayValues(value: unknown): boolean {
+    return Array.isArray(value) && value.some((item) => typeof item === 'string' && item.trim().length > 0);
+}
+
+function hasRecordEntries(value: unknown): boolean {
+    return isRecord(value) && Object.keys(value).length > 0;
+}
+
+function inspectBuilderSpec(specJson: string | null): BuilderSpecStatus {
+    const parsed = parseBuilderSpecJson(specJson);
+
+    if (!parsed) {
+        return {
+            hasSpec: false,
+            isCanonical: false,
+            runtime: null,
+            checks: {
+                identity: false,
+                prompt: false,
+                tools: false,
+                permissions: false,
+                behavior: false,
+                packaging: false,
+                extras: false,
+            },
+        };
+    }
+
+    const prompt = isRecord(parsed.prompt) ? parsed.prompt : null;
+    const tools = isRecord(parsed.tools) ? parsed.tools : null;
+    const permissions = isRecord(parsed.permissions) ? parsed.permissions : null;
+    const context = isRecord(parsed.context) ? parsed.context : null;
+    const market = isRecord(parsed.market) ? parsed.market : null;
+    const messaging = isRecord(context?.messaging) ? context.messaging : (isRecord(parsed.messaging) ? parsed.messaging : null);
+    const behavior = isRecord(context?.behavior) ? context.behavior : (isRecord(parsed.behavior) ? parsed.behavior : null);
+    const runtime = asNonEmptyString(parsed.runtime) ?? asNonEmptyString(parsed.runtimeType) ?? null;
+    const isCanonical = parsed.kind === 'aha.agent.v1'
+        && Boolean(asNonEmptyString(parsed.name))
+        && Boolean(asNonEmptyString(parsed.runtime));
+
+    return {
+        hasSpec: true,
+        isCanonical,
+        runtime,
+        checks: {
+            identity: isCanonical,
+            prompt: Boolean(asNonEmptyString(prompt?.system) ?? asNonEmptyString(parsed.systemPrompt)),
+            tools: hasStringArrayValues(tools?.allowed)
+                || hasStringArrayValues(tools?.disallowed)
+                || hasStringArrayValues(tools?.mcpServers)
+                || hasStringArrayValues(parsed.allowedTools)
+                || hasStringArrayValues(parsed.disallowedTools),
+            permissions: Boolean(
+                asNonEmptyString(permissions?.permissionMode)
+                ?? asNonEmptyString(permissions?.accessLevel)
+                ?? asNonEmptyString(permissions?.executionPlane)
+                ?? asNonEmptyString(parsed.permissionMode)
+                ?? asNonEmptyString(parsed.accessLevel)
+                ?? asNonEmptyString(parsed.executionPlane),
+            ),
+            behavior: Boolean(messaging && behavior),
+            packaging: hasRecordEntries(market)
+                || Boolean(asNonEmptyString(parsed.category))
+                || hasStringArrayValues(parsed.tags)
+                || hasStringArrayValues(market?.tags),
+            extras: hasRecordEntries(parsed.env)
+                || hasRecordEntries(parsed.workspace)
+                || hasRecordEntries(parsed.evaluation)
+                || hasRecordEntries(parsed.package)
+                || hasRecordEntries(parsed.files),
+        },
+    };
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -226,11 +364,15 @@ function AgentPreviewCard({ draft }: { draft: ManualAgentDraft }) {
 
 function DraftEditor({
     draft,
+    mode,
+    builderSpecStatus,
     setDraft,
     publishNow,
     setPublishNow,
 }: {
     draft: ManualAgentDraft;
+    mode: CreationMode;
+    builderSpecStatus: BuilderSpecStatus;
     setDraft: React.Dispatch<React.SetStateAction<ManualAgentDraft>>;
     publishNow: boolean;
     setPublishNow: React.Dispatch<React.SetStateAction<boolean>>;
@@ -241,6 +383,17 @@ function DraftEditor({
         setDraft((current) => mergeManualDraftUpdate(current, patch));
     }, [setDraft]);
 
+    const builderName = getOfficialBuilderDisplayName(draft.runtime);
+    const specChecklist = [
+        { key: 'identity' as const, label: t('agents.chatSpecIdentity') },
+        { key: 'prompt' as const, label: t('agents.chatSpecPrompt') },
+        { key: 'tools' as const, label: t('agents.chatSpecTools') },
+        { key: 'permissions' as const, label: t('agents.chatSpecPermissions') },
+        { key: 'behavior' as const, label: t('agents.chatSpecBehavior') },
+        { key: 'packaging' as const, label: t('agents.chatSpecPackaging') },
+        { key: 'extras' as const, label: t('agents.chatSpecExtras') },
+    ];
+
     return (
         <View style={styles.sidebarContent}>
             <View style={styles.sidebarIntro}>
@@ -249,6 +402,37 @@ function DraftEditor({
             </View>
 
             <AgentPreviewCard draft={draft} />
+
+            {mode === 'chat' ? (
+                <View style={[styles.callout, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
+                    <Text style={[styles.calloutTitle, { color: theme.colors.text }]}>{t('agents.chatSpecStatusTitle')}</Text>
+                    <Text style={[styles.calloutBody, { color: theme.colors.textSecondary }]}>
+                        {!builderSpecStatus.hasSpec
+                            ? t('agents.chatSpecPendingBody', { builderName })
+                            : builderSpecStatus.isCanonical
+                                ? t('agents.chatSpecReadyBody', { runtime: builderSpecStatus.runtime ?? draft.runtime })
+                                : t('agents.chatSpecCompatibilityBody', { runtime: builderSpecStatus.runtime ?? draft.runtime })}
+                    </Text>
+                    <View style={styles.specChecklist}>
+                        {specChecklist.map((item) => {
+                            const ready = builderSpecStatus.checks[item.key];
+
+                            return (
+                                <View key={item.key} style={styles.specChecklistRow}>
+                                    <Ionicons
+                                        name={ready ? 'checkmark-circle' : 'ellipse-outline'}
+                                        size={16}
+                                        color={ready ? theme.colors.button.primary.background : theme.colors.textSecondary}
+                                    />
+                                    <Text style={[styles.specChecklistText, { color: ready ? theme.colors.text : theme.colors.textSecondary }]}>
+                                        {item.label}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+            ) : null}
 
             <View style={styles.formGroup}>
                 <SectionLabel>{t('agents.agentName')}</SectionLabel>
@@ -319,6 +503,11 @@ function DraftEditor({
                         );
                     })}
                 </View>
+                <SectionHint>
+                    {mode === 'chat'
+                        ? t('agents.agentRuntimeChatHint', { builderName })
+                        : t('agents.agentRuntimeManualHint')}
+                </SectionHint>
             </View>
 
             <View style={styles.formGroup}>
@@ -499,6 +688,7 @@ export default React.memo(function NewAgentScreen() {
     const [cwdEdited, setCwdEdited] = React.useState(false);
     const [showPathDropdown, setShowPathDropdown] = React.useState(false);
     const [builderSessionId, setBuilderSessionId] = React.useState<string | null>(null);
+    const [builderSpecJson, setBuilderSpecJson] = React.useState<string | null>(null);
     const processedBuilderMessagesRef = React.useRef<Set<string>>(new Set());
 
     const { messages: builderMessages } = useSessionMessages(builderSessionId ?? '');
@@ -554,6 +744,10 @@ export default React.memo(function NewAgentScreen() {
             if (update) {
                 setManualDraft((current) => mergeManualDraftUpdate(current, update));
             }
+            const specSync = parseAgentSpecSyncComment(message.text);
+            if (specSync) {
+                setBuilderSpecJson(specSync);
+            }
         }
     }, [builderMessages, builderSessionId]);
 
@@ -562,9 +756,16 @@ export default React.memo(function NewAgentScreen() {
         () => getKnownPathsForMachine(selectedMachineId, recentMachinePaths),
         [recentMachinePaths, selectedMachineId],
     );
+    const builderSpecStatus = React.useMemo(
+        () => inspectBuilderSpec(builderSpecJson),
+        [builderSpecJson],
+    );
     const canCreateDraft = React.useMemo(() => {
+        if (mode === 'chat' && !!builderSpecJson) {
+            return true;
+        }
         return !!manualDraft.displayName.trim() && !!manualDraft.systemPrompt.trim();
-    }, [manualDraft.displayName, manualDraft.systemPrompt]);
+    }, [builderSpecJson, manualDraft.displayName, manualDraft.systemPrompt, mode]);
     const canStartChat = !!selectedMachine && isMachineOnline(selectedMachine) && !!cwd.trim();
 
     const primaryActionLabel = React.useMemo(() => {
@@ -606,13 +807,16 @@ export default React.memo(function NewAgentScreen() {
         setSaving(true);
         let genomeId: string | null = null;
         try {
-            const spec = buildManualAgentImage(manualDraft);
+            const specJson = mode === 'chat' && builderSpecJson
+                ? builderSpecJson
+                : JSON.stringify(buildManualAgentImage(manualDraft));
+            const specMetadata = extractCreateMetadataFromSpec(specJson);
             const created = await createGenome(credentials, {
-                name: slugifyAgentName(manualDraft.displayName),
-                description: manualDraft.description.trim() || undefined,
-                spec: JSON.stringify(spec),
-                tags: spec.tags && spec.tags.length > 0 ? JSON.stringify(spec.tags) : undefined,
-                category: manualDraft.category,
+                name: specMetadata.name ?? slugifyAgentName(manualDraft.displayName),
+                description: specMetadata.description ?? (manualDraft.description.trim() || undefined),
+                spec: specJson,
+                tags: specMetadata.tags && specMetadata.tags.length > 0 ? JSON.stringify(specMetadata.tags) : undefined,
+                category: specMetadata.category ?? manualDraft.category,
                 isPublic: false,
                 status: 'draft',
                 origin: 'manual',
@@ -635,14 +839,18 @@ export default React.memo(function NewAgentScreen() {
             try {
                 const cwdValidationError = getConcatenatedPathErrorMessage(cwd.trim());
                 if (!cwdValidationError) {
-                    const spec = buildManualAgentImage(manualDraft);
+                    const specMetadata = extractCreateMetadataFromSpec(
+                        mode === 'chat' && builderSpecJson
+                            ? builderSpecJson
+                            : JSON.stringify(buildManualAgentImage(manualDraft)),
+                    );
                     const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
                         directory: cwd.trim(),
                         agent: manualDraft.runtime,
                         sessionTag: buildStandaloneSessionTag(),
-                        role: spec.baseRoleId ?? manualDraft.roleId ?? 'agent',
+                        role: specMetadata.baseRoleId ?? manualDraft.roleId ?? 'agent',
                         specId: genomeId!,
-                        sessionName: manualDraft.displayName.trim(),
+                        sessionName: specMetadata.displayName ?? manualDraft.displayName.trim(),
                     });
                     if (sessionId) {
                         const updatedPaths = updateRecentMachinePaths(recentMachinePaths, selectedMachineId, cwd.trim());
@@ -656,7 +864,7 @@ export default React.memo(function NewAgentScreen() {
 
         setSaving(false);
         router.push({ pathname: '/agents/[id]', params: { id: genomeId! } } as any);
-    }, [canCreateDraft, cwd, manualDraft, manualPublishNow, recentMachinePaths, router, saving, selectedMachineId]);
+    }, [builderSpecJson, canCreateDraft, cwd, manualDraft, manualPublishNow, mode, recentMachinePaths, router, saving, selectedMachineId]);
 
     const handleStartBuilderChat = React.useCallback(async () => {
         const credentials = sync.getCredentials();
@@ -676,29 +884,21 @@ export default React.memo(function NewAgentScreen() {
                 return;
             }
 
-            const builderSpec = buildPrivateAgentBuilderImage({
-                displayName: PRIVATE_BUILDER_NAME,
-                runtime: manualDraft.runtime,
-                brief: chatBrief,
-            });
-            const createdGenome = await createGenome(credentials, {
-                name: `private-agent-creator-v${PRIVATE_AGENT_BUILDER_VERSION}-${randomUUID().slice(0, 8)}`,
-                description: builderSpec.description,
-                spec: JSON.stringify(builderSpec),
-                tags: builderSpec.tags ? JSON.stringify(builderSpec.tags) : undefined,
-                category: builderSpec.category,
-                isPublic: false,
-                status: 'draft',
-                origin: 'manual',
-            });
+            const builderRoleId = getOfficialBuilderRoleId(manualDraft.runtime);
+            const builderDisplayName = getOfficialBuilderDisplayName(manualDraft.runtime);
+            const builderGenome = await fetchGenomeByName('@official', builderRoleId).catch(() => null);
+
+            if (!builderGenome) {
+                throw new Error(`Official builder genome not found: @official/${builderRoleId}`);
+            }
 
             const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
                 directory: cwd.trim(),
                 agent: manualDraft.runtime,
                 sessionTag: buildStandaloneSessionTag(),
-                role: builderSpec.baseRoleId ?? 'agent-builder',
-                specId: createdGenome.genome.id,
-                sessionName: PRIVATE_BUILDER_NAME,
+                role: builderRoleId,
+                specId: builderGenome.id,
+                sessionName: builderDisplayName,
             });
 
             if (!sessionId) {
@@ -708,6 +908,7 @@ export default React.memo(function NewAgentScreen() {
             const updatedPaths = updateRecentMachinePaths(recentMachinePaths, selectedMachineId, cwd.trim());
             sync.applySettings({ recentMachinePaths: updatedPaths });
             processedBuilderMessagesRef.current.clear();
+            setBuilderSpecJson(null);
             setBuilderSessionId(sessionId);
             sync.onSessionVisible(sessionId);
 
@@ -996,6 +1197,8 @@ export default React.memo(function NewAgentScreen() {
             {!isDesktopShell ? (
                 <DraftEditor
                     draft={manualDraft}
+                    mode={mode}
+                    builderSpecStatus={builderSpecStatus}
                     setDraft={setManualDraft}
                     publishNow={manualPublishNow}
                     setPublishNow={setManualPublishNow}
@@ -1047,6 +1250,8 @@ export default React.memo(function NewAgentScreen() {
             >
                 <DraftEditor
                     draft={manualDraft}
+                    mode={mode}
+                    builderSpecStatus={builderSpecStatus}
                     setDraft={setManualDraft}
                     publishNow={manualPublishNow}
                     setPublishNow={setManualPublishNow}
@@ -1167,6 +1372,19 @@ const styles = StyleSheet.create((theme) => ({
     calloutBody: {
         fontSize: 13,
         lineHeight: 19,
+    },
+    specChecklist: {
+        gap: 8,
+        marginTop: 6,
+    },
+    specChecklistRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    specChecklistText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     guideCard: {
         borderRadius: 16,

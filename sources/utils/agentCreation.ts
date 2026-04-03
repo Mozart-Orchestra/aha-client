@@ -4,6 +4,7 @@ import type { Genome } from '@/sync/apiEvolution';
 export type ManualAgentCategory = 'coordination' | 'support' | 'execution';
 export type ManualAgentRuntime = 'claude' | 'codex';
 export type ManualPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
+export type OfficialBuilderRoleId = 'agent-builder' | 'agent-builder-codex';
 
 export interface ManualAgentDraft {
     displayName: string;
@@ -44,8 +45,11 @@ type ManualDraftSyncPayload = Partial<{
 }>;
 
 const AGENT_BUILDER_PRIMARY_KNOWLEDGE_BASE = 'kanban/docs/agent-builder-knowledge-base.md';
+const OFFICIAL_BUILDER_AUTHORING_RULES_PATH = 'docs/system-mirror/builder-authoring-rules.md';
+const OFFICIAL_BUILDER_ROLE_CONTRACT_PATH = 'docs/agent-image/README.md';
 export const PRIVATE_AGENT_BUILDER_VERSION = 3;
 export const AGENT_CARD_SYNC_COMMENT_TOKEN = 'AHA_AGENT_CARD';
+export const AGENT_SPEC_SYNC_COMMENT_TOKEN = 'AHA_AGENT_SPEC';
 
 const AGENT_BUILDER_DEEP_REFERENCES = [
     'AGENTS.md',
@@ -166,6 +170,14 @@ export function slugifyAgentName(value: string): string {
     return slug || 'agent';
 }
 
+export function getOfficialBuilderRoleId(runtime: ManualAgentRuntime): OfficialBuilderRoleId {
+    return runtime === 'codex' ? 'agent-builder-codex' : 'agent-builder';
+}
+
+export function getOfficialBuilderDisplayName(runtime: ManualAgentRuntime): string {
+    return runtime === 'codex' ? 'Agent Builder (Codex)' : 'Agent Builder';
+}
+
 export function buildManualAgentImage(draft: ManualAgentDraft): AgentImage {
     const responsibilities = splitListInput(draft.responsibilities);
     const capabilities = splitListInput(draft.capabilities);
@@ -261,6 +273,25 @@ export function parseManualDraftSyncComment(markdown: string): Partial<ManualAge
     }
 }
 
+export function parseAgentSpecSyncComment(markdown: string): string | null {
+    const matches = Array.from(markdown.matchAll(/<!--\s*AHA_AGENT_SPEC\s*([\s\S]*?)-->/gi));
+    const latest = matches.at(-1)?.[1]?.trim();
+
+    if (!latest) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(latest);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return null;
+        }
+        return JSON.stringify(parsed);
+    } catch {
+        return null;
+    }
+}
+
 function serializeManualDraftForBuilder(draft: ManualAgentDraft): string {
     return JSON.stringify({
         displayName: draft.displayName,
@@ -291,15 +322,24 @@ export function buildPrivateAgentBuilderKickoff(options: {
         'Reply in the same language as the user.',
         '',
         '## MANDATORY FIRST STEP',
-        `Read \`${AGENT_BUILDER_PRIMARY_KNOWLEDGE_BASE}\` before proposing anything. This file contains the canonical agents hub format, required spec fields (messaging + behavior), and quality standards.`,
-        'Every agent spec MUST include both `messaging` and `behavior` objects.',
+        `Read \`${OFFICIAL_BUILDER_AUTHORING_RULES_PATH}\` before proposing anything. This file is bundled into the official builder image and defines the canonical authoring contract.`,
+        `Then read \`${OFFICIAL_BUILDER_ROLE_CONTRACT_PATH}\` for the portable agent-image contract: runtime, tools, env, bundled docs, and evaluation.`,
+        'Canonical agent.json minimum contract:',
+        '  root: { kind: "aha.agent.v1", name: string, runtime: string }',
+        '  blocks: prompt, tools, permissions, context',
+        'Inside `context`, every spec MUST include both `messaging` and `behavior` objects.',
         '  messaging: { listenFrom: "*" | string[], receiveUserMessages: boolean, replyMode: "proactive"|"responsive"|"passive" }',
         '  behavior:  { onIdle: "wait"|"self-assign"|"ask", onBlocked: "report"|"escalate"|"retry", canSpawnAgents: boolean, requireExplicitAssignment: boolean }',
+        'Use `market` when category/tags matter, and add `env`, `workspace`, `evaluation`, or `package` blocks when portability or rollout depends on them.',
         '',
         'Ask the smallest next question that removes the most ambiguity.',
-        `Whenever your draft changes, append a hidden HTML comment using ${AGENT_CARD_SYNC_COMMENT_TOKEN} with the full current draft JSON.`,
+        `Whenever your draft changes, append a hidden HTML comment using ${AGENT_CARD_SYNC_COMMENT_TOKEN} with the full current UI draft JSON.`,
         `Format exactly like: <!-- ${AGENT_CARD_SYNC_COMMENT_TOKEN} {"displayName":"..."} -->`,
         'Use valid JSON only. Include every draft field, not just the changed ones.',
+        `When you have a structurally valid agent spec, also append a hidden HTML comment using ${AGENT_SPEC_SYNC_COMMENT_TOKEN} with the full current agent spec JSON.`,
+        `Format exactly like: <!-- ${AGENT_SPEC_SYNC_COMMENT_TOKEN} {"kind":"aha.agent.v1","name":"..."} -->`,
+        'Prefer canonical agent.json (`kind: "aha.agent.v1"`) for the spec sync payload.',
+        'Do not emit a partial spec sync payload. Wait until the spec is internally consistent, then emit the full latest spec.',
         'Current draft source of truth:',
         serializeManualDraftForBuilder(options.currentDraft),
         brief
@@ -346,6 +386,9 @@ export function buildPrivateAgentBuilderImage(draft: ChatBuilderDraft): AgentIma
             'Treat the editable manual draft as the source of truth for the UI.',
             `Whenever your draft changes, append a hidden HTML comment using ${AGENT_CARD_SYNC_COMMENT_TOKEN} with the full current draft JSON.`,
             `The exact sync format is: <!-- ${AGENT_CARD_SYNC_COMMENT_TOKEN} {"displayName":"..."} -->`,
+            `When you have a structurally valid agent spec, also append a hidden HTML comment using ${AGENT_SPEC_SYNC_COMMENT_TOKEN} with the full current agent spec JSON.`,
+            `The exact spec sync format is: <!-- ${AGENT_SPEC_SYNC_COMMENT_TOKEN} {"kind":"aha.agent.v1","name":"..."} -->`,
+            'Prefer canonical agent.json for the spec sync payload.',
             'Do not mention the hidden sync comment in your visible prose.',
             'Distinguish confirmed decisions from your recommendations.',
             'If the user wants a ready-made agent instead of authoring one, recommend opening the marketplace rather than forcing a custom draft.',
@@ -353,10 +396,14 @@ export function buildPrivateAgentBuilderImage(draft: ChatBuilderDraft): AgentIma
             'Default to private draft genomes. Do not publish publicly unless the user explicitly asks for it.',
             '',
             '## Agents Hub Format (CRITICAL)',
-            `Read \`${AGENT_BUILDER_PRIMARY_KNOWLEDGE_BASE}\` at the start to understand the canonical agents hub format.`,
-            'Every agent spec you help design MUST include these Tier 7 fields:',
+            `If bundled docs exist, start with \`${OFFICIAL_BUILDER_AUTHORING_RULES_PATH}\` and \`${OFFICIAL_BUILDER_ROLE_CONTRACT_PATH}\` before repo-local references.`,
+            'Canonical agent.json minimum contract:',
+            '  root: { kind: "aha.agent.v1", name: string, runtime: string }',
+            '  blocks: prompt, tools, permissions, context',
+            'Every agent spec you help design MUST include these context fields:',
             '  messaging: { listenFrom: "*", receiveUserMessages: true, replyMode: "responsive" }',
             '  behavior: { onIdle: "wait", onBlocked: "report", requireExplicitAssignment: false, canSpawnAgents: false }',
+            'Use `market` when packaging/discovery matters, and add `env`, `workspace`, `evaluation`, or `package` when the role needs portable rollout metadata.',
             'Without these fields the agent cannot participate in a team or be routed correctly.',
         ].join('\n'),
         systemPromptSuffix: brief
@@ -420,6 +467,7 @@ export function buildPrivateAgentBuilderImage(draft: ChatBuilderDraft): AgentIma
             builderKind: 'private-agent-creator',
             builderVersion: PRIVATE_AGENT_BUILDER_VERSION,
             syncCommentToken: AGENT_CARD_SYNC_COMMENT_TOKEN,
+            specSyncCommentToken: AGENT_SPEC_SYNC_COMMENT_TOKEN,
         },
     };
 }
@@ -434,10 +482,15 @@ export function buildAgentBuilderImage(draft: ChatBuilderDraft): AgentImage {
         'Treat master, builder, qa, reviewer, and related legacy role prompts as useful raw material, but not as final polished templates. Extract their constraints and improve them rather than copying them blindly.',
         'Every agent design must make explicit decisions about: purpose, archetype, user entrypoint or not, executionPlane, accessLevel, permissionMode, tool access, messaging rules, blocked behavior, idle behavior, evaluation criteria, and marketplace packaging.',
         '',
+        'Prefer bundled builder docs when they are present: docs/system-mirror/builder-authoring-rules.md and docs/agent-image/README.md.',
+        'Canonical agent.json minimum contract:',
+        '  root: { kind: "aha.agent.v1", name: string, runtime: string }',
+        '  blocks: prompt, tools, permissions, context',
         'MANDATORY Tier 7 fields — every genome spec MUST include both `messaging` and `behavior` objects:',
         '  messaging: { listenFrom: "*" | string[], receiveUserMessages: boolean, replyMode: "proactive"|"responsive"|"passive" }',
         '  behavior:  { onIdle: "wait"|"self-assign"|"ask", onBlocked: "report"|"escalate"|"retry", canSpawnAgents: boolean, requireExplicitAssignment: boolean }',
         'Do NOT submit a genome without these fields. The platform uses them for message routing and behavioral governance.',
+        'Use `market` when the agent needs category/tags, and add `env`, `workspace`, `evaluation`, or `package` when portability or rollout depends on them.',
         '',
         'MANDATORY tool baseline — every team agent MUST include these in allowedTools (or the agent cannot participate in the team):',
         '  Universal (all agents): get_team_info, list_tasks, send_team_message, get_context_status, get_self_view, change_title, request_help, remember, recall',
