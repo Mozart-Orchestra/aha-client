@@ -230,6 +230,9 @@ export default function MachineDetailScreen() {
                     }
                     break;
                 }
+                case 'pending':
+                    Modal.alert(t('common.error'), t('newSession.sessionTimeout'));
+                    break;
                 case 'error':
                     Modal.alert(t('common.error'), result.errorMessage);
                     break;

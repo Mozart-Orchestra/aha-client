@@ -33,6 +33,19 @@ import { t } from '@/text';
 import { getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
 import { listAgents, type AgentRecord } from '@/sync/apiAgents';
 
+function isArchivedTeamArtifact(artifact: DecryptedArtifact): boolean {
+    if (!artifact.body) {
+        return false;
+    }
+
+    try {
+        const board = JSON.parse(artifact.body) as { archivedAt?: number; team?: { archivedAt?: number } };
+        return Boolean(board.archivedAt || board.team?.archivedAt);
+    } catch {
+        return false;
+    }
+}
+
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
         flex: 1,
@@ -157,10 +170,25 @@ const stylesheet = StyleSheet.create((theme) => ({
     teamMeta: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 6,
     },
     teamDate: {
         fontSize: 13,
         color: theme.colors.textSecondary,
+    },
+    archivedBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 999,
+        backgroundColor: '#6b728018',
+    },
+    archivedBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#6b7280',
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
     },
     teamChevron: {
         color: theme.colors.textSecondary,
@@ -693,7 +721,15 @@ export default function TeamsScreen() {
     const desktopTheme = getThreeColumnShellTokens('default', theme);
 
     const teams = React.useMemo(() => {
-        return allArtifacts.filter((artifact) => artifact.type === 'team');
+        return allArtifacts
+            .filter((artifact) => artifact.type === 'team')
+            .sort((a, b) => {
+                const archivedDelta = Number(isArchivedTeamArtifact(a)) - Number(isArchivedTeamArtifact(b));
+                if (archivedDelta !== 0) {
+                    return archivedDelta;
+                }
+                return b.updatedAt - a.updatedAt;
+            });
     }, [allArtifacts]);
 
     const [isLoading, setIsLoading] = React.useState(false);
@@ -887,6 +923,30 @@ export default function TeamsScreen() {
         };
     }, [credentials?.token]);
 
+    React.useEffect(() => {
+        const teamsMissingBody = teams.filter((artifact) => artifact.body === undefined);
+        if (teamsMissingBody.length === 0) {
+            return;
+        }
+
+        let cancelled = false;
+
+        (async () => {
+            for (const artifact of teamsMissingBody) {
+                if (cancelled) {
+                    return;
+                }
+                await sync.fetchArtifactWithBody(artifact.id).catch((error) => {
+                    console.error(`Failed to hydrate team artifact ${artifact.id} in list view:`, error);
+                });
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [teams]);
+
     const handleDelete = React.useCallback(async (teamId: string, event: GestureResponderEvent) => {
         event.stopPropagation();
         const confirmed = await Modal.confirm(
@@ -903,6 +963,33 @@ export default function TeamsScreen() {
         } catch (error) {
             console.error('Failed to delete team:', error);
             await Modal.alert(t('common.error'), t('teams.deleteTeamFailed'));
+        }
+    }, []);
+
+    const handleRestore = React.useCallback(async (item: DecryptedArtifact, event: GestureResponderEvent) => {
+        event.stopPropagation();
+        const confirmed = await Modal.confirm(
+            t('teams.restoreTeam'),
+            t('teams.restoreTeamConfirm'),
+            {
+                confirmText: t('teams.restoreAction'),
+                cancelText: t('common.cancel'),
+            }
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const sessionIds = getTeamSessionIdsFromArtifact(item);
+            const result = await sync.unarchiveTeam(item.id, sessionIds);
+            if (result.success) {
+                Modal.alert(t('common.success'), t('teams.restoreTeamSuccess', { restoredSessions: result.restoredSessions }));
+            }
+        } catch (error) {
+            console.error('Failed to restore team from list:', error);
+            await Modal.alert(t('common.error'), t('teams.restoreTeamFailed'));
         }
     }, []);
 
@@ -1032,6 +1119,7 @@ export default function TeamsScreen() {
         const isLast = index === teams.length - 1;
         const isSingle = teams.length === 1;
         const isSelected = selectedTeams.has(item.id);
+        const isArchived = isArchivedTeamArtifact(item);
 
         return (
             <Pressable
@@ -1064,17 +1152,32 @@ export default function TeamsScreen() {
                         <Text style={styles.teamDate}>
                             {t('teams.membersLabel', { count: getTeamSessionIdsFromArtifact(item).length })} • {formatUpdatedDate(item.updatedAt)}
                         </Text>
+                        {isArchived ? (
+                            <View style={styles.archivedBadge}>
+                                <Text style={styles.archivedBadgeText}>{t('agents.archived')}</Text>
+                            </View>
+                        ) : null}
                     </View>
                 </View>
                 {!isSelectionMode ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Pressable
-                            onPress={(event) => handleDelete(item.id, event)}
-                            style={{ padding: 8, marginRight: 4 }}
-                            hitSlop={8}
-                        >
-                            <Ionicons name="trash-outline" size={20} color={theme.colors.textSecondary} />
-                        </Pressable>
+                        {isArchived ? (
+                            <Pressable
+                                onPress={(event) => handleRestore(item, event)}
+                                style={{ padding: 8, marginRight: 4 }}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="refresh-outline" size={20} color="#16a34a" />
+                            </Pressable>
+                        ) : (
+                            <Pressable
+                                onPress={(event) => handleDelete(item.id, event)}
+                                style={{ padding: 8, marginRight: 4 }}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="trash-outline" size={20} color={theme.colors.textSecondary} />
+                            </Pressable>
+                        )}
                         <Ionicons
                             name="chevron-forward"
                             size={18}
@@ -1090,6 +1193,7 @@ export default function TeamsScreen() {
         handleDelete,
         handleLongPress,
         handleTeamPress,
+        handleRestore,
         isSelectionMode,
         selectedTeams,
         styles,
@@ -1101,6 +1205,7 @@ export default function TeamsScreen() {
         const isSelected = selectedTeams.has(item.id);
         const memberCount = getTeamSessionIdsFromArtifact(item).length;
         const teamName = item.title || t('teams.untitledTeam');
+        const isArchived = isArchivedTeamArtifact(item);
 
         return (
             <Pressable
@@ -1146,17 +1251,31 @@ export default function TeamsScreen() {
                             <View style={styles.desktopMetaPill}>
                                 <Text style={styles.desktopMetaPillText}>{t('teams.artifactSynced')}</Text>
                             </View>
+                            {isArchived ? (
+                                <View style={styles.desktopMetaPill}>
+                                    <Text style={styles.desktopMetaPillText}>{t('agents.archived')}</Text>
+                                </View>
+                            ) : null}
                         </View>
                     </View>
 
                     {!isSelectionMode ? (
                         <View style={{ gap: 8 }}>
-                            <Pressable
-                                style={styles.desktopIconButton}
-                                onPress={(event) => handleDelete(item.id, event)}
-                            >
-                                <Ionicons name="trash-outline" size={18} color={theme.colors.textSecondary} />
-                            </Pressable>
+                            {isArchived ? (
+                                <Pressable
+                                    style={styles.desktopIconButton}
+                                    onPress={(event) => handleRestore(item, event)}
+                                >
+                                    <Ionicons name="refresh-outline" size={18} color="#16a34a" />
+                                </Pressable>
+                            ) : (
+                                <Pressable
+                                    style={styles.desktopIconButton}
+                                    onPress={(event) => handleDelete(item.id, event)}
+                                >
+                                    <Ionicons name="trash-outline" size={18} color={theme.colors.textSecondary} />
+                                </Pressable>
+                            )}
                             <View style={styles.desktopIconButton}>
                                 <Ionicons name="arrow-forward" size={16} color="#31485D" />
                             </View>
@@ -1170,6 +1289,7 @@ export default function TeamsScreen() {
         handleDelete,
         handleLongPress,
         handleTeamPress,
+        handleRestore,
         isSelectionMode,
         selectedTeams,
         styles,

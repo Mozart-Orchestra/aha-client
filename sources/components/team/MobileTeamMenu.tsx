@@ -9,6 +9,8 @@ interface MobileTeamMenuProps {
     onRecover: () => void;
     isRecovering: boolean;
     onArchive: () => void;
+    archiveLabel?: string;
+    archiveIconName?: React.ComponentProps<typeof Ionicons>['name'];
     onDelete: () => void;
 }
 
@@ -18,6 +20,8 @@ export function MobileTeamMenu({
     onRecover,
     isRecovering,
     onArchive,
+    archiveLabel = 'Archive',
+    archiveIconName = 'archive-outline',
     onDelete,
 }: MobileTeamMenuProps) {
     const { theme } = useUnistyles();
@@ -91,8 +95,8 @@ export function MobileTeamMenu({
                         borderBottomColor: theme.colors.divider,
                     }}
                 >
-                    <Ionicons name="archive-outline" size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
-                    <Text style={{ fontSize: 15, color: theme.colors.text }}>Archive</Text>
+                    <Ionicons name={archiveIconName} size={18} color={theme.colors.text} style={{ marginRight: 12 }} />
+                    <Text style={{ fontSize: 15, color: theme.colors.text }}>{archiveLabel}</Text>
                 </Pressable>
                 <Pressable
                     onPress={onDelete}

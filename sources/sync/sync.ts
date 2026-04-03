@@ -46,6 +46,7 @@ import { canonicalizeTeamMentions, type TeamMentionCandidate } from './teamMessa
 import { getNextPersistedMessageCount } from './persistedMessageCount';
 import { logCommerceEvent } from '@/observability/commerceEvents';
 import { getServiceToken } from './apiServices';
+import type { AgentLifecycle, SpawnSessionOutcome } from '@/utils/spawnState';
 
 const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
     if (!body) {
@@ -914,6 +915,36 @@ class Sync {
 
     public refreshSessions = async () => {
         return this.sessionsSync.invalidateAndAwait();
+    }
+
+    private findSessionIdByTag(sessionTag: string): string | null {
+        const sessions = Object.values(storage.getState().sessions)
+            .filter((session) => session.metadata?.sessionTag === sessionTag)
+            .sort((a, b) => b.updatedAt - a.updatedAt);
+
+        return sessions[0]?.id ?? null;
+    }
+
+    private async waitForSpawnedSessionByTag(sessionTag: string, attempts = 6, delayMs = 1500): Promise<string | null> {
+        const existing = this.findSessionIdByTag(sessionTag);
+        if (existing) {
+            return existing;
+        }
+
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+            await this.refreshSessions().catch(() => {
+                // Best effort only. The spawn should still surface as pending if refresh fails.
+            });
+            const sessionId = this.findSessionIdByTag(sessionTag);
+            if (sessionId) {
+                return sessionId;
+            }
+            if (attempt < attempts - 1) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+
+        return null;
     }
 
     public getCredentials() {
@@ -2539,7 +2570,12 @@ class Sync {
         agent: 'claude' | 'codex';
         token?: string;
         sessionTag?: string;
+        /** @deprecated Use `sourceImageId` instead. Kept for backward compatibility. */
         specId?: string;
+        /** Canonical image identifier (genome hub primary key). */
+        sourceImageId?: string;
+        /** Canonical image version at time of spawn. */
+        sourceImageVersion?: number | null;
         teamId?: string;
         role?: string;
         sessionName?: string;
@@ -2555,7 +2591,7 @@ class Sync {
         bypassProfile?: 'init' | 'periodic' | 'event' | 'reactive';
         lifecycleTokenId?: string;
         ttlSeconds?: number;
-    }): Promise<string | null> {
+    }): Promise<SpawnSessionOutcome> {
         try {
             if (!this.encryption.getMachineEncryption(machineId)) {
                 log.log(`Machine encryption missing for ${machineId}; refreshing machines before spawn`);
@@ -2637,19 +2673,31 @@ class Sync {
             }
             if (sessionId) {
                 log.log(`Spawned session ${sessionId} on machine ${machineId}`);
-                return sessionId;
+                return { status: 'active', sessionId, sessionTag: params.sessionTag };
+            }
+            if (params.sessionTag) {
+                const hydratedSessionId = await this.waitForSpawnedSessionByTag(params.sessionTag);
+                if (hydratedSessionId) {
+                    log.log(`Spawned session ${hydratedSessionId} on machine ${machineId} after pending reconciliation`);
+                    return { status: 'active', sessionId: hydratedSessionId, sessionTag: params.sessionTag };
+                }
             }
             log.log(`Spawn request completed on machine ${machineId} (no sessionId returned)`);
-            return null;
+            return {
+                status: 'pending',
+                sessionTag: params.sessionTag,
+                ...(typeof result?.pendingSessionId === 'string' ? { pendingSessionId: result.pendingSessionId } : {}),
+                ...(typeof result?.pid === 'number' ? { pid: result.pid } : {}),
+            };
         } catch (error) {
             await this.machinesSync.invalidateAndAwait().catch(() => {
                 // Best effort refresh so the UI can reflect daemon disconnects after an RPC failure.
             });
             console.error(`Failed to spawn session on machine ${machineId}:`, error);
             if (error instanceof Error && error.message.includes('RPC method not available')) {
-                throw new Error(`Machine ${machineId} daemon is not reachable right now. Refresh machine status and retry.`);
+                return { status: 'failed', error: `Machine ${machineId} daemon is not reachable right now. Refresh machine status and retry.` };
             }
-            throw error;
+            return { status: 'failed', error: error instanceof Error ? error.message : String(error) };
         }
     }
 
@@ -2888,10 +2936,15 @@ class Sync {
                     this.artifactsSync.invalidate();
                     break;
                 case 'team-archived':
+                    // Keep archived teams addressable so the UI can offer restore.
+                    this.fetchArtifactWithBody(teamId).catch(err => {
+                        console.error(`Failed to fetch artifact for team archive ${teamId}:`, err);
+                    });
+                    this.artifactsSync.invalidate();
+                    this.sessionsSync.invalidate();
+                    break;
                 case 'team-deleted':
-                    // Remove team artifact from local storage
                     storage.getState().deleteArtifact(teamId);
-                    // Refresh sessions list (sessions may have been archived/deleted)
                     this.sessionsSync.invalidate();
                     break;
                 case 'team-unarchived':
@@ -2921,14 +2974,13 @@ class Sync {
             // Handle different session events
             switch (eventType) {
                 case 'session-archived':
+                    // Keep archived sessions visible so they can be restored in-place.
+                    this.sessionsSync.invalidate();
+                    break;
                 case 'session-deleted':
-                    // Remove session from storage
                     storage.getState().deleteSession(sessionId);
-                    // Remove encryption keys from memory
                     this.encryption.removeSessionEncryption(sessionId);
-                    // Remove from project manager
                     projectManager.removeSession(sessionId);
-                    // Clear any cached git status
                     gitStatusSync.clearForSession(sessionId);
                     break;
                 case 'session-unarchived':
@@ -3647,12 +3699,16 @@ class Sync {
             sessionTag?: string;
             candidateId?: string;
             specId?: string;
+            sourceImageId?: string;
+            sourceImageVersion?: number | null;
             customPrompt?: string;
             parentSessionId?: string;
             executionPlane?: string;
             runtimeType?: string;
             machineId?: string | null;
             workspacePath?: string | null;
+            spawnError?: string;
+            lifecycle?: AgentLifecycle;
             authorities?: string[];
             teamOverlay?: Record<string, unknown>;
         }
@@ -3710,13 +3766,15 @@ class Sync {
         try {
             const result = await archiveTeam(this.credentials, teamId, sessionIds);
             if (result.success) {
-                storage.getState().deleteArtifact(teamId);
+                this.artifactsSync.invalidate();
                 this.sessionsSync.invalidate();
+                this.fetchArtifactWithBody(teamId).catch(err => {
+                    console.error(`Failed to fetch artifact after archive for team ${teamId}:`, err);
+                });
             }
             return result;
         } catch (error) {
             if (this.isTeamNotFoundError(error)) {
-                storage.getState().deleteArtifact(teamId);
                 return { success: true, archivedSessions: 0 };
             }
             throw error;

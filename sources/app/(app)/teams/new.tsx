@@ -22,6 +22,7 @@ import { fetchGenomeByName } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getConcatenatedPathErrorMessage } from '@/utils/workingDirectory';
+import { buildActiveSpawnLifecycle, buildPendingSpawnLifecycle } from '@/utils/spawnState';
 
 // Use localized team roles instead of hardcoded ones
 const LOCALIZED_TEAM_ROLES = getLocalizedTeamRoles();
@@ -925,9 +926,7 @@ export default function NewTeamScreen() {
                                             sessionTag,
                                             roleId,
                                             displayName: agentTitle,
-                                            lifecycle: {
-                                                spawnRequestedAt,
-                                            },
+                                            lifecycle: buildActiveSpawnLifecycle({ spawnRequestedAt }),
                                         });
                                         trackAgentDeployed(sessionId, {
                                             source: 'team_create_desktop_bridge',
@@ -971,6 +970,19 @@ export default function NewTeamScreen() {
                     });
                 }
 
+                // ── Artifact-first: build placeholder members, register team, THEN spawn ──
+                type PlaceholderMember = {
+                    memberId: string;
+                    sessionTag: string;
+                    roleId: string;
+                    displayName: string;
+                    specId?: string;
+                    sourceImageId?: string;
+                    sourceImageVersion?: number;
+                    spawnParams: Parameters<typeof sync.spawnSessionOnMachine>;
+                };
+                const placeholderMembers: PlaceholderMember[] = [];
+
                 if (hasRequestedSpawns) {
                     const targetMachine = machineIdForSpawn ? storage.getState().machines[machineIdForSpawn] : null;
 
@@ -981,119 +993,102 @@ export default function NewTeamScreen() {
                         const sessionTag = buildTeamMemberSessionTag(artifactId, memberId);
 
                         if (targetMachine?.active && resolvedCwd) {
-                            try {
-                                // Resolve org-manager genome from hub so the agent loads its DNA
-                                const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
-                                const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
+                            const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
+                            placeholderMembers.push({
+                                memberId,
+                                sessionTag,
+                                roleId,
+                                displayName: agentTitle,
+                                ...(orgManagerGenome ? { specId: orgManagerGenome.id, sourceImageId: orgManagerGenome.id, sourceImageVersion: orgManagerGenome.version } : {}),
+                                spawnParams: [targetMachine.id, {
                                     directory: resolvedCwd,
                                     agent: promptAgentPreference === 'codex' ? 'codex' : 'claude',
                                     sessionTag,
                                     teamId: artifactId,
                                     role: roleId,
-                                    executionPlane: 'bypass',
+                                    executionPlane: 'bypass' as const,
                                     sessionName: agentTitle,
                                     sessionPath: resolvedCwd,
                                     ...(orgManagerGenome ? { specId: orgManagerGenome.id } : {}),
+                                    ...(orgManagerGenome ? { sourceImageId: orgManagerGenome.id, sourceImageVersion: orgManagerGenome.version } : {}),
                                     env: {
                                         AHA_TEAM_MEMBER_ID: memberId,
                                         AHA_TASK_PROMPT: promptTaskRequest
                                     }
-                                });
-                                if (spawnedSessionId) {
-                                    promptBootstrapStarted = true;
-                                    trackAgentDeployed(spawnedSessionId, {
-                                        source: 'team_create_remote_prompt',
-                                        team_id: artifactId,
-                                        role_id: roleId,
-                                        runtime_type: promptAgentPreference === 'codex' ? 'codex' : 'claude',
-                                        machine_id: targetMachine.id,
-                                    });
-                                } else {
-                                    console.warn('Spawned org-manager but no sessionId was returned');
-                                    seedSpawnFailureReason = 'Spawned org-manager but no sessionId was returned.';
-                                }
-                            } catch (spawnError) {
-                                console.error('Failed to auto-spawn org-manager:', spawnError);
-                                seedSpawnFailureReason = spawnError instanceof Error ? spawnError.message : 'Failed to auto-spawn org-manager.';
-                            }
+                                }],
+                            });
                         } else if (!targetMachine?.active) {
                             console.warn('Selected machine is offline; skipping auto-spawn.');
                             seedSpawnFailureReason = 'Selected machine is offline; skipping auto-spawn.';
                         }
                     } else {
                         for (const [roleId, count] of Object.entries(roleCounts)) {
-                            // ── Phase 3-B Change 6: resolve specId for manual role spawn ──
                             let roleSpecId: string | undefined;
+                            let roleImageVersion: number | undefined;
                             try {
                                 const roleGenome = await fetchGenomeByName('@official', roleId);
                                 roleSpecId = roleGenome?.id;
+                                roleImageVersion = roleGenome?.version;
                             } catch { /* genome-hub unreachable — proceed without specId */ }
 
                             for (let i = 0; i < count; i++) {
-                                try {
-                                    const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
-                                    const memberId = randomUUID();
-                                    const sessionTag = buildTeamMemberSessionTag(artifactId, memberId);
+                                const agentTitle = `${roleId.charAt(0).toUpperCase() + roleId.slice(1)} ${i + 1}`;
+                                const memberId = randomUUID();
+                                const sessionTag = buildTeamMemberSessionTag(artifactId, memberId);
 
-                                    if (targetMachine?.active && resolvedCwd) {
-                                        try {
-                                            const spawnRequestedAt = Date.now();
-                                            const spawnedSessionId = await sync.spawnSessionOnMachine(targetMachine.id, {
-                                                directory: resolvedCwd,
-                                                agent: getRoleAgentType(roleId),
-                                                sessionTag,
-                                                teamId: artifactId,
-                                                role: roleId,
-                                                sessionName: agentTitle,
-                                                sessionPath: resolvedCwd,
-                                                ...(roleSpecId ? { specId: roleSpecId } : {}),
-                                                env: {
-                                                    AHA_TEAM_MEMBER_ID: memberId,
-                                                },
-                                            });
-                                            if (spawnedSessionId) {
-                                                spawnedMembers.push({
-                                                    memberId,
-                                                    sessionId: spawnedSessionId,
-                                                    sessionTag,
-                                                    roleId,
-                                                    displayName: agentTitle,
-                                                    ...(roleSpecId ? { specId: roleSpecId } : {}),
-                                                    lifecycle: {
-                                                        spawnRequestedAt,
-                                                    },
-                                                });
-                                                trackAgentDeployed(spawnedSessionId, {
-                                                    source: 'team_create_remote',
-                                                    team_id: artifactId,
-                                                    role_id: roleId,
-                                                    runtime_type: getRoleAgentType(roleId),
-                                                    machine_id: targetMachine.id,
-                                                });
-                                            } else {
-                                                console.warn(`Spawned agent ${roleId} but no sessionId was returned`);
-                                            }
-                                        } catch (spawnError) {
-                                            console.error('Failed to auto-spawn:', spawnError);
-                                        }
-                                    } else if (!targetMachine?.active) {
-                                        console.warn('Selected machine is offline; skipping auto-spawn.');
-                                    }
-                                } catch (error) {
-                                    console.error(`Failed to spawn agent ${roleId}:`, error);
+                                if (targetMachine?.active && resolvedCwd) {
+                                    placeholderMembers.push({
+                                        memberId,
+                                        sessionTag,
+                                        roleId,
+                                        displayName: agentTitle,
+                                        ...(roleSpecId ? { specId: roleSpecId, sourceImageId: roleSpecId } : {}),
+                                        ...(roleImageVersion !== undefined ? { sourceImageVersion: roleImageVersion } : {}),
+                                        spawnParams: [targetMachine.id, {
+                                            directory: resolvedCwd,
+                                            agent: getRoleAgentType(roleId),
+                                            sessionTag,
+                                            teamId: artifactId,
+                                            role: roleId,
+                                            sessionName: agentTitle,
+                                            sessionPath: resolvedCwd,
+                                            ...(roleSpecId ? { specId: roleSpecId } : {}),
+                                            ...(roleSpecId ? { sourceImageId: roleSpecId } : {}),
+                                            ...(roleImageVersion !== undefined ? { sourceImageVersion: roleImageVersion } : {}),
+                                            env: {
+                                                AHA_TEAM_MEMBER_ID: memberId,
+                                            },
+                                        }],
+                                    });
+                                } else if (!targetMachine?.active) {
+                                    console.warn('Selected machine is offline; skipping auto-spawn.');
                                 }
                             }
                         }
                     }
                 }
 
-                board.team.members = [...manualMembers, ...spawnedMembers];
-                const updatedBody = JSON.stringify(board, null, 2);
+                // Add placeholder members with lifecycle='spawn_pending' to the board
+                const pendingMembers = placeholderMembers.map((pm) => ({
+                    memberId: pm.memberId,
+                    sessionId: '',
+                    sessionTag: pm.sessionTag,
+                    roleId: pm.roleId,
+                    displayName: pm.displayName,
+                    ...(pm.specId ? { specId: pm.specId } : {}),
+                    ...(pm.sourceImageId ? { sourceImageId: pm.sourceImageId } : {}),
+                    ...(pm.sourceImageVersion !== undefined ? { sourceImageVersion: pm.sourceImageVersion } : {}),
+                    lifecycle: buildPendingSpawnLifecycle(),
+                }));
 
-                if (isPromptMode && hasRequestedSpawns && spawnedMembers.length === 0 && !promptBootstrapStarted) {
+                board.team.members = [...manualMembers, ...pendingMembers];
+
+                if (isPromptMode && hasRequestedSpawns && placeholderMembers.length === 0) {
                     throw new Error(seedSpawnFailureReason || 'Failed to auto-spawn org-manager.');
                 }
 
+                // Register team artifact FIRST (artifact-first pattern)
+                const updatedBody = JSON.stringify(board, null, 2);
                 await sync.registerTeam({
                     id: artifactId,
                     name: title.trim(),
@@ -1101,6 +1096,51 @@ export default function NewTeamScreen() {
                     board: JSON.parse(updatedBody) as KanbanBoard,
                 });
                 await sync.fetchArtifactWithBody(artifactId);
+
+                // Now spawn agents and collect results
+                for (const pm of placeholderMembers) {
+                    try {
+                        const spawnResult = await sync.spawnSessionOnMachine(...pm.spawnParams);
+
+                        if (spawnResult.status === 'active') {
+                            spawnedMembers.push({
+                                memberId: pm.memberId,
+                                sessionId: spawnResult.sessionId,
+                                sessionTag: pm.sessionTag,
+                                roleId: pm.roleId,
+                                displayName: pm.displayName,
+                                ...(pm.specId ? { specId: pm.specId } : {}),
+                                ...(pm.sourceImageId ? { sourceImageId: pm.sourceImageId } : {}),
+                                ...(pm.sourceImageVersion !== undefined ? { sourceImageVersion: pm.sourceImageVersion } : {}),
+                                lifecycle: buildActiveSpawnLifecycle(),
+                            });
+
+                            if (isPromptMode) {
+                                promptBootstrapStarted = true;
+                            }
+
+                            trackAgentDeployed(spawnResult.sessionId, {
+                                source: isPromptMode ? 'team_create_remote_prompt' : 'team_create_remote',
+                                team_id: artifactId,
+                                role_id: pm.roleId,
+                                runtime_type: getRoleAgentType(pm.roleId),
+                                machine_id: pm.spawnParams[0],
+                            });
+                        } else if (spawnResult.status === 'pending') {
+                            if (isPromptMode) {
+                                promptBootstrapStarted = true;
+                            }
+                            console.warn(`Spawned agent ${pm.roleId} but no sessionId was returned (pending)`);
+                        } else {
+                            console.warn(`Spawn failed for ${pm.roleId}: ${spawnResult.error}`);
+                        }
+                    } catch (spawnError) {
+                        console.error(`Failed to auto-spawn ${pm.roleId}:`, spawnError);
+                        if (isPromptMode && placeholderMembers.length === 1) {
+                            seedSpawnFailureReason = spawnError instanceof Error ? spawnError.message : 'Failed to auto-spawn.';
+                        }
+                    }
+                }
 
                 if (manualMembers.length > 0) {
                     await new Promise(resolve => setTimeout(resolve, 1000));

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, FlatList } from 'react-native';
+import { View, FlatList, Pressable, GestureResponderEvent } from 'react-native';
 import { Text } from '@/components/ui/StyledText';
 import { useAllSessions, useSessionGitStatus } from '@/sync/storage';
 import { Session } from '@/sync/storageTypes';
@@ -10,9 +10,11 @@ import { StyleSheet } from 'react-native-unistyles';
 import { Typography } from '@/constants/Typography';
 import { layout } from '@/utils/layout';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
-import { Pressable } from 'react-native';
 import { t } from '@/text';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Modal } from '@/modal';
+import { sync } from '@/sync/sync';
 
 interface SessionHistoryItem {
     type: 'session' | 'date-header';
@@ -53,6 +55,15 @@ const styles = StyleSheet.create((theme) => ({
         paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    sessionActionButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 12,
+        backgroundColor: '#22c55e14',
     },
     sessionCardFirst: {
         borderTopLeftRadius: 12,
@@ -97,10 +108,17 @@ const styles = StyleSheet.create((theme) => ({
         paddingHorizontal: 6,
         paddingVertical: 2,
     },
+    archivedChip: {
+        backgroundColor: '#6b728018',
+    },
     sessionMetaText: {
         fontSize: 11,
         color: theme.colors.textSecondary,
         ...Typography.default(),
+    },
+    archivedChipText: {
+        color: '#6b7280',
+        fontWeight: '700',
     },
     usageStatsBar: {
         marginHorizontal: 16,
@@ -246,7 +264,34 @@ function SessionCard({ session, isFirst, isLast, isSingle }: SessionCardProps) {
     const usage = session.latestUsage;
     const totalTokens = usage ? usage.inputTokens + usage.outputTokens : null;
     const linesChanged = gitStatus?.linesChanged ?? 0;
-    const showMeta = (totalTokens !== null && totalTokens > 0) || linesChanged > 0;
+    const isArchived = !session.active;
+    const showMeta = isArchived || (totalTokens !== null && totalTokens > 0) || linesChanged > 0;
+    const handleRestore = React.useCallback(async (event: GestureResponderEvent) => {
+        event.stopPropagation();
+        const confirmed = await Modal.confirm(
+            t('sessionInfo.restoreSession'),
+            t('sessionInfo.restoreSessionConfirm'),
+            {
+                confirmText: t('sessionInfo.restoreSession'),
+                cancelText: t('common.cancel'),
+            }
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const result = await sync.batchUnarchiveSessions([session.id]);
+            const restored = result.results.find((entry) => entry.sessionId === session.id);
+            if (!restored?.success) {
+                throw new Error(restored?.error || t('sessionInfo.failedToRestoreSession'));
+            }
+        } catch (error) {
+            console.error('Failed to restore session from recent list:', error);
+            Modal.alert(t('common.error'), error instanceof Error ? error.message : t('sessionInfo.failedToRestoreSession'));
+        }
+    }, [session.id]);
 
     return (
         <Pressable
@@ -257,7 +302,7 @@ function SessionCard({ session, isFirst, isLast, isSingle }: SessionCardProps) {
                 isLast ? styles.sessionCardLast : {}
             ]}
             onPress={() => navigateToSession(session.id)}
-        >
+            >
             <Avatar id={avatarId} size={48} />
             <View style={styles.sessionContent}>
                 <Text style={styles.sessionTitle} numberOfLines={1}>
@@ -268,6 +313,13 @@ function SessionCard({ session, isFirst, isLast, isSingle }: SessionCardProps) {
                 </Text>
                 {showMeta && (
                     <View style={styles.sessionMeta}>
+                        {isArchived ? (
+                            <View style={[styles.sessionMetaChip, styles.archivedChip]}>
+                                <Text style={[styles.sessionMetaText, styles.archivedChipText]}>
+                                    {t('agents.archived')}
+                                </Text>
+                            </View>
+                        ) : null}
                         {totalTokens !== null && totalTokens > 0 && (
                             <View style={styles.sessionMetaChip}>
                                 <Text style={styles.sessionMetaText}>{formatTokens(totalTokens)}</Text>
@@ -281,6 +333,11 @@ function SessionCard({ session, isFirst, isLast, isSingle }: SessionCardProps) {
                     </View>
                 )}
             </View>
+            {isArchived ? (
+                <Pressable onPress={handleRestore} style={styles.sessionActionButton} hitSlop={8}>
+                    <Ionicons name="refresh-outline" size={18} color="#16a34a" />
+                </Pressable>
+            ) : null}
         </Pressable>
     );
 }

@@ -375,13 +375,38 @@ export default function TeamDashboardScreen() {
             const result = await sync.archiveTeam(teamId, sessionIds);
             if (result.success) {
                 Modal.alert(t('common.success'), t('teams.archiveTeamSuccess', { archivedSessions: result.archivedSessions }));
-                router.replace('/teams');
             }
         } catch (error) {
             console.error('Failed to archive team:', error);
             Modal.alert(t('common.error'), t('teams.archiveTeamFailed'));
         }
-    }, [teamId, router, getSessionIds]);
+    }, [getSessionIds, teamId]);
+
+    const handleUnarchiveTeam = React.useCallback(async () => {
+        setShowMenu(false);
+        const confirmed = await Modal.confirm(
+            t('teams.restoreTeam'),
+            t('teams.restoreTeamConfirm'),
+            {
+                confirmText: t('teams.restoreAction'),
+                cancelText: t('common.cancel'),
+                destructive: false,
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const sessionIds = getSessionIds();
+            const result = await sync.unarchiveTeam(teamId, sessionIds);
+            if (result.success) {
+                Modal.alert(t('common.success'), t('teams.restoreTeamSuccess', { restoredSessions: result.restoredSessions }));
+            }
+        } catch (error) {
+            console.error('Failed to unarchive team:', error);
+            Modal.alert(t('common.error'), t('teams.restoreTeamFailed'));
+        }
+    }, [getSessionIds, teamId]);
 
     // Delete Team handler
     const handleDeleteTeam = React.useCallback(async () => {
@@ -516,6 +541,10 @@ export default function TeamDashboardScreen() {
         lastKnownKanbanBoardRef.current = board;
         return board;
     }, [artifact?.body, desktopBoard, desktopBridge, parsedArtifactBoard.board, parsedArtifactBoard.parseError]);
+    const isArchivedTeam = React.useMemo(() => {
+        const board = kanbanData as KanbanBoard & { archivedAt?: number; team?: { archivedAt?: number } };
+        return Boolean(board.archivedAt || board.team?.archivedAt);
+    }, [kanbanData]);
 
     const selectedTask = React.useMemo(() => {
         if (!selectedTaskId) {
@@ -623,7 +652,7 @@ export default function TeamDashboardScreen() {
                 }
 
                 try {
-                    const recoveredSessionId = await sync.spawnSessionOnMachine(machineId, {
+                    const spawnResult = await sync.spawnSessionOnMachine(machineId, {
                         sessionId: member.sessionId,
                         sessionTag,
                         directory,
@@ -641,30 +670,32 @@ export default function TeamDashboardScreen() {
                         },
                     });
 
-                    if (!recoveredSessionId) {
+                    if (spawnResult.status === 'failed') {
                         issues.push(`${label}: spawn failed`);
                         continue;
                     }
 
-                    await sync.addTeamMember(teamId, recoveredSessionId, member.roleId, sessionName, {
-                        memberId,
-                        sessionTag,
-                        candidateId: member.candidateId,
-                        specId: member.specId,
-                        customPrompt: member.customPrompt,
-                        parentSessionId: member.parentSessionId,
-                        executionPlane: member.executionPlane,
-                        runtimeType,
-                        machineId,
-                        workspacePath: directory,
-                    });
-                    trackAgentDeployed(recoveredSessionId, {
-                        source: 'team_recovery',
-                        team_id: teamId,
-                        role_id: member.roleId,
-                        runtime_type: runtimeType,
-                        execution_plane: member.executionPlane ?? null,
-                    });
+                    if (spawnResult.status === 'active') {
+                        await sync.addTeamMember(teamId, spawnResult.sessionId, member.roleId, sessionName, {
+                            memberId,
+                            sessionTag,
+                            candidateId: member.candidateId,
+                            specId: member.specId,
+                            customPrompt: member.customPrompt,
+                            parentSessionId: member.parentSessionId,
+                            executionPlane: member.executionPlane,
+                            runtimeType,
+                            machineId,
+                            workspacePath: directory,
+                        });
+                        trackAgentDeployed(spawnResult.sessionId, {
+                            source: 'team_recovery',
+                            team_id: teamId,
+                            role_id: member.roleId,
+                            runtime_type: runtimeType,
+                            execution_plane: member.executionPlane ?? null,
+                        });
+                    }
                     recovered += 1;
                 } catch (error) {
                     console.error(`Failed to recover team member ${label}:`, error);
@@ -1780,9 +1811,11 @@ export default function TeamDashboardScreen() {
                             </Text>
                         </Pressable>
                         <View style={[styles.desktopMenuDivider, { backgroundColor: shellTheme.panelDivider }]} />
-                        <Pressable onPress={handleArchiveTeam} style={styles.desktopMenuItem}>
-                            <Ionicons name="archive-outline" size={17} color={shellTheme.panelTitle} />
-                            <Text style={{ color: shellTheme.panelTitle, fontSize: 14 }}>Archive</Text>
+                        <Pressable onPress={isArchivedTeam ? handleUnarchiveTeam : handleArchiveTeam} style={styles.desktopMenuItem}>
+                            <Ionicons name={isArchivedTeam ? 'refresh-outline' : 'archive-outline'} size={17} color={shellTheme.panelTitle} />
+                            <Text style={{ color: shellTheme.panelTitle, fontSize: 14 }}>
+                                {isArchivedTeam ? t('teams.restoreTeam') : t('teams.archiveTeam')}
+                            </Text>
                         </Pressable>
                         <View style={[styles.desktopMenuDivider, { backgroundColor: shellTheme.panelDivider }]} />
                         <Pressable onPress={handleDeleteTeam} style={styles.desktopMenuItem}>
@@ -1896,7 +1929,9 @@ export default function TeamDashboardScreen() {
                     onRename={handleRenameTeam}
                     onRecover={handleRecoverTeam}
                     isRecovering={isRecoveringTeam}
-                    onArchive={handleArchiveTeam}
+                    onArchive={isArchivedTeam ? handleUnarchiveTeam : handleArchiveTeam}
+                    archiveLabel={isArchivedTeam ? t('teams.restoreTeam') : t('teams.archiveTeam')}
+                    archiveIconName={isArchivedTeam ? 'refresh-outline' : 'archive-outline'}
                     onDelete={handleDeleteTeam}
                 />
             )}

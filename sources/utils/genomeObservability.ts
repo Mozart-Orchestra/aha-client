@@ -501,7 +501,7 @@ export function getGenomeClosureState(input: {
     diffs?: AgentPlug[];
     ledger?: DiffLedgerEntry[];
     replayAlignment?: GenomeReplayAlignment | null;
-    agentStatus?: 'active' | 'paused' | 'archived' | null;
+    agentStatus?: 'active' | 'paused' | 'archived' | 'pending' | 'failed' | null;
     sessionActive?: boolean | null;
 }): GenomeClosureState {
     const {

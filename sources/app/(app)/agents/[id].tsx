@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Platform, TextInput } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,8 @@ import {
     fetchGenomeFavoriteStatus,
     fetchGenomeLedger,
     fetchGenomeSeed,
+    fetchGenomeVersion,
+    fetchGenomeVersions,
     getLegionMemberDisplayName,
     getLegionMemberReference,
     removeGenomeFavorite,
@@ -62,12 +64,24 @@ import {
     toggleFavoriteGenomeIdInStorage,
 } from '@/utils/favoriteGenomesStorage';
 import { isFavoriteGenomeId } from '@/utils/favoriteGenomes';
+import { Modal } from '@/modal';
 import { sync } from '@/sync/sync';
 import { useProfile, useSession, useSetting } from '@/sync/storage';
 import { DeployCorpsModal } from './DeployCorpsModal';
 import { RunStandaloneModal } from './RunStandaloneModal';
 import { JoinTeamModal } from './JoinTeamModal';
 import { getAgent, type AgentDetailRecord } from '@/sync/apiAgents';
+import {
+    fetchEntityTrials,
+    fetchTrialVerdicts,
+    forkGenome,
+    rollbackGenome,
+    submitUserVerdict,
+    triggerEvolve,
+    type EntityTrialRecord,
+    type EntityVerdictRecord,
+    type ManualEvolutionAction,
+} from '@/sync/apiEvolution';
 import { getStandaloneAgentStatusVisual } from '@/utils/standaloneAgentStatus';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -170,6 +184,25 @@ function getStatusTone(status: string): { text: string; bg: string } {
     return { text: '#8A7F74', bg: '#8A7F7418' };
 }
 
+function parseVerdictDimensions(dimensions: string | null): Record<string, number> | null {
+    if (!dimensions) {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(dimensions) as Record<string, number>;
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+function getManualActionLabel(action: ManualEvolutionAction): string {
+    if (action === 'keep') return t('agents.actionKeep');
+    if (action === 'keep_with_guardrails') return t('agents.actionGuardrails');
+    if (action === 'mutate') return t('agents.actionMutate');
+    return t('agents.actionDiscard');
+}
+
 function parseAgentDetailSpec(agent: AgentDetailRecord | null): AgentImage | null {
     if (!agent) return null;
 
@@ -194,6 +227,8 @@ export default React.memo(function AgentDetailScreen() {
     const profile = useProfile();
     const professionalMode = useSetting('professionalMode');
     const actorId = profile.id || null;
+    const credentials = sync.getCredentials();
+    const authToken = credentials?.token ?? null;
     const desktopShell = React.useContext(DesktopShellContext);
 
     const [genome, setGenome] = React.useState<GenomeRecord | null>(null);
@@ -210,6 +245,22 @@ export default React.memo(function AgentDetailScreen() {
     const [seedSpec, setSeedSpec] = React.useState<string | null>(null);
     const [replayedSpec, setReplayedSpec] = React.useState<string | null>(null);
     const [historyLoading, setHistoryLoading] = React.useState(false);
+    const [refreshNonce, setRefreshNonce] = React.useState(0);
+    const [trials, setTrials] = React.useState<EntityTrialRecord[]>([]);
+    const [verdictsByTrial, setVerdictsByTrial] = React.useState<Record<string, EntityVerdictRecord[]>>({});
+    const [evidenceLoading, setEvidenceLoading] = React.useState(false);
+    const [versionHistory, setVersionHistory] = React.useState<GenomeRecord[]>([]);
+    const [versionsLoading, setVersionsLoading] = React.useState(false);
+    const [verdictScore, setVerdictScore] = React.useState(4);
+    const [verdictAction, setVerdictAction] = React.useState<ManualEvolutionAction>('keep');
+    const [verdictText, setVerdictText] = React.useState('');
+    const [verdictSubmitting, setVerdictSubmitting] = React.useState(false);
+    const [evolveNote, setEvolveNote] = React.useState('');
+    const [evolveSubmitting, setEvolveSubmitting] = React.useState(false);
+    const [forkNamespace, setForkNamespace] = React.useState('');
+    const [forkName, setForkName] = React.useState('');
+    const [forkSubmitting, setForkSubmitting] = React.useState(false);
+    const [rollbackVersion, setRollbackVersion] = React.useState<number | null>(null);
 
     React.useEffect(() => {
         if (!id) {
@@ -269,7 +320,7 @@ export default React.memo(function AgentDetailScreen() {
         });
 
         return () => { cancelled = true; };
-    }, [id]);
+    }, [id, refreshNonce]);
 
     React.useEffect(() => {
         if (!genome) {
@@ -378,6 +429,95 @@ export default React.memo(function AgentDetailScreen() {
     const packageSurfaceIntro = imageKind === 'legion'
         ? 'authoring truth = team.json + team.norms.json · LegionImage remains the TypeScript compatibility projection'
         : 'authoring truth = agent.json · AgentImage remains the TypeScript compatibility projection';
+    const hasEvolutionTarget = Boolean(templateGenome?.id && templateGenome?.namespace && templateGenome?.name);
+    const refreshDetail = React.useCallback(() => {
+        setRefreshNonce((current) => current + 1);
+    }, []);
+
+    React.useEffect(() => {
+        if (!templateGenome?.id || !templateGenome.namespace || !templateGenome.name) {
+            setTrials([]);
+            setVerdictsByTrial({});
+            setEvidenceLoading(false);
+            return;
+        }
+        if (!credentials) {
+            setTrials([]);
+            setVerdictsByTrial({});
+            setEvidenceLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setEvidenceLoading(true);
+
+        fetchEntityTrials(credentials, templateGenome.id).then(async (nextTrials) => {
+            if (cancelled) return;
+            const sortedTrials = [...nextTrials].sort(
+                (left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime(),
+            );
+            setTrials(sortedTrials);
+
+            const recentTrials = sortedTrials.slice(0, 6);
+            const verdictEntries = await Promise.all(
+                recentTrials.map(async (trial) => {
+                    const verdicts = await fetchTrialVerdicts(credentials, trial.id);
+                    return [trial.id, verdicts] as const;
+                }),
+            );
+            if (cancelled) return;
+            setVerdictsByTrial(Object.fromEntries(verdictEntries));
+            setEvidenceLoading(false);
+        }).catch(() => {
+            if (cancelled) return;
+            setTrials([]);
+            setVerdictsByTrial({});
+            setEvidenceLoading(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [authToken, templateGenome?.id, templateGenome?.name, templateGenome?.namespace, refreshNonce]);
+
+    React.useEffect(() => {
+        if (!templateGenome?.namespace || !templateGenome?.name) {
+            setVersionHistory([]);
+            setVersionsLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setVersionsLoading(true);
+        fetchGenomeVersions(templateGenome.namespace, templateGenome.name).then((versions) => {
+            if (cancelled) return;
+            const sortedVersions = [...versions].sort((left, right) => right.version - left.version);
+            setVersionHistory(sortedVersions);
+            setVersionsLoading(false);
+        }).catch(() => {
+            if (cancelled) return;
+            setVersionHistory([]);
+            setVersionsLoading(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [templateGenome?.name, templateGenome?.namespace, refreshNonce]);
+
+    React.useEffect(() => {
+        if (!templateGenome) {
+            setForkNamespace('');
+            setForkName('');
+            return;
+        }
+
+        const nextNamespace = templateGenome.namespace === '@official'
+            ? '@public'
+            : templateGenome.namespace ?? '@public';
+        setForkNamespace(nextNamespace);
+        setForkName(`${templateGenome.name}-fork`);
+    }, [templateGenome?.id]);
 
     React.useEffect(() => {
         const namespace = templateGenome?.namespace;
@@ -457,6 +597,19 @@ export default React.memo(function AgentDetailScreen() {
         || legionLayerFacts.length > 0
         || corpsTeamPrompt
     );
+    const visibleTrials = React.useMemo(() => trials.slice(0, 6), [trials]);
+    const latestVerdictId = React.useMemo(() => {
+        for (const trial of visibleTrials) {
+            const verdicts = verdictsByTrial[trial.id] ?? [];
+            const sortedVerdicts = [...verdicts].sort(
+                (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+            );
+            if (sortedVerdicts[0]?.id) {
+                return sortedVerdicts[0].id;
+            }
+        }
+        return null;
+    }, [verdictsByTrial, visibleTrials]);
 
     const toggleFavorite = React.useCallback(async () => {
         if (!genome) return;
@@ -482,6 +635,208 @@ export default React.memo(function AgentDetailScreen() {
             setFavoriteLoading(false);
         }
     }, [actorId, favoriteLoading, genome, serverFavorited]);
+
+    const handleSubmitVerdict = React.useCallback(async () => {
+        const activeCredentials = sync.getCredentials();
+        if (!activeCredentials) {
+            await Modal.alert(t('common.error'), t('agents.signInToEvolve'));
+            return;
+        }
+        if (!templateGenome?.id || !templateGenome.namespace || !templateGenome.name) {
+            await Modal.alert(t('common.error'), t('agents.noEvolutionTarget'));
+            return;
+        }
+        if (!verdictText.trim()) {
+            await Modal.alert(t('common.error'), t('agents.verdictNotesRequired'));
+            return;
+        }
+        if (verdictSubmitting) {
+            return;
+        }
+
+        setVerdictSubmitting(true);
+        try {
+            const score = verdictScore * 20;
+            await submitUserVerdict(activeCredentials, {
+                namespace: templateGenome.namespace,
+                name: templateGenome.name,
+                entityId: templateGenome.id,
+                sessionId: agentDetail?.sessionId ?? undefined,
+                contextNarrative: `Manual kanban verdict for ${templateGenome.namespace}/${templateGenome.name}`,
+                readerRole: actorId ? `user:${actorId}` : 'user',
+                content: verdictText.trim(),
+                score,
+                action: verdictAction,
+                dimensions: {
+                    delivery: score,
+                    integrity: score,
+                    efficiency: score,
+                    collaboration: score,
+                    reliability: score,
+                },
+                materializeFeedback: true,
+            });
+            if (verdictAction === 'mutate' && !evolveNote.trim()) {
+                setEvolveNote(verdictText.trim());
+            }
+            setVerdictText('');
+            refreshDetail();
+            await Modal.alert(t('common.success'), t('agents.userVerdictSaved'));
+        } catch (error) {
+            await Modal.alert(
+                t('common.error'),
+                error instanceof Error ? error.message : t('agents.userVerdictFailed'),
+            );
+        } finally {
+            setVerdictSubmitting(false);
+        }
+    }, [
+        actorId,
+        agentDetail?.sessionId,
+        evolveNote,
+        refreshDetail,
+        templateGenome,
+        verdictAction,
+        verdictScore,
+        verdictSubmitting,
+        verdictText,
+    ]);
+
+    const handleTriggerEvolve = React.useCallback(async () => {
+        const activeCredentials = sync.getCredentials();
+        if (!activeCredentials) {
+            await Modal.alert(t('common.error'), t('agents.signInToEvolve'));
+            return;
+        }
+        if (!templateGenome?.namespace || !templateGenome.name) {
+            await Modal.alert(t('common.error'), t('agents.noEvolutionTarget'));
+            return;
+        }
+        if (!evolveNote.trim()) {
+            await Modal.alert(t('common.error'), t('agents.evolveNoteRequired'));
+            return;
+        }
+        if (evolveSubmitting) {
+            return;
+        }
+
+        setEvolveSubmitting(true);
+        try {
+            await triggerEvolve(activeCredentials, {
+                namespace: templateGenome.namespace,
+                name: templateGenome.name,
+                description: `Manual evolve from kanban: ${evolveNote.trim().slice(0, 120)}`,
+                verdictRefs: latestVerdictId ? [latestVerdictId] : undefined,
+                strategy: 'moderate',
+                authorRole: actorId ? `user:${actorId}` : 'user',
+                changes: [
+                    {
+                        type: 'string',
+                        path: 'memory.learnings',
+                        op: 'append',
+                        content: evolveNote.trim(),
+                    },
+                    {
+                        type: 'narrative',
+                        content: evolveNote.trim(),
+                    },
+                ],
+            });
+            setEvolveNote('');
+            refreshDetail();
+            await Modal.alert(t('common.success'), t('agents.manualEvolveSuccess'));
+        } catch (error) {
+            await Modal.alert(
+                t('common.error'),
+                error instanceof Error ? error.message : t('agents.manualEvolveFailed'),
+            );
+        } finally {
+            setEvolveSubmitting(false);
+        }
+    }, [actorId, evolveNote, evolveSubmitting, latestVerdictId, refreshDetail, templateGenome?.name, templateGenome?.namespace]);
+
+    const handleForkGenome = React.useCallback(async () => {
+        const activeCredentials = sync.getCredentials();
+        if (!activeCredentials) {
+            await Modal.alert(t('common.error'), t('agents.signInToEvolve'));
+            return;
+        }
+        if (!templateGenome?.id) {
+            await Modal.alert(t('common.error'), t('agents.noEvolutionTarget'));
+            return;
+        }
+        if (!forkNamespace.trim() || !forkName.trim()) {
+            await Modal.alert(t('common.error'), t('agents.forkFieldsRequired'));
+            return;
+        }
+        if (forkSubmitting) {
+            return;
+        }
+
+        setForkSubmitting(true);
+        try {
+            const result = await forkGenome(activeCredentials, templateGenome.id, {
+                namespace: forkNamespace.trim(),
+                name: forkName.trim(),
+                description: templateGenome.description,
+                tags: templateGenome.tags,
+                category: templateGenome.category,
+                isPublic: false,
+                publisherId: actorId,
+            });
+            await Modal.alert(t('common.success'), t('agents.forkSuccess'));
+            router.push({ pathname: '/agents/[id]', params: { id: result.genome.id } } as any);
+        } catch (error) {
+            await Modal.alert(
+                t('common.error'),
+                error instanceof Error ? error.message : t('agents.forkFailed'),
+            );
+        } finally {
+            setForkSubmitting(false);
+        }
+    }, [actorId, forkName, forkNamespace, forkSubmitting, router, templateGenome]);
+
+    const handleRollbackVersion = React.useCallback(async (targetVersion: number) => {
+        const activeCredentials = sync.getCredentials();
+        if (!activeCredentials) {
+            await Modal.alert(t('common.error'), t('agents.signInToEvolve'));
+            return;
+        }
+        if (!templateGenome?.namespace || !templateGenome.name) {
+            await Modal.alert(t('common.error'), t('agents.noEvolutionTarget'));
+            return;
+        }
+        if (rollbackVersion != null) {
+            return;
+        }
+
+        setRollbackVersion(targetVersion);
+        try {
+            const targetGenome = await fetchGenomeVersion(templateGenome.namespace, templateGenome.name, targetVersion);
+            if (!targetGenome) {
+                throw new Error(t('agents.rollbackSourceMissing'));
+            }
+            await rollbackGenome(activeCredentials, {
+                namespace: templateGenome.namespace,
+                name: templateGenome.name,
+                targetVersion,
+                currentSpec: templateGenome.spec,
+                targetSpec: targetGenome.spec,
+                verdictRefs: latestVerdictId ? [latestVerdictId] : undefined,
+                authorRole: actorId ? `user:${actorId}` : 'user',
+                authorSession: agentDetail?.sessionId ?? undefined,
+            });
+            refreshDetail();
+            await Modal.alert(t('common.success'), t('agents.rollbackSuccess', { version: targetVersion }));
+        } catch (error) {
+            await Modal.alert(
+                t('common.error'),
+                error instanceof Error ? error.message : t('agents.rollbackFailed'),
+            );
+        } finally {
+            setRollbackVersion(null);
+        }
+    }, [actorId, agentDetail?.sessionId, latestVerdictId, refreshDetail, rollbackVersion, templateGenome]);
 
     if (loading) {
         const loadingView = (
@@ -716,6 +1071,272 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
+                    {hasEvolutionTarget ? (
+                        <ItemGroup title={t('agents.evolutionControls')}>
+                            <Item
+                                title={t('agents.evolutionTarget')}
+                                subtitle={`${templateGenome?.namespace}/${templateGenome?.name} · ${templateGenome?.id}`}
+                                subtitleLines={0}
+                            />
+                            {!credentials ? (
+                                <Item
+                                    title={t('agents.signInToEvolve')}
+                                    subtitle={t('agents.signInToEvolveHint')}
+                                    subtitleLines={0}
+                                    icon={<Ionicons name="log-in-outline" size={18} color={theme.colors.textSecondary} />}
+                                />
+                            ) : (
+                                <>
+                                    <View style={[styles.formCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
+                                        <Text style={[styles.formCardTitle, { color: theme.colors.text }]}>
+                                            {t('agents.userVerdictTitle')}
+                                        </Text>
+                                        <Text style={[styles.formCardHint, { color: theme.colors.textSecondary }]}>
+                                            {t('agents.userVerdictHint')}
+                                        </Text>
+                                        <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                                            {t('agents.verdictScoreLabel')}
+                                        </Text>
+                                        <View style={styles.choiceRow}>
+                                            {[1, 2, 3, 4, 5].map((score) => {
+                                                const active = verdictScore === score;
+                                                return (
+                                                    <Pressable
+                                                        key={`score-${score}`}
+                                                        onPress={() => setVerdictScore(score)}
+                                                        style={[
+                                                            styles.choiceChip,
+                                                            {
+                                                                borderColor: active ? theme.colors.button.primary.background : theme.colors.divider,
+                                                                backgroundColor: active ? theme.colors.groupped.background : theme.colors.surface,
+                                                            },
+                                                        ]}
+                                                    >
+                                                        <Text style={[styles.choiceChipText, { color: active ? theme.colors.button.primary.background : theme.colors.text }]}>
+                                                            {score}
+                                                        </Text>
+                                                    </Pressable>
+                                                );
+                                            })}
+                                        </View>
+                                        <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                                            {t('agents.verdictActionLabel')}
+                                        </Text>
+                                        <View style={styles.choiceRow}>
+                                            {(['keep', 'keep_with_guardrails', 'mutate', 'discard'] as ManualEvolutionAction[]).map((action) => {
+                                                const active = verdictAction === action;
+                                                return (
+                                                    <Pressable
+                                                        key={action}
+                                                        onPress={() => setVerdictAction(action)}
+                                                        style={[
+                                                            styles.choiceChip,
+                                                            {
+                                                                borderColor: active ? theme.colors.button.primary.background : theme.colors.divider,
+                                                                backgroundColor: active ? theme.colors.groupped.background : theme.colors.surface,
+                                                            },
+                                                        ]}
+                                                    >
+                                                        <Text style={[styles.choiceChipText, { color: active ? theme.colors.button.primary.background : theme.colors.text }]}>
+                                                            {getManualActionLabel(action)}
+                                                        </Text>
+                                                    </Pressable>
+                                                );
+                                            })}
+                                        </View>
+                                        <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                                            {t('agents.verdictNotesLabel')}
+                                        </Text>
+                                        <TextInput
+                                            style={[
+                                                styles.multilineInput,
+                                                {
+                                                    color: theme.colors.text,
+                                                    backgroundColor: theme.colors.surface,
+                                                    borderColor: theme.colors.divider,
+                                                },
+                                                Platform.OS === 'web' && { outlineStyle: 'none' } as any,
+                                            ]}
+                                            value={verdictText}
+                                            onChangeText={setVerdictText}
+                                            multiline
+                                            placeholder={t('agents.verdictNotesPlaceholder')}
+                                            placeholderTextColor={theme.colors.input.placeholder}
+                                            textAlignVertical="top"
+                                        />
+                                        <Pressable
+                                            style={[styles.submitButton, { backgroundColor: theme.colors.button.primary.background }]}
+                                            onPress={handleSubmitVerdict}
+                                            disabled={verdictSubmitting}
+                                        >
+                                            {verdictSubmitting ? (
+                                                <ActivityIndicator size="small" color={theme.colors.button.primary.tint} />
+                                            ) : (
+                                                <Text style={[styles.submitButtonText, { color: theme.colors.button.primary.tint }]}>
+                                                    {t('agents.submitVerdict')}
+                                                </Text>
+                                            )}
+                                        </Pressable>
+                                    </View>
+
+                                    <View style={[styles.formCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
+                                        <Text style={[styles.formCardTitle, { color: theme.colors.text }]}>
+                                            {t('agents.manualEvolveTitle')}
+                                        </Text>
+                                        <Text style={[styles.formCardHint, { color: theme.colors.textSecondary }]}>
+                                            {t('agents.manualEvolveHint')}
+                                        </Text>
+                                        <TextInput
+                                            style={[
+                                                styles.multilineInput,
+                                                {
+                                                    color: theme.colors.text,
+                                                    backgroundColor: theme.colors.surface,
+                                                    borderColor: theme.colors.divider,
+                                                },
+                                                Platform.OS === 'web' && { outlineStyle: 'none' } as any,
+                                            ]}
+                                            value={evolveNote}
+                                            onChangeText={setEvolveNote}
+                                            multiline
+                                            placeholder={t('agents.manualEvolvePlaceholder')}
+                                            placeholderTextColor={theme.colors.input.placeholder}
+                                            textAlignVertical="top"
+                                        />
+                                        <Pressable
+                                            style={[styles.submitButton, { backgroundColor: theme.colors.button.primary.background }]}
+                                            onPress={handleTriggerEvolve}
+                                            disabled={evolveSubmitting}
+                                        >
+                                            {evolveSubmitting ? (
+                                                <ActivityIndicator size="small" color={theme.colors.button.primary.tint} />
+                                            ) : (
+                                                <Text style={[styles.submitButtonText, { color: theme.colors.button.primary.tint }]}>
+                                                    {t('agents.createEvolvedVersion')}
+                                                </Text>
+                                            )}
+                                        </Pressable>
+                                    </View>
+
+                                    <View style={[styles.formCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
+                                        <Text style={[styles.formCardTitle, { color: theme.colors.text }]}>
+                                            {t('agents.forkTitle')}
+                                        </Text>
+                                        <View style={styles.formFieldStack}>
+                                            <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                                                {t('agents.forkNamespaceLabel')}
+                                            </Text>
+                                            <TextInput
+                                                style={[
+                                                    styles.textField,
+                                                    {
+                                                        color: theme.colors.text,
+                                                        backgroundColor: theme.colors.surface,
+                                                        borderColor: theme.colors.divider,
+                                                    },
+                                                    Platform.OS === 'web' && { outlineStyle: 'none' } as any,
+                                                ]}
+                                                value={forkNamespace}
+                                                onChangeText={setForkNamespace}
+                                                autoCapitalize="none"
+                                                autoCorrect={false}
+                                            />
+                                        </View>
+                                        <View style={styles.formFieldStack}>
+                                            <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                                                {t('agents.forkNameLabel')}
+                                            </Text>
+                                            <TextInput
+                                                style={[
+                                                    styles.textField,
+                                                    {
+                                                        color: theme.colors.text,
+                                                        backgroundColor: theme.colors.surface,
+                                                        borderColor: theme.colors.divider,
+                                                    },
+                                                    Platform.OS === 'web' && { outlineStyle: 'none' } as any,
+                                                ]}
+                                                value={forkName}
+                                                onChangeText={setForkName}
+                                                autoCapitalize="none"
+                                                autoCorrect={false}
+                                            />
+                                        </View>
+                                        <Pressable
+                                            style={[styles.secondaryButton, { borderColor: theme.colors.divider, backgroundColor: theme.colors.surfaceHigh }]}
+                                            onPress={handleForkGenome}
+                                            disabled={forkSubmitting}
+                                        >
+                                            {forkSubmitting ? (
+                                                <ActivityIndicator size="small" color={theme.colors.text} />
+                                            ) : (
+                                                <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>
+                                                    {t('agents.forkCreate')}
+                                                </Text>
+                                            )}
+                                        </Pressable>
+                                    </View>
+
+                                    <View style={[styles.formCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
+                                        <Text style={[styles.formCardTitle, { color: theme.colors.text }]}>
+                                            {t('agents.versionHistoryTitle')}
+                                        </Text>
+                                        {versionsLoading ? (
+                                            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                                        ) : versionHistory.length === 0 ? (
+                                            <Text style={[styles.formCardHint, { color: theme.colors.textSecondary }]}>
+                                                {t('agents.noVersionHistory')}
+                                            </Text>
+                                        ) : (
+                                            <View style={styles.versionList}>
+                                                {versionHistory.slice(0, 6).map((version) => {
+                                                    const current = version.version === templateGenome?.version;
+                                                    const busy = rollbackVersion === version.version;
+                                                    return (
+                                                        <View
+                                                            key={`${version.id}-${version.version}`}
+                                                            style={[
+                                                                styles.versionCard,
+                                                                {
+                                                                    backgroundColor: theme.colors.surface,
+                                                                    borderColor: theme.colors.divider,
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <View style={{ flex: 1 }}>
+                                                                <Text style={[styles.versionCardTitle, { color: theme.colors.text }]}>
+                                                                    v{version.version} {current ? `· ${t('agents.currentVersion')}` : ''}
+                                                                </Text>
+                                                                <Text style={[styles.versionCardMeta, { color: theme.colors.textSecondary }]}>
+                                                                    {formatDate(version.createdAt)}
+                                                                </Text>
+                                                            </View>
+                                                            {!current ? (
+                                                                <Pressable
+                                                                    style={[styles.rollbackButton, { borderColor: theme.colors.divider }]}
+                                                                    onPress={() => handleRollbackVersion(version.version)}
+                                                                    disabled={busy}
+                                                                >
+                                                                    {busy ? (
+                                                                        <ActivityIndicator size="small" color={theme.colors.text} />
+                                                                    ) : (
+                                                                        <Text style={[styles.rollbackButtonText, { color: theme.colors.text }]}>
+                                                                            {t('agents.rollbackAction')}
+                                                                        </Text>
+                                                                    )}
+                                                                </Pressable>
+                                                            ) : null}
+                                                        </View>
+                                                    );
+                                                })}
+                                            </View>
+                                        )}
+                                    </View>
+                                </>
+                            )}
+                        </ItemGroup>
+                    ) : null}
+
                     {professionalMode && agentDetail ? (
                         <ItemGroup title="Instance">
                             <Item title="Status" detail={agentDetail.status} />
@@ -875,7 +1496,10 @@ export default React.memo(function AgentDetailScreen() {
                             />
                             <Item
                                 title="Behavior delta"
-                                subtitle="Trial / verdict / materialization evidence is not wired into this page yet."
+                                subtitle={evidenceLoading
+                                    ? t('agents.evidenceLoading')
+                                    : `${trials.length} trial${trials.length === 1 ? '' : 's'} · ${Object.values(verdictsByTrial).reduce((total, verdicts) => total + verdicts.length, 0)} verdict${Object.values(verdictsByTrial).reduce((total, verdicts) => total + verdicts.length, 0) === 1 ? '' : 's'}`
+                                }
                                 subtitleLines={0}
                                 detail={formatStatusLabel(closureState.behaviorDeltaStatus)}
                                 detailStyle={{ color: getStatusTone(closureState.behaviorDeltaStatus).text, fontWeight: '700' }}
@@ -1363,6 +1987,113 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
+                    {hasEvolutionTarget && credentials ? (
+                        <ItemGroup title={t('agents.evidenceTitle')}>
+                            {evidenceLoading ? (
+                                <Item
+                                    title={t('agents.evidenceLoading')}
+                                    icon={<ActivityIndicator size="small" color={theme.colors.textSecondary} />}
+                                    showChevron={false}
+                                />
+                            ) : visibleTrials.length === 0 ? (
+                                <Item
+                                    title={t('agents.noEvidenceYet')}
+                                    subtitle={t('agents.noEvidenceHint')}
+                                    subtitleLines={0}
+                                    showChevron={false}
+                                />
+                            ) : (
+                                visibleTrials.map((trial) => {
+                                    const verdicts = [...(verdictsByTrial[trial.id] ?? [])].sort(
+                                        (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+                                    );
+                                    return (
+                                        <View
+                                            key={trial.id}
+                                            style={[
+                                                styles.evidenceCard,
+                                                {
+                                                    backgroundColor: theme.colors.surfaceHigh,
+                                                    borderColor: theme.colors.divider,
+                                                },
+                                            ]}
+                                        >
+                                            <View style={styles.evidenceHeader}>
+                                                <Text style={[styles.evidenceTitle, { color: theme.colors.text }]}>
+                                                    {t('agents.trialLabel', { version: trial.entityVersion })}
+                                                </Text>
+                                                <Text style={[styles.evidenceMeta, { color: theme.colors.textSecondary }]}>
+                                                    {formatDate(trial.startedAt)}
+                                                </Text>
+                                            </View>
+                                            {trial.sessionId ? (
+                                                <Text style={[styles.evidenceMeta, { color: theme.colors.textSecondary }]}>
+                                                    {t('agents.sessionLabel')}: {trial.sessionId}
+                                                </Text>
+                                            ) : null}
+                                            {trial.contextNarrative ? (
+                                                <Text style={[styles.evidenceBody, { color: theme.colors.textSecondary }]}>
+                                                    {trial.contextNarrative}
+                                                </Text>
+                                            ) : null}
+                                            <View style={styles.evidenceVerdictList}>
+                                                {verdicts.length === 0 ? (
+                                                    <Text style={[styles.evidenceMeta, { color: theme.colors.textSecondary }]}>
+                                                        {t('agents.noVerdictsForTrial')}
+                                                    </Text>
+                                                ) : verdicts.map((verdict) => {
+                                                    const dims = parseVerdictDimensions(verdict.dimensions);
+                                                    return (
+                                                        <View
+                                                            key={verdict.id}
+                                                            style={[
+                                                                styles.verdictCard,
+                                                                {
+                                                                    backgroundColor: theme.colors.surface,
+                                                                    borderColor: theme.colors.divider,
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <View style={styles.evidenceHeader}>
+                                                                <Text style={[styles.verdictTitle, { color: theme.colors.text }]}>
+                                                                    {verdict.readerRole}
+                                                                </Text>
+                                                                <View style={styles.choiceRow}>
+                                                                    {verdict.score != null ? (
+                                                                        <View style={[styles.ledgerBadge, { backgroundColor: `${scoreColor(verdict.score)}18` }]}>
+                                                                            <Text style={[styles.ledgerBadgeText, { color: scoreColor(verdict.score) }]}>
+                                                                                {verdict.score}
+                                                                            </Text>
+                                                                        </View>
+                                                                    ) : null}
+                                                                    {verdict.action ? (
+                                                                        <View style={[styles.ledgerBadge, { backgroundColor: theme.colors.surfaceHigh }]}>
+                                                                            <Text style={[styles.ledgerBadgeText, { color: theme.colors.textSecondary }]}>
+                                                                                {getManualActionLabel(verdict.action)}
+                                                                            </Text>
+                                                                        </View>
+                                                                    ) : null}
+                                                                </View>
+                                                            </View>
+                                                            <Text style={[styles.evidenceBody, { color: theme.colors.text }]}>
+                                                                {verdict.content}
+                                                            </Text>
+                                                            {dims ? (
+                                                                <Text style={[styles.evidenceMeta, { color: theme.colors.textSecondary }]}>
+                                                                    {Object.entries(dims).map(([key, value]) => `${key}:${Math.round(value)}`).join(' · ')}
+                                                                </Text>
+                                                            ) : null}
+                                                        </View>
+                                                    );
+                                                })}
+                                            </View>
+                                        </View>
+                                    );
+                                })
+                            )}
+                        </ItemGroup>
+                    ) : null}
+
                     {/* ── Tags ── */}
                     {tags.length > 0 ? (
                         <View style={styles.tagsSection}>
@@ -1510,6 +2241,120 @@ const styles = StyleSheet.create((theme) => ({
         fontSize: 13,
         fontWeight: '500',
     },
+    formCard: {
+        marginHorizontal: 16,
+        marginVertical: 8,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 14,
+        gap: 10,
+    },
+    formCardTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    formCardHint: {
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    formLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    formFieldStack: {
+        gap: 6,
+    },
+    choiceRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    choiceChip: {
+        minHeight: 34,
+        minWidth: 34,
+        paddingHorizontal: 12,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    choiceChipText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    textField: {
+        minHeight: 42,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 14,
+    },
+    multilineInput: {
+        minHeight: 108,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    submitButton: {
+        minHeight: 40,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+    },
+    submitButtonText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    secondaryButton: {
+        minHeight: 40,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+    },
+    secondaryButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    versionList: {
+        gap: 8,
+    },
+    versionCard: {
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    versionCardTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    versionCardMeta: {
+        fontSize: 12,
+        marginTop: 2,
+    },
+    rollbackButton: {
+        minHeight: 34,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    rollbackButtonText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
     statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1538,6 +2383,46 @@ const styles = StyleSheet.create((theme) => ({
     },
     tagChipText: {
         fontSize: 12,
+    },
+    evidenceCard: {
+        marginHorizontal: 16,
+        marginVertical: 8,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 14,
+        gap: 8,
+    },
+    evidenceHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    evidenceTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    evidenceMeta: {
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    evidenceBody: {
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    evidenceVerdictList: {
+        gap: 8,
+        marginTop: 4,
+    },
+    verdictCard: {
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 12,
+        gap: 6,
+    },
+    verdictTitle: {
+        fontSize: 13,
+        fontWeight: '600',
     },
     ledgerSection: {
         paddingHorizontal: 16,

@@ -130,6 +130,7 @@ interface SessionKillResponse {
 // Response types for spawn session
 export type SpawnSessionResult =
     | { type: 'success'; sessionId: string }
+    | { type: 'pending'; pendingSessionId?: string; pid?: number }
     | { type: 'requestToApproveDirectoryCreation'; directory: string }
     | { type: 'error'; errorMessage: string };
 

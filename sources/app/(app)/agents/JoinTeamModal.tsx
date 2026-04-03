@@ -18,6 +18,7 @@ import { getRecentPathForMachine, getKnownPathsForMachine, updateRecentMachinePa
 import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
 import { parseAgentImage } from '@/utils/genomeHub';
 import type { GenomeRecord } from '@/utils/genomeHub';
+import { buildPendingSpawnLifecycle } from '@/utils/spawnState';
 import { randomUUID } from '@/utils/uuid';
 
 function buildTeamMemberSessionTag(teamId: string, memberId: string): string {
@@ -135,7 +136,7 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
             const sessionName = spec?.displayName?.trim() || genome.name;
             const trimmedCustomPrompt = customPrompt.trim();
 
-            const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
+            const spawnResult = await sync.spawnSessionOnMachine(selectedMachineId, {
                 directory: cwd.trim(),
                 agent: runtimeType,
                 sessionTag,
@@ -149,23 +150,35 @@ export const JoinTeamModal = React.memo(function JoinTeamModal({
                 },
             });
 
-            if (!sessionId) {
-                throw new Error('Spawn returned no session ID');
+            if (spawnResult.status === 'failed') {
+                throw new Error(spawnResult.error);
             }
-
-            await sync.addTeamMember(selectedTeamId, sessionId, roleId, sessionName, {
-                memberId,
-                sessionTag,
-                candidateId: `spec:${genome.id}`,
-                specId: genome.id,
-                runtimeType,
-                machineId: selectedMachineId,
-                workspacePath: cwd.trim(),
-                ...(trimmedCustomPrompt ? { customPrompt: trimmedCustomPrompt } : {}),
-            });
 
             const updatedPaths = updateRecentMachinePaths(recentPaths, selectedMachineId, cwd.trim());
             sync.applySettings({ recentMachinePaths: updatedPaths });
+
+            await sync.addTeamMember(
+                selectedTeamId,
+                spawnResult.status === 'active' ? spawnResult.sessionId : '',
+                roleId,
+                sessionName,
+                {
+                    memberId,
+                    sessionTag,
+                    candidateId: `spec:${genome.id}`,
+                    specId: genome.id,
+                    sourceImageId: genome.id,
+                    sourceImageVersion: genome.version,
+                    runtimeType,
+                    machineId: selectedMachineId,
+                    workspacePath: cwd.trim(),
+                    ...(spawnResult.status === 'pending'
+                        ? { lifecycle: buildPendingSpawnLifecycle() }
+                        : {}),
+                    ...(trimmedCustomPrompt ? { customPrompt: trimmedCustomPrompt } : {}),
+                },
+            );
+
             onJoined?.();
             onClose();
         } catch (e) {

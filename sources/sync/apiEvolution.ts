@@ -769,3 +769,393 @@ export async function fetchRepairSignals(
         return await response.json() as RepairSignalsResponse;
     });
 }
+
+// ============================================================================
+// Phase 5 — Entity Evidence / Manual Evolution Controls
+// ============================================================================
+
+export interface EntityLogRef {
+    kind: 'claude' | 'codex' | 'team' | 'daemon' | 'git' | 'browser' | 'other';
+    path: string;
+    sessionId?: string;
+}
+
+export interface EntityTrialRecord {
+    id: string;
+    hubEntityId: string;
+    entityVersion: number;
+    teamId: string | null;
+    sessionId: string | null;
+    contextNarrative: string | null;
+    logRefs: string | null;
+    startedAt: string;
+    endedAt: string | null;
+}
+
+export interface EntityVerdictRecord {
+    id: string;
+    trialId: string;
+    readerRole: string;
+    readerSessionId: string | null;
+    content: string;
+    score: number | null;
+    action: 'keep' | 'keep_with_guardrails' | 'mutate' | 'discard' | null;
+    dimensions: string | null;
+    createdAt: string;
+}
+
+export type ManualEvolutionAction = 'keep' | 'keep_with_guardrails' | 'mutate' | 'discard';
+
+export type EntityDiffChange = {
+    type: 'kv';
+    path: string;
+    from?: unknown;
+    to: unknown;
+} | {
+    type: 'string';
+    path: string;
+    op: 'append' | 'replace' | 'remove';
+    content: string;
+    from?: string;
+} | {
+    type: 'narrative';
+    content: string;
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function buildDiffChanges(
+    parentValue: unknown,
+    nextValue: unknown,
+    pathPrefix = '',
+): EntityDiffChange[] {
+    if (JSON.stringify(parentValue) === JSON.stringify(nextValue)) {
+        return [];
+    }
+
+    if (!pathPrefix) {
+        if (!isPlainObject(parentValue) || !isPlainObject(nextValue)) {
+            return [];
+        }
+
+        const changes: EntityDiffChange[] = [];
+        const keySet = new Set([
+            ...Object.keys(parentValue),
+            ...Object.keys(nextValue),
+        ]);
+
+        for (const key of [...keySet].sort()) {
+            changes.push(...buildDiffChanges(parentValue[key], nextValue[key], key));
+        }
+
+        return changes;
+    }
+
+    if (nextValue === undefined) {
+        return [{ type: 'kv', path: pathPrefix, from: parentValue, to: undefined }];
+    }
+
+    if (parentValue === undefined) {
+        return [{ type: 'kv', path: pathPrefix, to: nextValue }];
+    }
+
+    if (isPlainObject(parentValue) && isPlainObject(nextValue)) {
+        const changes: EntityDiffChange[] = [];
+        const keySet = new Set([
+            ...Object.keys(parentValue),
+            ...Object.keys(nextValue),
+        ]);
+
+        for (const key of [...keySet].sort()) {
+            changes.push(...buildDiffChanges(
+                parentValue[key],
+                nextValue[key],
+                `${pathPrefix}.${key}`,
+            ));
+        }
+
+        return changes;
+    }
+
+    return [{ type: 'kv', path: pathPrefix, from: parentValue, to: nextValue }];
+}
+
+function computeSpecDiffChanges(parentSpec: string, nextSpec: string): EntityDiffChange[] {
+    try {
+        const parentParsed = JSON.parse(parentSpec) as unknown;
+        const nextParsed = JSON.parse(nextSpec) as unknown;
+        return buildDiffChanges(parentParsed, nextParsed);
+    } catch {
+        return [];
+    }
+}
+
+export interface GenomeForkParams {
+    namespace: string;
+    name: string;
+    version?: number;
+    description?: string | null;
+    spec?: string;
+    tags?: string | null;
+    category?: string | null;
+    isPublic?: boolean;
+    publisherId?: string | null;
+}
+
+export interface GenomePromoteResponse {
+    genome: Genome;
+    validation: Record<string, unknown>;
+}
+
+export interface SubmitUserVerdictParams {
+    namespace: string;
+    name: string;
+    entityId?: string;
+    teamId?: string;
+    sessionId?: string;
+    contextNarrative?: string;
+    logRefs?: EntityLogRef[];
+    readerRole: string;
+    readerSessionId?: string;
+    content: string;
+    score: number;
+    action: ManualEvolutionAction;
+    dimensions?: Record<string, number>;
+    materializeFeedback?: boolean;
+}
+
+export async function fetchEntityTrials(
+    credentials: AuthCredentials,
+    entityId: string,
+): Promise<EntityTrialRecord[]> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/entities/id/${encodeURIComponent(entityId)}/trials`,
+            { headers: authHeaders(credentials.token) },
+        );
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        const body = await response.json() as { trials: EntityTrialRecord[] };
+        return body.trials ?? [];
+    });
+}
+
+export async function fetchTrialVerdicts(
+    credentials: AuthCredentials,
+    trialId: string,
+): Promise<EntityVerdictRecord[]> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/trials/${encodeURIComponent(trialId)}/verdicts`,
+            { headers: authHeaders(credentials.token) },
+        );
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        const body = await response.json() as { verdicts: EntityVerdictRecord[] };
+        return body.verdicts ?? [];
+    });
+}
+
+export async function materializeEntityFeedback(
+    credentials: AuthCredentials,
+    entityId: string,
+): Promise<Record<string, unknown>> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/entities/id/${encodeURIComponent(entityId)}/feedback/materialize`,
+            {
+                method: 'POST',
+                headers: authHeaders(credentials.token),
+            },
+        );
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        const body = await response.json() as { feedback?: Record<string, unknown> };
+        return body.feedback ?? {};
+    });
+}
+
+export async function submitUserVerdict(
+    credentials: AuthCredentials,
+    params: SubmitUserVerdictParams,
+): Promise<{ trial: EntityTrialRecord; verdict: EntityVerdictRecord; feedback: Record<string, unknown> | null }> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        let trial: EntityTrialRecord | null = null;
+
+        if (params.entityId && params.sessionId) {
+            const existingTrials = await fetchEntityTrials(credentials, params.entityId);
+            trial = existingTrials.find((entry) =>
+                entry.sessionId === params.sessionId
+                && (entry.endedAt == null || entry.endedAt === '')
+            ) ?? null;
+        }
+
+        if (!trial) {
+            const trialResponse = await fetch(
+                `${API_ENDPOINT}/v1/entities/${encodeURIComponent(params.namespace)}/${encodeURIComponent(params.name)}/trials`,
+                {
+                    method: 'POST',
+                    headers: authHeaders(credentials.token),
+                    body: JSON.stringify({
+                        teamId: params.teamId,
+                        sessionId: params.sessionId,
+                        contextNarrative: params.contextNarrative,
+                        logRefs: params.logRefs,
+                    }),
+                },
+            );
+            checkAuth(trialResponse, credentials.token);
+            if (!trialResponse.ok) {
+                throw new Error(await parseError(trialResponse));
+            }
+
+            const trialBody = await trialResponse.json() as { trial: EntityTrialRecord };
+            trial = trialBody.trial;
+        }
+
+        const verdictResponse = await fetch(
+            `${API_ENDPOINT}/v1/trials/${encodeURIComponent(trial.id)}/verdicts`,
+            {
+                method: 'POST',
+                headers: authHeaders(credentials.token),
+                body: JSON.stringify({
+                    readerRole: params.readerRole,
+                    readerSessionId: params.readerSessionId,
+                    content: params.content,
+                    score: params.score,
+                    action: params.action,
+                    dimensions: params.dimensions,
+                    contextNarrative: params.contextNarrative,
+                }),
+            },
+        );
+        checkAuth(verdictResponse, credentials.token);
+        if (!verdictResponse.ok) {
+            throw new Error(await parseError(verdictResponse));
+        }
+
+        const verdictBody = await verdictResponse.json() as { verdict: EntityVerdictRecord };
+        const verdict = verdictBody.verdict;
+
+        let feedback: Record<string, unknown> | null = null;
+        if (params.materializeFeedback !== false && params.entityId) {
+            feedback = await materializeEntityFeedback(credentials, params.entityId);
+        }
+
+        return { trial, verdict, feedback };
+    });
+}
+
+export async function triggerEvolve(
+    credentials: AuthCredentials,
+    params: {
+        namespace: string;
+        name: string;
+        description: string;
+        verdictRefs?: string[];
+        changes: EntityDiffChange[];
+        strategy?: 'conservative' | 'moderate' | 'radical';
+        authorRole?: string;
+        authorSession?: string;
+    },
+): Promise<{ genome?: Genome; entity?: Record<string, unknown>; diff?: Record<string, unknown> }> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/entities/${encodeURIComponent(params.namespace)}/${encodeURIComponent(params.name)}/diffs`,
+            {
+                method: 'POST',
+                headers: authHeaders(credentials.token),
+                body: JSON.stringify(params),
+            },
+        );
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as { genome?: Genome; entity?: Record<string, unknown>; diff?: Record<string, unknown> };
+    });
+}
+
+export async function forkGenome(
+    credentials: AuthCredentials,
+    genomeId: string,
+    params: GenomeForkParams,
+): Promise<{ genome: Genome; operation: 'fork' | 'clone' }> {
+    const API_ENDPOINT = getServerUrl();
+
+    return await backoff(async () => {
+        const response = await fetch(
+            `${API_ENDPOINT}/v1/genomes/id/${encodeURIComponent(genomeId)}/fork`,
+            {
+                method: 'POST',
+                headers: authHeaders(credentials.token),
+                body: JSON.stringify(params),
+            },
+        );
+        checkAuth(response, credentials.token);
+
+        if (!response.ok) {
+            throw new Error(await parseError(response));
+        }
+
+        return await response.json() as { genome: Genome; operation: 'fork' | 'clone' };
+    });
+}
+
+export async function rollbackGenome(
+    credentials: AuthCredentials,
+    params: {
+        namespace: string;
+        name: string;
+        targetVersion: number;
+        currentSpec: string;
+        targetSpec: string;
+        verdictRefs?: string[];
+        authorRole?: string;
+        authorSession?: string;
+    },
+): Promise<{ genome?: Genome; entity?: Record<string, unknown>; diff?: Record<string, unknown> }> {
+    const rollbackChanges = computeSpecDiffChanges(params.currentSpec, params.targetSpec);
+    const description = `Manual rollback to v${params.targetVersion}`;
+    const changes: EntityDiffChange[] = [
+        ...rollbackChanges,
+        { type: 'narrative', content: description },
+    ];
+
+    return await triggerEvolve(credentials, {
+        namespace: params.namespace,
+        name: params.name,
+        description,
+        verdictRefs: params.verdictRefs,
+        changes,
+        strategy: 'conservative',
+        authorRole: params.authorRole,
+        authorSession: params.authorSession,
+    });
+}

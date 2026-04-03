@@ -400,9 +400,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
     const devModeEnabled = __DEV__;
     const sessionName = getSessionName(session);
     const sessionStatus = useSessionStatus(session);
-    const handleExitSessionInfo = useCallback(() => {
-        goBackOrReturn(router, returnTo, `/session/${session.id}`);
-    }, [returnTo, router, session.id]);
+    const isArchivedSession = !session.active;
 
     // Check if CLI version is outdated
     const isCliOutdated = session.metadata?.version && !isVersionSupported(session.metadata.version, MINIMUM_CLI_VERSION);
@@ -433,13 +431,14 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
         if (!result.success) {
             throw new HappyError(result.message || t('sessionInfo.failedToArchiveSession'), false);
         }
-        // Exit the archived session context entirely.
-        if (returnTo) {
-            handleExitSessionInfo();
-            return;
+    });
+
+    const [, performRestore] = useHappyAction(async () => {
+        const result = await sync.batchUnarchiveSessions([session.id]);
+        const restoredSession = result.results.find((entry) => entry.sessionId === session.id);
+        if (!restoredSession?.success) {
+            throw new HappyError(restoredSession?.error || t('sessionInfo.failedToRestoreSession'), false);
         }
-        router.back();
-        router.back();
     });
 
     const handleArchiveSession = useCallback(() => {
@@ -456,6 +455,20 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
             ]
         );
     }, [performArchive]);
+
+    const handleRestoreSession = useCallback(() => {
+        Modal.alert(
+            t('sessionInfo.restoreSession'),
+            t('sessionInfo.restoreSessionConfirm'),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('sessionInfo.restoreSession'),
+                    onPress: performRestore
+                }
+            ]
+        );
+    }, [performRestore]);
 
     // Use HappyAction for deletion - it handles errors automatically
     const [, performDelete] = useHappyAction(async () => {
@@ -658,7 +671,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                             onPress={() => router.push(`/machine/${session.metadata?.machineId}`)}
                         />
                     )}
-                    {sessionStatus.isConnected && (
+                    {!isArchivedSession && sessionStatus.isConnected && (
                         <Item
                             title={t('sessionInfo.archiveSession')}
                             subtitle={t('sessionInfo.archiveSessionSubtitle')}
@@ -666,7 +679,15 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                             onPress={handleArchiveSession}
                         />
                     )}
-                    {!sessionStatus.isConnected && !session.active && (
+                    {isArchivedSession && (
+                        <Item
+                            title={t('sessionInfo.restoreSession')}
+                            subtitle={t('sessionInfo.restoreSessionSubtitle')}
+                            icon={<Ionicons name="refresh-outline" size={29} color="#34C759" />}
+                            onPress={handleRestoreSession}
+                        />
+                    )}
+                    {!sessionStatus.isConnected && isArchivedSession && (
                         <Item
                             title={t('sessionInfo.deleteSession')}
                             subtitle={t('sessionInfo.deleteSessionSubtitle')}

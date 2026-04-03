@@ -22,6 +22,7 @@ import { fetchGenomeByName, parseAgentVerdict, type GenomeRecord } from '@/utils
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { getRoleVisual } from '@/utils/roleVisualUtils';
+import { buildPendingSpawnLifecycle } from '@/utils/spawnState';
 import { randomUUID } from '@/utils/uuid';
 
 interface Props {
@@ -687,7 +688,7 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
 
             for (const plannedMember of result.plannedMembers) {
                 try {
-                    const sessionId = await sync.spawnSessionOnMachine(plannedMember.machineId, {
+                    const spawnResult = await sync.spawnSessionOnMachine(plannedMember.machineId, {
                         directory: plannedMember.workspacePath,
                         agent: plannedMember.runtimeType,
                         sessionTag: plannedMember.sessionTag,
@@ -702,20 +703,30 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
                         },
                     });
 
-                    if (!sessionId) {
-                        throw new Error('Spawn returned no session ID');
+                    if (spawnResult.status === 'failed') {
+                        throw new Error(spawnResult.error);
                     }
 
-                    await sync.addTeamMember(result.team.id, sessionId, plannedMember.roleId, plannedMember.displayName, {
-                        memberId: plannedMember.memberId,
-                        sessionTag: plannedMember.sessionTag,
-                        candidateId: plannedMember.candidateId,
-                        specId: plannedMember.genomeId,
-                        runtimeType: plannedMember.runtimeType,
-                        machineId: plannedMember.machineId,
-                        workspacePath: plannedMember.workspacePath,
-                        ...(plannedMember.customPrompt ? { customPrompt: plannedMember.customPrompt } : {}),
-                    });
+                    await sync.addTeamMember(
+                        result.team.id,
+                        spawnResult.status === 'active' ? spawnResult.sessionId : '',
+                        plannedMember.roleId,
+                        plannedMember.displayName,
+                        {
+                            memberId: plannedMember.memberId,
+                            sessionTag: plannedMember.sessionTag,
+                            candidateId: plannedMember.candidateId,
+                            specId: plannedMember.genomeId,
+                            sourceImageId: plannedMember.genomeId,
+                            runtimeType: plannedMember.runtimeType,
+                            machineId: plannedMember.machineId,
+                            workspacePath: plannedMember.workspacePath,
+                            ...(spawnResult.status === 'pending'
+                                ? { lifecycle: buildPendingSpawnLifecycle() }
+                                : {}),
+                            ...(plannedMember.customPrompt ? { customPrompt: plannedMember.customPrompt } : {}),
+                        },
+                    );
 
                     nextRecentPaths = updateRecentMachinePaths(
                         nextRecentPaths,

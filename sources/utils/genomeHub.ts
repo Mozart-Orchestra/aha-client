@@ -225,6 +225,38 @@ export async function fetchGenomeByName(namespace: string, name: string): Promis
     }
 }
 
+/** Fetch all published versions for a genome lineage from genome-hub. */
+export async function fetchGenomeVersions(namespace: string, name: string): Promise<GenomeRecord[]> {
+    try {
+        const encodedNs = encodeURIComponent(namespace);
+        const resolvedName = resolveCanonicalGenomeName(namespace, name);
+        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/versions`);
+        if (!res.ok) return [];
+        const data = await res.json() as { versions?: GenomeRecord[] };
+        return data.versions ?? [];
+    } catch {
+        return [];
+    }
+}
+
+/** Fetch a specific immutable published version from genome-hub. */
+export async function fetchGenomeVersion(
+    namespace: string,
+    name: string,
+    version: number,
+): Promise<GenomeRecord | null> {
+    try {
+        const encodedNs = encodeURIComponent(namespace);
+        const resolvedName = resolveCanonicalGenomeName(namespace, name);
+        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/${encodeURIComponent(String(version))}`);
+        if (!res.ok) return null;
+        const data = await res.json() as { genome?: GenomeRecord };
+        return data.genome ?? null;
+    } catch {
+        return null;
+    }
+}
+
 export function parseTags(tagsJson: string | null): string[] {
     if (!tagsJson) return [];
     try {

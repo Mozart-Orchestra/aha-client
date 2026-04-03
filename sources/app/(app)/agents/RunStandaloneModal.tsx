@@ -16,9 +16,10 @@ import { useAllMachines, useSetting } from '@/sync/storage';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getRecentPathForMachine, getKnownPathsForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
-import { createAgent } from '@/sync/apiAgents';
+import { createAgent, updateAgent } from '@/sync/apiAgents';
 import { parseAgentImage } from '@/utils/genomeHub';
 import type { GenomeRecord } from '@/utils/genomeHub';
+import { buildActiveSpawnLifecycle, buildFailedSpawnLifecycle, buildPendingSpawnLifecycle } from '@/utils/spawnState';
 import { randomUUID } from '@/utils/uuid';
 
 interface Props {
@@ -29,10 +30,10 @@ interface Props {
 
 /**
  * Modal for spawning a genome as a standalone agent.
- * Flow:
+ * Flow (artifact-first):
  *  1. User selects a machine (chip row)
  *  2. User enters / selects a working directory
- *  3. On confirm: spawnSessionOnMachine() → createAgent(sessionId=...) → persist recent path
+ *  3. On confirm: createAgent() → spawnSessionOnMachine() → patch artifact with session result
  */
 export const RunStandaloneModal = React.memo(function RunStandaloneModal({ genome, onClose, onSuccess }: Props) {
     const { theme } = useUnistyles();
@@ -100,31 +101,49 @@ export const RunStandaloneModal = React.memo(function RunStandaloneModal({ genom
             const resolvedName = agentName.trim() || genome.name;
             const generatedSessionTag = `standalone:${randomUUID()}`;
 
-            const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
-                directory: cwd.trim(),
-                agent: runtimeType,
-                sessionTag: generatedSessionTag,
-                role: roleId,
-                specId: genome.id,
-                sessionName: resolvedName,
-            });
-
-            if (!sessionId) {
-                throw new Error('Spawn returned no session ID');
-            }
-
-            await createAgent(credentials, {
+            // Artifact-first: create the agent record before spawning the session
+            const agent = await createAgent(credentials, {
                 displayName: resolvedName,
                 genomeId: genome.id,
+                sourceImageId: genome.id,
+                sourceImageVersion: genome.version,
                 genomeSpec: JSON.parse(genome.spec),
                 runtimeType,
-                sessionId,
                 sessionTag: generatedSessionTag,
                 metadata: {
                     source: 'marketplace-deploy',
                     deployMode: 'standalone',
                 },
             });
+
+            // Spawn session after artifact exists
+            const spawnResult = await sync.spawnSessionOnMachine(selectedMachineId, {
+                directory: cwd.trim(),
+                agent: runtimeType,
+                sessionTag: generatedSessionTag,
+                role: roleId,
+                specId: genome.id,
+                sourceImageId: genome.id,
+                sourceImageVersion: genome.version,
+                sessionName: resolvedName,
+            });
+
+            // Patch artifact with spawn result
+            if (spawnResult.status === 'active') {
+                await updateAgent(credentials, agent.id, {
+                    sessionId: spawnResult.sessionId,
+                    lifecycle: buildActiveSpawnLifecycle(agent.lifecycle),
+                });
+            } else if (spawnResult.status === 'pending') {
+                await updateAgent(credentials, agent.id, {
+                    lifecycle: buildPendingSpawnLifecycle(agent.lifecycle),
+                });
+            } else {
+                await updateAgent(credentials, agent.id, {
+                    lifecycle: buildFailedSpawnLifecycle(agent.lifecycle),
+                    metadata: { ...agent.metadata, spawnError: spawnResult.error },
+                });
+            }
 
             const updatedPaths = updateRecentMachinePaths(recentPaths, selectedMachineId, cwd.trim());
             sync.applySettings({ recentMachinePaths: updatedPaths });

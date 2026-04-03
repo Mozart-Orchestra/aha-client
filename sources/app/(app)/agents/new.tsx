@@ -844,7 +844,7 @@ export default React.memo(function NewAgentScreen() {
                             ? builderSpecJson
                             : JSON.stringify(buildManualAgentImage(manualDraft)),
                     );
-                    const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
+                    const spawnResult = await sync.spawnSessionOnMachine(selectedMachineId, {
                         directory: cwd.trim(),
                         agent: manualDraft.runtime,
                         sessionTag: buildStandaloneSessionTag(),
@@ -852,7 +852,7 @@ export default React.memo(function NewAgentScreen() {
                         specId: genomeId!,
                         sessionName: specMetadata.displayName ?? manualDraft.displayName.trim(),
                     });
-                    if (sessionId) {
+                    if (spawnResult.status === 'active') {
                         const updatedPaths = updateRecentMachinePaths(recentMachinePaths, selectedMachineId, cwd.trim());
                         sync.applySettings({ recentMachinePaths: updatedPaths });
                     }
@@ -892,7 +892,7 @@ export default React.memo(function NewAgentScreen() {
                 throw new Error(`Official builder genome not found: @official/${builderRoleId}`);
             }
 
-            const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
+            const builderSpawnResult = await sync.spawnSessionOnMachine(selectedMachineId, {
                 directory: cwd.trim(),
                 agent: manualDraft.runtime,
                 sessionTag: buildStandaloneSessionTag(),
@@ -901,22 +901,26 @@ export default React.memo(function NewAgentScreen() {
                 sessionName: builderDisplayName,
             });
 
-            if (!sessionId) {
-                throw new Error('Spawn returned no session ID');
+            if (builderSpawnResult.status !== 'active') {
+                throw new Error(
+                    builderSpawnResult.status === 'failed'
+                        ? builderSpawnResult.error
+                        : t('newSession.sessionTimeout')
+                );
             }
 
             const updatedPaths = updateRecentMachinePaths(recentMachinePaths, selectedMachineId, cwd.trim());
             sync.applySettings({ recentMachinePaths: updatedPaths });
             processedBuilderMessagesRef.current.clear();
             setBuilderSpecJson(null);
-            setBuilderSessionId(sessionId);
-            sync.onSessionVisible(sessionId);
+            setBuilderSessionId(builderSpawnResult.sessionId);
+            sync.onSessionVisible(builderSpawnResult.sessionId);
 
             const kickoff = buildPrivateAgentBuilderKickoff({
                 brief: chatBrief,
                 currentDraft: manualDraft,
             });
-            await sync.sendMessage(sessionId, kickoff.text, kickoff.displayText);
+            await sync.sendMessage(builderSpawnResult.sessionId, kickoff.text, kickoff.displayText);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to start builder chat';
             await Modal.alert(t('common.error'), message);

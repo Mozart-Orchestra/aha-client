@@ -1,7 +1,9 @@
 import type { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff, NonRetryableError } from '@/utils/time';
 import { checkAuth } from '@/utils/handleResponse';
+import { buildImageRefFields, resolveCandidateId, resolveImageRef } from '@/utils/imageRef';
 import { getServerUrl } from './serverConfig';
+import type { AgentLifecycle } from '@/utils/spawnState';
 import type { WorkspaceOverviewSnapshot } from './workspaceOverviewTypes';
 import type { KanbanBoard } from './kanbanTypes';
 
@@ -94,11 +96,16 @@ export interface TeamSummary {
 
 export interface CorpsSeatRequest {
     id?: string;
+    /** @deprecated Use `sourceImageId` instead. Kept for backward compatibility. */
     genomeId: string;
     genomeName?: string | null;
     genomeNamespace?: string | null;
     genomeVersion?: number | null;
     genomeDisplayName?: string | null;
+    /** Canonical image identifier (genome hub primary key). */
+    sourceImageId?: string;
+    /** Canonical image version at time of spawn. */
+    sourceImageVersion?: number | null;
     roleId: string;
     displayName?: string;
     runtimeType: 'claude' | 'codex';
@@ -167,13 +174,21 @@ async function throwTeamManagementHttpError(response: Response, fallbackMessage:
 }
 
 function serializeCorpsSeat(seat: CorpsSeatRequest): Record<string, unknown> {
+    const imageRef = resolveImageRef({
+        sourceImageId: seat.sourceImageId,
+        sourceImageVersion: seat.sourceImageVersion,
+        genomeId: seat.genomeId,
+        genomeVersion: seat.genomeVersion,
+    });
+
     return {
         ...(seat.id !== undefined ? { id: seat.id } : {}),
-        genomeId: seat.genomeId,
+        genomeId: imageRef?.id ?? seat.genomeId,
         ...(seat.genomeName !== undefined && seat.genomeName !== null ? { genomeName: seat.genomeName } : {}),
         ...(seat.genomeNamespace !== undefined && seat.genomeNamespace !== null ? { genomeNamespace: seat.genomeNamespace } : {}),
-        ...(seat.genomeVersion !== undefined && seat.genomeVersion !== null ? { genomeVersion: seat.genomeVersion } : {}),
+        ...(imageRef?.version !== null && imageRef?.version !== undefined ? { genomeVersion: imageRef.version } : {}),
         ...(seat.genomeDisplayName !== undefined && seat.genomeDisplayName !== null ? { genomeDisplayName: seat.genomeDisplayName } : {}),
+        ...buildImageRefFields(imageRef),
         roleId: seat.roleId,
         ...(seat.displayName !== undefined ? { displayName: seat.displayName } : {}),
         runtimeType: seat.runtimeType,
@@ -290,19 +305,31 @@ export async function addTeamMember(
         memberId?: string;
         sessionTag?: string;
         candidateId?: string;
+        /** @deprecated Use `sourceImageId` instead. Kept for backward compatibility. */
         specId?: string;
+        /** Canonical image identifier (genome hub primary key). */
+        sourceImageId?: string;
+        /** Canonical image version at time of spawn. */
+        sourceImageVersion?: number | null;
         customPrompt?: string;
         parentSessionId?: string;
         executionPlane?: string;
         runtimeType?: string;
         machineId?: string | null;
         workspacePath?: string | null;
+        spawnError?: string;
+        lifecycle?: AgentLifecycle;
         authorities?: string[];
         teamOverlay?: Record<string, unknown>;
     }
 ): Promise<TeamMemberResponse> {
     const API_ENDPOINT = getServerUrl();
-    const candidateId = opts?.candidateId ?? (opts?.specId ? `spec:${opts.specId}` : undefined);
+    const imageRef = resolveImageRef({
+        sourceImageId: opts?.sourceImageId,
+        sourceImageVersion: opts?.sourceImageVersion,
+        specId: opts?.specId,
+    });
+    const candidateId = resolveCandidateId(imageRef, opts?.candidateId);
 
     return await backoff(async () => {
         const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/members`, {
@@ -318,13 +345,15 @@ export async function addTeamMember(
                 ...(opts?.memberId !== undefined ? { memberId: opts.memberId } : {}),
                 ...(opts?.sessionTag !== undefined ? { sessionTag: opts.sessionTag } : {}),
                 ...(candidateId !== undefined ? { candidateId } : {}),
-                ...(opts?.specId !== undefined ? { specId: opts.specId } : {}),
+                ...buildImageRefFields(imageRef, { includeLegacySpec: true }),
                 ...(opts?.customPrompt !== undefined ? { customPrompt: opts.customPrompt } : {}),
                 ...(opts?.parentSessionId !== undefined ? { parentSessionId: opts.parentSessionId } : {}),
                 ...(opts?.executionPlane !== undefined ? { executionPlane: opts.executionPlane } : {}),
                 ...(opts?.runtimeType !== undefined ? { runtimeType: opts.runtimeType } : {}),
                 ...(opts?.machineId !== undefined && opts.machineId !== null ? { machineId: opts.machineId } : {}),
                 ...(opts?.workspacePath !== undefined && opts.workspacePath !== null ? { workspacePath: opts.workspacePath } : {}),
+                ...(opts?.spawnError !== undefined ? { spawnError: opts.spawnError } : {}),
+                ...(opts?.lifecycle !== undefined ? { lifecycle: opts.lifecycle } : {}),
                 ...(opts?.authorities !== undefined ? { authorities: opts.authorities } : {}),
                 ...(opts?.teamOverlay !== undefined ? { teamOverlay: opts.teamOverlay } : {}),
             })

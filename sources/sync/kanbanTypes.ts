@@ -232,6 +232,8 @@ export interface KanbanTeamMemberOverlay {
     authorities?: TeamAuthority[];
 }
 
+import type { AgentLifecycle } from '@/utils/spawnState';
+
 export interface KanbanTeamMember {
     /**
      * Stable team-member identity used for recovery.
@@ -248,7 +250,11 @@ export interface KanbanTeamMember {
     roleId: string;
     displayName?: string;
     focusAreas?: string[];
+    sourceImageId?: string;
+    sourceImageVersion?: number | null;
     specId?: string;
+    genomeId?: string;
+    genomeVersion?: number | null;
     authorities?: TeamAuthority[];
     teamOverlay?: KanbanTeamMemberOverlay;
     customPrompt?: string;
@@ -265,13 +271,7 @@ export interface KanbanTeamMember {
      * - handshakeReadyAt: first authoritative "online and ready" handshake observed in team messages
      * - taskAckedAt: first execution-started/task-ack observed for this session
      */
-    lifecycle?: {
-        spawnRequestedAt?: number;
-        processStartedAt?: number;
-        handshakeReadyAt?: number;
-        taskAckedAt?: number;
-        taskAckedTaskId?: string;
-    };
+    lifecycle?: AgentLifecycle;
 }
 
 export interface KanbanTeamRole {

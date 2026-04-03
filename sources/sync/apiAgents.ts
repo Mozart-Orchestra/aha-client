@@ -1,6 +1,8 @@
 import { AuthCredentials } from '@/auth/tokenStorage';
 import { backoff, NonRetryableError } from '@/utils/time';
 import { checkAuth } from '@/utils/handleResponse';
+import type { ImageRef } from '@/utils/imageRef';
+import type { AgentLifecycle } from '@/utils/spawnState';
 import { getServerUrl } from './serverConfig';
 
 //
@@ -15,15 +17,13 @@ export interface AgentRecord {
     memberId?: string | null;
     roleId: string | null;
     runtimeType: 'claude' | 'codex';
+    sourceImageId?: string | null;
+    sourceImageVersion?: number | null;
     genomeId: string | null;
-    status: 'active' | 'paused' | 'archived';
+    status: 'active' | 'paused' | 'archived' | 'pending' | 'failed';
     metadata: Record<string, unknown>;
     type: 'standalone' | 'team';
-    lifecycle?: {
-        spawnRequestedAt?: number;
-        spawnedAt?: number;
-        runStatus?: string;
-    } | null;
+    lifecycle?: AgentLifecycle | null;
     createdAt: number;
     updatedAt: number;
 }
@@ -33,9 +33,25 @@ export interface AgentDetailRecord extends AgentRecord {
     genome?: Record<string, unknown> | null;
 }
 
+export function getAgentImageRef(agent: Pick<AgentRecord, 'sourceImageId' | 'sourceImageVersion' | 'genomeId'>): ImageRef | null {
+    const id = agent.sourceImageId ?? agent.genomeId;
+    if (!id) {
+        return null;
+    }
+    return {
+        id,
+        version: agent.sourceImageVersion ?? null,
+    };
+}
+
 export interface AgentCreateParams {
     displayName: string;
+    /** @deprecated Use `sourceImageId` instead. Kept for backward compatibility. */
     genomeId?: string;
+    /** Canonical image identifier (genome hub primary key). */
+    sourceImageId?: string;
+    /** Canonical image version at time of spawn. */
+    sourceImageVersion?: number | null;
     genomeSpec?: Record<string, unknown>;
     sessionId?: string;
     sessionTag?: string;
@@ -48,7 +64,9 @@ export interface AgentCreateParams {
 export interface AgentUpdateParams {
     displayName?: string;
     genomeId?: string;
-    status?: 'active' | 'paused' | 'archived';
+    status?: 'active' | 'paused' | 'archived' | 'pending' | 'failed';
+    sessionId?: string;
+    lifecycle?: AgentLifecycle;
     metadata?: Record<string, unknown>;
 }
 

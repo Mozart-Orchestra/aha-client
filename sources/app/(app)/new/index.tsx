@@ -332,8 +332,7 @@ function NewSessionScreen() {
                 agent: agentType
             });
 
-            // Use sessionId to check for success for backwards compatibility
-            if ('sessionId' in result && result.sessionId) {
+            if (result.type === 'success' && result.sessionId) {
                 // Store worktree metadata if applicable
                 if (sessionType === 'worktree') {
                     // The metadata will be stored by the session itself once created
@@ -368,15 +367,17 @@ function NewSessionScreen() {
                     },
                 });
                 trackSessionCreated();
+            } else if (result.type === 'pending') {
+                throw new Error('session-pending');
             } else {
-                throw new Error('Session spawning failed - no session ID returned.');
+                throw new Error(t('newSession.sessionSpawningFailed'));
             }
         } catch (error) {
             console.error('Failed to start session', error);
 
             let errorMessage = 'Failed to start session. Make sure the daemon is running on the target machine.';
             if (error instanceof Error) {
-                if (error.message.includes('timeout')) {
+                if (error.message.includes('timeout') || error.message.includes('session-pending')) {
                     errorMessage = 'Session startup timed out. The machine may be slow or the daemon may not be responding.';
                 } else if (error.message.includes('Socket not connected')) {
                     errorMessage = 'Not connected to server. Check your internet connection.';

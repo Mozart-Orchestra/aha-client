@@ -35,4 +35,24 @@ describe('getStandaloneAgentStatusVisual', () => {
             liveState: 'ended',
         });
     });
+
+    it('maps pending lifecycle without session to offline', () => {
+        expect(getStandaloneAgentStatusVisual({
+            status: 'active',
+            lifecycle: { runStatus: 'pending' },
+        }, null)).toEqual({
+            dotColor: '#8A7F74',
+            liveState: 'offline',
+        });
+    });
+
+    it('maps failed lifecycle without session to ended', () => {
+        expect(getStandaloneAgentStatusVisual({
+            status: 'active',
+            lifecycle: { runStatus: 'failed' },
+        }, null)).toEqual({
+            dotColor: '#B45309',
+            liveState: 'ended',
+        });
+    });
 });

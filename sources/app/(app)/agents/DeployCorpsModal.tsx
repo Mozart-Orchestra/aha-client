@@ -25,6 +25,7 @@ import { fetchGenomeByName, parseLegionImage, parseAgentImage, type GenomeRecord
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
 import { getPreferredMachineId } from '@/utils/getPreferredMachineId';
+import { buildActiveSpawnLifecycle, buildPendingSpawnLifecycle } from '@/utils/spawnState';
 import { randomUUID } from '@/utils/uuid';
 
 interface Props {
@@ -136,7 +137,7 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                 const sessionTag = buildTeamMemberSessionTag(teamId, memberId);
 
                 try {
-                    const sessionId = await sync.spawnSessionOnMachine(selectedMachineId, {
+                    const spawnResult = await sync.spawnSessionOnMachine(selectedMachineId, {
                         directory: cwd.trim(),
                         agent: runtimeType,
                         sessionTag,
@@ -150,14 +151,14 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                         },
                     });
 
-                    if (!sessionId) {
-                        failures.push(`${plan.displayName}: spawn returned no session ID`);
+                    if (spawnResult.status === 'failed') {
+                        failures.push(`${plan.displayName}: ${spawnResult.error}`);
                         continue;
                     }
 
                     spawnedMembers.push({
                         memberId,
-                        sessionId,
+                        sessionId: spawnResult.status === 'active' ? spawnResult.sessionId : '',
                         sessionTag,
                         roleId: plan.roleId,
                         displayName: plan.displayName,
@@ -176,9 +177,9 @@ export const DeployCorpsModal = React.memo(function DeployCorpsModal({ genome, o
                         runtimeType,
                         machineId: selectedMachineId,
                         workspacePath: cwd.trim(),
-                        lifecycle: {
-                            spawnRequestedAt: Date.now(),
-                        },
+                        lifecycle: spawnResult.status === 'pending'
+                            ? buildPendingSpawnLifecycle()
+                            : buildActiveSpawnLifecycle(),
                     });
                 } catch (error) {
                     failures.push(`${plan.displayName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
