@@ -6,6 +6,7 @@
 import { apiSocket } from './apiSocket';
 import { sync } from './sync';
 import type { MachineMetadata } from './storageTypes';
+import { getServerUrl } from './serverConfig';
 import { trackConflictDetected } from '@/track';
 
 // Strict type definitions for all operations
@@ -287,6 +288,68 @@ export async function machineUpdateMetadata(
     }
 
     throw new Error('Unexpected error in machineUpdateMetadata');
+}
+
+async function machineLifecycleRequest<T>(
+    machineId: string,
+    options: {
+        method: 'POST' | 'DELETE';
+        action?: 'archive' | 'unarchive';
+        fallbackError: string;
+    }
+): Promise<T> {
+    const credentials = sync.getCredentials();
+    if (!credentials) {
+        throw new Error('Not authenticated');
+    }
+
+    const suffix = options.action ? `/${options.action}` : '';
+    const response = await fetch(`${getServerUrl()}/v1/machines/${encodeURIComponent(machineId)}${suffix}`, {
+        method: options.method,
+        headers: {
+            'Authorization': `Bearer ${credentials.token}`,
+            'Content-Type': 'application/json',
+        },
+    });
+
+    let data: unknown = null;
+    try {
+        data = await response.json();
+    } catch {
+        data = null;
+    }
+
+    if (!response.ok) {
+        const errorMessage = data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string'
+            ? (data as { error: string }).error
+            : options.fallbackError;
+        throw new Error(errorMessage);
+    }
+
+    return data as T;
+}
+
+export async function machineArchive(machineId: string): Promise<{ success: boolean; machineId: string; archivedAt: number }> {
+    return machineLifecycleRequest(machineId, {
+        method: 'POST',
+        action: 'archive',
+        fallbackError: 'Failed to archive machine',
+    });
+}
+
+export async function machineUnarchive(machineId: string): Promise<{ success: boolean; machineId: string }> {
+    return machineLifecycleRequest(machineId, {
+        method: 'POST',
+        action: 'unarchive',
+        fallbackError: 'Failed to restore machine',
+    });
+}
+
+export async function machineDelete(machineId: string): Promise<{ success: boolean; machineId: string }> {
+    return machineLifecycleRequest(machineId, {
+        method: 'DELETE',
+        fallbackError: 'Failed to delete machine',
+    });
 }
 
 /**

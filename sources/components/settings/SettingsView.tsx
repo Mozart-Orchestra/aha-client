@@ -7,8 +7,8 @@ import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
 import { useLocalSetting } from '@/sync/storage';
-import { useAllMachines } from '@/sync/storage';
-import { isMachineOnline } from '@/utils/machineUtils';
+import { useAllMachinesIncludingArchived } from '@/sync/storage';
+import { isMachineArchived, isMachineOnline } from '@/utils/machineUtils';
 import { useUnistyles } from 'react-native-unistyles';
 import { layout } from '@/utils/layout';
 import { useProfile } from '@/sync/storage';
@@ -16,15 +16,18 @@ import { getDisplayName, getAvatarUrl, getBio } from '@/sync/profile';
 import { Avatar } from '@/components/avatar/Avatar';
 import { t } from '@/text';
 
+const ARCHIVED_MACHINES_COLLAPSE_LIMIT = 8;
+
 export const SettingsView = React.memo(function SettingsView() {
     const { theme } = useUnistyles();
     const router = useRouter();
     const devModeEnabled = useLocalSetting('devModeEnabled');
-    const allMachines = useAllMachines();
+    const allMachines = useAllMachinesIncludingArchived();
     const profile = useProfile();
     const displayName = getDisplayName(profile);
     const avatarUrl = getAvatarUrl(profile);
     const bio = getBio(profile);
+    const [showAllArchivedMachines, setShowAllArchivedMachines] = React.useState(false);
 
     const handleReportIssue = async () => {
         const url = 'https://github.com/Shiyao-Huang/aha/issues/new/choose';
@@ -33,6 +36,21 @@ export const SettingsView = React.memo(function SettingsView() {
             await Linking.openURL(url);
         }
     };
+
+    const activeMachines = React.useMemo(
+        () => allMachines.filter((machine) => !isMachineArchived(machine)),
+        [allMachines],
+    );
+    const archivedMachines = React.useMemo(
+        () => allMachines.filter((machine) => isMachineArchived(machine)),
+        [allMachines],
+    );
+    const visibleArchivedMachines = React.useMemo(
+        () => showAllArchivedMachines
+            ? archivedMachines
+            : archivedMachines.slice(0, ARCHIVED_MACHINES_COLLAPSE_LIMIT),
+        [archivedMachines, showAllArchivedMachines],
+    );
 
 
     return (
@@ -72,12 +90,12 @@ export const SettingsView = React.memo(function SettingsView() {
                 </View>
             </View>
 
-            {/* Machines (sorted: online first, then last seen desc) */}
-            {allMachines.length > 0 && (
-                <ItemGroup title={t('settings.machines')}>
-                    {[...allMachines].map((machine) => {
+            {/* Machines */}
+            {activeMachines.length > 0 && (
+                <ItemGroup title={t('settings.availableMachines')}>
+                    {activeMachines.map((machine) => {
                         const isOnline = isMachineOnline(machine);
-                        const host = machine.metadata?.host || 'Unknown';
+                        const host = machine.metadata?.host || t('status.unknown');
                         const displayName = machine.metadata?.displayName;
                         const platform = machine.metadata?.platform || '';
 
@@ -110,6 +128,58 @@ export const SettingsView = React.memo(function SettingsView() {
                             />
                         );
                     })}
+                </ItemGroup>
+            )}
+
+            {archivedMachines.length > 0 && (
+                <ItemGroup title={t('settings.archivedMachines')}>
+                    {visibleArchivedMachines.map((machine) => {
+                        const host = machine.metadata?.host || t('status.unknown');
+                        const displayName = machine.metadata?.displayName;
+                        const platform = machine.metadata?.platform || '';
+                        const title = displayName || host;
+                        const subtitleParts = [];
+                        if (displayName && displayName !== host) {
+                            subtitleParts.push(host);
+                        }
+                        if (platform) {
+                            subtitleParts.push(platform);
+                        }
+                        subtitleParts.push(t('machine.statusArchived'));
+                        if (machine.archivedAt) {
+                            subtitleParts.push(`${t('machine.archivedAt')}: ${new Date(machine.archivedAt).toLocaleString()}`);
+                        }
+
+                        return (
+                            <Item
+                                key={machine.id}
+                                title={title}
+                                subtitle={subtitleParts.join(' • ')}
+                                icon={
+                                    <Ionicons
+                                        name="archive-outline"
+                                        size={29}
+                                        color={theme.colors.textSecondary}
+                                    />
+                                }
+                                onPress={() => router.push(`/machine/${machine.id}`)}
+                            />
+                        );
+                    })}
+                    {archivedMachines.length > ARCHIVED_MACHINES_COLLAPSE_LIMIT && (
+                        <Item
+                            title={showAllArchivedMachines
+                                ? t('settings.showLessArchivedMachines')
+                                : t('settings.showAllArchivedMachines', { count: archivedMachines.length })}
+                            onPress={() => setShowAllArchivedMachines((current) => !current)}
+                            showChevron={false}
+                            showDivider={false}
+                            titleStyle={{
+                                textAlign: 'center',
+                                color: (theme as any).dark ? theme.colors.button.primary.tint : theme.colors.button.primary.background,
+                            }}
+                        />
+                    )}
                 </ItemGroup>
             )}
 

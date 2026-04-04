@@ -80,7 +80,8 @@ export const ApiUpdateMachineStateSchema = z.object({
         value: z.string() // Encrypted, client decrypts
     }).nullish(),
     active: z.boolean().optional(),
-    activeAt: z.number().optional()
+    activeAt: z.number().optional(),
+    archivedAt: z.number().nullable().optional(),
 });
 
 // Artifact update schemas
@@ -158,8 +159,14 @@ export const ApiNewMachineSchema = z.object({
     dataEncryptionKey: z.string().nullable(),
     active: z.boolean(),
     activeAt: z.number(),
+    archivedAt: z.number().nullable(),
     createdAt: z.number(),
     updatedAt: z.number()
+});
+
+export const ApiDeleteMachineSchema = z.object({
+    t: z.literal('delete-machine'),
+    machineId: z.string(),
 });
 
 export const ApiUpdateTeamMessageSchema = z.object({
@@ -212,6 +219,7 @@ export const ApiUpdateSchema = z.discriminatedUnion('t', [
     ApiUpdateAccountSchema,
     ApiUpdateMachineStateSchema,
     ApiNewMachineSchema,
+    ApiDeleteMachineSchema,
     ApiNewArtifactSchema,
     ApiUpdateArtifactSchema,
     ApiDeleteArtifactSchema,

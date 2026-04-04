@@ -11,6 +11,7 @@ function createMachine(overrides: Partial<Machine> & Pick<Machine, 'id'>): Machi
         updatedAt: 0,
         active: false,
         activeAt: 0,
+        archivedAt: null,
         metadata: {
             host: `${overrides.id}.local`,
             platform: 'darwin',

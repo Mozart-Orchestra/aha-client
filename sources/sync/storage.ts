@@ -4,7 +4,7 @@ import { Session, Machine, GitStatus } from "./storageTypes";
 import { createReducer, reducer, ReducerState } from "./reducer/reducer";
 import { Message } from "./typesMessage";
 import { NormalizedMessage } from "./typesRaw";
-import { dedupeMachinesForDisplay, isMachineOnline } from '@/utils/machineUtils';
+import { dedupeMachinesForDisplay, isMachineArchived, isMachineOnline } from '@/utils/machineUtils';
 import { applySettings, Settings } from "./settings";
 import { LocalSettings, applyLocalSettings } from "./localSettings";
 import { Purchases, customerInfoToPurchases } from "./purchases";
@@ -129,6 +129,7 @@ interface StorageState {
     updateArtifact: (artifact: DecryptedArtifact) => void;
     deleteArtifact: (artifactId: string) => void;
     deleteSession: (sessionId: string) => void;
+    deleteMachine: (machineId: string) => void;
     // Project management methods
     getProjects: () => import('./projectManager').Project[];
     getProject: (projectId: string) => import('./projectManager').Project | null;
@@ -1217,6 +1218,14 @@ export const storage = create<StorageState>()((set, get) => {
                 sessionListViewData
             };
         }),
+        deleteMachine: (machineId: string) => set((state) => {
+            const { [machineId]: _, ...remainingMachines } = state.machines;
+
+            return {
+                ...state,
+                machines: remainingMachines,
+            };
+        }),
         // Friend management methods
         applyFriends: (friends: UserProfile[]) => set((state) => {
             const mergedFriends = { ...state.friends };
@@ -1411,9 +1420,29 @@ export function useLocalSettings(): LocalSettings {
 export function useAllMachines(): Machine[] {
     return storage(useShallow((state) => {
         if (!state.isDataReady) return [];
-        // Keep offline machines visible so UI can show status/CTA guidance
-        return dedupeMachinesForDisplay(Object.values(state.machines))
+        // Keep offline machines visible so UI can show status/CTA guidance,
+        // but hide archived devices from normal machine pickers.
+        return dedupeMachinesForDisplay(Object.values(state.machines).filter((machine) => !isMachineArchived(machine)))
             .sort((a, b) => b.createdAt - a.createdAt);
+    }));
+}
+
+export function useAllMachinesIncludingArchived(): Machine[] {
+    return storage(useShallow((state) => {
+        if (!state.isDataReady) return [];
+        return Object.values(state.machines).sort((left, right) => {
+            const archivedDelta = Number(isMachineArchived(left)) - Number(isMachineArchived(right));
+            if (archivedDelta !== 0) {
+                return archivedDelta;
+            }
+
+            const onlineDelta = Number(isMachineOnline(right)) - Number(isMachineOnline(left));
+            if (onlineDelta !== 0) {
+                return onlineDelta;
+            }
+
+            return (right.updatedAt || right.activeAt || right.createdAt) - (left.updatedAt || left.activeAt || left.createdAt);
+        });
     }));
 }
 

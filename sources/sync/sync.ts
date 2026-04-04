@@ -47,6 +47,7 @@ import { getNextPersistedMessageCount } from './persistedMessageCount';
 import { logCommerceEvent } from '@/observability/commerceEvents';
 import { getServiceToken } from './apiServices';
 import type { AgentLifecycle, SpawnSessionOutcome } from '@/utils/spawnState';
+import { resolveMachineArchivedAt } from '@/utils/machineUtils';
 
 const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
     if (!body) {
@@ -1645,6 +1646,7 @@ class Sync {
             seq: number;
             active: boolean;
             activeAt: number;  // Changed from lastActiveAt
+            archivedAt?: number | null;
             createdAt: number;
             updatedAt: number;
         }>;
@@ -1698,6 +1700,7 @@ class Sync {
                     updatedAt: machine.updatedAt,
                     active: machine.active,
                     activeAt: machine.activeAt,
+                    archivedAt: machine.archivedAt ?? null,
                     metadata,
                     metadataVersion: machine.metadataVersion,
                     daemonState,
@@ -1713,6 +1716,7 @@ class Sync {
                     updatedAt: machine.updatedAt,
                     active: machine.active,
                     activeAt: machine.activeAt,
+                    archivedAt: machine.archivedAt ?? null,
                     metadata: null,
                     metadataVersion: machine.metadataVersion,
                     daemonState: null,
@@ -3102,8 +3106,9 @@ class Sync {
                 seq: updateData.seq,
                 createdAt: machine?.createdAt ?? updateData.createdAt,
                 updatedAt: updateData.createdAt,
-                active: machineUpdate.active ?? true,
-                activeAt: machineUpdate.activeAt ?? updateData.createdAt,
+                active: machineUpdate.active ?? machine?.active ?? true,
+                activeAt: machineUpdate.activeAt ?? machine?.activeAt ?? updateData.createdAt,
+                archivedAt: resolveMachineArchivedAt(machineUpdate, machine),
                 metadata: machine?.metadata ?? null,
                 metadataVersion: machine?.metadataVersion ?? 0,
                 daemonState: machine?.daemonState ?? null,
@@ -3150,6 +3155,8 @@ class Sync {
             // We invalidate machines sync to fetch the new machine
             // Note: We might not have the key for this machine yet if it wasn't paired
             this.machinesSync.invalidate();
+        } else if (updateData.body.t === 'delete-machine') {
+            storage.getState().deleteMachine(updateData.body.machineId);
         } else if (updateData.body.t === 'relationship-updated') {
             log.log('👥 Received relationship-updated update');
             const relationshipUpdate = updateData.body;

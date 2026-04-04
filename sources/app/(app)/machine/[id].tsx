@@ -1,17 +1,17 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl, Platform, Pressable, TextInput } from 'react-native';
+import { View, Text, ActivityIndicator, RefreshControl, Platform, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
 import { Typography } from '@/constants/Typography';
-import { useSessions, useAllMachines, useMachine } from '@/sync/storage';
+import { useSessions, useMachine } from '@/sync/storage';
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import type { Session } from '@/sync/storageTypes';
-import { machineStopDaemon, machineUpdateMetadata } from '@/sync/ops';
+import { machineArchive, machineDelete, machineStopDaemon, machineUnarchive, machineUpdateMetadata } from '@/sync/ops';
 import { Modal } from '@/modal';
 import { formatPathRelativeToHome, getSessionName, getSessionSubtitle } from '@/utils/sessionUtils';
-import { isMachineOnline } from '@/utils/machineUtils';
+import { getMachineDaemonStatus, isMachineArchived, isMachineOnline } from '@/utils/machineUtils';
 import { sync } from '@/sync/sync';
 import { useUnistyles, StyleSheet } from 'react-native-unistyles';
 import { t } from '@/text';
@@ -74,6 +74,7 @@ export default function MachineDetailScreen() {
     const [isRenamingMachine, setIsRenamingMachine] = useState(false);
     const [customPath, setCustomPath] = useState('');
     const [isSpawning, setIsSpawning] = useState(false);
+    const [lifecycleAction, setLifecycleAction] = useState<'archive' | 'restore' | 'delete' | null>(null);
     const inputRef = useRef<MultiTextInputHandle>(null);
     const [showAllPaths, setShowAllPaths] = useState(false);
     // Variant D only
@@ -110,48 +111,35 @@ export default function MachineDetailScreen() {
     }, [recentPaths, showAllPaths]);
 
     // Determine daemon status from metadata
-    const daemonStatus = useMemo(() => {
-        if (!machine) return 'unknown';
+    const daemonStatus = useMemo(() => getMachineDaemonStatus(machine), [machine]);
+    const daemonStatusText = useMemo(() => {
+        if (daemonStatus === 'unknown') return t('status.unknown');
+        if (daemonStatus === 'likely_alive') return t('machine.daemonLikelyAlive');
+        return t('machine.daemonStopped');
+    }, [daemonStatus]);
+    const daemonLikelyAlive = daemonStatus === 'likely_alive';
+    const daemonStopped = daemonStatus === 'stopped';
 
-        // Check metadata for daemon status
-        const metadata = machine.metadata as any;
-        if (metadata?.daemonLastKnownStatus === 'shutting-down') {
-            return 'stopped';
-        }
-
-        // Use machine online status as proxy for daemon status
-        return isMachineOnline(machine) ? 'likely alive' : 'stopped';
-    }, [machine]);
+    const isArchived = useMemo(() => (machine ? isMachineArchived(machine) : false), [machine]);
 
     const handleStopDaemon = async () => {
-        // Show confirmation modal using alert with buttons
-        Modal.alert(
-            'Stop Daemon?',
-            'You will not be able to spawn new sessions on this machine until you restart the daemon on your computer again. Your current sessions will stay alive.',
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel'
-                },
-                {
-                    text: 'Stop Daemon',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setIsStoppingDaemon(true);
-                        try {
-                            const result = await machineStopDaemon(machineId!);
-                            Modal.alert('Daemon Stopped', result.message);
-                            // Refresh to get updated metadata
-                            await sync.refreshMachines();
-                        } catch (error) {
-                            Modal.alert(t('common.error'), 'Failed to stop daemon. It may not be running.');
-                        } finally {
-                            setIsStoppingDaemon(false);
-                        }
-                    }
-                }
-            ]
+        const confirmed = await Modal.confirm(
+            t('machine.stopDaemonTitle'),
+            t('machine.stopDaemonConfirm'),
+            { cancelText: t('common.cancel'), confirmText: t('machine.stopDaemon'), destructive: true },
         );
+        if (!confirmed) return;
+
+        setIsStoppingDaemon(true);
+        try {
+            const result = await machineStopDaemon(machineId!);
+            Modal.alert(t('common.success'), result.message);
+            await sync.refreshMachines();
+        } catch (error) {
+            Modal.alert(t('common.error'), error instanceof Error ? error.message : t('machine.stopDaemonFailed'));
+        } finally {
+            setIsStoppingDaemon(false);
+        }
     };
 
     // inline control below
@@ -166,11 +154,11 @@ export default function MachineDetailScreen() {
         if (!machine || !machineId) return;
 
         const newDisplayName = await Modal.prompt(
-            'Rename Machine',
-            'Give this machine a custom name. Leave empty to use the default hostname.',
+            t('machine.renameMachine'),
+            t('machine.renamePrompt'),
             {
                 defaultValue: machine.metadata?.displayName || '',
-                placeholder: machine.metadata?.host || 'Enter machine name',
+                placeholder: machine.metadata?.host || t('machine.renamePlaceholder'),
                 cancelText: t('common.cancel'),
                 confirmText: t('common.rename')
             }
@@ -190,11 +178,11 @@ export default function MachineDetailScreen() {
                     machine.metadataVersion
                 );
                 
-                Modal.alert(t('common.success'), 'Machine renamed successfully');
+                Modal.alert(t('common.success'), t('machine.renameSuccess'));
             } catch (error) {
                 Modal.alert(
-                    'Error',
-                    error instanceof Error ? error.message : 'Failed to rename machine'
+                    t('common.error'),
+                    error instanceof Error ? error.message : t('machine.renameFailed')
                 );
                 // Refresh to get latest state
                 await sync.refreshMachines();
@@ -208,7 +196,7 @@ export default function MachineDetailScreen() {
         if (!machine || !machineId) return;
         try {
             const pathToUse = (customPath.trim() || '~');
-            if (!isMachineOnline(machine)) return;
+            if (!isMachineOnline(machine) || isArchived) return;
             setIsSpawning(true);
             const absolutePath = resolveAbsolutePath(pathToUse, machine?.metadata?.homeDir);
             const result = await machineSpawnNewSession({
@@ -224,7 +212,11 @@ export default function MachineDetailScreen() {
                     navigateToSession(result.sessionId);
                     break;
                 case 'requestToApproveDirectoryCreation': {
-                    const approved = await Modal.confirm('Create Directory?', `The directory '${result.directory}' does not exist. Would you like to create it?`, { cancelText: t('common.cancel'), confirmText: t('common.create') });
+                    const approved = await Modal.confirm(
+                        t('machine.createDirectoryTitle'),
+                        t('machine.createDirectoryConfirm', { directory: result.directory }),
+                        { cancelText: t('common.cancel'), confirmText: t('common.create') },
+                    );
                     if (approved) {
                         await handleStartSession(true);
                     }
@@ -238,7 +230,7 @@ export default function MachineDetailScreen() {
                     break;
             }
         } catch (error) {
-            let errorMessage = 'Failed to start session. Make sure the daemon is running on the target machine.';
+            let errorMessage = t('machine.startSessionFailed');
             if (error instanceof Error && !error.message.includes('Failed to spawn session')) {
                 errorMessage = error.message;
             }
@@ -248,8 +240,72 @@ export default function MachineDetailScreen() {
         }
     };
 
+    const handleArchiveMachine = async () => {
+        if (!machineId) return;
+        const confirmed = await Modal.confirm(
+            t('machine.archiveMachine'),
+            t('machine.archiveMachineConfirm'),
+            { cancelText: t('common.cancel'), confirmText: t('machine.archiveMachine'), destructive: true },
+        );
+        if (!confirmed) return;
+
+        setLifecycleAction('archive');
+        try {
+            await machineArchive(machineId);
+            await sync.refreshMachines();
+            Modal.alert(t('common.success'), t('machine.archiveMachineSuccess'));
+        } catch (error) {
+            Modal.alert(t('common.error'), error instanceof Error ? error.message : t('machine.archiveMachineFailed'));
+        } finally {
+            setLifecycleAction(null);
+        }
+    };
+
+    const handleRestoreMachine = async () => {
+        if (!machineId) return;
+        const confirmed = await Modal.confirm(
+            t('machine.restoreMachine'),
+            t('machine.restoreMachineConfirm'),
+            { cancelText: t('common.cancel'), confirmText: t('machine.restoreMachine') },
+        );
+        if (!confirmed) return;
+
+        setLifecycleAction('restore');
+        try {
+            await machineUnarchive(machineId);
+            await sync.refreshMachines();
+            Modal.alert(t('common.success'), t('machine.restoreMachineSuccess'));
+        } catch (error) {
+            Modal.alert(t('common.error'), error instanceof Error ? error.message : t('machine.restoreMachineFailed'));
+        } finally {
+            setLifecycleAction(null);
+        }
+    };
+
+    const handleDeleteMachine = async () => {
+        if (!machineId) return;
+        const confirmed = await Modal.confirm(
+            t('machine.deleteMachine'),
+            t('machine.deleteMachineConfirm'),
+            { cancelText: t('common.cancel'), confirmText: t('machine.deleteMachine'), destructive: true },
+        );
+        if (!confirmed) return;
+
+        setLifecycleAction('delete');
+        try {
+            await machineDelete(machineId);
+            await sync.refreshMachines();
+            router.back();
+            Modal.alert(t('common.success'), t('machine.deleteMachineSuccess'));
+        } catch (error) {
+            Modal.alert(t('common.error'), error instanceof Error ? error.message : t('machine.deleteMachineFailed'));
+        } finally {
+            setLifecycleAction(null);
+        }
+    };
+
     const pastUsedRelativePath = useCallback((session: Session) => {
-        if (!session.metadata) return 'unknown path';
+        if (!session.metadata) return t('machine.unknownPath');
         return formatPathRelativeToHome(session.metadata.path, session.metadata.homeDir);
     }, []);
 
@@ -265,7 +321,7 @@ export default function MachineDetailScreen() {
                 />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Text style={[Typography.default(), { fontSize: 16, color: '#666' }]}>
-                        Machine not found
+                        {t('machine.notFound')}
                     </Text>
                 </View>
             </>
@@ -273,9 +329,9 @@ export default function MachineDetailScreen() {
     }
 
     const metadata = machine.metadata;
-    const machineName = metadata?.displayName || metadata?.host || 'unknown machine';
+    const machineName = metadata?.displayName || metadata?.host || t('status.unknown');
 
-    const spawnButtonDisabled = !customPath.trim() || isSpawning || !isMachineOnline(machine!);
+    const spawnButtonDisabled = !customPath.trim() || isSpawning || !isMachineOnline(machine!) || isArchived;
 
     return (
         <>
@@ -343,7 +399,17 @@ export default function MachineDetailScreen() {
                 {/* Launch section */}
                 {machine && (
                     <>
-                        {!isMachineOnline(machine) && (
+                        {isArchived && (
+                            <ItemGroup>
+                                <Item
+                                    title={t('machine.archivedNotice')}
+                                    subtitle={t('machine.archivedHelp')}
+                                    subtitleLines={0}
+                                    showChevron={false}
+                                />
+                            </ItemGroup>
+                        )}
+                        {!isArchived && !isMachineOnline(machine) && (
                             <ItemGroup>
                                 <Item
                                     title={t('machine.offlineUnableToSpawn')}
@@ -354,14 +420,14 @@ export default function MachineDetailScreen() {
                             </ItemGroup>
                         )}
                         <ItemGroup title={t('machine.launchNewSessionInDirectory')}>
-                        <View style={{ opacity: isMachineOnline(machine) ? 1 : 0.5 }}>
+                        <View style={{ opacity: isMachineOnline(machine) && !isArchived ? 1 : 0.5 }}>
                             <View style={styles.pathInputContainer}>
                                 <View style={[styles.pathInput, { paddingVertical: 8 }]}>
                                     <MultiTextInput
                                         ref={inputRef}
                                         value={customPath}
                                         onChangeText={setCustomPath}
-                                        placeholder={'Enter custom path'}
+                                        placeholder={t('machine.customPathPlaceholder')}
                                         maxHeight={76}
                                         paddingTop={8}
                                         paddingBottom={8}
@@ -395,11 +461,11 @@ export default function MachineDetailScreen() {
                                         key={path}
                                         title={display}
                                         leftElement={<Ionicons name="folder-outline" size={18} color={theme.colors.textSecondary} />}
-                                        onPress={isMachineOnline(machine) ? () => {
+                                        onPress={isMachineOnline(machine) && !isArchived ? () => {
                                             setCustomPath(display);
                                             setTimeout(() => inputRef.current?.focus(), 50);
                                         } : undefined}
-                                        disabled={!isMachineOnline(machine)}
+                                        disabled={!isMachineOnline(machine) || isArchived}
                                         selected={isSelected}
                                         showChevron={false}
                                         pressableStyle={isSelected ? { backgroundColor: theme.colors.surfaceSelected } : undefined}
@@ -424,23 +490,56 @@ export default function MachineDetailScreen() {
                     </>
                 )}
 
+                <ItemGroup title={t('machine.lifecycle')}>
+                    <Item
+                        title={t('machine.lifecycleStatus')}
+                        detail={isArchived ? t('machine.statusArchived') : t('machine.statusAvailable')}
+                        showChevron={false}
+                    />
+                    {isArchived ? (
+                        <Item
+                            title={t('machine.restoreMachine')}
+                            subtitle={t('machine.restoreMachineHelp')}
+                            onPress={lifecycleAction ? undefined : handleRestoreMachine}
+                            disabled={lifecycleAction !== null}
+                            loading={lifecycleAction === 'restore'}
+                        />
+                    ) : (
+                        <Item
+                            title={t('machine.archiveMachine')}
+                            subtitle={machine.active ? t('machine.archiveMachineDisabledActive') : t('machine.archiveMachineHelp')}
+                            onPress={lifecycleAction || machine.active ? undefined : handleArchiveMachine}
+                            disabled={lifecycleAction !== null || machine.active}
+                            loading={lifecycleAction === 'archive'}
+                        />
+                    )}
+                    <Item
+                        title={t('machine.deleteMachine')}
+                        subtitle={machine.active ? t('machine.deleteMachineDisabledActive') : t('machine.deleteMachineHelp')}
+                        destructive
+                        onPress={lifecycleAction || machine.active ? undefined : handleDeleteMachine}
+                        disabled={lifecycleAction !== null || machine.active}
+                        loading={lifecycleAction === 'delete'}
+                    />
+                </ItemGroup>
+
                 {/* Daemon */}
                 <ItemGroup title={t('machine.daemon')}>
                         <Item
                             title={t('machine.status')}
-                            detail={daemonStatus}
+                            detail={daemonStatusText}
                             detailStyle={{
-                                color: daemonStatus === 'likely alive' ? '#34C759' : '#FF9500'
+                                color: daemonLikelyAlive ? '#34C759' : '#FF9500'
                             }}
                             showChevron={false}
                         />
                         <Item
                             title={t('machine.stopDaemon')}
                             titleStyle={{ 
-                                color: daemonStatus === 'stopped' ? '#999' : '#FF9500' 
+                                color: daemonStopped ? '#999' : '#FF9500' 
                             }}
-                            onPress={daemonStatus === 'stopped' ? undefined : handleStopDaemon}
-                            disabled={isStoppingDaemon || daemonStatus === 'stopped'}
+                            onPress={daemonStopped ? undefined : handleStopDaemon}
+                            disabled={isStoppingDaemon || daemonStopped}
                             rightElement={
                                 isStoppingDaemon ? (
                                     <ActivityIndicator size="small" color={theme.colors.textSecondary} />
@@ -448,7 +547,7 @@ export default function MachineDetailScreen() {
                                     <Ionicons 
                                         name="stop-circle" 
                                         size={20} 
-                                        color={daemonStatus === 'stopped' ? '#999' : '#FF9500'} 
+                                        color={daemonStopped ? '#999' : '#FF9500'} 
                                     />
                                 )
                             }
@@ -492,7 +591,7 @@ export default function MachineDetailScreen() {
 
                 {/* Previous Sessions (debug view) */}
                 {previousSessions.length > 0 && (
-                    <ItemGroup title={'Previous Sessions (up to 5 most recent)'}>
+                    <ItemGroup title={t('machine.previousSessions')}>
                         {previousSessions.map(session => (
                             <Item
                                 key={session.id}
@@ -545,6 +644,12 @@ export default function MachineDetailScreen() {
                             title={t('machine.lastSeen')}
                             subtitle={machine.activeAt ? new Date(machine.activeAt).toLocaleString() : t('machine.never')}
                         />
+                        {machine.archivedAt && (
+                            <Item
+                                title={t('machine.archivedAt')}
+                                subtitle={new Date(machine.archivedAt).toLocaleString()}
+                            />
+                        )}
                         <Item
                             title={t('machine.metadataVersion')}
                             subtitle={String(machine.metadataVersion)}
