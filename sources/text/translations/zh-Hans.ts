@@ -1576,6 +1576,8 @@ export const zhHans: TranslationStructure = {
         agentCreated: 'Agent 已创建',
         agentUpdated: 'Agent 已更新',
         agentDeleted: 'Agent 已归档',
+        contextMirrorSection: '上下文镜像',
+        contextMirrorPercent: ({ percent }: { percent: number }) => `已用 ${percent}%`,
         configuration: '配置',
         capabilities: '能力',
         toolsAndMcps: '工具与 MCP',

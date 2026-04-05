@@ -219,6 +219,70 @@ function parseAgentDetailSpec(agent: AgentDetailRecord | null): AgentImage | nul
     return null;
 }
 
+const CONTEXT_WINDOW_SIZE = 190_000;
+
+function contextBarColor(pct: number): string {
+    if (pct >= 90) return '#ef4444';
+    if (pct >= 75) return '#f59e0b';
+    return '#22c55e';
+}
+
+/** Self-mirror: shows context window usage for a live deployed agent session. */
+function ContextMirrorGroup({ latestUsage }: {
+    latestUsage: {
+        inputTokens: number;
+        outputTokens: number;
+        cacheRead: number;
+        contextSize: number;
+    };
+}) {
+    const { theme } = useUnistyles();
+    const pct = Math.min(100, Math.round((latestUsage.contextSize / CONTEXT_WINDOW_SIZE) * 100));
+    const barColor = contextBarColor(pct);
+    return (
+        <ItemGroup title={t('agents.contextMirrorSection')}>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 10, gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{
+                        flex: 1,
+                        height: 8,
+                        backgroundColor: theme.colors.divider,
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                    }}>
+                        <View style={{
+                            width: `${pct}%` as `${number}%`,
+                            height: '100%',
+                            backgroundColor: barColor,
+                            borderRadius: 4,
+                        }} />
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: barColor, width: 52, textAlign: 'right' }}>
+                        {t('agents.contextMirrorPercent', { percent: pct })}
+                    </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                    {`${(latestUsage.contextSize / 1000).toFixed(0)}k / ${(CONTEXT_WINDOW_SIZE / 1000).toFixed(0)}k ${t('sessionInfo.contextSize').toLowerCase()}`}
+                </Text>
+            </View>
+            <Item
+                title={t('sessionInfo.inputTokens')}
+                detail={t('sessionInfo.tokensUnit', { n: latestUsage.inputTokens })}
+            />
+            <Item
+                title={t('sessionInfo.outputTokens')}
+                detail={t('sessionInfo.tokensUnit', { n: latestUsage.outputTokens })}
+            />
+            {latestUsage.cacheRead > 0 && (
+                <Item
+                    title={t('sessionInfo.cacheRead')}
+                    detail={t('sessionInfo.tokensUnit', { n: latestUsage.cacheRead })}
+                />
+            )}
+        </ItemGroup>
+    );
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default React.memo(function AgentDetailScreen() {
@@ -1361,6 +1425,10 @@ export default React.memo(function AgentDetailScreen() {
                             {standaloneSession?.metadata?.machineId ? <Item title="Machine ID" detail={standaloneSession.metadata.machineId} /> : null}
                             {agentDetail.genomeId ? <Item title="Genome ID" detail={agentDetail.genomeId} /> : null}
                         </ItemGroup>
+                    ) : null}
+
+                    {agentDetail && standaloneSession?.latestUsage ? (
+                        <ContextMirrorGroup latestUsage={standaloneSession.latestUsage} />
                     ) : null}
 
                     {/* ── Storefront / Resume ── */}

@@ -1225,6 +1225,8 @@ export const ru: TranslationStructure = {
         agentCreated: 'Агент создан',
         agentUpdated: 'Агент обновлён',
         agentDeleted: 'Агент архивирован',
+        contextMirrorSection: 'Зеркало контекста',
+        contextMirrorPercent: ({ percent }: { percent: number }) => `${percent}% использовано`,
         configuration: 'Конфигурация',
         capabilities: 'Возможности',
         toolsAndMcps: 'Инструменты и MCP',

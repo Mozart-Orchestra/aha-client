@@ -1203,6 +1203,8 @@ export const es: TranslationStructure = {
         agentCreated: 'Agente creado',
         agentUpdated: 'Agente actualizado',
         agentDeleted: 'Agente archivado',
+        contextMirrorSection: 'Espejo de contexto',
+        contextMirrorPercent: ({ percent }: { percent: number }) => `${percent}% usado`,
         configuration: 'Configuración',
         capabilities: 'Capacidades',
         toolsAndMcps: 'Herramientas y MCP',

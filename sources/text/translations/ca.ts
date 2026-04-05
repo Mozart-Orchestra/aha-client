@@ -1300,6 +1300,8 @@ export const ca: TranslationStructure = {
         agentCreated: 'Agent creat',
         agentUpdated: 'Agent actualitzat',
         agentDeleted: 'Agent arxivat',
+        contextMirrorSection: 'Mirall de context',
+        contextMirrorPercent: ({ percent }: { percent: number }) => `${percent}% utilitzat`,
         configuration: 'Configuració',
         capabilities: 'Capacitats',
         toolsAndMcps: 'Eines i MCP',

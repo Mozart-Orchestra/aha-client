@@ -1613,6 +1613,9 @@ export const en = {
         agentCreated: 'Agent created',
         agentUpdated: 'Agent updated',
         agentDeleted: 'Agent archived',
+        // Context Mirror (self-mirror section for deployed agent instances)
+        contextMirrorSection: 'Context Mirror',
+        contextMirrorPercent: ({ percent }: { percent: number }) => `${percent}% used`,
         // Detail page
         configuration: 'Configuration',
         capabilities: 'Capabilities',
