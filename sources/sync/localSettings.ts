@@ -9,7 +9,7 @@ const ThemePreferenceSchema = z.preprocess(
     z.enum(['light', 'dark'])
 );
 
-const AutomaticLanguageSchema = z.enum(['en', 'zh-Hans']);
+const AutomaticLanguageSchema = z.enum(['en', 'ru', 'pl', 'es', 'pt', 'ca', 'zh-Hans']);
 const AutomaticLanguageSourceSchema = z.enum(['ip', 'device']);
 
 export const LocalSettingsSchema = z.object({

@@ -3,16 +3,28 @@ import * as Localization from 'expo-localization';
 import type { LocalSettings } from '@/sync/localSettings';
 import { loadLocalSettings, saveLocalSettings } from '@/sync/persistence';
 
-import type { SupportedLanguage } from './_all';
+import { type SupportedLanguage, SUPPORTED_LANGUAGE_CODES } from './_all';
 
-export const PRIMARY_LANGUAGE_CODES = ['en', 'zh-Hans'] as const;
-
-export type AutomaticLanguage = (typeof PRIMARY_LANGUAGE_CODES)[number];
+export type AutomaticLanguage = SupportedLanguage;
 export type AutomaticLanguageSource = 'ip' | 'device';
 
 const CHINESE_REGION_CODES = new Set(['CN', 'SG', 'HK', 'MO', 'TW']);
 const AUTO_LANGUAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const IP_LOOKUP_TIMEOUT_MS = 2500;
+
+/**
+ * Locale prefix → SupportedLanguage mapping for browser/device locale detection.
+ * Order matters: more specific prefixes should appear before less specific ones.
+ * 'zh' must be handled separately because its tag is 'zh-Hans', not just 'zh'.
+ */
+const LOCALE_PREFIX_MAP: Array<[prefix: string, language: SupportedLanguage]> = [
+    ['zh', 'zh-Hans'],
+    ['ru', 'ru'],
+    ['pl', 'pl'],
+    ['es', 'es'],
+    ['pt', 'pt'],
+    ['ca', 'ca'],
+];
 
 const IP_LOOKUP_ENDPOINTS = [
     {
@@ -25,14 +37,13 @@ const IP_LOOKUP_ENDPOINTS = [
     },
 ] as const;
 
-function shouldSkipIpLookup(): boolean {
-    // Direct browser calls to third-party IP services are frequently blocked by CORS.
-    // Use deterministic locale fallback for web/local flows instead of surfacing console noise.
-    return typeof window !== 'undefined';
-}
-
 function normalizeAutomaticLanguage(value: string | null | undefined): AutomaticLanguage | null {
-    return value === 'en' || value === 'zh-Hans' ? value : null;
+    if (!value) {
+        return null;
+    }
+    return (SUPPORTED_LANGUAGE_CODES as readonly string[]).includes(value)
+        ? (value as AutomaticLanguage)
+        : null;
 }
 
 function normalizeCountryCode(value: unknown): string | null {
@@ -92,15 +103,31 @@ async function fetchJsonWithTimeout(url: string): Promise<any | null> {
     }
 }
 
+/**
+ * Try to resolve country code via a same-origin server proxy.
+ * This avoids CORS issues that affect direct third-party IP API calls from browsers.
+ * The server reads the client IP from request headers and returns only the country code.
+ */
+async function fetchCountryCodeViaProxy(proxyUrl: string): Promise<string | null> {
+    const payload = await fetchJsonWithTimeout(proxyUrl);
+    return normalizeCountryCode(payload?.countryCode);
+}
+
+/**
+ * Resolve language from device/browser locales.
+ * Maps all supported language prefixes; defaults to 'en' if no match is found.
+ */
 export function resolveAutomaticLanguageFromLocale(
     locales: readonly Localization.Locale[] = Localization.getLocales()
 ): AutomaticLanguage {
     for (const locale of locales) {
-        const languageCode = locale.languageCode?.toLowerCase();
-        const languageTag = locale.languageTag?.toLowerCase();
+        const languageCode = locale.languageCode?.toLowerCase() ?? '';
+        const languageTag = locale.languageTag?.toLowerCase() ?? '';
 
-        if (languageCode === 'zh' || languageTag?.startsWith('zh')) {
-            return 'zh-Hans';
+        for (const [prefix, language] of LOCALE_PREFIX_MAP) {
+            if (languageCode === prefix || languageTag.startsWith(prefix)) {
+                return language;
+            }
         }
     }
 
@@ -133,7 +160,20 @@ export function resolvePreferredLanguage(
     return getCachedAutomaticLanguage(localSettings);
 }
 
-export async function refreshAutomaticLanguagePreference() {
+/**
+ * Refresh the automatically detected language.
+ *
+ * Strategy:
+ * - Cache hit (< 24 h): return cached value.
+ * - Web environment: call server proxy `/v1/geo/country-code` to avoid CORS;
+ *   falls back to device locale if the proxy is unavailable.
+ * - Native environment: call third-party IP APIs directly.
+ * - All IP lookups fall back to device locale on failure.
+ */
+export async function refreshAutomaticLanguagePreference(
+    /** Override the server proxy URL (used in tests). Pass null to skip proxy. */
+    geoProxyUrl?: string | null
+) {
     const localSettings = loadLocalSettings();
     const cached = getAutomaticLanguageSnapshot(localSettings);
 
@@ -147,15 +187,38 @@ export async function refreshAutomaticLanguagePreference() {
 
     const localeLanguage = resolveAutomaticLanguageFromLocale();
 
-    if (shouldSkipIpLookup()) {
+    // --- Web environment ---
+    // Direct calls to third-party IP services are blocked by CORS in browsers.
+    // Use a same-origin server proxy instead.
+    if (typeof window !== 'undefined') {
+        const proxyUrl = geoProxyUrl !== undefined
+            ? geoProxyUrl
+            : (() => {
+                try {
+                    // Lazy import to avoid circular module issues at module load time.
+                    // eslint-disable-next-line @typescript-eslint/no-var-requires
+                    const { getServerUrl } = require('@/sync/serverConfig') as { getServerUrl: () => string };
+                    return `${getServerUrl()}/v1/geo/country-code`;
+                } catch {
+                    return null;
+                }
+            })();
+
+        if (proxyUrl) {
+            const countryCode = await fetchCountryCodeViaProxy(proxyUrl);
+            const language = mapCountryCodeToLanguage(countryCode) ?? localeLanguage;
+            const source: AutomaticLanguageSource = countryCode ? 'ip' : 'device';
+            persistAutomaticLanguage(language, source, countryCode);
+            return { language, source, countryCode };
+        }
+
+        // No proxy available — fall back to device locale.
         persistAutomaticLanguage(localeLanguage, 'device', null);
-        return {
-            language: localeLanguage,
-            source: 'device' as const,
-            countryCode: null,
-        };
+        return { language: localeLanguage, source: 'device' as const, countryCode: null };
     }
 
+    // --- Native environment ---
+    // Call third-party IP APIs directly (no CORS restrictions).
     for (const endpoint of IP_LOOKUP_ENDPOINTS) {
         const payload = await fetchJsonWithTimeout(endpoint.url);
         const countryCode = normalizeCountryCode(endpoint.pickCountryCode(payload));
