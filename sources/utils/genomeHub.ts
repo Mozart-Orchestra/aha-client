@@ -236,7 +236,7 @@ export async function fetchGenomeByName(namespace: string, name: string): Promis
     const request = (async () => {
         try {
             const encodedNs = encodeURIComponent(namespace);
-            const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}`);
+            const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/latest`);
             if (res.status === 429) {
                 return null;
             }
