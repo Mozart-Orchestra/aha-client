@@ -12,8 +12,8 @@ FROM deps AS builder
 ARG APP_ENV=production
 ARG EXPO_PUBLIC_POSTHOG_API_KEY=""
 ARG EXPO_PUBLIC_REVENUE_CAT_STRIPE=""
-ARG EXPO_PUBLIC_HAPPY_SERVER_URL="https://top1vibe.com/api/v3"
-ARG EXPO_PUBLIC_GENOME_HUB_URL="https://top1vibe.com/genome/v3"
+ARG EXPO_PUBLIC_HAPPY_SERVER_URL="https://ahaagi.com/api/v3"
+ARG EXPO_PUBLIC_GENOME_HUB_URL="https://ahaagi.com/api/v2"
 ARG BASE_PATH=""
 
 ENV NODE_ENV=production \

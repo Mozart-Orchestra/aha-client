@@ -19,9 +19,16 @@ vi.mock('react-native-mmkv', () => ({
     },
 }));
 
-function setWindowHostname(hostname: string) {
+function setWindowLocation(hostname: string, origin?: string) {
     Object.defineProperty(globalThis, 'window', {
-        value: { location: { hostname } },
+        value: {
+            location: {
+                hostname,
+                origin: origin ?? `https://${hostname}`,
+                protocol: 'https:',
+                host: hostname,
+            },
+        },
         configurable: true,
         writable: true,
     });
@@ -50,15 +57,23 @@ describe('serverConfig', () => {
     });
 
     it('uses the hosted default server for localhost web builds', async () => {
-        setWindowHostname('localhost');
+        setWindowLocation('localhost', 'http://localhost:8081');
 
         const { getServerUrl } = await loadServerConfig();
 
-        expect(getServerUrl()).toBe('https://top1vibe.com');
+        expect(getServerUrl()).toBe('https://ahaagi.com/api/v3');
+    });
+
+    it('uses the current public origin for hosted web builds', async () => {
+        setWindowLocation('ahaagi.com', 'https://ahaagi.com');
+
+        const { getServerUrl } = await loadServerConfig();
+
+        expect(getServerUrl()).toBe('https://ahaagi.com/api/v3');
     });
 
     it('keeps LAN auto-discovery for private IP web builds', async () => {
-        setWindowHostname('192.168.1.20');
+        setWindowLocation('192.168.1.20', 'http://192.168.1.20:8081');
 
         const { getServerUrl } = await loadServerConfig();
 
@@ -67,7 +82,7 @@ describe('serverConfig', () => {
 
     it('rewrites localhost env overrides to the current LAN host', async () => {
         process.env.EXPO_PUBLIC_HAPPY_SERVER_URL = 'http://localhost:3005';
-        setWindowHostname('192.168.1.20');
+        setWindowLocation('192.168.1.20', 'http://192.168.1.20:8081');
 
         const { getServerUrl } = await loadServerConfig();
 

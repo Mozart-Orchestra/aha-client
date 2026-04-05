@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/StyledText';
 import { Avatar } from '@/components/avatar/Avatar';
 import { JoinTeamModal } from '@/app/(app)/agents/JoinTeamModal';
-import { parseAgentImage, searchGenomes, type GenomeRecord } from '@/utils/genomeHub';
+import { parseAgentImage, searchAllGenomes, type GenomeRecord } from '@/utils/genomeHub';
 
 interface Props {
     visible: boolean;
@@ -186,9 +186,9 @@ export const TeamAgentLibraryModal = React.memo(function TeamAgentLibraryModal({
         const timeoutId = setTimeout(async () => {
             setLoading(true);
             try {
-                const result = await searchGenomes({
+                const result = await searchAllGenomes({
                     q: query.trim() || undefined,
-                    limit: 40,
+                    kind: 'agent',
                 });
                 if (!cancelled) {
                     setGenomes(result.genomes.filter((genome) => genome.category !== 'corps'));

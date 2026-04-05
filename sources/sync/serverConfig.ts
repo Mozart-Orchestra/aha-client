@@ -4,7 +4,31 @@ import { MMKV } from 'react-native-mmkv';
 const serverConfigStorage = new MMKV({ id: 'server-config' });
 
 const SERVER_KEY = 'custom-server-url';
-const DEFAULT_SERVER_URL = 'https://top1vibe.com';
+const DEFAULT_SERVER_URL = 'https://ahaagi.com/api/v3';
+const DEFAULT_PUBLIC_API_PATH = '/api/v3';
+
+function isLocalHost(hostname: string): boolean {
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+}
+
+function getWindowOrigin(): string | null {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    const origin = typeof window.location.origin === 'string' ? window.location.origin.trim() : '';
+    if (origin) {
+        return origin.replace(/\/+$/, '');
+    }
+
+    const protocol = typeof window.location.protocol === 'string' ? window.location.protocol : '';
+    const host = typeof window.location.host === 'string' ? window.location.host : '';
+    if (!protocol || !host) {
+        return null;
+    }
+
+    return `${protocol}//${host}`.replace(/\/+$/, '');
+}
 
 function getRuntimeServerUrl(): string | null {
     const envServerUrl = process.env.EXPO_PUBLIC_HAPPY_SERVER_URL?.trim();
@@ -20,6 +44,13 @@ function getRuntimeServerUrl(): string | null {
         // still opt into localhost explicitly via env or the server settings UI.
         if (isPrivateIp(hostname)) {
             return `http://${hostname}:3005`;
+        }
+
+        if (!isLocalHost(hostname)) {
+            const origin = getWindowOrigin();
+            if (origin) {
+                return `${origin}${DEFAULT_PUBLIC_API_PATH}`;
+            }
         }
     }
 
@@ -55,7 +86,7 @@ function rewriteLocalhostUrl(url: string): string {
     }
 
     const pageHost = window.location.hostname;
-    if (pageHost === 'localhost' || pageHost === '127.0.0.1') {
+    if (isLocalHost(pageHost)) {
         return url;
     }
 
