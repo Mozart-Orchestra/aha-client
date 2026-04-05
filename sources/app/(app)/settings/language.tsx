@@ -4,10 +4,10 @@ import { Item } from '@/components/ui/Item';
 import { ItemGroup } from '@/components/ui/ItemGroup';
 import { ItemList } from '@/components/ui/ItemList';
 import { useLocalSettings, useSettingMutable } from '@/sync/storage';
-import { t, getLanguageNativeName, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/text';
+import { t, getLanguageNativeName, SUPPORTED_LANGUAGE_CODES, type SupportedLanguage } from '@/text';
 import { Modal } from '@/modal';
 import { useUpdates } from '@/hooks/useUpdates';
-import { PRIMARY_LANGUAGE_CODES } from '@/text/automaticLanguage';
+import { getCachedAutomaticLanguage } from '@/text/automaticLanguage';
 
 type LanguageOption = 'auto' | SupportedLanguage;
 
@@ -22,16 +22,14 @@ export default function LanguageSettingsScreen() {
     const localSettings = useLocalSettings();
     const { reloadApp } = useUpdates();
 
-    const detectedLanguage = localSettings.autoDetectedLanguage === 'zh-Hans' ? 'zh-Hans' : 'en';
+    const detectedLanguage = getCachedAutomaticLanguage(localSettings);
     const detectedLanguageName = getLanguageNativeName(detectedLanguage);
-    const isPrimaryPreferredLanguage = preferredLanguage === 'en' || preferredLanguage === 'zh-Hans';
+    const supportedPreferredLanguage = preferredLanguage && SUPPORTED_LANGUAGE_CODES.includes(preferredLanguage as SupportedLanguage)
+        ? preferredLanguage as SupportedLanguage
+        : null;
 
     // Current selection
-    const currentSelection: LanguageOption = preferredLanguage === null
-        ? 'auto'
-        : isPrimaryPreferredLanguage
-            ? preferredLanguage as SupportedLanguage
-            : 'auto';
+    const currentSelection: LanguageOption = supportedPreferredLanguage ?? 'auto';
 
     // Language options - dynamically generated from supported languages
     const languageOptions: LanguageItem[] = [
@@ -40,7 +38,7 @@ export default function LanguageSettingsScreen() {
             title: t('settingsLanguage.automatic'),
             subtitle: `${t('settingsLanguage.automaticSubtitle')} (${detectedLanguageName})`
         },
-        ...PRIMARY_LANGUAGE_CODES.map(code => ({
+        ...SUPPORTED_LANGUAGE_CODES.map(code => ({
             key: code,
             title: getLanguageNativeName(code)
         }))
