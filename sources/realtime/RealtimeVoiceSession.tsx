@@ -25,9 +25,17 @@ class RealtimeVoiceSessionImpl implements VoiceSession {
             const userLanguagePreference = storage.getState().settings.voiceAssistantLanguage;
             const elevenLabsLanguage = getElevenLabsCodeFromPreference(userLanguagePreference);
             
-            // Use hardcoded agent ID for Eleven Labs
+            // Resolve ElevenLabs agent ID from environment — fail-fast if not configured
+            const elevenLabsAgentId = __DEV__
+                ? (process.env.EXPO_PUBLIC_ELEVENLABS_AGENT_ID_DEV?.trim() || process.env.EXPO_PUBLIC_ELEVENLABS_AGENT_ID?.trim())
+                : process.env.EXPO_PUBLIC_ELEVENLABS_AGENT_ID?.trim();
+            if (!elevenLabsAgentId) {
+                throw new Error(
+                    'ElevenLabs agent ID is not configured — set EXPO_PUBLIC_ELEVENLABS_AGENT_ID (and optionally EXPO_PUBLIC_ELEVENLABS_AGENT_ID_DEV for dev)'
+                );
+            }
             await conversationInstance.startSession({
-                agentId: __DEV__ ? 'agent_7801k2c0r5hjfraa1kdbytpvs6yt' : 'agent_6701k211syvvegba4kt7m68nxjmw',
+                agentId: elevenLabsAgentId,
                 // Pass session ID and initial context as dynamic variables
                 dynamicVariables: {
                     sessionId: config.sessionId,
