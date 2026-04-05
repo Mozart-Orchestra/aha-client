@@ -35,6 +35,11 @@ afterEach(() => {
 // ─── resolveAutomaticLanguageFromLocale ──────────────────────────────────────
 
 describe('resolveAutomaticLanguageFromLocale', () => {
+    it('returns en for English locale', async () => {
+        const { resolveAutomaticLanguageFromLocale } = await import('./automaticLanguage');
+        expect(resolveAutomaticLanguageFromLocale([{ languageCode: 'en', languageTag: 'en-US' } as any])).toBe('en');
+    });
+
     it('returns zh-Hans for zh languageCode', async () => {
         const { resolveAutomaticLanguageFromLocale } = await import('./automaticLanguage');
         expect(resolveAutomaticLanguageFromLocale([{ languageCode: 'zh', languageTag: 'zh-CN' } as any])).toBe('zh-Hans');
@@ -112,7 +117,24 @@ describe('refreshAutomaticLanguagePreference – native (no window)', () => {
         expect(result).toEqual({ language: 'zh-Hans', source: 'ip', countryCode: 'CN' });
     });
 
-    it('performs IP lookup when cache is expired and returns ip-based language', async () => {
+    it('uses supported device locale directly without IP lookup', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'ru', languageTag: 'ru-RU' }]);
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { refreshAutomaticLanguagePreference } = await import('./automaticLanguage');
+        const result = await refreshAutomaticLanguagePreference();
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(result).toEqual({
+            language: 'ru',
+            source: 'device',
+            countryCode: null,
+        });
+    });
+
+    it('performs IP lookup when locale is unsupported and returns ip-based language', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'ja', languageTag: 'ja-JP' }]);
         const fetchMock = vi.fn().mockResolvedValueOnce({
             ok: true,
             json: async () => ({ country_code: 'CN' }),
@@ -140,6 +162,7 @@ describe('refreshAutomaticLanguagePreference – native (no window)', () => {
     });
 
     it('falls back to second IP endpoint when first fails', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'ja', languageTag: 'ja-JP' }]);
         const fetchMock = vi.fn()
             .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
             .mockResolvedValueOnce({
@@ -156,19 +179,20 @@ describe('refreshAutomaticLanguagePreference – native (no window)', () => {
     });
 
     it('falls back to device locale when all IP endpoints fail', async () => {
-        getLocalesMock.mockReturnValue([{ languageCode: 'ru', languageTag: 'ru-RU' }]);
+        getLocalesMock.mockReturnValue([{ languageCode: 'ja', languageTag: 'ja-JP' }]);
         const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
         vi.stubGlobal('fetch', fetchMock);
 
         const { refreshAutomaticLanguagePreference } = await import('./automaticLanguage');
         const result = await refreshAutomaticLanguagePreference();
 
-        expect(result.language).toBe('ru');
+        expect(result.language).toBe('en');
         expect(result.source).toBe('device');
         expect(result.countryCode).toBeNull();
     });
 
     it('maps non-Chinese country code to en', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'ja', languageTag: 'ja-JP' }]);
         const fetchMock = vi.fn().mockResolvedValueOnce({
             ok: true,
             json: async () => ({ country_code: 'DE' }),
@@ -191,27 +215,29 @@ describe('refreshAutomaticLanguagePreference – web (window present)', () => {
         (globalThis as { window?: unknown }).window = {};
     });
 
-    it('skips external IP lookups and falls back to locale when proxy URL is null', async () => {
+    it('skips external IP lookups and uses supported browser language directly', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'pl', languageTag: 'pl-PL' }]);
         const fetchMock = vi.fn();
         vi.stubGlobal('fetch', fetchMock);
 
         const { refreshAutomaticLanguagePreference } = await import('./automaticLanguage');
-        const result = await refreshAutomaticLanguagePreference(null);
+        const result = await refreshAutomaticLanguagePreference('https://example.com/v1/geo/country-code');
 
         expect(fetchMock).not.toHaveBeenCalled();
         expect(result).toEqual({
-            language: 'en',
+            language: 'pl',
             source: 'device',
             countryCode: null,
         });
         expect(saveLocalSettingsMock).toHaveBeenCalledWith(expect.objectContaining({
-            autoDetectedLanguage: 'en',
+            autoDetectedLanguage: 'pl',
             autoDetectedLanguageSource: 'device',
             autoDetectedLanguageCountryCode: null,
         }));
     });
 
     it('uses server proxy to resolve language from IP in browser', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'ja', languageTag: 'ja-JP' }]);
         const fetchMock = vi.fn().mockResolvedValueOnce({
             ok: true,
             json: async () => ({ countryCode: 'SG' }),
@@ -230,8 +256,8 @@ describe('refreshAutomaticLanguagePreference – web (window present)', () => {
         expect(result.countryCode).toBe('SG');
     });
 
-    it('falls back to device locale when proxy returns no country code', async () => {
-        getLocalesMock.mockReturnValue([{ languageCode: 'pl', languageTag: 'pl-PL' }]);
+    it('falls back to default English when proxy returns no country code and locale is unsupported', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'ja', languageTag: 'ja-JP' }]);
         const fetchMock = vi.fn().mockResolvedValueOnce({
             ok: true,
             json: async () => ({ countryCode: null }),
@@ -241,19 +267,21 @@ describe('refreshAutomaticLanguagePreference – web (window present)', () => {
         const { refreshAutomaticLanguagePreference } = await import('./automaticLanguage');
         const result = await refreshAutomaticLanguagePreference('https://example.com/v1/geo/country-code');
 
-        expect(result.language).toBe('pl');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result.language).toBe('en');
         expect(result.source).toBe('device');
     });
 
-    it('falls back to device locale when proxy call fails', async () => {
-        getLocalesMock.mockReturnValue([{ languageCode: 'es', languageTag: 'es-MX' }]);
+    it('falls back to default English when proxy call fails and locale is unsupported', async () => {
+        getLocalesMock.mockReturnValue([{ languageCode: 'ja', languageTag: 'ja-JP' }]);
         const fetchMock = vi.fn().mockRejectedValueOnce(new Error('network error'));
         vi.stubGlobal('fetch', fetchMock);
 
         const { refreshAutomaticLanguagePreference } = await import('./automaticLanguage');
         const result = await refreshAutomaticLanguagePreference('https://example.com/v1/geo/country-code');
 
-        expect(result.language).toBe('es');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result.language).toBe('en');
         expect(result.source).toBe('device');
     });
 

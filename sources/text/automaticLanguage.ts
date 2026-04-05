@@ -24,6 +24,7 @@ const LOCALE_PREFIX_MAP: Array<[prefix: string, language: SupportedLanguage]> = 
     ['es', 'es'],
     ['pt', 'pt'],
     ['ca', 'ca'],
+    ['en', 'en'],
 ];
 
 const IP_LOOKUP_ENDPOINTS = [
@@ -117,9 +118,9 @@ async function fetchCountryCodeViaProxy(proxyUrl: string): Promise<string | null
  * Resolve language from device/browser locales.
  * Maps all supported language prefixes; defaults to 'en' if no match is found.
  */
-export function resolveAutomaticLanguageFromLocale(
+function resolveAutomaticLanguageMatchFromLocale(
     locales: readonly Localization.Locale[] = Localization.getLocales()
-): AutomaticLanguage {
+): AutomaticLanguage | null {
     for (const locale of locales) {
         const languageCode = locale.languageCode?.toLowerCase() ?? '';
         const languageTag = locale.languageTag?.toLowerCase() ?? '';
@@ -131,7 +132,17 @@ export function resolveAutomaticLanguageFromLocale(
         }
     }
 
-    return 'en';
+    return null;
+}
+
+/**
+ * Resolve language from device/browser locales.
+ * Maps all supported language prefixes; defaults to 'en' if no match is found.
+ */
+export function resolveAutomaticLanguageFromLocale(
+    locales: readonly Localization.Locale[] = Localization.getLocales()
+): AutomaticLanguage {
+    return resolveAutomaticLanguageMatchFromLocale(locales) ?? 'en';
 }
 
 export function getAutomaticLanguageSnapshot(localSettings: LocalSettings = loadLocalSettings()) {
@@ -165,10 +176,11 @@ export function resolvePreferredLanguage(
  *
  * Strategy:
  * - Cache hit (< 24 h): return cached value.
+ * - Supported browser/device locale: use it directly.
  * - Web environment: call server proxy `/v1/geo/country-code` to avoid CORS;
- *   falls back to device locale if the proxy is unavailable.
+ *   falls back to device locale/default English if the proxy is unavailable.
  * - Native environment: call third-party IP APIs directly.
- * - All IP lookups fall back to device locale on failure.
+ * - All IP lookups fall back to device locale/default English on failure.
  */
 export async function refreshAutomaticLanguagePreference(
     /** Override the server proxy URL (used in tests). Pass null to skip proxy. */
@@ -185,7 +197,17 @@ export async function refreshAutomaticLanguagePreference(
         };
     }
 
-    const localeLanguage = resolveAutomaticLanguageFromLocale();
+    const localeLanguageMatch = resolveAutomaticLanguageMatchFromLocale();
+    const localeLanguage = localeLanguageMatch ?? 'en';
+
+    if (localeLanguageMatch) {
+        persistAutomaticLanguage(localeLanguageMatch, 'device', null);
+        return {
+            language: localeLanguageMatch,
+            source: 'device' as const,
+            countryCode: null,
+        };
+    }
 
     // --- Web environment ---
     // Direct calls to third-party IP services are blocked by CORS in browsers.
