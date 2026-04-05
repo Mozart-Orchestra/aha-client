@@ -171,8 +171,13 @@ export interface SearchParams {
     q?: string;
     namespace?: string;
     category?: string;
+    kind?: 'agent' | 'legion';
     limit?: number;
     offset?: number;
+}
+
+interface SearchAllParams extends Omit<SearchParams, 'limit' | 'offset'> {
+    pageLimit?: number;
 }
 
 export async function searchGenomes(params: SearchParams = {}): Promise<SearchResult> {
@@ -180,6 +185,7 @@ export async function searchGenomes(params: SearchParams = {}): Promise<SearchRe
     if (params.q) query.set('q', params.q);
     if (params.namespace) query.set('namespace', params.namespace);
     if (params.category) query.set('category', params.category);
+    if (params.kind) query.set('kind', params.kind);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
 
@@ -187,6 +193,35 @@ export async function searchGenomes(params: SearchParams = {}): Promise<SearchRe
     const res = await fetch(`${BASE}/genomes${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
     return res.json() as Promise<SearchResult>;
+}
+
+export async function searchAllGenomes(params: SearchAllParams = {}): Promise<SearchResult> {
+    const pageLimit = Math.max(1, Math.min(params.pageLimit ?? 100, 100));
+    const genomes: GenomeRecord[] = [];
+    let total = 0;
+    let offset = 0;
+
+    while (true) {
+        const page = await searchGenomes({
+            ...params,
+            limit: pageLimit,
+            offset,
+        });
+
+        total = page.total;
+        genomes.push(...page.genomes);
+
+        if (page.genomes.length === 0 || page.genomes.length < pageLimit || genomes.length >= total) {
+            break;
+        }
+
+        offset += page.genomes.length;
+    }
+
+    return {
+        genomes,
+        total,
+    };
 }
 
 /** Fetch a genome by namespace + name (latest version). Returns null if not found. */
