@@ -6,7 +6,8 @@ ENV NODE_OPTIONS=${NODE_OPTIONS}
 COPY package.json yarn.lock ./
 COPY patches ./patches
 COPY sources/team-config ./sources/team-config
-RUN yarn install --frozen-lockfile --ignore-engines
+RUN yarn config set registry https://registry.yarnpkg.com
+RUN yarn install --frozen-lockfile --ignore-engines --network-timeout 600000
 
 FROM deps AS builder
 ARG APP_ENV=production
