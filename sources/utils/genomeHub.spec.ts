@@ -53,7 +53,7 @@ describe('genomeHub role alias lookup', () => {
         const { fetchGenomeByName } = await import('./genomeHub');
         const genome = await fetchGenomeByName('@official', 'builder');
 
-        expect(fetchMock).toHaveBeenCalledWith('http://genome-hub.test/genomes/%40official/implementer');
+        expect(fetchMock).toHaveBeenCalledWith('http://genome-hub.test/genomes/%40official/implementer/latest');
         expect(genome?.name).toBe('implementer');
     });
 
@@ -68,9 +68,37 @@ describe('genomeHub role alias lookup', () => {
         const { fetchGenomeByName } = await import('./genomeHub');
         const genome = await fetchGenomeByName('@private', 'MyPrivateBuilder');
 
-        expect(fetchMock).toHaveBeenCalledWith('http://genome-hub.test/genomes/%40private/MyPrivateBuilder');
+        expect(fetchMock).toHaveBeenCalledWith('http://genome-hub.test/genomes/%40private/MyPrivateBuilder/latest');
         expect(genome?.namespace).toBe('@private');
         expect(genome?.name).toBe('MyPrivateBuilder');
+    });
+
+    it('maps gstack official role aliases to their canonical genome names', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ genome: makeGenome('gstack-engineering-reviewer') }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { fetchGenomeByName, resolveOfficialRoleGenomeName } = await import('./genomeHub');
+        const genome = await fetchGenomeByName('@official', 'engineering-reviewer');
+
+        expect(resolveOfficialRoleGenomeName('product-strategist')).toBe('gstack-product-strategist');
+        expect(fetchMock).toHaveBeenCalledWith('http://genome-hub.test/genomes/%40official/gstack-engineering-reviewer/latest');
+        expect(genome?.name).toBe('gstack-engineering-reviewer');
+    });
+
+    it('skips official role lookups for unknown non-canonical role keys', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { fetchOfficialGenomeByRoleKey, resolveOfficialRoleGenomeName } = await import('./genomeHub');
+        const genome = await fetchOfficialGenomeByRoleKey('experiment-architect');
+
+        expect(resolveOfficialRoleGenomeName('experiment-architect')).toBeNull();
+        expect(genome).toBeNull();
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('fails fast with a warning when genome hub env is missing', async () => {

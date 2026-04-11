@@ -1,5 +1,13 @@
 # Changelog
 
+## Version 7 - 2026-04-12
+
+This release fixes two noisy genome-hub integration failures on the web app: official role score lookups now resolve gstack canonical names correctly, and custom session roles no longer spam missing `@official` genome requests.
+
+- Fixed official genome alias resolution for gstack roles such as Product Strategist, Engineering Reviewer, QA Commander, Design Architect, Security Officer, Release Engineer, and Retro Analyst.
+- Updated the sidebar role score loader so it only probes known official roles instead of firing 404 requests for arbitrary session `roleKey` values.
+- Added implementation notes documenting the official-role lookup contract for future UI and marketplace work.
+
 ## Version 6 - 2026-04-02
 
 This release makes account recovery much more legible when Google sign-in cannot immediately restore the existing account. Instead of dropping every failure into the same generic fallback, the app now explains the actual recovery state and points users to the right next action.

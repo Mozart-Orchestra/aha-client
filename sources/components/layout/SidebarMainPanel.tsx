@@ -16,7 +16,7 @@ import {
 import { buildSidebarAgentRosterEntries, selectSidebarAgentSessions } from '@/utils/sidebarAgentSessions';
 import { getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
-import { fetchGenomeByName, parseAgentVerdict } from '@/utils/genomeHub';
+import { fetchOfficialGenomeByRoleKey, parseAgentVerdict } from '@/utils/genomeHub';
 import {
     normalizeRoleKey,
     resolveSidebarAgentIdentity,
@@ -42,15 +42,6 @@ type RoleScore = {
     score: number;
     evaluationCount: number;
 };
-
-function buildRoleCandidates(value: string): string[] {
-    const normalized = normalizeRoleKey(value);
-    return Array.from(new Set([
-        value.trim(),
-        normalized,
-        normalized.replace(/[\s_]+/g, '-'),
-    ].filter(Boolean)));
-}
 
 function formatListTime(timestamp: number): string {
     const now = new Date();
@@ -213,19 +204,17 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
         (async () => {
             const resolvedEntries = await Promise.all(
                 missingRoleKeys.map(async (roleKey) => {
-                    for (const candidate of buildRoleCandidates(roleKey)) {
-                        try {
-                            const genome = await fetchGenomeByName('@official', candidate);
-                            const feedback = parseAgentVerdict(genome?.feedbackData ?? null);
-                            if (feedback && feedback.evaluationCount > 0) {
-                                return [roleKey, {
-                                    score: feedback.avgScore,
-                                    evaluationCount: feedback.evaluationCount,
-                                }] as const;
-                            }
-                        } catch {
-                            // Ignore missing or unreachable genome hub entries.
+                    try {
+                        const genome = await fetchOfficialGenomeByRoleKey(roleKey);
+                        const feedback = parseAgentVerdict(genome?.feedbackData ?? null);
+                        if (feedback && feedback.evaluationCount > 0) {
+                            return [roleKey, {
+                                score: feedback.avgScore,
+                                evaluationCount: feedback.evaluationCount,
+                            }] as const;
                         }
+                    } catch {
+                        // Ignore missing or unreachable genome hub entries.
                     }
 
                     return [roleKey, null] as const;

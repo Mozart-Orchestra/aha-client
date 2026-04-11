@@ -34,15 +34,55 @@ const OFFICIAL_GENOME_ALIASES: Record<string, string> = {
     scribe: 'researcher',
     'technical-writer': 'researcher',
     'spec-writer': 'researcher',
+    'product-strategist': 'gstack-product-strategist',
+    'engineering-reviewer': 'gstack-engineering-reviewer',
+    'fullstack-builder': 'gstack-fullstack-builder',
+    'qa-commander': 'gstack-qa-commander',
+    'design-architect': 'gstack-design-architect',
+    'security-officer': 'gstack-security-officer',
+    'release-engineer': 'gstack-release-engineer',
+    'retro-analyst': 'gstack-retro-analyst',
 };
+const KNOWN_OFFICIAL_ROLE_LOOKUPS = new Set<string>([
+    'master',
+    'implementer',
+    'qa-engineer',
+    'researcher',
+    'org-manager',
+    'supervisor',
+    ...Object.values(OFFICIAL_GENOME_ALIASES),
+]);
+
+function normalizeGenomeLookupName(name: string): string {
+    return name.trim().toLowerCase().replace(/[\s_]+/g, '-');
+}
 
 export function resolveCanonicalGenomeName(namespace: string, name: string): string {
     const trimmedName = name.trim();
-    const normalizedName = name.trim().toLowerCase().replace(/[\s_]+/g, '-');
+    const normalizedName = normalizeGenomeLookupName(name);
     if (namespace.trim().toLowerCase() !== '@official') {
         return trimmedName;
     }
     return OFFICIAL_GENOME_ALIASES[normalizedName] ?? normalizedName;
+}
+
+export function resolveOfficialRoleGenomeName(name: string): string | null {
+    const normalizedName = normalizeGenomeLookupName(name);
+    if (!normalizedName) {
+        return null;
+    }
+
+    const resolvedName = OFFICIAL_GENOME_ALIASES[normalizedName] ?? normalizedName;
+    return KNOWN_OFFICIAL_ROLE_LOOKUPS.has(resolvedName) ? resolvedName : null;
+}
+
+export async function fetchOfficialGenomeByRoleKey(roleKey: string): Promise<GenomeRecord | null> {
+    const resolvedName = resolveOfficialRoleGenomeName(roleKey);
+    if (!resolvedName) {
+        return null;
+    }
+
+    return fetchGenomeByName('@official', resolvedName);
 }
 
 export interface AgentVerdict {
