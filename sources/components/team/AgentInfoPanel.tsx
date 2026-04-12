@@ -32,7 +32,6 @@ import { useRouter } from 'expo-router';
 import { useSession, useArtifact, useSetting } from '@/sync/storage';
 import { t } from '@/text';
 import { type KanbanBoard } from '@/sync/kanbanTypes';
-import { CodeView } from '@/components/session/CodeView';
 import {
     fetchGenomeById,
     parseAgentImage,
@@ -485,13 +484,10 @@ function GenomeDetails({
             {professionalMode && learnings.length > 0 && (
                 <>
                     <Divider />
-                    <SectionLabel label={`Memory & Learnings (${learnings.length})`} />
-                    {learnings.map((learning, index) => (
-                        <View key={`${learning}-${index}`} style={{ flexDirection: 'row', marginBottom: 4 }}>
-                            <Text style={{ color: WG.accent, fontSize: 13, marginRight: 6, lineHeight: 18 }}>•</Text>
-                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, flex: 1, lineHeight: 18 }}>{learning}</Text>
-                        </View>
-                    ))}
+                    <SectionLabel label="Memory & Learnings" />
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+                        {learnings.length} learning{learnings.length === 1 ? '' : 's'}
+                    </Text>
                 </>
             )}
 
@@ -540,22 +536,10 @@ function GenomeDetails({
             {professionalMode && protocol.length > 0 && (
                 <>
                     <Divider />
-                    <SectionLabel label={`Protocol (${protocol.length} steps)`} />
-                    {protocol.slice(0, 6).map((step, i) => (
-                        <View key={i} style={{ flexDirection: 'row', marginBottom: 4 }}>
-                            <Text style={{ color: WG.accent, fontSize: 12, marginRight: 6, minWidth: 18 }}>
-                                {i + 1}.
-                            </Text>
-                            <Text style={{ color: theme.colors.textSecondary, fontSize: 12, flex: 1, lineHeight: 17 }}>
-                                {step}
-                            </Text>
-                        </View>
-                    ))}
-                    {protocol.length > 6 && (
-                        <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                            +{protocol.length - 6} more steps…
-                        </Text>
-                    )}
+                    <SectionLabel label="Protocol" />
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 12, lineHeight: 17 }}>
+                        {protocol.length} step{protocol.length === 1 ? '' : 's'}
+                    </Text>
                 </>
             )}
 
@@ -624,8 +608,14 @@ function GenomeDetails({
             {professionalMode ? (
                 <>
                     <Divider />
-                    <SectionLabel label="Spec Mirror" />
-                    <CodeView code={fullSpecJson} />
+                    <SectionLabel label="Spec Summary" />
+                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, lineHeight: 18 }}>
+                        {[
+                            protocol.length ? `${protocol.length} protocol rules` : null,
+                            authorities.length ? `${authorities.length} authorities` : null,
+                            learnings.length ? `${learnings.length} learnings` : null,
+                        ].filter(Boolean).join(' · ') || 'No spec metadata'}
+                    </Text>
                 </>
             ) : hasProfessionalDetails ? (
                 <>

@@ -1495,43 +1495,32 @@ export default React.memo(function AgentDetailScreen() {
                     {/* ── Protocol ── */}
                     {professionalMode && spec?.protocol?.length ? (
                         <ItemGroup title={t('agents.protocolRules')}>
-                            {spec.protocol.map((p, i) => (
-                                <Item key={`p-${i}`} title={p} subtitle="" />
-                            ))}
+                            <Item title={`${spec.protocol.length} rules`} subtitle="" />
                         </ItemGroup>
                     ) : null}
 
                     {professionalMode && (spec?.operations?.commonPatterns?.length || spec?.handoffProtocol?.length || spec?.operations?.recentChanges?.length) ? (
                         <ItemGroup title="Operational Patterns">
-                            {spec?.operations?.commonPatterns?.map((pattern, index) => (
-                                <Item key={`pattern-${index}`} title={pattern} subtitle="" />
-                            ))}
-                            {spec?.handoffProtocol?.map((rule, index) => (
-                                <Item key={`handoff-${index}`} title={rule} subtitle="" />
-                            ))}
-                            {spec?.operations?.recentChanges?.map((change, index) => (
-                                <Item key={`change-${index}`} title={change} subtitle="" />
-                            ))}
+                            <Item
+                                title={[
+                                    spec?.operations?.commonPatterns?.length ? `${spec.operations.commonPatterns.length} patterns` : null,
+                                    spec?.handoffProtocol?.length ? `${spec.handoffProtocol.length} handoff rules` : null,
+                                    spec?.operations?.recentChanges?.length ? `${spec.operations.recentChanges.length} recent changes` : null,
+                                ].filter(Boolean).join(' · ')}
+                                subtitle=""
+                            />
                         </ItemGroup>
                     ) : null}
 
                     {professionalMode && (spec?.memory?.learnings?.length || spec?.memory?.iterationGuide || spec?.memory?.knowledgeBase?.length) ? (
                         <ItemGroup title="Memory & Learning">
-                            {spec?.memory?.learnings?.map((learning, index) => (
-                                <Item key={`learning-${index}`} title={learning} subtitle="" />
-                            ))}
-                            {spec?.memory?.iterationGuide?.recentChanges?.length ? (
-                                <Item title="Recent Changes" subtitle={spec.memory.iterationGuide.recentChanges.join('\n')} subtitleLines={0} />
-                            ) : null}
-                            {spec?.memory?.iterationGuide?.discoveries?.length ? (
-                                <Item title="Discoveries" subtitle={spec.memory.iterationGuide.discoveries.join('\n')} subtitleLines={0} />
-                            ) : null}
-                            {spec?.memory?.iterationGuide?.improvements?.length ? (
-                                <Item title="Improvements" subtitle={spec.memory.iterationGuide.improvements.join('\n')} subtitleLines={0} />
-                            ) : null}
-                            {spec?.memory?.knowledgeBase?.length ? (
-                                <Item title="Knowledge Base" subtitle={spec.memory.knowledgeBase.join('\n')} subtitleLines={0} />
-                            ) : null}
+                            <Item
+                                title={[
+                                    spec?.memory?.learnings?.length ? `${spec.memory.learnings.length} learnings` : null,
+                                    spec?.memory?.knowledgeBase?.length ? `${spec.memory.knowledgeBase.length} knowledge entries` : null,
+                                ].filter(Boolean).join(' · ')}
+                                subtitle=""
+                            />
                         </ItemGroup>
                     ) : null}
 
@@ -1762,16 +1751,7 @@ export default React.memo(function AgentDetailScreen() {
                         </ItemGroup>
                     ) : null}
 
-                    {professionalMode && formattedSpecJson ? (
-                        <ItemGroup title={getGenomeImageMirrorTitle(imageKind)}>
-                            <View style={styles.ledgerSection}>
-                                <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
-                                    Full {imageLabel} JSON
-                                </Text>
-                                <CodeView code={formattedSpecJson} />
-                            </View>
-                        </ItemGroup>
-                    ) : null}
+                    {/* Full spec JSON is intentionally hidden to protect core assets */}
 
                     {/* ── Tools allow/deny ── */}
                     {professionalMode && (spec?.allowedTools?.length || spec?.disallowedTools?.length) ? (
