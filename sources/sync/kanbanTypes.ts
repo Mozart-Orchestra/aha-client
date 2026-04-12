@@ -6,6 +6,7 @@ import {
     DEFAULT_NESTED_TASK_SETTINGS as SHARED_NESTED_TASK_SETTINGS
 } from '@happy/shared-team-config';
 import type { SharedNestedTaskSettings, SharedStatusPropagation } from '@happy/shared-team-config';
+import type { TeamScope } from '@/sync/teamMessageTypes';
 
 export interface KanbanColumn {
     id: string;
@@ -87,6 +88,7 @@ export interface KanbanTask {
     status: string; // Should match a column id
     assigneeId?: string | null; // Session ID of the assigned agent
     reporterId?: string; // Session ID of the creator
+    scope?: TeamScope | null;    // Repo/scope truth for scoped teams
     priority?: 'low' | 'medium' | 'high' | 'urgent';
     createdAt: number;
     updatedAt: number;

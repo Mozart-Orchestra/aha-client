@@ -20,6 +20,13 @@ export type TeamMessageType =
 
 export type TeamMessagePriority = 'low' | 'normal' | 'high' | 'urgent';
 
+export interface TeamScope {
+    scopePath: string;
+    scopeLabel?: string;
+    repoName?: string;
+    visibility?: 'scoped' | 'global';
+}
+
 /**
  * 团队消息核心接口
  */
@@ -70,6 +77,12 @@ export interface TeamMessageMetadata {
         version?: string;
         payload?: Record<string, any>;
     };
+    scope?: TeamScope;
+    reviewContext?: {
+        commitHash?: string;
+        scopePath?: string;
+        repoName?: string;
+    };
     [key: string]: any;
 }
 
@@ -103,6 +116,14 @@ export interface TeamMessageListResponse {
     messages: TeamMessage[];
     hasMore: boolean;
     cursor?: string;
+}
+
+export interface TeamMessageListParams {
+    limit?: number;
+    before?: string;
+    scopePath?: string;
+    repoName?: string;
+    includeGlobal?: boolean;
 }
 
 /**

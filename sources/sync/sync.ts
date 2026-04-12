@@ -331,6 +331,20 @@ class Sync {
         });
     }
 
+    private getTeamMessagesCacheKey(
+        teamId: string,
+        params?: import('@/sync/teamMessageTypes').TeamMessageListParams,
+    ): string {
+        return JSON.stringify({
+            teamId,
+            scopePath: params?.scopePath ?? null,
+            repoName: params?.repoName ?? null,
+            includeGlobal: params?.includeGlobal ?? null,
+            before: params?.before ?? null,
+            limit: params?.limit ?? null,
+        });
+    }
+
     async create(credentials: AuthCredentials, encryption: Encryption) {
         this.credentials = credentials;
         this.encryption = encryption;
@@ -2872,18 +2886,19 @@ class Sync {
             console.log(`🔄 Sync: Received team message for team ${teamId}: ${message.id}`);
 
             // Update cache
-            const currentMessages = this.teamMessagesCache.get(teamId) || [];
+            const defaultCacheKey = this.getTeamMessagesCacheKey(teamId);
+            const currentMessages = this.teamMessagesCache.get(defaultCacheKey) || [];
             // Check for duplicates
             const isDuplicate = currentMessages.find(m => m.id === message.id);
 
             if (!isDuplicate) {
                 // Cap in-memory cache at 500 (same bound as sessionStorage)
                 const updated = [...currentMessages, message as any].slice(-500);
-                this.teamMessagesCache.set(teamId, updated);
+                this.teamMessagesCache.set(defaultCacheKey, updated);
                 // Persist to sessionStorage so messages survive reconnects (not localStorage — too large)
                 try {
                     if (typeof sessionStorage !== 'undefined') {
-                        sessionStorage.setItem(`team_msgs_${teamId}`, JSON.stringify(updated));
+                        sessionStorage.setItem(`team_msgs_${defaultCacheKey}`, JSON.stringify(updated));
                     }
                 } catch { /* storage full — skip */ }
 
@@ -3507,9 +3522,14 @@ class Sync {
     /**
      * 获取团队消息列表
      */
-    async getTeamMessages(teamId: string): Promise<import('@/sync/teamMessageTypes').TeamMessageListResponse> {
+    async getTeamMessages(
+        teamId: string,
+        params?: import('@/sync/teamMessageTypes').TeamMessageListParams,
+    ): Promise<import('@/sync/teamMessageTypes').TeamMessageListResponse> {
+        const cacheKey = this.getTeamMessagesCacheKey(teamId, params);
+
         // 先检查内存缓存
-        const cached = this.teamMessagesCache.get(teamId);
+        const cached = this.teamMessagesCache.get(cacheKey);
         if (cached && cached.length > 0) {
             return {
                 messages: cached,
@@ -3520,11 +3540,11 @@ class Sync {
         // Restore from sessionStorage if available (survives page refresh, not app close)
         try {
             if (typeof sessionStorage !== 'undefined') {
-                const stored = sessionStorage.getItem(`team_msgs_${teamId}`);
+                const stored = sessionStorage.getItem(`team_msgs_${cacheKey}`);
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed) && parsed.length > 0) {
-                        this.teamMessagesCache.set(teamId, parsed);
+                        this.teamMessagesCache.set(cacheKey, parsed);
                         return { messages: parsed, hasMore: false };
                     }
                 }
@@ -3533,7 +3553,14 @@ class Sync {
 
         try {
             const fetchMessages = async () => {
-                const response = await apiSocket.request(`/v1/teams/${teamId}/messages`);
+                const search = new URLSearchParams();
+                if (params?.limit != null) search.set('limit', String(params.limit));
+                if (params?.before) search.set('before', params.before);
+                if (params?.scopePath) search.set('scopePath', params.scopePath);
+                if (params?.repoName) search.set('repoName', params.repoName);
+                if (params?.includeGlobal != null) search.set('includeGlobal', String(params.includeGlobal));
+                const query = search.toString();
+                const response = await apiSocket.request(`/v1/teams/${teamId}/messages${query ? `?${query}` : ''}`);
 
                 if (!response.ok) {
                     const text = await response.text();
@@ -3546,7 +3573,7 @@ class Sync {
 
             const messages = await this.withTeamRecovery(teamId, fetchMessages);
 
-            this.teamMessagesCache.set(teamId, messages);
+            this.teamMessagesCache.set(cacheKey, messages);
 
             return {
                 messages,
@@ -3620,8 +3647,9 @@ class Sync {
             await this.withTeamRecovery(request.teamId, sendToServer);
 
             // 立即更新本地缓存（cap at 500）
-            const cached = this.teamMessagesCache.get(request.teamId) || [];
-            this.teamMessagesCache.set(request.teamId, [...cached, message].slice(-500));
+            const defaultCacheKey = this.getTeamMessagesCacheKey(request.teamId);
+            const cached = this.teamMessagesCache.get(defaultCacheKey) || [];
+            this.teamMessagesCache.set(defaultCacheKey, [...cached, message].slice(-500));
 
             // 触发本地订阅者
             const subscribers = this.teamMessageSubscriptions.get(request.teamId);
