@@ -220,6 +220,9 @@ interface SearchAllParams extends Omit<SearchParams, 'limit' | 'offset'> {
     pageLimit?: number;
 }
 
+const SEARCH_CACHE_TTL_MS = 30_000; // 30s cache — avoid re-fetch on tab switch
+const searchCache = new Map<string, { value: Promise<SearchResult>; expiresAt: number }>();
+
 export async function searchGenomes(params: SearchParams = {}): Promise<SearchResult> {
     const query = new URLSearchParams();
     if (params.q) query.set('q', params.q);
@@ -229,10 +232,20 @@ export async function searchGenomes(params: SearchParams = {}): Promise<SearchRe
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
 
-    const qs = query.toString();
-    const res = await fetch(`${BASE}/genomes${qs ? `?${qs}` : ''}`);
-    if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
-    return res.json() as Promise<SearchResult>;
+    const cacheKey = query.toString();
+    const cached = searchCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.value;
+    }
+
+    const request = (async () => {
+        const res = await fetch(`${BASE}/genomes${cacheKey ? `?${cacheKey}` : ''}`);
+        if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
+        return res.json() as Promise<SearchResult>;
+    })();
+
+    searchCache.set(cacheKey, { value: request, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+    return request;
 }
 
 export async function searchAllGenomes(params: SearchAllParams = {}): Promise<SearchResult> {

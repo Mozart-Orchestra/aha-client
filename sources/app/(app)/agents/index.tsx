@@ -23,7 +23,7 @@ import {
     parseAgentImage,
     parseTags,
     removeGenomeFavorite,
-    searchAllGenomes,
+    searchGenomes,
     type GenomeRecord,
 } from '@/utils/genomeHub';
 import {
@@ -468,10 +468,12 @@ export default React.memo(function AgentsScreen() {
         const marketplaceSource = sourceFilter === 'deployed' ? 'market' : sourceFilter;
 
         const publicPromise = marketplaceSource === 'market' || (!actorId && marketplaceSource === 'favorites')
-            ? searchAllGenomes({
+            ? searchGenomes({
                 q: debouncedQuery || undefined,
                 category: isCorps ? undefined : (category === 'all' ? undefined : category),
                 kind: isCorps ? 'legion' : 'agent',
+                limit: 20,
+                offset: 0,
             }).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }))
             : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
 
