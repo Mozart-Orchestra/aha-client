@@ -37,6 +37,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Modal } from '@/modal';
+import { t } from '@/text';
 import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
@@ -1488,17 +1489,13 @@ export default function TeamChatRoom({
     const messageListRef = React.useRef<FlatList<TeamMessage>>(null);
     const isNearBottomRef = React.useRef(true);  // Track if user is near bottom for auto-scroll
     const hasInitialScrolled = React.useRef(false);  // Ensure we scroll to bottom on first layout
-    const hasInitialMessageSync = React.useRef(false);  // Ensure first loaded message batch lands at bottom
     const [showScrollToLatestButton, setShowScrollToLatestButton] = React.useState(false);
 
-    // Reliable scroll-to-end helper — uses rAF on web for accurate post-paint timing
+    // Scroll-to-end helper — uses setTimeout on web for reliable post-layout timing.
+    // double-rAF proved insufficient for virtualized FlatList on web.
     const scrollToEnd = React.useCallback((animated: boolean) => {
         const doScroll = () => messageListRef.current?.scrollToEnd({ animated });
-        if (Platform.OS === 'web') {
-            requestAnimationFrame(() => requestAnimationFrame(doScroll));
-        } else {
-            setTimeout(doScroll, 100);
-        }
+        setTimeout(doScroll, Platform.OS === 'web' ? 150 : 100);
     }, []);
     const router = useRouter();
     const isEdzlf = variant === 'edzlf';
@@ -2246,7 +2243,6 @@ export default function TeamChatRoom({
     React.useEffect(() => {
         isNearBottomRef.current = true;
         hasInitialScrolled.current = false;
-        hasInitialMessageSync.current = false;
         setShowScrollToLatestButton(false);
     }, [teamId]);
 
@@ -2263,7 +2259,7 @@ export default function TeamChatRoom({
                 scrollToEnd(false);
             }, 100);
         } catch (error) {
-            console.error('Failed to load team messages:', error);
+            Modal.alert(t('common.error'), t('errors.networkError'), [{ text: t('common.ok'), style: 'cancel' }]);
         } finally {
             setIsLoading(false);
         }
@@ -2275,11 +2271,10 @@ export default function TeamChatRoom({
     }, [loadMessages]);
 
     React.useEffect(() => {
-        if (uniqueMessages.length === 0 || hasInitialMessageSync.current) {
+        if (uniqueMessages.length === 0) {
             return;
         }
 
-        hasInitialMessageSync.current = true;
         isNearBottomRef.current = true;
         setShowScrollToLatestButton(false);
         scrollToEnd(false);
