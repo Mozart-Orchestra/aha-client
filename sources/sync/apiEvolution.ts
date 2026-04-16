@@ -18,8 +18,19 @@
  */
 
 import { AuthCredentials } from '@/auth/tokenStorage';
-import { backoff } from '@/utils/time';
+import { createBackoff } from '@/utils/time';
 import { checkAuth } from '@/utils/handleResponse';
+
+/**
+ * Limited-retry backoff for evolution API calls.
+ * Unlike the global `backoff` (used by the sync layer, which retries indefinitely),
+ * this stops after 5 failures to prevent infinite React re-render storms when
+ * the server is unreachable (e.g. ERR_CONNECTION_CLOSED).
+ */
+const evolutionBackoff = createBackoff({
+    maxRetries: 5,
+    onError: (e) => { console.warn('[evolutionBackoff]', e); },
+});
 import { getServerUrl } from './serverConfig';
 
 // ============================================================================
@@ -349,7 +360,7 @@ export async function fetchBypassAgents(
 ): Promise<BypassAgentsResponse> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents`,
             { headers: authHeaders(credentials.token) }
@@ -374,7 +385,7 @@ export async function retireBypassAgent(
 ): Promise<void> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents/${agentId}`,
             {
@@ -400,7 +411,7 @@ export async function fetchSupervisorState(
 ): Promise<SupervisorStateResponse> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/teams/${teamId}/supervisor-state`,
             { headers: authHeaders(credentials.token) }
@@ -444,7 +455,7 @@ export async function fetchGenomes(
     const query = params.toString();
     const url = `${API_ENDPOINT}/v1/genomes${query ? `?${query}` : ''}`;
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(url, {
             headers: authHeaders(credentials.token),
         });
@@ -468,7 +479,7 @@ export async function createGenome(
 ): Promise<{ genome: Genome }> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(`${API_ENDPOINT}/v1/genomes`, {
             method: 'POST',
             headers: authHeaders(credentials.token),
@@ -494,7 +505,7 @@ export async function publishGenome(
 ): Promise<PublishGenomeResponse> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(`${API_ENDPOINT}/v1/genomes/${genomeId}/publish`, {
             method: 'POST',
             headers: authHeaders(credentials.token),
@@ -551,7 +562,7 @@ export async function createBypassLease(
 ): Promise<BypassAgentLease> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents/leases`,
             {
@@ -581,7 +592,7 @@ export async function getBypassLease(
 ): Promise<BypassAgentLease> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/teams/${teamId}/bypass-agents/leases/${leaseId}`,
             { headers: authHeaders(credentials.token) }
@@ -677,7 +688,7 @@ export async function fetchRunsByTeam(
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/runs?${params.toString()}`,
             { headers: authHeaders(credentials.token) }
@@ -701,7 +712,7 @@ export async function fetchGenomeLineage(
 ): Promise<LineageEdge[]> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/genomes/${genomeId}/lineage`,
             { headers: authHeaders(credentials.token) }
@@ -726,7 +737,7 @@ export async function fetchGenomeScorecard(
 ): Promise<GenomeScorecard> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/genomes/${genomeId}/scorecard`,
             { headers: authHeaders(credentials.token) }
@@ -758,7 +769,7 @@ export async function fetchRepairSignals(
     const query = params.toString();
     const url = `${API_ENDPOINT}/v1/teams/${teamId}/repair-signals${query ? `?${query}` : ''}`;
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(url, { headers: authHeaders(credentials.token) });
         checkAuth(response, credentials.token);
 
@@ -932,7 +943,7 @@ export async function fetchEntityTrials(
 ): Promise<EntityTrialRecord[]> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/entities/id/${encodeURIComponent(entityId)}/trials`,
             { headers: authHeaders(credentials.token) },
@@ -954,7 +965,7 @@ export async function fetchTrialVerdicts(
 ): Promise<EntityVerdictRecord[]> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/trials/${encodeURIComponent(trialId)}/verdicts`,
             { headers: authHeaders(credentials.token) },
@@ -976,7 +987,7 @@ export async function materializeEntityFeedback(
 ): Promise<Record<string, unknown>> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/entities/id/${encodeURIComponent(entityId)}/feedback/materialize`,
             {
@@ -1001,7 +1012,7 @@ export async function submitUserVerdict(
 ): Promise<{ trial: EntityTrialRecord; verdict: EntityVerdictRecord; feedback: Record<string, unknown> | null }> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         let trial: EntityTrialRecord | null = null;
 
         if (params.entityId && params.sessionId) {
@@ -1083,7 +1094,7 @@ export async function triggerEvolve(
 ): Promise<{ genome?: Genome; entity?: Record<string, unknown>; diff?: Record<string, unknown> }> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/entities/${encodeURIComponent(params.namespace)}/${encodeURIComponent(params.name)}/diffs`,
             {
@@ -1109,7 +1120,7 @@ export async function forkGenome(
 ): Promise<{ genome: Genome; operation: 'fork' | 'clone' }> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
+    return await evolutionBackoff(async () => {
         const response = await fetch(
             `${API_ENDPOINT}/v1/genomes/id/${encodeURIComponent(genomeId)}/fork`,
             {

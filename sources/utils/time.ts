@@ -22,13 +22,15 @@ export function createBackoff(
         onError?: (e: any, failuresCount: number) => void,
         minDelay?: number,
         maxDelay?: number,
-        maxFailureCount?: number
+        maxFailureCount?: number,
+        maxRetries?: number,
     }): BackoffFunc {
     return async <T>(callback: () => Promise<T>): Promise<T> => {
         let currentFailureCount = 0;
         const minDelay = opts && opts.minDelay !== undefined ? opts.minDelay : 250;
         const maxDelay = opts && opts.maxDelay !== undefined ? opts.maxDelay : 1000;
         const maxFailureCount = opts && opts.maxFailureCount !== undefined ? opts.maxFailureCount : 50;
+        const maxRetries = opts?.maxRetries;
         while (true) {
             try {
                 return await callback();
@@ -36,13 +38,17 @@ export function createBackoff(
                 if (e instanceof NonRetryableError) {
                     throw e;
                 }
-                if (currentFailureCount < maxFailureCount) {
-                    currentFailureCount++;
+                currentFailureCount++;
+                if (maxRetries !== undefined && currentFailureCount >= maxRetries) {
+                    throw new NonRetryableError(
+                        e instanceof Error ? e.message : 'Max retries exceeded'
+                    );
                 }
                 if (opts && opts.onError) {
                     opts.onError(e, currentFailureCount);
                 }
-                let waitForRequest = exponentialBackoffDelay(currentFailureCount, minDelay, maxDelay, maxFailureCount);
+                const delayCount = Math.min(currentFailureCount, maxFailureCount);
+                let waitForRequest = exponentialBackoffDelay(delayCount, minDelay, maxDelay, maxFailureCount);
                 await delay(waitForRequest);
             }
         }
