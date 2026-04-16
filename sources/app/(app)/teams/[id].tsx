@@ -64,6 +64,8 @@ import { resolveStickyKanbanBoard } from '@/utils/teamBoardState';
 import { resolveImageRef } from '@/utils/imageRef';
 import { getServerUrl } from '@/sync/serverConfig';
 import { fetchBypassAgents, type BypassAgent } from '@/sync/apiEvolution';
+import { createTeamTask } from '@/sync/apiTasks';
+import { createTaskServerFirstWithFallback, type CreateTaskGatewayDeps } from '@/sync/taskWriteGateway';
 import { stylesheet } from './teamStyles';
 import {
     STANDARD_SHELL_TABS,
@@ -934,6 +936,38 @@ export default function TeamDashboardScreen() {
     }, [teamId]);
 
     const handleTaskCreate = React.useCallback(async (taskData: Partial<KanbanTask>) => {
+        // Server-first path: try server API, fall back to legacy artifact write
+        const credentials = sync.getCredentials();
+        if (credentials && teamId) {
+            const gatewayDeps: CreateTaskGatewayDeps = {
+                teamId,
+                createTaskOnServer: (request) => createTeamTask(credentials, teamId, request),
+                legacyCreateTask: async (legacyTaskData) => {
+                    const result = await legacyArtifactCreate(legacyTaskData);
+                    return result;
+                },
+                refreshTeamArtifact: async () => { await sync.fetchArtifactWithBody(teamId); },
+            };
+
+            const result = await createTaskServerFirstWithFallback(gatewayDeps, taskData);
+
+            trackTaskCreated(teamId, {
+                task_id: result.task.id,
+                source: result.task.source ?? null,
+                status: result.task.status,
+                priority: result.task.priority ?? null,
+                assignee_id: result.task.assigneeId ?? null,
+                approval_status: result.task.approvalStatus ?? null,
+                created_via: result.writePath === 'server' ? 'server_api' : 'artifact_update',
+            });
+
+            return result.task;
+        }
+
+        return legacyArtifactCreate(taskData);
+    }, [artifact, desktopBridge, kanbanData, roomId, teamId]);
+
+    const legacyArtifactCreate = React.useCallback(async (taskData: Partial<KanbanTask>) => {
         if (desktopBridge && roomId) {
             const createdTask = await desktopBridge.createTask({
                 roomId,
