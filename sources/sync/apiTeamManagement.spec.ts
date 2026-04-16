@@ -101,6 +101,8 @@ describe('apiTeamManagement', () => {
                     roleId: 'builder',
                     runtimeType: 'codex',
                     quantity: 1,
+                    sourceImageId: 'genome-builder',
+                    sourceImageVersion: null,
                 },
             ],
         });

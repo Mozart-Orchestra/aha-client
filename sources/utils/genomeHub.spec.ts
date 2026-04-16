@@ -73,16 +73,15 @@ describe('genomeHub role alias lookup', () => {
         expect(genome?.name).toBe('MyPrivateBuilder');
     });
 
-    it('fails fast with a warning when genome hub env is missing', async () => {
+    it('fails fast when genome hub env is missing and a fetch function is called', async () => {
         delete process.env.EXPO_PUBLIC_GENOME_HUB_URL;
         vi.resetModules();
 
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { searchGenomes } = await import('./genomeHub');
 
-        await expect(import('./genomeHub')).rejects.toThrow(
+        await expect(searchGenomes()).rejects.toThrow(
             'EXPO_PUBLIC_GENOME_HUB_URL is not configured',
         );
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('EXPO_PUBLIC_GENOME_HUB_URL'));
     });
 
     it('reuses canonical alias resolution for official diff and seed lookups', async () => {

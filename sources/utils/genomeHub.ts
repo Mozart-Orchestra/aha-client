@@ -3,16 +3,13 @@
  * Base URL must be provided via EXPO_PUBLIC_GENOME_HUB_URL.
  */
 
-const BASE = (() => {
+function getBase(): string {
     const url = process.env.EXPO_PUBLIC_GENOME_HUB_URL?.trim();
     if (!url) {
-        console.warn(
-            '[genomeHub] EXPO_PUBLIC_GENOME_HUB_URL is not configured — refusing to fall back silently',
-        );
         throw new Error('EXPO_PUBLIC_GENOME_HUB_URL is not configured — genome-hub URL is required');
     }
     return url.replace(/\/$/, '');
-})();
+}
 const GENOME_BY_NAME_TTL_MS = 30_000;
 const genomeByNameCache = new Map<string, { expiresAt: number; value: Promise<GenomeRecord | null> }>();
 const OFFICIAL_GENOME_ALIASES: Record<string, string> = {
@@ -190,7 +187,7 @@ export async function searchGenomes(params: SearchParams = {}): Promise<SearchRe
     if (params.offset != null) query.set('offset', String(params.offset));
 
     const qs = query.toString();
-    const res = await fetch(`${BASE}/genomes${qs ? `?${qs}` : ''}`);
+    const res = await fetch(`${getBase()}/genomes${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
     return res.json() as Promise<SearchResult>;
 }
@@ -236,7 +233,7 @@ export async function fetchGenomeByName(namespace: string, name: string): Promis
     const request = (async () => {
         try {
             const encodedNs = encodeURIComponent(namespace);
-            const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}`);
+            const res = await fetch(`${getBase()}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}`);
             if (res.status === 429) {
                 return null;
             }
@@ -265,7 +262,7 @@ export async function fetchGenomeVersions(namespace: string, name: string): Prom
     try {
         const encodedNs = encodeURIComponent(namespace);
         const resolvedName = resolveCanonicalGenomeName(namespace, name);
-        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/versions`);
+        const res = await fetch(`${getBase()}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/versions`);
         if (!res.ok) return [];
         const data = await res.json() as { versions?: GenomeRecord[] };
         return data.versions ?? [];
@@ -283,7 +280,7 @@ export async function fetchGenomeVersion(
     try {
         const encodedNs = encodeURIComponent(namespace);
         const resolvedName = resolveCanonicalGenomeName(namespace, name);
-        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/${encodeURIComponent(String(version))}`);
+        const res = await fetch(`${getBase()}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/${encodeURIComponent(String(version))}`);
         if (!res.ok) return null;
         const data = await res.json() as { genome?: GenomeRecord };
         return data.genome ?? null;
@@ -674,14 +671,14 @@ export interface GenomeFavoriteStatus {
 }
 
 export async function fetchFavoriteGenomes(actorId: string): Promise<FavoriteGenomeResponse> {
-    const res = await fetch(`${BASE}/genomes/favorites?actorId=${encodeURIComponent(actorId)}`);
+    const res = await fetch(`${getBase()}/genomes/favorites?actorId=${encodeURIComponent(actorId)}`);
     if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
     return res.json() as Promise<FavoriteGenomeResponse>;
 }
 
 export async function fetchGenomeFavoriteStatus(id: string, actorId: string): Promise<GenomeFavoriteStatus | null> {
     try {
-        const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}/favorite/${encodeURIComponent(actorId)}`);
+        const res = await fetch(`${getBase()}/genomes/id/${encodeURIComponent(id)}/favorite/${encodeURIComponent(actorId)}`);
         if (!res.ok) return null;
         return res.json() as Promise<GenomeFavoriteStatus>;
     } catch {
@@ -690,7 +687,7 @@ export async function fetchGenomeFavoriteStatus(id: string, actorId: string): Pr
 }
 
 export async function addGenomeFavorite(id: string, actorId: string): Promise<{ genome: GenomeRecord; favorite: GenomeFavoriteRecord; created: boolean }> {
-    const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}/favorite`, {
+    const res = await fetch(`${getBase()}/genomes/id/${encodeURIComponent(id)}/favorite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actorId }),
@@ -700,7 +697,7 @@ export async function addGenomeFavorite(id: string, actorId: string): Promise<{ 
 }
 
 export async function removeGenomeFavorite(id: string, actorId: string): Promise<{ genome: GenomeRecord; removed: boolean }> {
-    const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}/favorite/${encodeURIComponent(actorId)}`, {
+    const res = await fetch(`${getBase()}/genomes/id/${encodeURIComponent(id)}/favorite/${encodeURIComponent(actorId)}`, {
         method: 'DELETE',
     });
     if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
@@ -710,7 +707,7 @@ export async function removeGenomeFavorite(id: string, actorId: string): Promise
 /** Fetch a genome by its immutable UUID. Returns null if not found. */
 export async function fetchGenomeById(id: string): Promise<GenomeRecord | null> {
     try {
-        const res = await fetch(`${BASE}/genomes/id/${encodeURIComponent(id)}`);
+        const res = await fetch(`${getBase()}/genomes/id/${encodeURIComponent(id)}`);
         if (!res.ok) return null;
         const data = await res.json() as { genome?: GenomeRecord };
         return data.genome ?? null;
@@ -726,7 +723,7 @@ export async function fetchGenomeDiffs(namespace: string, name: string): Promise
     try {
         const encodedNs = encodeURIComponent(namespace);
         const resolvedName = resolveCanonicalGenomeName(namespace, name);
-        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/diffs`);
+        const res = await fetch(`${getBase()}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/diffs`);
         if (!res.ok) return [];
         const data = await res.json() as { diffs: AgentPlugRecord[] };
         return data.diffs ?? [];
@@ -742,7 +739,7 @@ export async function fetchGenomeSeed(namespace: string, name: string): Promise<
     try {
         const encodedNs = encodeURIComponent(namespace);
         const resolvedName = resolveCanonicalGenomeName(namespace, name);
-        const res = await fetch(`${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/seed`);
+        const res = await fetch(`${getBase()}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/seed`);
         if (!res.ok) return null;
         const data = await res.json() as { seed: string };
         return data.seed ?? null;
@@ -765,7 +762,7 @@ export async function fetchGenomeLedger(
         }
         const query = params.toString();
         const res = await fetch(
-            `${BASE}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/ledger${query ? `?${query}` : ''}`,
+            `${getBase()}/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/ledger${query ? `?${query}` : ''}`,
         );
         if (!res.ok) {
             return { ledger: [], replayedSpec: null };
