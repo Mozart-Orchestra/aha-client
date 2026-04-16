@@ -194,6 +194,7 @@ export default function MachineDetailScreen() {
 
     const handleStartSession = async (approvedNewDirectoryCreation: boolean = false): Promise<void> => {
         if (!machine || !machineId) return;
+        const submittedAt = Date.now();
         try {
             const pathToUse = (customPath.trim() || '~');
             if (!isMachineOnline(machine) || isArchived) return;
@@ -223,7 +224,14 @@ export default function MachineDetailScreen() {
                     break;
                 }
                 case 'pending':
-                    Modal.alert(t('common.error'), t('newSession.sessionTimeout'));
+                    // Daemon hasn't received the child's session-started webhook yet.
+                    // Hand off to the /session-starting placeholder which auto-navigates
+                    // when the real session id appears in storage.
+                    // Cast: typed routes typegen hasn't picked up the new
+                    // session-starting.tsx file yet (regenerated on `yarn start`).
+                    router.replace(
+                        `/session-starting?machineId=${encodeURIComponent(machineId!)}&path=${encodeURIComponent(absolutePath)}&t=${submittedAt}${result.pendingSessionId ? `&pendingId=${encodeURIComponent(result.pendingSessionId)}` : ''}` as any
+                    );
                     break;
                 case 'error':
                     Modal.alert(t('common.error'), result.errorMessage);

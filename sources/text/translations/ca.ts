@@ -287,7 +287,7 @@ export const ca: TranslationStructure = {
         sessionStartedMessage: 'La sessió s\'ha iniciat correctament.',
         sessionSpawningFailed: 'Ha fallat la creació de la sessió - no s\'ha retornat cap ID de sessió.',
         failedToStart: 'Ha fallat l\'inici de la sessió. Assegura\'t que el dimoni s\'estigui executant a la màquina de destinació.',
-        sessionTimeout: 'L\'inici de la sessió ha esgotat el temps d\'espera. La màquina pot ser lenta o el dimoni pot no estar responent.',
+        sessionTimeout: 'L\'agent encara s\'està iniciant. Obre la màquina per veure\'l quan aparegui, o torna a provar-ho en un moment.',
         notConnectedToServer: 'No connectat al servidor. Comprova la teva connexió a internet.',
         startingSession: 'Iniciant la sessió...',
         startNewSessionInFolder: 'Nova sessió aquí',
@@ -305,6 +305,19 @@ export const ca: TranslationStructure = {
             failed: ({ error }: { error: string }) => `Error en crear el worktree: ${error}`,
             success: 'Worktree creat amb èxit',
         }
+    },
+
+    sessionStarting: {
+        preparing: 'Preparant la sessió…',
+        connecting: 'Connectant a la teva màquina…',
+        bootingAgent: 'L\'agent s\'està iniciant — això pot trigar un minut…',
+        takingLonger: 'Encara treballant. L\'agent està trigant més del normal.',
+        cancel: 'Cancel·la',
+        retry: 'Torna a provar',
+        failedActionable: ({ machineName }: { machineName: string }) => `No s\'ha pogut connectar amb l\'agent a ${machineName}. Prova de reiniciar el dimoni en aquesta màquina.`,
+        failedNoMachine: 'No s\'ha pogut connectar amb l\'agent. Prova de reiniciar el dimoni en aquesta màquina.',
+        openMachineDetails: 'Obre els detalls de la màquina',
+        debugDiagnosticId: ({ id }: { id: string }) => `Id de diagnòstic: ${id}`,
     },
 
     sessionHistory: {

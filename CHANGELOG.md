@@ -1,5 +1,14 @@
 # Changelog
 
+## Version 7 - 2026-04-16
+
+This release fixes a frustrating "Session startup timed out" error that appeared even when sessions were starting normally. Slow agents and slow networks now show live progress instead of a misleading failure modal, and the session opens automatically once it's ready.
+
+- Replaced the misleading "Session startup timed out" alert with a progressive loading screen that updates as the agent boots.
+- Sessions that start slowly are no longer lost — the new loading screen waits and auto-navigates to the chat once the session is ready.
+- Real errors now surface specific, actionable messages instead of being lumped into a generic timeout text.
+- Added a "View machine details" shortcut on the loading screen for cases where the agent really can't be reached.
+
 ## Version 6 - 2026-04-02
 
 This release makes account recovery much more legible when Google sign-in cannot immediately restore the existing account. Instead of dropping every failure into the same generic fallback, the app now explains the actual recovery state and points users to the right next action.

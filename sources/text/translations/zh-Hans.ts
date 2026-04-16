@@ -306,7 +306,7 @@ export const zhHans: TranslationStructure = {
         startingSession: '正在启动会话...',
         startNewSessionInFolder: '在此文件夹中启动新会话',
         failedToStart: '启动会话失败。确保守护进程在目标设备上运行。',
-        sessionTimeout: '会话启动超时。设备可能运行缓慢或守护进程可能无响应。',
+        sessionTimeout: '智能体仍在启动中。打开设备查看它何时出现，或稍后再试。',
         notConnectedToServer: '未连接到服务器。请检查您的网络连接。',
         noMachineSelected: '请选择一台设备以启动会话',
         noPathSelected: '请选择一个目录以启动会话',
@@ -322,6 +322,19 @@ export const zhHans: TranslationStructure = {
             failed: ({ error }: { error: string }) => `创建 worktree 失败：${error}`,
             success: 'Worktree 创建成功',
         }
+    },
+
+    sessionStarting: {
+        preparing: '正在准备会话…',
+        connecting: '正在连接到您的设备…',
+        bootingAgent: '智能体启动中——这可能需要一分钟…',
+        takingLonger: '仍在工作。智能体启动比平时慢一些。',
+        cancel: '取消',
+        retry: '重试',
+        failedActionable: ({ machineName }: { machineName: string }) => `无法连接到 ${machineName} 上的智能体。请尝试在该设备上重启 daemon。`,
+        failedNoMachine: '无法连接到智能体。请尝试在该设备上重启 daemon。',
+        openMachineDetails: '打开设备详情',
+        debugDiagnosticId: ({ id }: { id: string }) => `诊断 id：${id}`,
     },
 
     sessionHistory: {

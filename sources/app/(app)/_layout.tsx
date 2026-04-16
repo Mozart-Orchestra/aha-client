@@ -70,6 +70,12 @@ export default function RootLayout() {
                 }}
             />
             <Stack.Screen
+                name="session-starting"
+                options={{
+                    headerShown: false
+                }}
+            />
+            <Stack.Screen
                 name="session/[id]/message/[messageId]"
                 options={{
                     headerShown: true,

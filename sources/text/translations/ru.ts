@@ -269,7 +269,7 @@ export const ru: TranslationStructure = {
         sessionStartedMessage: 'Сессия успешно запущена.',
         sessionSpawningFailed: 'Ошибка создания сессии - ID сессии не получен.',
         failedToStart: 'Не удалось запустить сессию. Убедитесь, что daemon запущен на целевой машине.',
-        sessionTimeout: 'Время запуска сессии истекло. Машина может работать медленно или daemon не отвечает.',
+        sessionTimeout: 'Агент всё ещё запускается. Откройте машину, чтобы увидеть, когда он появится, или попробуйте ещё раз через минуту.',
         notConnectedToServer: 'Нет подключения к серверу. Проверьте интернет-соединение.',
         startingSession: 'Запуск сессии...',
         startNewSessionInFolder: 'Новая сессия здесь',
@@ -287,6 +287,19 @@ export const ru: TranslationStructure = {
             failed: ({ error }: { error: string }) => `Не удалось создать worktree: ${error}`,
             success: 'Worktree успешно создан',
         }
+    },
+
+    sessionStarting: {
+        preparing: 'Подготовка сессии…',
+        connecting: 'Подключение к вашей машине…',
+        bootingAgent: 'Агент запускается — это может занять минуту…',
+        takingLonger: 'Всё ещё работаю. Агент запускается дольше обычного.',
+        cancel: 'Отмена',
+        retry: 'Повторить',
+        failedActionable: ({ machineName }: { machineName: string }) => `Не удалось связаться с агентом на ${machineName}. Попробуйте перезапустить daemon на этой машине.`,
+        failedNoMachine: 'Не удалось связаться с агентом. Попробуйте перезапустить daemon на этой машине.',
+        openMachineDetails: 'Открыть детали машины',
+        debugDiagnosticId: ({ id }: { id: string }) => `Диагностический id: ${id}`,
     },
 
     sessionHistory: {

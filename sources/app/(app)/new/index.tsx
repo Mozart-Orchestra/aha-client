@@ -293,29 +293,30 @@ function NewSessionScreen() {
         }
 
         setIsSending(true);
+        const submittedAt = Date.now();
         try {
             let actualPath = selectedPath;
-            
+
             // Handle worktree creation if selected and experiments are enabled
             if (sessionType === 'worktree' && experimentsEnabled) {
                 const worktreeResult = await createWorktree(selectedMachineId, selectedPath);
-                
+
                 if (!worktreeResult.success) {
                     if (worktreeResult.error === 'Not a Git repository') {
                         Modal.alert(
-                            t('common.error'), 
+                            t('common.error'),
                             t('newSession.worktree.notGitRepo')
                         );
                     } else {
                         Modal.alert(
-                            t('common.error'), 
+                            t('common.error'),
                             t('newSession.worktree.failed', { error: worktreeResult.error || 'Unknown error' })
                         );
                     }
                     setIsSending(false);
                     return;
                 }
-                
+
                 // Update the path to the new worktree location
                 actualPath = worktreeResult.worktreePath;
             }
@@ -368,19 +369,33 @@ function NewSessionScreen() {
                 });
                 trackSessionCreated();
             } else if (result.type === 'pending') {
-                throw new Error('session-pending');
+                // Daemon hasn't received the child's session-started webhook yet.
+                // Don't throw — the session is most likely still booting on the
+                // remote machine and will appear in the storage shortly. Hand
+                // off to the /session-starting placeholder which subscribes to
+                // sessions store and auto-navigates when the real id arrives.
+                // (Telemetry: trackSessionCreated will fire when the real session
+                // is opened by the user, no need to double-count here.)
+                // Cast: typed routes typegen hasn't picked up the new
+                // session-starting.tsx file yet (regenerated on `yarn start`).
+                router.replace(
+                    `/session-starting?machineId=${encodeURIComponent(selectedMachineId)}&path=${encodeURIComponent(actualPath)}&t=${submittedAt}${result.pendingSessionId ? `&pendingId=${encodeURIComponent(result.pendingSessionId)}` : ''}` as any
+                );
+            } else if (result.type === 'error') {
+                throw new Error(result.errorMessage || t('newSession.sessionSpawningFailed'));
             } else {
                 throw new Error(t('newSession.sessionSpawningFailed'));
             }
         } catch (error) {
             console.error('Failed to start session', error);
 
-            let errorMessage = 'Failed to start session. Make sure the daemon is running on the target machine.';
+            let errorMessage = t('newSession.failedToStart');
             if (error instanceof Error) {
-                if (error.message.includes('timeout') || error.message.includes('session-pending')) {
-                    errorMessage = 'Session startup timed out. The machine may be slow or the daemon may not be responding.';
-                } else if (error.message.includes('Socket not connected')) {
-                    errorMessage = 'Not connected to server. Check your internet connection.';
+                if (error.message.includes('Socket not connected')) {
+                    errorMessage = t('newSession.notConnectedToServer');
+                } else if (error.message) {
+                    // Surface the real error rather than a generic timeout.
+                    errorMessage = error.message;
                 }
             }
 

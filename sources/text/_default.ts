@@ -303,7 +303,7 @@ export const en = {
         startingSession: 'Starting session...',
         startNewSessionInFolder: 'New session here',
         failedToStart: 'Failed to start session. Make sure the daemon is running on the target machine.',
-        sessionTimeout: 'Session startup timed out. The machine may be slow or the daemon may not be responding.',
+        sessionTimeout: 'Agent is still starting up. Open the machine to see when it appears, or try again in a moment.',
         notConnectedToServer: 'Not connected to server. Check your internet connection.',
         noMachineSelected: 'Please select a machine to start the session',
         noPathSelected: 'Please select a directory to start the session in',
@@ -319,6 +319,20 @@ export const en = {
             failed: ({ error }: { error: string }) => `Failed to create worktree: ${error}`,
             success: 'Worktree created successfully',
         }
+    },
+
+    sessionStarting: {
+        // Shown on the placeholder screen between "tap Start" and the real session id arriving
+        preparing: 'Preparing session…',
+        connecting: 'Connecting to your machine…',
+        bootingAgent: 'Agent is booting up — this can take a minute…',
+        takingLonger: 'Still working. The agent is taking longer than usual.',
+        cancel: 'Cancel',
+        retry: 'Retry',
+        failedActionable: ({ machineName }: { machineName: string }) => `Couldn't reach the agent on ${machineName}. Try restarting the daemon there.`,
+        failedNoMachine: 'Couldn\'t reach the agent. Try restarting the daemon on that machine.',
+        openMachineDetails: 'Open machine details',
+        debugDiagnosticId: ({ id }: { id: string }) => `Diagnostic id: ${id}`,
     },
 
     sessionHistory: {

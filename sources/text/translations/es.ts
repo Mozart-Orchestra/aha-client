@@ -287,7 +287,7 @@ export const es: TranslationStructure = {
         sessionStartedMessage: 'La sesión se ha iniciado correctamente.',
         sessionSpawningFailed: 'Falló la creación de sesión - no se devolvió ID de sesión.',
         failedToStart: 'Falló al iniciar sesión. Asegúrate de que el daemon esté ejecutándose en la máquina objetivo.',
-        sessionTimeout: 'El inicio de sesión expiró. La máquina puede ser lenta o el daemon puede no estar respondiendo.',
+        sessionTimeout: 'El agente sigue iniciando. Abre la máquina para verlo cuando aparezca, o vuelve a intentarlo en un momento.',
         notConnectedToServer: 'No conectado al servidor. Verifica tu conexión a internet.',
         startingSession: 'Iniciando sesión...',
         startNewSessionInFolder: 'Nueva sesión aquí',
@@ -305,6 +305,19 @@ export const es: TranslationStructure = {
             failed: ({ error }: { error: string }) => `Error al crear worktree: ${error}`,
             success: 'Worktree creado exitosamente',
         }
+    },
+
+    sessionStarting: {
+        preparing: 'Preparando sesión…',
+        connecting: 'Conectando a tu máquina…',
+        bootingAgent: 'El agente está iniciando — esto puede tardar un minuto…',
+        takingLonger: 'Sigo trabajando. El agente está tardando más de lo habitual.',
+        cancel: 'Cancelar',
+        retry: 'Reintentar',
+        failedActionable: ({ machineName }: { machineName: string }) => `No se pudo conectar con el agente en ${machineName}. Intenta reiniciar el daemon allí.`,
+        failedNoMachine: 'No se pudo conectar con el agente. Intenta reiniciar el daemon en esa máquina.',
+        openMachineDetails: 'Abrir detalles de la máquina',
+        debugDiagnosticId: ({ id }: { id: string }) => `Id de diagnóstico: ${id}`,
     },
 
     sessionHistory: {
