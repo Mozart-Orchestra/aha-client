@@ -34,6 +34,7 @@ import {
     type SupervisorStateSummary,
 } from '@/sync/apiEvolution';
 import { Modal } from '@/modal';
+import { t } from '@/text';
 import { searchGenomes, parseAgentVerdict } from '@/utils/genomeHub';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -270,7 +271,7 @@ export const EvolutionSection = React.memo(({ teamId }: EvolutionSectionProps) =
             setRepairSignals(repairSignalsRes.signals);
             setSupervisorState(supervisorStateRes.state);
         } catch {
-            // Silent — show whatever we have
+            Modal.alert(t('common.error'), t('errors.networkError'), [{ text: t('common.ok'), style: 'cancel' }]);
         } finally {
             setIsLoading(false);
         }
@@ -537,7 +538,9 @@ function SupervisorReports() {
                 scored.sort((a, b) => b.evaluationCount - a.evaluationCount);
                 setGenomes(scored);
             })
-            .catch(() => {});
+            .catch(() => {
+                Modal.alert(t('common.error'), t('errors.networkError'), [{ text: t('common.ok'), style: 'cancel' }]);
+            });
     }, []);
 
     if (genomes.length === 0) return null;

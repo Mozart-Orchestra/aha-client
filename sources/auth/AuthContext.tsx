@@ -6,12 +6,20 @@ import { clearPersistence } from '@/sync/persistence';
 import { Platform } from 'react-native';
 import { trackLogout } from '@/track';
 import { bootstrapRecoveryMaterial, signOutSupabase } from '@/auth/supabaseAuth';
+import { fetchInvitationStatus } from '@/auth/invitationStatus';
+import { invalidateHubToken } from '@/utils/hubToken';
+
+/** null = unknown yet (still loading), true/false = server answer */
+export type InvitationState = boolean | null;
 
 interface AuthContextType {
     isAuthenticated: boolean;
     credentials: AuthCredentials | null;
-    login: (token: string, secret: string) => Promise<void>;
+    invitationVerified: InvitationState;
+    login: (token: string, secret: string, invitationVerified?: InvitationState) => Promise<void>;
     logout: () => Promise<void>;
+    refreshInvitationStatus: () => Promise<void>;
+    markInvitationVerified: () => void;
 }
 
 export type RestoreReason = 'restore_required' | 'secret_mismatch' | 'recovery_not_ready';
@@ -21,14 +29,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children, initialCredentials }: { children: ReactNode; initialCredentials: AuthCredentials | null }) {
     const [isAuthenticated, setIsAuthenticated] = useState(!!initialCredentials);
     const [credentials, setCredentials] = useState<AuthCredentials | null>(initialCredentials);
+    const [invitationVerified, setInvitationVerified] = useState<InvitationState>(null);
     const bootstrappedRecoveryRef = React.useRef<string | null>(null);
     const credentialsRef = React.useRef<AuthCredentials | null>(initialCredentials);
 
     // Update global auth state when local state changes
     useEffect(() => {
-        setCurrentAuth(credentials ? { isAuthenticated, credentials, login, logout } : null);
+        setCurrentAuth(credentials
+            ? { isAuthenticated, credentials, invitationVerified, login, logout, refreshInvitationStatus, markInvitationVerified }
+            : null);
         credentialsRef.current = credentials;
-    }, [isAuthenticated, credentials]);
+    }, [isAuthenticated, credentials, invitationVerified]);
 
     useEffect(() => {
         if (!credentials?.token || !credentials.secret) {
@@ -66,7 +77,7 @@ export function AuthProvider({ children, initialCredentials }: { children: React
         });
     }, []);
 
-    const login = async (token: string, secret: string) => {
+    const login = async (token: string, secret: string, invitationHint?: InvitationState) => {
         const newCredentials: AuthCredentials = { token, secret };
         const success = await TokenStorage.setCredentials(newCredentials);
         if (success) {
@@ -81,20 +92,69 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             if (Platform.OS === 'web') {
                 clearLegacyStoredSecretForMigration();
             }
+
+            // Seed invitation state from the login response when the server told us;
+            // otherwise leave it unknown so the gate refresh picks it up.
+            if (invitationHint !== undefined) {
+                setInvitationVerified(invitationHint);
+            } else {
+                setInvitationVerified(null);
+            }
+            // Force-refresh from source of truth once we have a token to carry.
+            // Errors are caught here to prevent unhandled rejections; the internal
+            // function already sets invitationVerified=false on failure.
+            refreshInvitationStatusInternal(token).catch(() => { /* state already set to false */ });
         } else {
             throw new Error('Failed to save credentials');
         }
     };
 
+    const refreshInvitationStatusInternal = async (token: string) => {
+        try {
+            const status = await fetchInvitationStatus(token);
+            setInvitationVerified(status.verified);
+        } catch (error) {
+            // Server unreachable or auth error — treat as unverified so the
+            // invitation gate is shown rather than letting the user through silently.
+            // This surfaces the failure to the user instead of masking it.
+            setInvitationVerified(false);
+            throw error;
+        }
+    };
+
+    const refreshInvitationStatus = async () => {
+        const token = credentialsRef.current?.token;
+        if (!token) return;
+        await refreshInvitationStatusInternal(token);
+    };
+
+    const markInvitationVerified = () => {
+        setInvitationVerified(true);
+    };
+
+    // When credentials rehydrate from storage at app boot, check server state.
+    useEffect(() => {
+        const token = credentials?.token;
+        if (!token) {
+            setInvitationVerified(null);
+            return;
+        }
+        if (invitationVerified === null) {
+            refreshInvitationStatusInternal(token).catch(() => { /* state already set to false */ });
+        }
+    }, [credentials?.token]);
+
     const logout = async () => {
         trackLogout();
         clearPersistence();
+        invalidateHubToken();
         await TokenStorage.removeCredentials();
         await signOutSupabase();
 
         // Update React state to ensure UI consistency
         setCredentials(null);
         setIsAuthenticated(false);
+        setInvitationVerified(null);
 
         if (Platform.OS === 'web') {
             window.location.reload();
@@ -112,8 +172,11 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             value={{
                 isAuthenticated,
                 credentials,
+                invitationVerified,
                 login,
                 logout,
+                refreshInvitationStatus,
+                markInvitationVerified,
             }}
         >
             {children}

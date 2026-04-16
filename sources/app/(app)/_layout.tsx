@@ -24,8 +24,15 @@ export default function RootLayout() {
     React.useEffect(() => {
         if (!auth.isAuthenticated && pathname !== '/') {
             router.replace('/');
+            return;
         }
-    }, [auth.isAuthenticated, pathname]);
+        // Invitation gate: block access to the app until the server says we are verified.
+        // `null` means we haven't heard back yet — don't redirect, wait for refresh.
+        if (auth.isAuthenticated && auth.invitationVerified === false && pathname !== '/invitation') {
+            // Typed-route cache may not include /invitation until `expo start` regenerates it.
+            router.replace('/invitation' as any);
+        }
+    }, [auth.isAuthenticated, auth.invitationVerified, pathname]);
 
     return (
         <Stack
@@ -131,6 +138,13 @@ export default function RootLayout() {
                     headerShown: true,
                     headerTitle: t('home.addDeviceTitle'),
                     headerBackTitle: t('common.back'),
+                }}
+            />
+            <Stack.Screen
+                name="invitation"
+                options={{
+                    headerShown: false,
+                    gestureEnabled: false,
                 }}
             />
             <Stack.Screen

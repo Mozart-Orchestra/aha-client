@@ -1924,4 +1924,19 @@ export const zhHans: TranslationStructure = {
         agentStatusTesting: '测试中',
         agentStatusDeploying: '部署中',
     },
+
+    invitation: {
+        title: '需要邀请码',
+        subtitle: '当前工作区处于封测阶段，请输入邀请码以继续使用。',
+        inputPlaceholder: 'aha-XXXX-YYYY',
+        submit: '解锁工作区',
+        submitting: '验证中…',
+        help: '没有邀请码？请联系管理员。',
+        logout: '退出登录',
+        errorInvalid: '邀请码无效。',
+        errorExpired: '邀请码已过期。',
+        errorExhausted: '该邀请码已用尽。',
+        errorGeneric: '验证失败，请稍后重试。',
+        errorNetwork: '网络错误，请检查网络连接。',
+    },
 } as const;

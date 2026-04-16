@@ -537,9 +537,14 @@ function NotAuthenticated() {
         if (!session?.access_token) return;
 
         const result = await completeSupabaseSession(session.access_token);
-        await auth.login(result.token, result.secretBase64);
+        const invitationHint = result.invitationVerified ?? null;
+        await auth.login(result.token, result.secretBase64, invitationHint);
         if (hasPendingTerminalConnectRequest()) {
             router.replace('/terminal/connect');
+            return;
+        }
+        if (invitationHint === false) {
+            router.replace('/invitation' as any);
         }
     }, [auth, router]);
 

@@ -26,6 +26,7 @@ interface SupabaseCompleteResponse {
     encryptedContentSecretKey?: string | null;
     canonicalPublicKey?: string | null;
     reason?: string;
+    invitationVerified?: boolean;
 }
 
 type SupabaseCompleteSessionResult = {
@@ -33,6 +34,7 @@ type SupabaseCompleteSessionResult = {
     userId: string;
     secretBase64: string;
     recoveryReady: boolean;
+    invitationVerified?: boolean;
 };
 
 export class SupabaseRestoreRequiredError extends Error {
@@ -353,6 +355,7 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
                 userId: response.data.userId,
                 secretBase64: encodeBase64(secret, 'base64url'),
                 recoveryReady: true,
+                invitationVerified: response.data.invitationVerified,
             };
         }
 
@@ -382,6 +385,7 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
             userId: response.data.userId,
             secretBase64: encodeBase64(newSecret, 'base64url'),
             recoveryReady: true,
+            invitationVerified: response.data.invitationVerified,
         };
     } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 409) {

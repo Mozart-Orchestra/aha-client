@@ -1586,6 +1586,21 @@ export const pl: TranslationStructure = {
         agentStatusTesting: 'testing',
         agentStatusDeploying: 'deploying',
     },
+
+    invitation: {
+        title: 'Invitation Required',
+        subtitle: 'This workspace is in closed beta. Enter the invitation code shared with you to continue.',
+        inputPlaceholder: 'aha-XXXX-YYYY',
+        submit: 'Unlock workspace',
+        submitting: 'Verifying...',
+        help: 'Don\'t have a code? Contact your administrator.',
+        logout: 'Sign out',
+        errorInvalid: 'This invitation code does not exist.',
+        errorExpired: 'This invitation code has expired.',
+        errorExhausted: 'This invitation code has already been fully used.',
+        errorGeneric: 'Could not verify the code. Please try again.',
+        errorNetwork: 'Network error. Please check your connection.',
+    },
 } as const;
 
 export type TranslationsPl = typeof pl;

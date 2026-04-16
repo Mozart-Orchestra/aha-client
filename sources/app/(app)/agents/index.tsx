@@ -472,15 +472,15 @@ export default React.memo(function AgentsScreen() {
                 q: debouncedQuery || undefined,
                 category: isCorps ? undefined : (category === 'all' ? undefined : category),
                 kind: isCorps ? 'legion' : 'agent',
-            }).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }))
+            })
             : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
 
         const favoritePublicPromise = actorId
-            ? fetchFavoriteGenomes(actorId).catch(() => ({ genomes: [] as GenomeRecord[], total: 0 }))
+            ? fetchFavoriteGenomes(actorId)
             : Promise.resolve({ genomes: [] as GenomeRecord[], total: 0 });
 
         const privatePromise = credentials && marketplaceSource !== 'market'
-            ? fetchGenomes(credentials, { ownedOnly: marketplaceSource === 'mine', limit: 100 }).catch(() => ({ genomes: [], total: 0 }))
+            ? fetchGenomes(credentials, { ownedOnly: marketplaceSource === 'mine', limit: 100 })
             : Promise.resolve({ genomes: [], total: 0 });
 
         const [publicResult, favoritePublicResult, privateResult] = await Promise.all([
