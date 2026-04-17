@@ -34,6 +34,7 @@ import { encodeBase64 } from '@/encryption/base64';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 import { trackAccountCreated } from '@/track';
+import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
 
 const DESKTOP_BREAKPOINT = 1180;
 const LANDING_HERO_ARTWORK_ASPECT_RATIO = 2814 / 1536;
@@ -468,7 +469,7 @@ function NotAuthenticated() {
     }, [router]);
 
     const handleCopyCliCommand = React.useCallback(async () => {
-        await Clipboard.setStringAsync(t('landing.cliCommand'));
+        await Clipboard.setStringAsync(getCliInstallAndLoginCommand());
         Modal.alert(
             t('landing.cliCopiedTitle'),
             t('landing.cliCopiedMessage'),
