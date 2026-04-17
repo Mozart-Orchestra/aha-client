@@ -63,26 +63,30 @@ describe('teamChatRoomList helpers', () => {
         ]);
     });
 
-    it('isNearBottom only returns true when within the configured threshold', () => {
-        expect(isNearBottom(400, 500, 980)).toBe(true);
-        expect(isNearBottom(400, 300, 980)).toBe(false);
+    it('isNearBottom treats inverted FlatList offset near zero as "at bottom"', () => {
+        expect(isNearBottom(0)).toBe(true);
+        expect(isNearBottom(80)).toBe(true);
+        expect(isNearBottom(150)).toBe(false);
     });
 
     it('shows scroll-to-latest button when messages exist and user is away from bottom', () => {
         expect(shouldShowScrollToLatestButton({
             messageCount: 12,
-            layoutHeight: 400,
-            offsetY: 120,
-            contentHeight: 1000,
+            offsetY: 400,
         })).toBe(true);
     });
 
     it('hides scroll-to-latest button when there are no messages', () => {
         expect(shouldShowScrollToLatestButton({
             messageCount: 0,
-            layoutHeight: 400,
-            offsetY: 0,
-            contentHeight: 0,
+            offsetY: 500,
+        })).toBe(false);
+    });
+
+    it('hides scroll-to-latest button when user is already at the bottom', () => {
+        expect(shouldShowScrollToLatestButton({
+            messageCount: 12,
+            offsetY: 20,
         })).toBe(false);
     });
 });

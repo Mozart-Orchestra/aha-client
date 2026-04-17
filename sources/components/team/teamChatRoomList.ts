@@ -25,30 +25,22 @@ export function appendTeamMessage(
     return mergeTeamMessages(previous, [message], limit);
 }
 
+// Inverted FlatList: offsetY ≈ 0 means the user is at the bottom (latest message).
+// As the user scrolls back into history, offsetY grows.
 export function isNearBottom(
-    layoutHeight: number,
     offsetY: number,
-    contentHeight: number,
     threshold = TEAM_CHAT_NEAR_BOTTOM_THRESHOLD_PX
 ): boolean {
-    return layoutHeight + offsetY >= contentHeight - threshold;
+    return offsetY <= threshold;
 }
 
 export function shouldShowScrollToLatestButton(args: {
     messageCount: number;
-    layoutHeight: number;
     offsetY: number;
-    contentHeight: number;
     threshold?: number;
 }): boolean {
     if (args.messageCount === 0) {
         return false;
     }
-
-    return !isNearBottom(
-        args.layoutHeight,
-        args.offsetY,
-        args.contentHeight,
-        args.threshold
-    );
+    return !isNearBottom(args.offsetY, args.threshold);
 }

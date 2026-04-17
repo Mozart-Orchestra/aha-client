@@ -1488,14 +1488,12 @@ export default function TeamChatRoom({
     const styles = stylesheet;
     const messageListRef = React.useRef<FlatList<TeamMessage>>(null);
     const isNearBottomRef = React.useRef(true);  // Track if user is near bottom for auto-scroll
-    const hasInitialScrolled = React.useRef(false);  // Ensure we scroll to bottom on first layout
     const [showScrollToLatestButton, setShowScrollToLatestButton] = React.useState(false);
 
-    // Scroll-to-end helper — uses setTimeout on web for reliable post-layout timing.
-    // double-rAF proved insufficient for virtualized FlatList on web.
-    const scrollToEnd = React.useCallback((animated: boolean) => {
-        const doScroll = () => messageListRef.current?.scrollToEnd({ animated });
-        setTimeout(doScroll, Platform.OS === 'web' ? 150 : 100);
+    // Inverted FlatList: offset 0 is the bottom (latest message). Jumping to
+    // the latest message is a single scrollToOffset call — no retry loop.
+    const scrollToBottom = React.useCallback((animated: boolean) => {
+        messageListRef.current?.scrollToOffset({ offset: 0, animated });
     }, []);
     const router = useRouter();
     const isEdzlf = variant === 'edzlf';
@@ -2235,14 +2233,18 @@ export default function TeamChatRoom({
         );
     };
 
-    // Deduplicate and sort
+    // Deduplicate and sort chronologically (oldest → newest).
     const uniqueMessages = React.useMemo(() => {
         return dedupeAndSortTeamMessages(messages);
     }, [messages]);
 
+    // Inverted FlatList consumes newest-first data; reverse once per change.
+    const invertedMessages = React.useMemo(() => {
+        return uniqueMessages.slice().reverse();
+    }, [uniqueMessages]);
+
     React.useEffect(() => {
         isNearBottomRef.current = true;
-        hasInitialScrolled.current = false;
         setShowScrollToLatestButton(false);
     }, [teamId]);
 
@@ -2253,32 +2255,25 @@ export default function TeamChatRoom({
 
             setMessages(prev => mergeTeamMessages(prev, result.messages));
 
-            setTimeout(() => {
-                isNearBottomRef.current = true;
-                setShowScrollToLatestButton(false);
-                scrollToEnd(false);
-            }, 100);
+            // Inverted FlatList renders bottom-anchored by default after a data
+            // change; no explicit scroll is required on first load.
+            isNearBottomRef.current = true;
+            setShowScrollToLatestButton(false);
         } catch (error) {
             Modal.alert(t('common.error'), t('errors.networkError'), [{ text: t('common.ok'), style: 'cancel' }]);
         } finally {
             setIsLoading(false);
         }
-    }, [scrollToEnd, setMessages, teamId]);
+    }, [setMessages, teamId]);
 
     // Load messages
     React.useEffect(() => {
         void loadMessages();
     }, [loadMessages]);
 
-    React.useEffect(() => {
-        if (uniqueMessages.length === 0) {
-            return;
-        }
-
-        isNearBottomRef.current = true;
-        setShowScrollToLatestButton(false);
-        scrollToEnd(false);
-    }, [scrollToEnd, uniqueMessages.length]);
+    // Inverted FlatList stays anchored at offset=0 automatically when new items
+    // are prepended to the head of the data array, so we no longer need an
+    // effect that scrolls on every message count change.
 
     // Subscribe to real-time messages
     React.useEffect(() => {
@@ -2298,7 +2293,7 @@ export default function TeamChatRoom({
                     });
                     if (shouldAutoScroll) {
                         setShowScrollToLatestButton(false);
-                        scrollToEnd(true);
+                        scrollToBottom(true);
                     }
                 });
 
@@ -2375,7 +2370,7 @@ export default function TeamChatRoom({
 
                 isNearBottomRef.current = true;
                 setShowScrollToLatestButton(false);
-                scrollToEnd(true);
+                scrollToBottom(true);
 
                 // Clear states
                 setTimeout(() => {
@@ -2671,7 +2666,7 @@ export default function TeamChatRoom({
             setMessages(prev => appendTeamMessage(prev, optimisticMsg));
             isNearBottomRef.current = true;
             setShowScrollToLatestButton(false);
-            scrollToEnd(true);
+            scrollToBottom(true);
             setInputText('');
 
             await sync.sendTeamMessage(request);
@@ -2837,49 +2832,31 @@ export default function TeamChatRoom({
             <FlatList
                 ref={messageListRef}
                 style={styles.messageList}
-                data={uniqueMessages}
+                data={invertedMessages}
+                inverted
                 keyExtractor={(message) => message.id}
                 renderItem={renderMessageItem}
                 ListEmptyComponent={renderEmptyState}
                 contentContainerStyle={[
                     styles.messageListContent,
                     isEdzlf && { paddingHorizontal: 26, paddingTop: 22, paddingBottom: 24 },
-                    uniqueMessages.length === 0 && { flexGrow: 1 }
+                    invertedMessages.length === 0 && { flexGrow: 1 }
                 ]}
                 initialNumToRender={20}
                 maxToRenderPerBatch={20}
                 windowSize={10}
                 removeClippedSubviews={Platform.OS !== 'web'}
                 keyboardShouldPersistTaps="handled"
-                // Track user scroll position to determine if near bottom
+                // Inverted list: offset=0 means the user is at the latest message.
                 onScroll={(event) => {
-                    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-                    const nearBottom = isNearBottom(layoutMeasurement.height, contentOffset.y, contentSize.height);
-                    isNearBottomRef.current = nearBottom;
+                    const offsetY = event.nativeEvent.contentOffset.y;
+                    isNearBottomRef.current = isNearBottom(offsetY);
                     setShowScrollToLatestButton(shouldShowScrollToLatestButton({
-                        messageCount: uniqueMessages.length,
-                        layoutHeight: layoutMeasurement.height,
-                        offsetY: contentOffset.y,
-                        contentHeight: contentSize.height,
+                        messageCount: invertedMessages.length,
+                        offsetY,
                     }));
                 }}
                 scrollEventThrottle={16}
-                // Only auto-scroll when user is near bottom (respecting user intent)
-                onContentSizeChange={() => {
-                    if (isNearBottomRef.current) {
-                        setShowScrollToLatestButton(false);
-                        scrollToEnd(true);
-                    }
-                }}
-                // Scroll to bottom on first layout (e.g. initial render with messages already present)
-                onLayout={() => {
-                    if (!hasInitialScrolled.current) {
-                        hasInitialScrolled.current = true;
-                        isNearBottomRef.current = true;
-                        setShowScrollToLatestButton(false);
-                        scrollToEnd(false);
-                    }
-                }}
             />
 
             {showScrollToLatestButton && (
@@ -2894,7 +2871,7 @@ export default function TeamChatRoom({
                         onPress={() => {
                             isNearBottomRef.current = true;
                             setShowScrollToLatestButton(false);
-                            scrollToEnd(true);
+                            scrollToBottom(true);
                         }}
                     >
                         <Ionicons name="arrow-down" size={20} color="#FFFFFF" />
