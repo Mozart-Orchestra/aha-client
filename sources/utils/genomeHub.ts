@@ -47,6 +47,7 @@ export async function hubFetch(path: string, init?: RequestInit): Promise<Respon
     return response;
 }
 const GENOME_BY_NAME_TTL_MS = 30_000;
+const GENOME_NOT_FOUND_TTL_MS = 5 * 60_000;
 const genomeByNameCache = new Map<string, { expiresAt: number; value: Promise<GenomeRecord | null> }>();
 const OFFICIAL_GENOME_ALIASES: Record<string, string> = {
     architect: 'researcher',
@@ -287,7 +288,14 @@ export async function fetchGenomeByName(namespace: string, name: string): Promis
     });
 
     try {
-        return await request;
+        const result = await request;
+        if (result === null) {
+            genomeByNameCache.set(cacheKey, {
+                value: request,
+                expiresAt: Date.now() + GENOME_NOT_FOUND_TTL_MS,
+            });
+        }
+        return result;
     } catch {
         return null;
     }
