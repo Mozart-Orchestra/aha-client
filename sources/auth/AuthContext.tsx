@@ -113,12 +113,9 @@ export function AuthProvider({ children, initialCredentials }: { children: React
         try {
             const status = await fetchInvitationStatus(token);
             setInvitationVerified(status.verified);
-        } catch (error) {
-            // Server unreachable or auth error — treat as unverified so the
-            // invitation gate is shown rather than letting the user through silently.
-            // This surfaces the failure to the user instead of masking it.
-            setInvitationVerified(false);
-            throw error;
+        } catch {
+            // Server unreachable — keep current state instead of forcing
+            // the user back to the invitation screen on transient failures.
         }
     };
 
