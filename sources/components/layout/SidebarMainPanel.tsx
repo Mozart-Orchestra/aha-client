@@ -16,10 +16,12 @@ import {
 import { buildSidebarAgentRosterEntries, selectSidebarAgentSessions } from '@/utils/sidebarAgentSessions';
 import { getTeamSessionIdsFromArtifact } from '@/utils/teamRoster';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
-import { fetchGenomeByName, parseAgentVerdict } from '@/utils/genomeHub';
+import { fetchGenomeById, fetchGenomeByName, parseAgentVerdict } from '@/utils/genomeHub';
 import {
     normalizeRoleKey,
+    resolveSidebarAgentImageRef,
     resolveSidebarAgentIdentity,
+    resolveSidebarGenomeRoleCandidates,
 } from '@/utils/sidebarAgentIdentity';
 
 import { t } from '@/text';
@@ -43,14 +45,10 @@ type RoleScore = {
     evaluationCount: number;
 };
 
-function buildRoleCandidates(value: string): string[] {
-    const normalized = normalizeRoleKey(value);
-    return Array.from(new Set([
-        value.trim(),
-        normalized,
-        normalized.replace(/[\s_]+/g, '-'),
-    ].filter(Boolean)));
-}
+type RoleScoreState = {
+    signature: string;
+    score: RoleScore | null;
+};
 
 function formatListTime(timestamp: number): string {
     const now = new Date();
@@ -127,6 +125,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             stableOrder: number;
             activityLabel?: string;
             activityColor: string;
+            imageId?: string;
         }[] = [];
 
         const DEAD_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour without activity = "ended"
@@ -152,6 +151,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             const activity = session ? activityMetrics.get(session.id) : undefined;
             const tokenRateBucket = activity?.tokenRateBucket ?? 0;
             const tokenRate = activity?.tokenRate ?? 0;
+            const imageRef = resolveSidebarAgentImageRef({ member, session });
             result.push({
                 id: entry.sessionId,
                 name: member?.displayName || (session ? getSessionName(session) : entry.sessionId),
@@ -169,6 +169,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                     ?? (session ? getStableSessionOrder(session) : Number.MAX_SAFE_INTEGER),
                 activityLabel: session ? formatTokenRateLabel(tokenRate) : undefined,
                 activityColor: getTokenRateAccentColor(tokenRateBucket),
+                imageId: imageRef?.id,
             });
         });
 
@@ -191,20 +192,43 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
             }));
     }, [allArtifacts]);
 
-    const [roleScores, setRoleScores] = React.useState<Record<string, RoleScore | null>>({});
+    const [roleScores, setRoleScores] = React.useState<Record<string, RoleScoreState>>({});
 
-    const roleKeys = React.useMemo(() => {
-        return Array.from(new Set(
-            agents
-                .map((agent) => agent.roleKey?.trim())
-                .filter((value): value is string => !!value)
-                .map(normalizeRoleKey)
-        ));
+    const roleLookupInputs = React.useMemo(() => {
+        const lookupMap = new Map<string, { imageIds: Set<string>; roleCandidates: string[] }>();
+
+        agents.forEach((agent) => {
+            const roleKey = normalizeRoleKey(agent.roleKey || '');
+            if (!roleKey) {
+                return;
+            }
+
+            const current = lookupMap.get(roleKey) ?? {
+                imageIds: new Set<string>(),
+                roleCandidates: resolveSidebarGenomeRoleCandidates(roleKey),
+            };
+            if (agent.imageId) {
+                current.imageIds.add(agent.imageId);
+            }
+            lookupMap.set(roleKey, current);
+        });
+
+        return Array.from(lookupMap.entries()).map(([roleKey, input]) => ({
+            roleKey,
+            imageIds: Array.from(input.imageIds),
+            roleCandidates: input.roleCandidates,
+            signature: JSON.stringify({
+                imageIds: Array.from(input.imageIds).sort(),
+                roleCandidates: [...input.roleCandidates].sort(),
+            }),
+        }));
     }, [agents]);
 
     React.useEffect(() => {
-        const missingRoleKeys = roleKeys.filter((roleKey) => !(roleKey in roleScores));
-        if (missingRoleKeys.length === 0) {
+        const pendingLookups = roleLookupInputs.filter(
+            (input) => roleScores[input.roleKey]?.signature !== input.signature,
+        );
+        if (pendingLookups.length === 0) {
             return;
         }
 
@@ -212,15 +236,18 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
 
         (async () => {
             const resolvedEntries = await Promise.all(
-                missingRoleKeys.map(async (roleKey) => {
-                    for (const candidate of buildRoleCandidates(roleKey)) {
+                pendingLookups.map(async ({ roleKey, imageIds, roleCandidates, signature }) => {
+                    for (const imageId of imageIds) {
                         try {
-                            const genome = await fetchGenomeByName('@official', candidate);
+                            const genome = await fetchGenomeById(imageId);
                             const feedback = parseAgentVerdict(genome?.feedbackData ?? null);
                             if (feedback && feedback.evaluationCount > 0) {
                                 return [roleKey, {
-                                    score: feedback.avgScore,
-                                    evaluationCount: feedback.evaluationCount,
+                                    signature,
+                                    score: {
+                                        score: feedback.avgScore,
+                                        evaluationCount: feedback.evaluationCount,
+                                    },
                                 }] as const;
                             }
                         } catch {
@@ -228,7 +255,25 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                         }
                     }
 
-                    return [roleKey, null] as const;
+                    for (const candidate of roleCandidates) {
+                        try {
+                            const genome = await fetchGenomeByName('@official', candidate);
+                            const feedback = parseAgentVerdict(genome?.feedbackData ?? null);
+                            if (feedback && feedback.evaluationCount > 0) {
+                                return [roleKey, {
+                                    signature,
+                                    score: {
+                                        score: feedback.avgScore,
+                                        evaluationCount: feedback.evaluationCount,
+                                    },
+                                }] as const;
+                            }
+                        } catch {
+                            // Ignore missing or unreachable genome hub entries.
+                        }
+                    }
+
+                    return [roleKey, { signature, score: null }] as const;
                 })
             );
 
@@ -238,8 +283,8 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
 
             setRoleScores((prev) => {
                 const next = { ...prev };
-                for (const [roleKey, score] of resolvedEntries) {
-                    next[roleKey] = score;
+                for (const [roleKey, state] of resolvedEntries) {
+                    next[roleKey] = state;
                 }
                 return next;
             });
@@ -248,7 +293,7 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
         return () => {
             cancelled = true;
         };
-    }, [roleKeys, roleScores]);
+    }, [roleLookupInputs, roleScores]);
 
     React.useEffect(() => {
         if (agents.length > 0 && (!selectedAgentId || !agents.some((agent) => agent.id === selectedAgentId))) {
@@ -283,8 +328,8 @@ export const SidebarMainPanel = React.memo(({ variant = 'default' }: SidebarMain
                 inactive: agent.inactive,
                 dead: agent.dead,
                 description: agent.description || undefined,
-                score: roleScores[normalizeRoleKey(agent.roleKey || '')]?.score,
-                scoreCount: roleScores[normalizeRoleKey(agent.roleKey || '')]?.evaluationCount,
+                score: roleScores[normalizeRoleKey(agent.roleKey || '')]?.score?.score,
+                scoreCount: roleScores[normalizeRoleKey(agent.roleKey || '')]?.score?.evaluationCount,
                 activityLabel: agent.activityLabel,
                 activityColor: agent.activityColor,
                 selected: selectedAgentId === agent.id,
