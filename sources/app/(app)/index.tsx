@@ -20,6 +20,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { getNeedsRestore, getNeedsRestoreReason } from '@/auth/AuthContext';
 import { authGetToken } from '@/auth/authGetToken';
 import { hasPendingTerminalConnectRequest } from '@/auth/pendingTerminalConnect';
+import { clearSupabaseSession } from '@/auth/supabaseSession';
 import {
     completeSupabaseSession,
     signInWithGoogle,
@@ -534,18 +535,22 @@ function NotAuthenticated() {
      * Existing accounts recover the canonical secret; new accounts create one in memory.
      */
     const completeSupabaseLogin = React.useCallback(async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) return;
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) return;
 
-        const result = await completeSupabaseSession(session.access_token);
-        const invitationHint = result.invitationVerified ?? null;
-        await auth.login(result.token, result.secretBase64, invitationHint);
-        if (hasPendingTerminalConnectRequest()) {
-            router.replace('/terminal/connect');
-            return;
-        }
-        if (invitationHint === false) {
-            router.replace('/invitation' as any);
+            const result = await completeSupabaseSession(session.access_token);
+            const invitationHint = result.invitationVerified ?? null;
+            await auth.login(result.token, result.secretBase64, invitationHint);
+            if (hasPendingTerminalConnectRequest()) {
+                router.replace('/terminal/connect');
+                return;
+            }
+            if (invitationHint === false) {
+                router.replace('/invitation' as any);
+            }
+        } finally {
+            await clearSupabaseSession();
         }
     }, [auth, router]);
 

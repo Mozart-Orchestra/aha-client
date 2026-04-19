@@ -9,6 +9,7 @@ import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import { clearSupabaseOAuthCallbackHash, readSupabaseOAuthCallbackState } from '@/auth/supabaseCallback';
 import { supabase } from '@/auth/supabase';
 import { completeSupabaseSession, SupabaseRecoveryNotReadyError, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
+import { clearSupabaseSession, shouldClearSupabaseSessionError } from '@/auth/supabaseSession';
 import { persistPendingTerminalConnectRequestStorage, readPendingTerminalConnectRequestStorage } from '@/auth/pendingTerminalConnect';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -208,7 +209,13 @@ export default function RootLayout() {
                 // (e.g. from OAuth callback redirect with #access_token=...)
                 if (!credentials) {
                     // Wait for Supabase to process URL hash if present
-                    let session = (await supabase.auth.getSession()).data.session;
+                    const { data, error: sessionError } = await supabase.auth.getSession();
+                    const shouldClearSession = shouldClearSupabaseSessionError(sessionError);
+                    if (shouldClearSession) {
+                        await clearSupabaseSession();
+                    }
+
+                    let session = shouldClearSession ? null : data.session;
                     if (!session && callbackState?.accessToken) {
                         // Hash present but session not ready — wait for auth state change
                         session = await new Promise((resolve) => {
@@ -232,6 +239,8 @@ export default function RootLayout() {
                                 setNeedsRestore('recovery_not_ready');
                             }
                             // Failed: continue unauthenticated
+                        } finally {
+                            await clearSupabaseSession();
                         }
                     }
                 }
