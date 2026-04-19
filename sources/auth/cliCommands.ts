@@ -1,6 +1,6 @@
 import { getServerUrl } from '@/sync/serverConfig';
 
-const DEFAULT_PRODUCTION_API = 'https://ahaagi.com/api';
+const DEFAULT_PRODUCTION_API = 'https://aha-agi.com/api';
 
 export function getCliInstallAndLoginCommand(code?: string): string {
     const serverUrl = getServerUrl();

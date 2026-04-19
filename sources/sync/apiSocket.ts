@@ -114,7 +114,7 @@ export class ApiSocket {
 
         this.updateStatus('connecting');
 
-        // Extract path prefix from endpoint URL (e.g. '/api/v3' from 'https://top1vibe.com/api/v3')
+        // Extract path prefix from endpoint URL (e.g. '/api' from 'https://aha-agi.com/api')
         // socket.io path is relative to the domain root, so we must prepend the prefix
         const endpointUrl = new URL(this.config.endpoint);
         const pathPrefix = endpointUrl.pathname.replace(/\/+$/, ''); // remove trailing slash

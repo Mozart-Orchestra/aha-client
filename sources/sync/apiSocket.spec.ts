@@ -85,7 +85,7 @@ describe('ApiSocket reconnect', () => {
 
     function createSocket(encryption: any = {}) {
         const apiSocket = new ApiSocket();
-        apiSocket.initialize({ endpoint: 'https://example.com/api/v3', token: 'token-123' }, encryption);
+        apiSocket.initialize({ endpoint: 'https://example.com/api', token: 'token-123' }, encryption);
         return {
             apiSocket,
             socket: sockets[0]!,

@@ -61,15 +61,15 @@ describe('serverConfig', () => {
 
         const { getServerUrl } = await loadServerConfig();
 
-        expect(getServerUrl()).toBe('https://ahaagi.com/api/v3');
+        expect(getServerUrl()).toBe('https://aha-agi.com/api');
     });
 
     it('uses the current public origin for hosted web builds', async () => {
-        setWindowLocation('ahaagi.com', 'https://ahaagi.com');
+        setWindowLocation('aha-agi.com', 'https://aha-agi.com');
 
         const { getServerUrl } = await loadServerConfig();
 
-        expect(getServerUrl()).toBe('https://ahaagi.com/api/v3');
+        expect(getServerUrl()).toBe('https://aha-agi.com/api');
     });
 
     it('keeps LAN auto-discovery for private IP web builds', async () => {

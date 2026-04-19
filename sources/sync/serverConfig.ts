@@ -4,8 +4,8 @@ import { MMKV } from 'react-native-mmkv';
 const serverConfigStorage = new MMKV({ id: 'server-config' });
 
 const SERVER_KEY = 'custom-server-url';
-const DEFAULT_SERVER_URL = 'https://ahaagi.com/api/v3';
-const DEFAULT_PUBLIC_API_PATH = '/api/v3';
+const DEFAULT_SERVER_URL = 'https://aha-agi.com/api';
+const DEFAULT_PUBLIC_API_PATH = '/api';
 
 function isLocalHost(hostname: string): boolean {
     return hostname === 'localhost' || hostname === '127.0.0.1';

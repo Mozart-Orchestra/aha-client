@@ -13,8 +13,8 @@ FROM deps AS builder
 ARG APP_ENV=production
 ARG EXPO_PUBLIC_POSTHOG_API_KEY=""
 ARG EXPO_PUBLIC_REVENUE_CAT_STRIPE=""
-ARG EXPO_PUBLIC_HAPPY_SERVER_URL="https://ahaagi.com/api/v3"
-ARG EXPO_PUBLIC_GENOME_HUB_URL="https://ahaagi.com/api/v2"
+ARG EXPO_PUBLIC_HAPPY_SERVER_URL="https://aha-agi.com/api"
+ARG EXPO_PUBLIC_GENOME_HUB_URL="https://aha-agi.com/genome"
 ARG BASE_PATH=""
 
 ENV NODE_ENV=production \
