@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-native', () => ({
     Platform: {
@@ -16,7 +16,13 @@ vi.mock('expo-secure-store', () => ({
 }));
 
 import type { AuthCredentials, WebAuthSyncEvent } from '@/auth/tokenStorage';
-import { shouldReloadForWebAuthSyncEvent } from '@/auth/tokenStorage';
+import {
+    getLegacyStoredSecretForMigration,
+    shouldReloadForWebAuthSyncEvent,
+    TokenStorage,
+} from '@/auth/tokenStorage';
+
+const mockStorage = new Map<string, string>();
 
 async function digestSecret(secret: string): Promise<string> {
     const encoded = new TextEncoder().encode(secret);
@@ -60,5 +66,59 @@ describe('shouldReloadForWebAuthSyncEvent', () => {
         };
 
         await expect(shouldReloadForWebAuthSyncEvent(null, event)).resolves.toBe(false);
+    });
+});
+
+describe('TokenStorage', () => {
+    beforeEach(() => {
+        mockStorage.clear();
+        Object.defineProperty(global, 'window', {
+            value: {},
+            writable: true,
+            configurable: true,
+        });
+        Object.defineProperty(global, 'localStorage', {
+            value: {
+                getItem: (key: string) => mockStorage.get(key) ?? null,
+                setItem: (key: string, value: string) => { mockStorage.set(key, value); },
+                removeItem: (key: string) => { mockStorage.delete(key); },
+                clear: () => { mockStorage.clear(); },
+            },
+            writable: true,
+            configurable: true,
+        });
+    });
+
+    it('preserves the last known invitation state with credentials', async () => {
+        const credentials: AuthCredentials = {
+            token: 'token-1',
+            secret: 'same-secret',
+            invitationVerified: true,
+        };
+
+        await expect(TokenStorage.setCredentials(credentials)).resolves.toBe(true);
+        await expect(TokenStorage.getCredentials()).resolves.toEqual(credentials);
+        await expect(TokenStorage.removeCredentials()).resolves.toBe(true);
+    });
+
+    it('stores the current web secret for future reauth migration', async () => {
+        const credentials: AuthCredentials = {
+            token: 'token-1',
+            secret: 'same-secret',
+        };
+
+        await expect(TokenStorage.setCredentials(credentials)).resolves.toBe(true);
+        expect(getLegacyStoredSecretForMigration()).toBe('same-secret');
+    });
+
+    it('clears the legacy reauth secret on logout on web', async () => {
+        const credentials: AuthCredentials = {
+            token: 'token-1',
+            secret: 'same-secret',
+        };
+
+        await expect(TokenStorage.setCredentials(credentials)).resolves.toBe(true);
+        await expect(TokenStorage.removeCredentials()).resolves.toBe(true);
+        expect(getLegacyStoredSecretForMigration()).toBeNull();
     });
 });

@@ -11,6 +11,7 @@ let credentialsCache: string | null = null;
 export interface AuthCredentials {
     token: string;
     secret: string;
+    invitationVerified?: boolean | null;
 }
 
 export type WebAuthSyncEvent =
@@ -121,6 +122,14 @@ export function clearLegacyStoredSecretForMigration(): void {
     localStorage.removeItem(LEGACY_AUTH_SECRET_REAUTH_KEY);
 }
 
+function setLegacyStoredSecretForMigration(secret: string): void {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+    }
+
+    localStorage.setItem(LEGACY_AUTH_SECRET_REAUTH_KEY, secret);
+}
+
 export const TokenStorage = {
     async getCredentials(): Promise<AuthCredentials | null> {
         if (Platform.OS === 'web') {
@@ -149,6 +158,7 @@ export const TokenStorage = {
         if (Platform.OS === 'web') {
             try {
                 applyExternalWebCredentials(credentials);
+                setLegacyStoredSecretForMigration(credentials.secret);
                 const secretDigest = await digestWebAuthSecret(credentials.secret);
                 broadcastWebAuthSyncEvent({
                     type: 'login',
@@ -194,7 +204,7 @@ export const TokenStorage = {
 
     /**
      * Deprecated compatibility wrapper.
-     * Web no longer preserves the secret across logout; use removeCredentials().
+     * Alias kept for older callers.
      */
     async clearToken(): Promise<boolean> {
         return this.removeCredentials();
