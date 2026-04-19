@@ -799,6 +799,7 @@ export const ru: TranslationStructure = {
         createAccount: 'Создать аккаунт',
         signInWithGoogle: 'Войти через Google',
         signInWithEmail: 'Войти по email',
+        emailSignInUnavailable: 'Вход по email сейчас недоступен. Пожалуйста, используйте вход через Google.',
         emailPlaceholder: 'ваш@email.com',
         sendCode: 'Отправить код',
         otpPlaceholder: '6-значный код',

@@ -853,6 +853,7 @@ export const en = {
         createAccount: 'Create account',
         signInWithGoogle: 'Sign in with Google',
         signInWithEmail: 'Sign in with Email',
+        emailSignInUnavailable: 'Email sign-in is not available right now. Please use Google sign-in.',
         emailPlaceholder: 'your@email.com',
         sendCode: 'Send verification code',
         otpPlaceholder: '6-digit code',

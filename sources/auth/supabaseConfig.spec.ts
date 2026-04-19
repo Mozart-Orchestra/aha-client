@@ -5,6 +5,7 @@ import {
     DEFAULT_SUPABASE_URL,
     isLikelySupabaseAnonKey,
     resolveSupabaseAnonKey,
+    resolveSupabaseEmailOtpEnabled,
     resolveSupabaseUrl,
 } from '@/auth/supabaseConfig';
 
@@ -32,5 +33,13 @@ describe('supabaseConfig', () => {
     it('uses the env anon key when it looks valid', () => {
         const envKey = 'header.payload.signature';
         expect(resolveSupabaseAnonKey(envKey)).toBe(envKey);
+    });
+
+    it('disables email OTP login unless explicitly enabled', () => {
+        expect(resolveSupabaseEmailOtpEnabled()).toBe(false);
+        expect(resolveSupabaseEmailOtpEnabled('')).toBe(false);
+        expect(resolveSupabaseEmailOtpEnabled('false')).toBe(false);
+        expect(resolveSupabaseEmailOtpEnabled('true')).toBe(true);
+        expect(resolveSupabaseEmailOtpEnabled('YES')).toBe(true);
     });
 });

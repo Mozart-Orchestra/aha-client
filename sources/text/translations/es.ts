@@ -801,6 +801,7 @@ export const es: TranslationStructure = {
         createAccount: 'Crear cuenta',
         signInWithGoogle: 'Iniciar sesion con Google',
         signInWithEmail: 'Iniciar sesion con email',
+        emailSignInUnavailable: 'El inicio de sesion por email no esta disponible ahora. Usa el inicio de sesion con Google.',
         emailPlaceholder: 'tu@email.com',
         sendCode: 'Enviar codigo',
         otpPlaceholder: 'Codigo de 6 digitos',

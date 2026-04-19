@@ -811,6 +811,7 @@ export const pl: TranslationStructure = {
         createAccount: 'Utworz konto',
         signInWithGoogle: 'Zaloguj sie przez Google',
         signInWithEmail: 'Zaloguj sie przez email',
+        emailSignInUnavailable: 'Logowanie przez email jest obecnie niedostepne. Uzyj logowania przez Google.',
         emailPlaceholder: 'twoj@email.com',
         sendCode: 'Wyslij kod',
         otpPlaceholder: '6-cyfrowy kod',

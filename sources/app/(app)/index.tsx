@@ -27,6 +27,7 @@ import {
     signInWithEmail,
     verifyEmailOtp,
 } from '@/auth/supabaseAuth';
+import { resolveSupabaseEmailOtpEnabled } from '@/auth/supabaseConfig';
 import { supabase } from '@/auth/supabase';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
@@ -39,6 +40,7 @@ import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
 
 const DESKTOP_BREAKPOINT = 1180;
 const LANDING_HERO_ARTWORK_ASPECT_RATIO = 2814 / 1536;
+const EMAIL_OTP_ENABLED = resolveSupabaseEmailOtpEnabled();
 
 const styles = StyleSheet.create((theme) => ({
     shellContent: {
@@ -499,6 +501,10 @@ function NotAuthenticated() {
     }, [resendCooldown]);
 
     const handleEmailLogin = React.useCallback(() => {
+        if (!EMAIL_OTP_ENABLED) {
+            Modal.alert(t('common.error'), t('welcome.emailSignInUnavailable'));
+            return;
+        }
         setEmailLoginStep('email');
     }, []);
 
@@ -658,12 +664,14 @@ function NotAuthenticated() {
                                         onPress={handleGoogleLogin}
                                         tone="primary"
                                     />
-                                    <LandingButton
-                                        icon="mail-outline"
-                                        title={t('welcome.signInWithEmail')}
-                                        onPress={handleEmailLogin}
-                                        tone="secondary"
-                                    />
+                                    {EMAIL_OTP_ENABLED ? (
+                                        <LandingButton
+                                            icon="mail-outline"
+                                            title={t('welcome.signInWithEmail')}
+                                            onPress={handleEmailLogin}
+                                            tone="secondary"
+                                        />
+                                    ) : null}
                                 </View>
                             ) : emailLoginStep === 'email' ? (
                                 <View style={styles.landingActionsRow}>
@@ -800,12 +808,14 @@ function NotAuthenticated() {
                             onPress={handleGoogleLogin}
                             tone="primary"
                         />
-                        <LandingButton
-                            icon="mail-outline"
-                            title={t('welcome.signInWithEmail')}
-                            onPress={handleEmailLogin}
-                            tone="secondary"
-                        />
+                        {EMAIL_OTP_ENABLED ? (
+                            <LandingButton
+                                icon="mail-outline"
+                                title={t('welcome.signInWithEmail')}
+                                onPress={handleEmailLogin}
+                                tone="secondary"
+                            />
+                        ) : null}
                     </View>
                 ) : emailLoginStep === 'email' ? (
                     <View style={styles.landingMobileActions}>

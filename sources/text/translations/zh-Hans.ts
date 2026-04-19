@@ -818,6 +818,7 @@ export const zhHans: TranslationStructure = {
         createAccount: '创建账户',
         signInWithGoogle: '使用 Google 登录',
         signInWithEmail: '使用邮箱登录',
+        emailSignInUnavailable: '当前暂不支持邮箱登录，请先使用 Google 登录。',
         emailPlaceholder: '请输入邮箱',
         sendCode: '发送验证码',
         otpPlaceholder: '6 位验证码',

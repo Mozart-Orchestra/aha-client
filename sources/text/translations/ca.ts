@@ -801,6 +801,7 @@ export const ca: TranslationStructure = {
         createAccount: 'Crea un compte',
         signInWithGoogle: 'Inicia sessio amb Google',
         signInWithEmail: 'Inicia sessio amb email',
+        emailSignInUnavailable: 'L inici de sessio amb email no esta disponible ara mateix. Fes servir l inici de sessio amb Google.',
         emailPlaceholder: 'el-teu@email.com',
         sendCode: 'Envia el codi',
         otpPlaceholder: 'Codi de 6 digits',
