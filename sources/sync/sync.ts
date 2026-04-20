@@ -46,8 +46,10 @@ import { canonicalizeTeamMentions, type TeamMentionCandidate } from './teamMessa
 import { getNextPersistedMessageCount } from './persistedMessageCount';
 import { logCommerceEvent } from '@/observability/commerceEvents';
 import { getServiceToken } from './apiServices';
+import { stopMissingSessionMessageSync } from './sessionMessageSync';
 import type { AgentLifecycle, SpawnSessionOutcome } from '@/utils/spawnState';
 import { resolveMachineArchivedAt } from '@/utils/machineUtils';
+import { validateSpawnedSessionRuntime } from '@/utils/spawnRuntimeGuard';
 
 const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
     if (!body) {
@@ -918,16 +920,20 @@ class Sync {
         return this.sessionsSync.invalidateAndAwait();
     }
 
-    private findSessionIdByTag(sessionTag: string): string | null {
+    private findSessionById(sessionId: string): Session | null {
+        return storage.getState().sessions[sessionId] ?? null;
+    }
+
+    private findSessionByTag(sessionTag: string): Session | null {
         const sessions = Object.values(storage.getState().sessions)
             .filter((session) => session.metadata?.sessionTag === sessionTag)
             .sort((a, b) => b.updatedAt - a.updatedAt);
 
-        return sessions[0]?.id ?? null;
+        return sessions[0] ?? null;
     }
 
-    private async waitForSpawnedSessionByTag(sessionTag: string, attempts = 6, delayMs = 1500): Promise<string | null> {
-        const existing = this.findSessionIdByTag(sessionTag);
+    private async waitForSpawnedSessionByTag(sessionTag: string, attempts = 6, delayMs = 1500): Promise<Session | null> {
+        const existing = this.findSessionByTag(sessionTag);
         if (existing) {
             return existing;
         }
@@ -936,9 +942,9 @@ class Sync {
             await this.refreshSessions().catch(() => {
                 // Best effort only. The spawn should still surface as pending if refresh fails.
             });
-            const sessionId = this.findSessionIdByTag(sessionTag);
-            if (sessionId) {
-                return sessionId;
+            const session = this.findSessionByTag(sessionTag);
+            if (session) {
+                return session;
             }
             if (attempt < attempts - 1) {
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -2406,6 +2412,14 @@ class Sync {
 
         // Request
         const response = await apiSocket.request(`/v1/sessions/${sessionId}/messages`);
+        if (stopMissingSessionMessageSync(this.messagesSync, sessionId, response.status)) {
+            // Do NOT throw here. sync.stop() already set _stopped=true, so InvalidateSync._doSync
+            // will detect the stopped state and exit cleanly without retrying.
+            return;
+        }
+        if (!response.ok) {
+            throw new Error(`Failed to fetch messages for session ${sessionId}: ${response.status}`);
+        }
         const data = await response.json();
         const persistedMessageCount = typeof data.totalCount === 'number' ? data.totalCount : undefined;
 
@@ -2676,14 +2690,28 @@ class Sync {
                 throw new Error(`Directory does not exist on the selected machine yet: ${result.directory}`);
             }
             if (sessionId) {
+                const hydratedSession = this.findSessionById(sessionId);
+                if (hydratedSession) {
+                    const runtimeValidation = validateSpawnedSessionRuntime(params.agent, hydratedSession);
+                    if (!runtimeValidation.ok) {
+                        log.log(`Spawned session ${sessionId} on machine ${machineId} failed runtime validation: ${runtimeValidation.error}`);
+                        return { status: 'failed', error: runtimeValidation.error };
+                    }
+                }
                 log.log(`Spawned session ${sessionId} on machine ${machineId}`);
                 return { status: 'active', sessionId, sessionTag: params.sessionTag };
             }
             if (params.sessionTag) {
-                const hydratedSessionId = await this.waitForSpawnedSessionByTag(params.sessionTag);
-                if (hydratedSessionId) {
-                    log.log(`Spawned session ${hydratedSessionId} on machine ${machineId} after pending reconciliation`);
-                    return { status: 'active', sessionId: hydratedSessionId, sessionTag: params.sessionTag };
+                const hydratedSession = await this.waitForSpawnedSessionByTag(params.sessionTag);
+                if (hydratedSession) {
+                    const runtimeValidation = validateSpawnedSessionRuntime(params.agent, hydratedSession);
+                    if (!runtimeValidation.ok) {
+                        log.log(`Hydrated session ${hydratedSession.id} on machine ${machineId} failed runtime validation: ${runtimeValidation.error}`);
+                        return { status: 'failed', error: runtimeValidation.error };
+                    }
+
+                    log.log(`Spawned session ${hydratedSession.id} on machine ${machineId} after pending reconciliation`);
+                    return { status: 'active', sessionId: hydratedSession.id, sessionTag: params.sessionTag };
                 }
             }
             log.log(`Spawn request completed on machine ${machineId} (no sessionId returned)`);
@@ -3507,33 +3535,50 @@ class Sync {
     /**
      * 获取团队消息列表
      */
-    async getTeamMessages(teamId: string): Promise<import('@/sync/teamMessageTypes').TeamMessageListResponse> {
-        // 先检查内存缓存
-        const cached = this.teamMessagesCache.get(teamId);
-        if (cached && cached.length > 0) {
-            return {
-                messages: cached,
-                hasMore: false
-            };
-        }
+    async getTeamMessages(
+        teamId: string,
+        options?: { limit?: number; before?: string; useCache?: boolean }
+    ): Promise<import('@/sync/teamMessageTypes').TeamMessageListResponse> {
+        const canUseCache = options?.useCache !== false && !options?.before && options?.limit === undefined;
 
-        // Restore from sessionStorage if available (survives page refresh, not app close)
-        try {
-            if (typeof sessionStorage !== 'undefined') {
-                const stored = sessionStorage.getItem(`team_msgs_${teamId}`);
-                if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        this.teamMessagesCache.set(teamId, parsed);
-                        return { messages: parsed, hasMore: false };
+        if (canUseCache) {
+            // 先检查内存缓存
+            const cached = this.teamMessagesCache.get(teamId);
+            if (cached && cached.length > 0) {
+                return {
+                    messages: cached,
+                    hasMore: false
+                };
+            }
+
+            // Restore from sessionStorage if available (survives page refresh, not app close)
+            try {
+                if (typeof sessionStorage !== 'undefined') {
+                    const stored = sessionStorage.getItem(`team_msgs_${teamId}`);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            this.teamMessagesCache.set(teamId, parsed);
+                            return { messages: parsed, hasMore: false };
+                        }
                     }
                 }
-            }
-        } catch { /* ignore */ }
+            } catch { /* ignore */ }
+        }
 
         try {
             const fetchMessages = async () => {
-                const response = await apiSocket.request(`/v1/teams/${teamId}/messages`);
+                const query = new URLSearchParams();
+                if (typeof options?.limit === 'number') {
+                    query.set('limit', String(options.limit));
+                }
+                if (options?.before) {
+                    query.set('before', options.before);
+                }
+
+                const response = await apiSocket.request(
+                    `/v1/teams/${teamId}/messages${query.toString() ? `?${query}` : ''}`
+                );
 
                 if (!response.ok) {
                     const text = await response.text();
@@ -3541,16 +3586,23 @@ class Sync {
                 }
 
                 const data = await response.json();
-                return data.messages || [];
+                return {
+                    messages: Array.isArray(data.messages) ? data.messages : [],
+                    hasMore: Boolean(data.hasMore),
+                    cursor: typeof data.cursor === 'string' ? data.cursor : undefined,
+                };
             };
 
-            const messages = await this.withTeamRecovery(teamId, fetchMessages);
+            const result = await this.withTeamRecovery(teamId, fetchMessages);
 
-            this.teamMessagesCache.set(teamId, messages);
+            if (!options?.before) {
+                this.teamMessagesCache.set(teamId, result.messages);
+            }
 
             return {
-                messages,
-                hasMore: false
+                messages: result.messages,
+                hasMore: result.hasMore,
+                ...(result.cursor ? { cursor: result.cursor } : {}),
             };
         } catch (error) {
             console.error('Failed to fetch team messages:', error);
