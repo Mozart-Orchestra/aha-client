@@ -70,14 +70,15 @@ describe('sidebarAgentIdentity', () => {
         });
     });
 
-    it('maps gstack and legacy role ids to canonical genome candidates', () => {
+    it('maps gstack and legacy role ids directly to canonical genome candidates', () => {
         expect(resolveSidebarGenomeRoleCandidates('product-strategist')).toEqual([
-            'product-strategist',
             'gstack-product-strategist',
         ]);
         expect(resolveSidebarGenomeRoleCandidates('builder')).toEqual([
-            'builder',
             'implementer',
+        ]);
+        expect(resolveSidebarGenomeRoleCandidates('run-analyst')).toEqual([
+            'gstack-retro-analyst',
         ]);
     });
 

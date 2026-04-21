@@ -8,6 +8,7 @@ import { trackLogout } from '@/track';
 import { bootstrapRecoveryMaterial, signOutSupabase } from '@/auth/supabaseAuth';
 import { fetchInvitationStatus } from '@/auth/invitationStatus';
 import { invalidateHubToken } from '@/utils/hubToken';
+import { isInvitationGateEnabled } from '@/auth/invitationGate';
 
 /** null = unknown yet (still loading), true/false = server answer */
 export type InvitationState = boolean | null;
@@ -27,11 +28,34 @@ export type RestoreReason = 'restore_required' | 'secret_mismatch' | 'recovery_n
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children, initialCredentials }: { children: ReactNode; initialCredentials: AuthCredentials | null }) {
+    const invitationGateEnabled = isInvitationGateEnabled();
     const [isAuthenticated, setIsAuthenticated] = useState(!!initialCredentials);
     const [credentials, setCredentials] = useState<AuthCredentials | null>(initialCredentials);
-    const [invitationVerified, setInvitationVerified] = useState<InvitationState>(null);
+    const [invitationVerified, setInvitationVerified] = useState<InvitationState>(
+        invitationGateEnabled ? initialCredentials?.invitationVerified ?? null : true,
+    );
     const bootstrappedRecoveryRef = React.useRef<string | null>(null);
     const credentialsRef = React.useRef<AuthCredentials | null>(initialCredentials);
+
+    const persistInvitationState = React.useCallback(async (nextInvitationState: InvitationState) => {
+        const currentCredentials = credentialsRef.current;
+        if (!currentCredentials) {
+            return;
+        }
+
+        const updatedCredentials: AuthCredentials = {
+            ...currentCredentials,
+            invitationVerified: nextInvitationState,
+        };
+
+        const success = await TokenStorage.setCredentials(updatedCredentials);
+        if (!success) {
+            throw new Error('Failed to persist invitation state');
+        }
+
+        credentialsRef.current = updatedCredentials;
+        setCredentials(updatedCredentials);
+    }, []);
 
     // Update global auth state when local state changes
     useEffect(() => {
@@ -78,7 +102,12 @@ export function AuthProvider({ children, initialCredentials }: { children: React
     }, []);
 
     const login = async (token: string, secret: string, invitationHint?: InvitationState) => {
-        const newCredentials: AuthCredentials = { token, secret };
+        const nextInvitationState = invitationGateEnabled ? invitationHint ?? null : true;
+        const newCredentials: AuthCredentials = {
+            token,
+            secret,
+            invitationVerified: nextInvitationState,
+        };
         const success = await TokenStorage.setCredentials(newCredentials);
         if (success) {
             if (isAuthenticated) {
@@ -95,7 +124,9 @@ export function AuthProvider({ children, initialCredentials }: { children: React
 
             // Seed invitation state from the login response when the server told us;
             // otherwise leave it unknown so the gate refresh picks it up.
-            if (invitationHint !== undefined) {
+            if (!invitationGateEnabled) {
+                setInvitationVerified(true);
+            } else if (invitationHint !== undefined) {
                 setInvitationVerified(invitationHint);
             } else {
                 setInvitationVerified(null);
@@ -103,16 +134,25 @@ export function AuthProvider({ children, initialCredentials }: { children: React
             // Force-refresh from source of truth once we have a token to carry.
             // Errors are caught here to prevent unhandled rejections; the internal
             // function already sets invitationVerified=false on failure.
-            refreshInvitationStatusInternal(token).catch(() => { /* state already set to false */ });
+            if (invitationGateEnabled) {
+                refreshInvitationStatusInternal(token).catch(() => { /* state already set to false */ });
+            }
         } else {
             throw new Error('Failed to save credentials');
         }
     };
 
     const refreshInvitationStatusInternal = async (token: string) => {
+        if (!invitationGateEnabled) {
+            setInvitationVerified(true);
+            await persistInvitationState(true);
+            return;
+        }
+
         try {
             const status = await fetchInvitationStatus(token);
             setInvitationVerified(status.verified);
+            await persistInvitationState(status.verified);
         } catch {
             // Server unreachable — keep current state instead of forcing
             // the user back to the invitation screen on transient failures.
@@ -120,6 +160,12 @@ export function AuthProvider({ children, initialCredentials }: { children: React
     };
 
     const refreshInvitationStatus = async () => {
+        if (!invitationGateEnabled) {
+            setInvitationVerified(true);
+            await persistInvitationState(true);
+            return;
+        }
+
         const token = credentialsRef.current?.token;
         if (!token) return;
         await refreshInvitationStatusInternal(token);
@@ -127,13 +173,23 @@ export function AuthProvider({ children, initialCredentials }: { children: React
 
     const markInvitationVerified = () => {
         setInvitationVerified(true);
+        persistInvitationState(true).catch(() => {
+            // Keep optimistic UI state even if local persistence fails.
+        });
     };
 
     // When credentials rehydrate from storage at app boot, check server state.
     useEffect(() => {
         const token = credentials?.token;
         if (!token) {
-            setInvitationVerified(null);
+            setInvitationVerified(invitationGateEnabled ? null : true);
+            return;
+        }
+        if (!invitationGateEnabled) {
+            setInvitationVerified(true);
+            if (credentials.invitationVerified !== true) {
+                persistInvitationState(true).catch(() => { /* keep unlocked locally */ });
+            }
             return;
         }
         if (invitationVerified === null) {

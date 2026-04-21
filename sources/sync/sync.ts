@@ -273,6 +273,10 @@ class Sync {
     // Team messaging
     private teamMessagesCache = new Map<string, import('@/sync/teamMessageTypes').TeamMessage[]>();
     private teamMessageSubscriptions = new Map<string, Set<(message: import('@/sync/teamMessageTypes').TeamMessage) => void>>();
+    private missingSessionMessageIds = new Set<string>();
+    private missingArtifactIds = new Set<string>();
+    private readableSessionMessageIds = new Set<string>();
+    private hasLoadedReadableSessionMessageIds = false;
 
     // Task events (Server-Driven Task Orchestration)
     private taskEventSubscriptions = new Map<string, Set<(event: { type: 'task-created' | 'task-updated' | 'task-deleted'; teamId: string; taskId: string; task?: any }) => void>>();
@@ -334,6 +338,7 @@ class Sync {
     }
 
     async create(credentials: AuthCredentials, encryption: Encryption) {
+        this.resetSessionMessageState();
         this.credentials = credentials;
         this.encryption = encryption;
         this.anonID = encryption.anonID;
@@ -351,6 +356,7 @@ class Sync {
     }
 
     async restore(credentials: AuthCredentials, encryption: Encryption) {
+        this.resetSessionMessageState();
         // NOTE: No awaiting anything here, we're restoring from a disk (ie app restarted)
         this.credentials = credentials;
         this.encryption = encryption;
@@ -403,6 +409,15 @@ class Sync {
 
 
     onSessionVisible = (sessionId: string) => {
+        if (!this.canReadSessionMessages(sessionId)) {
+            this.missingSessionMessageIds.add(sessionId);
+            return;
+        }
+
+        if (this.missingSessionMessageIds.has(sessionId)) {
+            return;
+        }
+
         let ex = this.messagesSync.get(sessionId);
         if (!ex) {
             ex = new InvalidateSync(() => this.fetchMessages(sessionId));
@@ -850,6 +865,23 @@ class Sync {
             persistedMessageCount?: number;
         }>;
 
+        const readableSessionMessageIds = new Set(sessions.map((session) => session.id));
+        this.readableSessionMessageIds = readableSessionMessageIds;
+        this.hasLoadedReadableSessionMessageIds = true;
+
+        for (const sessionId of readableSessionMessageIds) {
+            this.missingSessionMessageIds.delete(sessionId);
+        }
+
+        for (const [sessionId, sessionSync] of this.messagesSync.entries()) {
+            if (readableSessionMessageIds.has(sessionId)) {
+                continue;
+            }
+            sessionSync.stop();
+            this.messagesSync.delete(sessionId);
+            this.missingSessionMessageIds.add(sessionId);
+        }
+
         // Initialize all session encryptions first
         const sessionKeys = new Map<string, Uint8Array | null>();
         const results = await Promise.allSettled(
@@ -1127,6 +1159,9 @@ class Sync {
             }
 
             storage.getState().applyArtifacts(decryptedArtifacts);
+            for (const artifact of decryptedArtifacts) {
+                this.missingArtifactIds.delete(artifact.id);
+            }
             log.log('📦 fetchArtifactsList: Artifacts applied to storage');
             // Rebuild deduplication cache from fetched artifacts instead of clearing.
             // Clearing would allow syncSessionToTeam to re-add already-synced members,
@@ -1159,9 +1194,13 @@ class Sync {
 
     public async fetchArtifactWithBody(artifactId: string): Promise<DecryptedArtifact | null> {
         if (!this.credentials) return null;
+        if (this.missingArtifactIds.has(artifactId)) {
+            return null;
+        }
 
         try {
             const artifact = await fetchArtifact(this.credentials, artifactId);
+            this.missingArtifactIds.delete(artifactId);
 
             const plaintextTeamArtifact = resolvePlaintextTeamArtifact(artifact);
             if (plaintextTeamArtifact) {
@@ -1238,6 +1277,7 @@ class Sync {
             const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
             if (message.includes('artifact not found')) {
                 console.warn(`Artifact ${artifactId} not found on server (404). Deleting locally.`);
+                this.missingArtifactIds.add(artifactId);
                 storage.getState().deleteArtifact(artifactId);
             }
             return null;
@@ -1259,6 +1299,7 @@ class Sync {
         try {
             // Use provided ID or generate new unique artifact ID
             const artifactId = existingId || this.encryption.generateId();
+            this.missingArtifactIds.delete(artifactId);
 
             // Generate data encryption key
             const dataEncryptionKey = ArtifactEncryption.generateDataEncryptionKey();
@@ -2136,6 +2177,9 @@ class Sync {
         if (!this.credentials) {
             return false;
         }
+        if (this.missingArtifactIds.has(teamId)) {
+            return false;
+        }
 
         try {
             await fetchArtifact(this.credentials, teamId);
@@ -2147,6 +2191,10 @@ class Sync {
         }
 
         const localArtifact = storage.getState().artifacts[teamId];
+        if (!localArtifact) {
+            this.missingArtifactIds.add(teamId);
+            return false;
+        }
         const title = localArtifact?.title ?? 'Team';
         let body = localArtifact?.body ?? null;
 
@@ -2403,6 +2451,11 @@ class Sync {
     private fetchMessages = async (sessionId: string) => {
         log.log(`💬 fetchMessages starting for session ${sessionId} - acquiring lock`);
 
+        if (!this.canReadSessionMessages(sessionId)) {
+            this.missingSessionMessageIds.add(sessionId);
+            return;
+        }
+
         // Get encryption
         const encryption = this.encryption.getSessionEncryption(sessionId);
         if (!encryption) { // Should never happen
@@ -2413,6 +2466,7 @@ class Sync {
         // Request
         const response = await apiSocket.request(`/v1/sessions/${sessionId}/messages`);
         if (stopMissingSessionMessageSync(this.messagesSync, sessionId, response.status)) {
+            this.missingSessionMessageIds.add(sessionId);
             // Do NOT throw here. sync.stop() already set _stopped=true, so InvalidateSync._doSync
             // will detect the stopped state and exit cleanly without retrying.
             return;
@@ -2420,6 +2474,7 @@ class Sync {
         if (!response.ok) {
             throw new Error(`Failed to fetch messages for session ${sessionId}: ${response.status}`);
         }
+        this.missingSessionMessageIds.delete(sessionId);
         const data = await response.json();
         const persistedMessageCount = typeof data.totalCount === 'number' ? data.totalCount : undefined;
 
@@ -2466,6 +2521,24 @@ class Sync {
             storage.getState().setSessionPersistedMessageCount(sessionId, persistedMessageCount);
         }
         log.log(`💬 fetchMessages completed for session ${sessionId} - processed ${normalizedMessages.length} messages`);
+    }
+
+    private canReadSessionMessages(sessionId: string): boolean {
+        if (!this.hasLoadedReadableSessionMessageIds) {
+            return true;
+        }
+        return this.readableSessionMessageIds.has(sessionId);
+    }
+
+    private resetSessionMessageState(): void {
+        for (const sync of this.messagesSync.values()) {
+            sync.stop();
+        }
+        this.messagesSync.clear();
+        this.sessionReceivedMessages.clear();
+        this.missingSessionMessageIds.clear();
+        this.readableSessionMessageIds.clear();
+        this.hasLoadedReadableSessionMessageIds = false;
     }
 
     private registerPushToken = async () => {

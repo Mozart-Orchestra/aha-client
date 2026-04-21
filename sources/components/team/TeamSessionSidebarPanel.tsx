@@ -106,7 +106,7 @@ export const TeamSessionSidebarPanel = React.memo(({
                     sortIndex: index,
                     avatarLabel: (displayName || '?').slice(0, 1),
                     avatarColor: roleVisual.avatarBackground,
-                    specId: member?.specId,
+                    specId: member?.sourceImageId ?? member?.genomeId ?? member?.specId,
                 };
             })
             .sort((left, right) => compareTeamRosterEntries(

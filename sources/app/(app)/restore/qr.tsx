@@ -61,7 +61,7 @@ export default memo(function RestoreQR() {
 
                 if (credentials && !isCancelledRef.current) {
                     const secretString = encodeBase64(credentials.secret, 'base64url');
-                    await auth.login(credentials.token, secretString);
+                    await auth.login(credentials.token, secretString, credentials.invitationVerified ?? null);
                     if (!isCancelledRef.current) {
                         router.back();
                     }

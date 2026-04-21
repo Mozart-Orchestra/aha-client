@@ -141,7 +141,7 @@ describe('RestoreQR', () => {
         expect(mockAuthQRStart).toHaveBeenCalledWith(STUB_KEYPAIR);
     });
 
-    it('should call auth.login and router.back when QR auth succeeds', async () => {
+    it('should call auth.login with a null invitation hint and router.back when QR auth succeeds', async () => {
         const credentials = { secret: new Uint8Array(32).fill(3), token: 'tok-123' };
         mockAuthQRStart.mockResolvedValue(true);
         mockAuthQRWait.mockResolvedValue(credentials);
@@ -153,7 +153,27 @@ describe('RestoreQR', () => {
         });
 
         expect(mockLogin).toHaveBeenCalledTimes(1);
-        expect(mockLogin).toHaveBeenCalledWith('tok-123', expect.stringContaining('mock-encoded'));
+        expect(mockLogin).toHaveBeenCalledWith('tok-123', expect.stringContaining('mock-encoded'), null);
+        expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    });
+
+    it('should forward invitationVerified to auth.login when QR auth returns it', async () => {
+        const credentials = {
+            secret: new Uint8Array(32).fill(4),
+            token: 'tok-invite',
+            invitationVerified: true,
+        };
+        mockAuthQRStart.mockResolvedValue(true);
+        mockAuthQRWait.mockResolvedValue(credentials);
+
+        renderQR();
+
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        });
+
+        expect(mockLogin).toHaveBeenCalledTimes(1);
+        expect(mockLogin).toHaveBeenCalledWith('tok-invite', expect.stringContaining('mock-encoded'), true);
         expect(mockRouterBack).toHaveBeenCalledTimes(1);
     });
 

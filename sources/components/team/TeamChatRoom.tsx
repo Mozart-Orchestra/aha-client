@@ -42,10 +42,12 @@ import { pushSessionRoute } from '@/utils/returnNavigation';
 import { buildMentionChipAccessibilityLabel, buildMentionChipLabel, buildMentionFlowAccessibilityLabel, buildMentionFlowLabel } from '@/utils/teamMentionSummary';
 import { trackTeamChatSent } from '@/track';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
-import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages, shouldShowScrollToLatestButton } from './teamChatRoomList';
+import { resolveWebInvertedListAnchorAdjustment, type WebInvertedListAnchorSnapshot } from '@/utils/invertedListAnchor';
+import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMessages, shouldLoadOlderMessages, shouldShowScrollToLatestButton } from './teamChatRoomList';
 
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
+const TEAM_CHAT_PAGE_SIZE = 50;
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
@@ -76,6 +78,16 @@ const stylesheet = StyleSheet.create((theme) => ({
     messageListContent: {
         padding: 16,
         paddingBottom: 24,
+    },
+    historyLoadIndicator: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 8,
+        paddingBottom: 12,
+    },
+    historyLoadIndicatorText: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
     },
     scrollToLatestContainer: {
         alignItems: 'flex-end',
@@ -1488,7 +1500,15 @@ export default function TeamChatRoom({
     const styles = stylesheet;
     const messageListRef = React.useRef<FlatList<TeamMessage>>(null);
     const isNearBottomRef = React.useRef(true);  // Track if user is near bottom for auto-scroll
+    const currentOffsetYRef = React.useRef(0);
+    const contentHeightRef = React.useRef(0);
+    const viewportHeightRef = React.useRef(0);
+    const historyLoadInFlightRef = React.useRef(false);
+    const pendingWebAnchorSnapshotRef = React.useRef<WebInvertedListAnchorSnapshot | null>(null);
     const [showScrollToLatestButton, setShowScrollToLatestButton] = React.useState(false);
+    const [historyCursor, setHistoryCursor] = React.useState<string | null>(null);
+    const [hasMoreHistory, setHasMoreHistory] = React.useState(false);
+    const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
 
     // Inverted FlatList: offset 0 is the bottom (latest message). Jumping to
     // the latest message is a single scrollToOffset call — no retry loop.
@@ -1502,6 +1522,9 @@ export default function TeamChatRoom({
     // 🆕 使用外部 messages（如果提供），否则使用内部状态
     const [internalMessages, setInternalMessages] = React.useState<TeamMessage[]>([]);
     const messages = externalMessages ?? internalMessages;
+    const teamMessages = React.useMemo(() => {
+        return messages.filter(message => message.teamId === teamId);
+    }, [messages, teamId]);
     const messagesRef = React.useRef<TeamMessage[]>(messages);
     const messageIdsRef = React.useRef<Set<string>>(new Set());
 
@@ -1526,8 +1549,8 @@ export default function TeamChatRoom({
     }, [setMessages]);
 
     React.useEffect(() => {
-        messageIdsRef.current = new Set(messages.map(message => message.id));
-    }, [messages]);
+        messageIdsRef.current = new Set(teamMessages.map(message => message.id));
+    }, [teamMessages]);
 
     const [inputText, setInputText] = React.useState('');
     const [inputSelection, setInputSelection] = React.useState<{ start: number; end: number }>({ start: 0, end: 0 });
@@ -2235,8 +2258,8 @@ export default function TeamChatRoom({
 
     // Deduplicate and sort chronologically (oldest → newest).
     const uniqueMessages = React.useMemo(() => {
-        return dedupeAndSortTeamMessages(messages);
-    }, [messages]);
+        return dedupeAndSortTeamMessages(teamMessages);
+    }, [teamMessages]);
 
     // Inverted FlatList consumes newest-first data; reverse once per change.
     const invertedMessages = React.useMemo(() => {
@@ -2245,19 +2268,120 @@ export default function TeamChatRoom({
 
     React.useEffect(() => {
         isNearBottomRef.current = true;
+        currentOffsetYRef.current = 0;
+        contentHeightRef.current = 0;
+        viewportHeightRef.current = 0;
+        historyLoadInFlightRef.current = false;
+        pendingWebAnchorSnapshotRef.current = null;
         setShowScrollToLatestButton(false);
+        setHistoryCursor(null);
+        setHasMoreHistory(false);
+        setIsLoadingHistory(false);
     }, [teamId]);
+
+    const queuePendingWebAnchor = React.useCallback((wasNearBottom: boolean) => {
+        if (Platform.OS !== 'web') {
+            return;
+        }
+
+        pendingWebAnchorSnapshotRef.current = {
+            previousContentHeight: contentHeightRef.current,
+            previousOffsetY: currentOffsetYRef.current,
+            wasNearBottom,
+        };
+    }, []);
+
+    const applyPendingWebAnchor = React.useCallback((nextContentHeight: number) => {
+        if (Platform.OS !== 'web') {
+            return;
+        }
+
+        const snapshot = pendingWebAnchorSnapshotRef.current;
+        if (!snapshot) {
+            return;
+        }
+
+        pendingWebAnchorSnapshotRef.current = null;
+        const adjustment = resolveWebInvertedListAnchorAdjustment(snapshot, nextContentHeight);
+        if (adjustment.type === 'none') {
+            return;
+        }
+
+        requestAnimationFrame(() => {
+            if (adjustment.type === 'scroll_to_latest') {
+                scrollToBottom(false);
+                return;
+            }
+
+            messageListRef.current?.scrollToOffset({
+                offset: adjustment.offset,
+                animated: false,
+            });
+        });
+    }, [scrollToBottom]);
+
+    const loadOlderMessages = React.useCallback(async () => {
+        if (!historyCursor || !hasMoreHistory || historyLoadInFlightRef.current) {
+            return;
+        }
+
+        if (!shouldLoadOlderMessages({
+            hasMore: hasMoreHistory,
+            isLoading: historyLoadInFlightRef.current,
+            offsetY: currentOffsetYRef.current,
+            contentHeight: contentHeightRef.current,
+            viewportHeight: viewportHeightRef.current,
+        })) {
+            return;
+        }
+
+        historyLoadInFlightRef.current = true;
+        setIsLoadingHistory(true);
+
+        try {
+            const result = await sync.getTeamMessages(teamId, {
+                limit: TEAM_CHAT_PAGE_SIZE,
+                before: historyCursor,
+                useCache: false,
+            });
+
+            setMessages(prev => mergeTeamMessages(prev, result.messages, null));
+
+            const nextCursor = typeof result.cursor === 'string' ? result.cursor : null;
+            const nextHasMore = result.messages.length > 0 && result.hasMore && !!nextCursor && nextCursor !== historyCursor;
+            setHistoryCursor(nextHasMore ? nextCursor : null);
+            setHasMoreHistory(nextHasMore);
+        } catch (error) {
+            console.error('Failed to load older team messages:', error);
+        } finally {
+            historyLoadInFlightRef.current = false;
+            setIsLoadingHistory(false);
+        }
+    }, [hasMoreHistory, historyCursor, setMessages, teamId]);
 
     const loadMessages = React.useCallback(async () => {
         try {
             setIsLoading(true);
-            const result = await sync.getTeamMessages(teamId);
+            const result = await sync.getTeamMessages(teamId, {
+                limit: TEAM_CHAT_PAGE_SIZE,
+                useCache: false,
+            });
 
-            setMessages(prev => mergeTeamMessages(prev, result.messages));
+            setMessages(prev => mergeTeamMessages(
+                prev.filter(message => message.teamId === teamId),
+                result.messages,
+                null
+            ));
+
+            const nextCursor = typeof result.cursor === 'string' ? result.cursor : null;
+            const nextHasMore = result.messages.length > 0 && result.hasMore && !!nextCursor;
+            setHistoryCursor(nextHasMore ? nextCursor : null);
+            setHasMoreHistory(nextHasMore);
 
             // Inverted FlatList renders bottom-anchored by default after a data
             // change; no explicit scroll is required on first load.
             isNearBottomRef.current = true;
+            currentOffsetYRef.current = 0;
             setShowScrollToLatestButton(false);
         } catch (error) {
             Modal.alert(t('common.error'), t('errors.networkError'), [{ text: t('common.ok'), style: 'cancel' }]);
@@ -2270,6 +2394,22 @@ export default function TeamChatRoom({
     React.useEffect(() => {
         void loadMessages();
     }, [loadMessages]);
+
+    const renderHistoryLoader = React.useCallback(() => {
+        if (!isLoadingHistory && !hasMoreHistory) {
+            return null;
+        }
+
+        return (
+            <View style={styles.historyLoadIndicator}>
+                {isLoadingHistory ? (
+                    <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                ) : (
+                    <Text style={styles.historyLoadIndicatorText}>Load older messages</Text>
+                )}
+            </View>
+        );
+    }, [hasMoreHistory, isLoadingHistory, styles.historyLoadIndicator, styles.historyLoadIndicatorText, theme.colors.textSecondary]);
 
     // Inverted FlatList stays anchored at offset=0 automatically when new items
     // are prepended to the head of the data array, so we no longer need an
@@ -2284,16 +2424,19 @@ export default function TeamChatRoom({
             try {
                 const unsubscribe = await sync.subscribeToTeamMessages(teamId, (message) => {
                     const shouldAutoScroll = isNearBottomRef.current;
+                    if (messageIdsRef.current.has(message.id)) {
+                        return;
+                    }
+                    queuePendingWebAnchor(shouldAutoScroll);
                     setMessages(prev => {
-                        if (messageIdsRef.current.has(message.id)) {
-                            return prev;
-                        }
                         messageIdsRef.current.add(message.id);
                         return appendTeamMessage(prev, message);
                     });
                     if (shouldAutoScroll) {
                         setShowScrollToLatestButton(false);
-                        scrollToBottom(true);
+                        if (Platform.OS !== 'web') {
+                            scrollToBottom(true);
+                        }
                     }
                 });
 
@@ -2663,10 +2806,13 @@ export default function TeamChatRoom({
                 ...(messageMetadata ? { metadata: messageMetadata } : {}),
             };
             messageIdsRef.current.add(messageId);
+            queuePendingWebAnchor(true);
             setMessages(prev => appendTeamMessage(prev, optimisticMsg));
             isNearBottomRef.current = true;
             setShowScrollToLatestButton(false);
-            scrollToBottom(true);
+            if (Platform.OS !== 'web') {
+                scrollToBottom(true);
+            }
             setInputText('');
 
             await sync.sendTeamMessage(request);
@@ -2837,6 +2983,7 @@ export default function TeamChatRoom({
                 keyExtractor={(message) => message.id}
                 renderItem={renderMessageItem}
                 ListEmptyComponent={renderEmptyState}
+                ListFooterComponent={renderHistoryLoader}
                 contentContainerStyle={[
                     styles.messageListContent,
                     isEdzlf && { paddingHorizontal: 26, paddingTop: 22, paddingBottom: 24 },
@@ -2847,14 +2994,31 @@ export default function TeamChatRoom({
                 windowSize={10}
                 removeClippedSubviews={Platform.OS !== 'web'}
                 keyboardShouldPersistTaps="handled"
+                maintainVisibleContentPosition={Platform.OS !== 'web' ? {
+                    minIndexForVisible: 0,
+                    autoscrollToTopThreshold: 100,
+                } : undefined}
+                onLayout={(event) => {
+                    viewportHeightRef.current = event.nativeEvent.layout.height;
+                    void loadOlderMessages();
+                }}
+                onContentSizeChange={(_, contentHeight) => {
+                    contentHeightRef.current = contentHeight;
+                    applyPendingWebAnchor(contentHeight);
+                    void loadOlderMessages();
+                }}
                 // Inverted list: offset=0 means the user is at the latest message.
                 onScroll={(event) => {
                     const offsetY = event.nativeEvent.contentOffset.y;
+                    currentOffsetYRef.current = offsetY;
+                    contentHeightRef.current = event.nativeEvent.contentSize.height;
+                    viewportHeightRef.current = event.nativeEvent.layoutMeasurement.height;
                     isNearBottomRef.current = isNearBottom(offsetY);
                     setShowScrollToLatestButton(shouldShowScrollToLatestButton({
                         messageCount: invertedMessages.length,
                         offsetY,
                     }));
+                    void loadOlderMessages();
                 }}
                 scrollEventThrottle={16}
             />

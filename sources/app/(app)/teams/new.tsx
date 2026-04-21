@@ -18,7 +18,7 @@ import { SidebarView } from '@/components/layout/SidebarView';
 import { DESKTOP_BREAKPOINT } from '@/navigation/navigationConfig';
 import { useEscapeAction } from '@/hooks/useEscapeAction';
 import { goBackOrReturn } from '@/utils/returnNavigation';
-import { fetchGenomeByName } from '@/utils/genomeHub';
+import { resolvePreferredGenomeForRole } from '@/utils/genomeHub';
 import { randomUUID } from '@/utils/uuid';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getConcatenatedPathErrorMessage } from '@/utils/workingDirectory';
@@ -866,7 +866,8 @@ export default function NewTeamScreen() {
                         const roleId = 'org-manager';
                         const agentTitle = 'Org-manager 1';
                         try {
-                            const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
+                            const orgManagerRuntime = promptAgentPreference === 'codex' ? 'codex' : 'claude';
+                            const orgManagerGenome = await resolvePreferredGenomeForRole('org-manager', orgManagerRuntime).catch(() => null);
                             const memberId = randomUUID();
                             const sessionTag = buildTeamMemberSessionTag(room.id, memberId);
                             const sessionId = await desktopBridge.startAgentSession({
@@ -993,7 +994,8 @@ export default function NewTeamScreen() {
                         const sessionTag = buildTeamMemberSessionTag(artifactId, memberId);
 
                         if (targetMachine?.active && resolvedCwd) {
-                            const orgManagerGenome = await fetchGenomeByName('@official', 'org-manager').catch(() => null);
+                            const orgManagerRuntime = promptAgentPreference === 'codex' ? 'codex' : 'claude';
+                            const orgManagerGenome = await resolvePreferredGenomeForRole('org-manager', orgManagerRuntime).catch(() => null);
                             placeholderMembers.push({
                                 memberId,
                                 sessionTag,
@@ -1026,7 +1028,7 @@ export default function NewTeamScreen() {
                             let roleSpecId: string | undefined;
                             let roleImageVersion: number | undefined;
                             try {
-                                const roleGenome = await fetchGenomeByName('@official', roleId);
+                                const roleGenome = await resolvePreferredGenomeForRole(roleId, getRoleAgentType(roleId));
                                 roleSpecId = roleGenome?.id;
                                 roleImageVersion = roleGenome?.version;
                             } catch { /* genome-hub unreachable — proceed without specId */ }
@@ -1089,13 +1091,63 @@ export default function NewTeamScreen() {
 
                 // Register team artifact FIRST (artifact-first pattern)
                 const updatedBody = JSON.stringify(board, null, 2);
-                await sync.registerTeam({
+                const provisionalArtifactId = artifactId;
+                const createdTeam = await sync.registerTeam({
                     id: artifactId,
                     name: title.trim(),
                     ...(target.trim() ? { description: target.trim() } : {}),
                     board: JSON.parse(updatedBody) as KanbanBoard,
                 });
+                artifactId = createdTeam.id;
                 await sync.fetchArtifactWithBody(artifactId);
+
+                if (artifactId !== provisionalArtifactId && placeholderMembers.length > 0) {
+                    placeholderMembers.forEach((pm) => {
+                        const nextSessionTag = buildTeamMemberSessionTag(artifactId, pm.memberId);
+                        pm.sessionTag = nextSessionTag;
+                        pm.spawnParams = [
+                            pm.spawnParams[0],
+                            {
+                                ...pm.spawnParams[1],
+                                teamId: artifactId,
+                                sessionTag: nextSessionTag,
+                            },
+                        ];
+                    });
+
+                    const canonicalPendingMembers = placeholderMembers.map((pm) => ({
+                        memberId: pm.memberId,
+                        sessionId: '',
+                        sessionTag: pm.sessionTag,
+                        roleId: pm.roleId,
+                        displayName: pm.displayName,
+                        ...(pm.specId ? { specId: pm.specId } : {}),
+                        ...(pm.sourceImageId ? { sourceImageId: pm.sourceImageId } : {}),
+                        ...(pm.sourceImageVersion !== undefined ? { sourceImageVersion: pm.sourceImageVersion } : {}),
+                        lifecycle: buildPendingSpawnLifecycle(),
+                    }));
+
+                    const canonicalBoard: KanbanBoard = {
+                        ...board,
+                        team: {
+                            ...board.team,
+                            members: [...manualMembers, ...canonicalPendingMembers],
+                        },
+                    };
+
+                    const canonicalArtifact = storage.getState().artifacts[artifactId];
+                    if (canonicalArtifact) {
+                        await sync.updateArtifact(
+                            artifactId,
+                            canonicalArtifact.title,
+                            JSON.stringify(canonicalBoard, null, 2),
+                            canonicalArtifact.sessions,
+                            canonicalArtifact.draft,
+                            canonicalArtifact.type
+                        );
+                        await sync.fetchArtifactWithBody(artifactId);
+                    }
+                }
 
                 // Now spawn agents and collect results
                 for (const pm of placeholderMembers) {

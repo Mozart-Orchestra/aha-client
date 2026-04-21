@@ -126,7 +126,6 @@ export function resolveSidebarAgentImageRef(input: SidebarAgentImageRefInput): I
 }
 
 export function resolveSidebarGenomeRoleCandidates(value: string): string[] {
-    const trimmedValue = value.trim();
     const normalized = normalizeOfficialRoleCandidate(value);
     if (!normalized) {
         return [];
@@ -137,9 +136,7 @@ export function resolveSidebarGenomeRoleCandidates(value: string): string[] {
         return [];
     }
 
-    return Array.from(new Set([
-        trimmedValue,
-        normalized,
-        canonical,
-    ].filter(Boolean)));
+    // Sidebar score lookups are official-only. Query the canonical role directly so
+    // retired aliases do not generate guaranteed 404s before we reach the real image.
+    return [canonical];
 }

@@ -18,7 +18,7 @@ import type { ManualCorpsDraft, ManualCorpsPreset, ManualCorpsSeatConfig } from 
 import type { Machine } from '@/sync/storageTypes';
 import { getLocalizedTeamRoles } from '@/team-config/i18n';
 import { t } from '@/text';
-import { fetchGenomeByName, parseAgentVerdict, type GenomeRecord } from '@/utils/genomeHub';
+import { fetchGenomeByName, parseAgentVerdict, resolvePreferredGenomeForRole, type GenomeRecord } from '@/utils/genomeHub';
 import { resolveImageRef } from '@/utils/imageRef';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { getKnownPathsForMachine, getRecentPathForMachine, updateRecentMachinePaths } from '@/utils/machinePaths';
@@ -77,6 +77,23 @@ function buildSeatFromRole(
         workspacePath: defaults.workspacePath,
         quantity: 1,
         customPrompt: '',
+    };
+}
+
+function buildSeatGenomePatch(
+    role: RoleTemplate | undefined,
+    runtimeType: ManualCorpsSeatConfig['runtimeType'],
+    genome: GenomeRecord | null,
+): Partial<ManualCorpsSeatConfig> {
+    return {
+        runtimeType,
+        genomeId: genome?.id ?? null,
+        sourceImageId: genome?.id ?? null,
+        genomeName: genome?.name ?? role?.title ?? null,
+        genomeNamespace: genome?.namespace ?? '@official',
+        genomeVersion: genome?.version ?? null,
+        sourceImageVersion: genome?.version ?? null,
+        genomeDisplayName: genome?.name ?? role?.title ?? null,
     };
 }
 
@@ -237,6 +254,7 @@ function SeatCard({
     defaultMachineId,
     defaultWorkspacePath,
     onChange,
+    onRuntimeChange,
     onRemove,
     theme,
 }: {
@@ -247,6 +265,7 @@ function SeatCard({
     defaultMachineId: string | null;
     defaultWorkspacePath: string;
     onChange: (patch: Partial<ManualCorpsSeatConfig>) => void;
+    onRuntimeChange: (runtimeType: ManualCorpsSeatConfig['runtimeType']) => void;
     onRemove: () => void;
     theme: any;
 }) {
@@ -318,7 +337,7 @@ function SeatCard({
                                         backgroundColor: selected ? theme.colors.button.primary.background : theme.colors.surface,
                                     },
                                 ]}
-                                onPress={() => onChange({ runtimeType })}
+                                onPress={() => onRuntimeChange(runtimeType)}
                             >
                                 <Text style={[styles.runtimeChipText, { color: selected ? theme.colors.button.primary.tint : theme.colors.text }]}>
                                     {runtimeType === 'claude' ? 'Claude' : 'Codex'}
@@ -580,6 +599,19 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
             seats: current.seats.map((seat) => seat.id === seatId ? { ...seat, ...patch } : seat),
         }));
     }, []);
+
+    const handleSeatRuntimeChange = React.useCallback(async (
+        seat: ManualCorpsSeatConfig,
+        runtimeType: ManualCorpsSeatConfig['runtimeType'],
+    ) => {
+        if (seat.runtimeType === runtimeType) {
+            return;
+        }
+
+        const role = LOCALIZED_TEAM_ROLES.find((entry) => entry.id === seat.roleId);
+        const genome = await resolvePreferredGenomeForRole(seat.roleId, runtimeType).catch(() => null);
+        updateSeat(seat.id, buildSeatGenomePatch(role, runtimeType, genome));
+    }, [updateSeat]);
 
     const removeSeat = React.useCallback((seatId: string) => {
         setDraft((current) => ({
@@ -1064,6 +1096,7 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
                                             defaultMachineId={defaultMachineId}
                                             defaultWorkspacePath={defaultWorkspacePath}
                                             onChange={(patch) => updateSeat(seat.id, patch)}
+                                            onRuntimeChange={(runtimeType) => { void handleSeatRuntimeChange(seat, runtimeType); }}
                                             onRemove={() => removeSeat(seat.id)}
                                             theme={theme}
                                         />

@@ -230,7 +230,11 @@ export default function RootLayout() {
                     if (session?.access_token) {
                         try {
                             const result = await completeSupabaseSession(session.access_token);
-                            credentials = { token: result.token, secret: result.secretBase64 };
+                            credentials = {
+                                token: result.token,
+                                secret: result.secretBase64,
+                                invitationVerified: result.invitationVerified ?? null,
+                            };
                             await TokenStorage.setCredentials(credentials);
                         } catch (error) {
                             if (error instanceof SupabaseRestoreRequiredError) {

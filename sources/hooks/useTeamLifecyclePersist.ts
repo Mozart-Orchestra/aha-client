@@ -1,6 +1,6 @@
 import React from 'react';
 import { sync } from '@/sync/sync';
-import { applyDerivedLifecycleTimestamps } from '@/utils/teamLifecycle';
+import { buildDerivedLifecyclePersistPlan } from '@/utils/teamLifecycle';
 import type { DecryptedArtifact } from '@/sync/artifactTypes';
 import type { KanbanBoard } from '@/sync/kanbanTypes';
 import type { TeamMessage } from '@/sync/teamMessageTypes';
@@ -20,6 +20,7 @@ export function useTeamLifecyclePersist(
     allSessions: Session[],
 ): void {
     const lifecyclePersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastScheduledBodyRef = React.useRef<string | null>(null);
     // Use ref so allSessions reads the latest value without re-triggering the
     // effect — matching the original dep array: [artifact?.id, board, teamMessages].
     const allSessionsRef = React.useRef(allSessions);
@@ -38,33 +39,29 @@ export function useTeamLifecyclePersist(
             }
         }
 
-        const { members: nextMembers, changed } = applyDerivedLifecycleTimestamps(
-            board.team.members,
-            teamMessages,
+        const persistPlan = buildDerivedLifecyclePersistPlan({
+            board,
+            currentBody: artifact.body,
+            messages: teamMessages,
             processStartedBySessionId,
-        );
+            lastScheduledBody: lastScheduledBodyRef.current,
+        });
 
-        if (!changed) {
+        if (!persistPlan.shouldPersist || !persistPlan.nextBody) {
             return;
         }
-
-        const nextBoard: KanbanBoard = {
-            ...board,
-            team: {
-                ...board.team,
-                members: nextMembers,
-            },
-        };
 
         if (lifecyclePersistTimerRef.current) {
             clearTimeout(lifecyclePersistTimerRef.current);
         }
 
+        lastScheduledBodyRef.current = persistPlan.nextBody;
         lifecyclePersistTimerRef.current = setTimeout(() => {
+            lifecyclePersistTimerRef.current = null;
             sync.updateArtifact(
                 artifact.id,
                 artifact.title,
-                JSON.stringify(nextBoard, null, 2),
+                persistPlan.nextBody,
                 artifact.sessions,
                 artifact.draft,
                 artifact.type,
@@ -72,6 +69,7 @@ export function useTeamLifecyclePersist(
                 console.error('Failed to persist derived team lifecycle timestamps:', error);
             }).finally(() => {
                 lifecyclePersistTimerRef.current = null;
+                lastScheduledBodyRef.current = null;
             });
         }, 250);
 
@@ -79,6 +77,7 @@ export function useTeamLifecyclePersist(
             if (lifecyclePersistTimerRef.current) {
                 clearTimeout(lifecyclePersistTimerRef.current);
                 lifecyclePersistTimerRef.current = null;
+                lastScheduledBodyRef.current = null;
             }
         };
     // allSessions intentionally omitted — read via ref to preserve original dep array behaviour

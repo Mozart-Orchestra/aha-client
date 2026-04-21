@@ -7,6 +7,7 @@ import { decryptBox } from '@/encryption/libsodium';
 export interface AuthCredentials {
     secret: Uint8Array;
     token: string;
+    invitationVerified?: boolean | null;
 }
 
 export async function authQRWait(keypair: QRAuthKeyPair, onProgress?: (dots: number) => void, shouldCancel?: () => boolean): Promise<AuthCredentials | null> {
@@ -32,7 +33,8 @@ export async function authQRWait(keypair: QRAuthKeyPair, onProgress?: (dots: num
                     console.log('\n\n✓ Authentication successful\n');
                     return {
                         secret: decrypted,
-                        token: token
+                        token,
+                        invitationVerified: response.data.invitationVerified ?? null,
                     };
                 } else {
                     console.log('\n\nFailed to decrypt response. Please try again.');

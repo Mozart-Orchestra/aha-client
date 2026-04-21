@@ -8,6 +8,7 @@ import { isRunningOnMac } from '@/utils/platform';
 import { useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
 import { useAuth } from '@/auth/AuthContext';
+import { isInvitationGateEnabled } from '@/auth/invitationGate';
 
 export const unstable_settings = {
     initialRouteName: 'index',
@@ -20,6 +21,7 @@ export default function RootLayout() {
     const auth = useAuth();
     const router = useRouter();
     const pathname = usePathname();
+    const invitationGateEnabled = isInvitationGateEnabled();
 
     React.useEffect(() => {
         if (!auth.isAuthenticated && pathname !== '/') {
@@ -28,11 +30,11 @@ export default function RootLayout() {
         }
         // Invitation gate: block access to the app until the server says we are verified.
         // `null` means we haven't heard back yet — don't redirect, wait for refresh.
-        if (auth.isAuthenticated && auth.invitationVerified === false && pathname !== '/invitation') {
+        if (invitationGateEnabled && auth.isAuthenticated && auth.invitationVerified === false && pathname !== '/invitation') {
             // Typed-route cache may not include /invitation until `expo start` regenerates it.
             router.replace('/invitation' as any);
         }
-    }, [auth.isAuthenticated, auth.invitationVerified, pathname]);
+    }, [auth.isAuthenticated, auth.invitationVerified, invitationGateEnabled, pathname]);
 
     return (
         <Stack

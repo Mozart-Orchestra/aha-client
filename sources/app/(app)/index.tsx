@@ -29,6 +29,7 @@ import {
 } from '@/auth/supabaseAuth';
 import { resolveSupabaseEmailOtpEnabled } from '@/auth/supabaseConfig';
 import { supabase } from '@/auth/supabase';
+import { isInvitationGateEnabled } from '@/auth/invitationGate';
 import { SidebarView } from '@/components/layout/SidebarView';
 import { HomeMainPanel } from '@/components/layout/HomeMainPanel';
 import { MainView } from '@/components/layout/MainView';
@@ -41,6 +42,7 @@ import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
 const DESKTOP_BREAKPOINT = 1180;
 const LANDING_HERO_ARTWORK_ASPECT_RATIO = 2814 / 1536;
 const EMAIL_OTP_ENABLED = resolveSupabaseEmailOtpEnabled();
+const INVITATION_GATE_ENABLED = isInvitationGateEnabled();
 
 const styles = StyleSheet.create((theme) => ({
     shellContent: {
@@ -454,9 +456,13 @@ function NotAuthenticated() {
     const handleCreateAccount = React.useCallback(async () => {
         try {
             const secret = await getRandomBytesAsync(32);
-            const token = await authGetToken(secret, 'create');
-            if (token && secret) {
-                await auth.login(token, encodeBase64(secret, 'base64url'));
+            const authResult = await authGetToken(secret, 'create');
+            if (authResult.token && secret) {
+                await auth.login(
+                    authResult.token,
+                    encodeBase64(secret, 'base64url'),
+                    authResult.invitationVerified,
+                );
                 trackAccountCreated();
                 if (hasPendingTerminalConnectRequest()) {
                     router.replace('/terminal/connect');
@@ -552,7 +558,7 @@ function NotAuthenticated() {
                 router.replace('/terminal/connect');
                 return;
             }
-            if (invitationHint === false) {
+            if (INVITATION_GATE_ENABLED && invitationHint === false) {
                 router.replace('/invitation' as any);
             }
         } finally {

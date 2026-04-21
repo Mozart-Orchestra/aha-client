@@ -3,11 +3,11 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 // Hoisted mocks
-const mockApplyDerived = vi.hoisted(() => vi.fn());
+const mockBuildPersistPlan = vi.hoisted(() => vi.fn());
 const mockUpdateArtifact = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@/utils/teamLifecycle', () => ({
-    applyDerivedLifecycleTimestamps: mockApplyDerived,
+    buildDerivedLifecyclePersistPlan: mockBuildPersistPlan,
 }));
 
 vi.mock('@/sync/sync', () => ({
@@ -95,6 +95,13 @@ describe('useTeamLifecyclePersist', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.clearAllMocks();
+        mockBuildPersistPlan.mockReturnValue({
+            changed: false,
+            nextBoard: null,
+            nextBody: null,
+            shouldPersist: false,
+            reason: 'no-derived-change',
+        });
         consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: any) => {
             if (typeof message === 'string' && message.includes('react-test-renderer is deprecated')) {
                 return;
@@ -112,7 +119,7 @@ describe('useTeamLifecyclePersist', () => {
 
         act(() => { vi.runAllTimers(); });
 
-        expect(mockApplyDerived).not.toHaveBeenCalled();
+        expect(mockBuildPersistPlan).not.toHaveBeenCalled();
         expect(mockUpdateArtifact).not.toHaveBeenCalled();
     });
 
@@ -123,7 +130,7 @@ describe('useTeamLifecyclePersist', () => {
 
         act(() => { vi.runAllTimers(); });
 
-        expect(mockApplyDerived).not.toHaveBeenCalled();
+        expect(mockBuildPersistPlan).not.toHaveBeenCalled();
     });
 
     it('does nothing when board is null', () => {
@@ -131,7 +138,7 @@ describe('useTeamLifecyclePersist', () => {
 
         act(() => { vi.runAllTimers(); });
 
-        expect(mockApplyDerived).not.toHaveBeenCalled();
+        expect(mockBuildPersistPlan).not.toHaveBeenCalled();
     });
 
     it('does nothing when board has no team members', () => {
@@ -139,25 +146,43 @@ describe('useTeamLifecyclePersist', () => {
 
         act(() => { vi.runAllTimers(); });
 
-        expect(mockApplyDerived).not.toHaveBeenCalled();
+        expect(mockBuildPersistPlan).not.toHaveBeenCalled();
     });
 
-    it('does not call updateArtifact when changed=false', () => {
+    it('does not call updateArtifact when persist plan says not to persist', () => {
         const board = makeBoard(1);
-        mockApplyDerived.mockReturnValue({ members: board.team!.members, changed: false });
+        mockBuildPersistPlan.mockReturnValue({
+            changed: true,
+            nextBoard: board,
+            nextBody: JSON.stringify(board, null, 2),
+            shouldPersist: false,
+            reason: 'body-already-current',
+        });
 
         renderHook(() => useTeamLifecyclePersist(makeArtifact(), board, emptyMessages, emptySessions));
 
         act(() => { vi.runAllTimers(); });
 
-        expect(mockApplyDerived).toHaveBeenCalled();
+        expect(mockBuildPersistPlan).toHaveBeenCalled();
         expect(mockUpdateArtifact).not.toHaveBeenCalled();
     });
 
-    it('calls updateArtifact after 250ms debounce when changed=true', () => {
+    it('calls updateArtifact after 250ms debounce when persist plan requests it', () => {
         const board = makeBoard(1);
-        const updatedMembers = [{ sessionId: 'updated', role: 'builder', joinedAt: 9999 } as any];
-        mockApplyDerived.mockReturnValue({ members: updatedMembers, changed: true });
+        const nextBody = JSON.stringify({
+            ...board,
+            team: {
+                ...board.team,
+                members: [{ sessionId: 'updated', roleId: 'builder', joinedAt: 9999 }],
+            },
+        }, null, 2);
+        mockBuildPersistPlan.mockReturnValue({
+            changed: true,
+            nextBoard: board,
+            nextBody,
+            shouldPersist: true,
+            reason: 'persist',
+        });
 
         renderHook(() => useTeamLifecyclePersist(makeArtifact(), board, emptyMessages, emptySessions));
 
@@ -172,7 +197,7 @@ describe('useTeamLifecyclePersist', () => {
         expect(mockUpdateArtifact).toHaveBeenCalledWith(
             'artifact-1',
             'Team Artifact',
-            expect.stringContaining('"updated"'),
+            nextBody,
             ['s1'],
             false,
             'team',
@@ -181,7 +206,13 @@ describe('useTeamLifecyclePersist', () => {
 
     it('cleanup cancels pending timer on unmount', () => {
         const board = makeBoard(1);
-        mockApplyDerived.mockReturnValue({ members: board.team!.members, changed: true });
+        mockBuildPersistPlan.mockReturnValue({
+            changed: true,
+            nextBoard: board,
+            nextBody: JSON.stringify({ ...board, version: 2 }, null, 2),
+            shouldPersist: true,
+            reason: 'persist',
+        });
 
         const { unmount } = renderHook(() =>
             useTeamLifecyclePersist(makeArtifact(), board, emptyMessages, emptySessions)
@@ -197,7 +228,13 @@ describe('useTeamLifecyclePersist', () => {
 
     it('passes processStartedAt from allSessions to applyDerivedLifecycleTimestamps', () => {
         const board = makeBoard(1);
-        mockApplyDerived.mockReturnValue({ members: board.team!.members, changed: false });
+        mockBuildPersistPlan.mockReturnValue({
+            changed: false,
+            nextBoard: null,
+            nextBody: null,
+            shouldPersist: false,
+            reason: 'no-derived-change',
+        });
 
         const sessions: Session[] = [
             {
@@ -221,18 +258,26 @@ describe('useTeamLifecyclePersist', () => {
 
         act(() => { vi.runAllTimers(); });
 
-        expect(mockApplyDerived).toHaveBeenCalledWith(
-            board.team!.members,
-            emptyMessages,
-            expect.any(Map),
-        );
-        const passedMap: Map<string, number> = mockApplyDerived.mock.calls[0][2];
+        expect(mockBuildPersistPlan).toHaveBeenCalledWith({
+            board,
+            currentBody: '{}',
+            messages: emptyMessages,
+            processStartedBySessionId: expect.any(Map),
+            lastScheduledBody: null,
+        });
+        const passedMap: Map<string, number> = mockBuildPersistPlan.mock.calls[0][0].processStartedBySessionId;
         expect(passedMap.get('session-0')).toBe(5555);
     });
 
     it('allSessions ref change does not re-trigger effect', () => {
         const board = makeBoard(1);
-        mockApplyDerived.mockReturnValue({ members: board.team!.members, changed: false });
+        mockBuildPersistPlan.mockReturnValue({
+            changed: false,
+            nextBoard: null,
+            nextBody: null,
+            shouldPersist: false,
+            reason: 'no-derived-change',
+        });
         const artifact = makeArtifact();
 
         let sessions = emptySessions;
@@ -240,7 +285,7 @@ describe('useTeamLifecyclePersist', () => {
             useTeamLifecyclePersist(artifact, board, emptyMessages, sessions)
         );
 
-        const callCountAfterMount = mockApplyDerived.mock.calls.length;
+        const callCountAfterMount = mockBuildPersistPlan.mock.calls.length;
 
         // Change allSessions — dep array is [artifact?.id, board, teamMessages] so should NOT re-run
         sessions = [{ id: 'new-session' } as Session];
@@ -248,12 +293,18 @@ describe('useTeamLifecyclePersist', () => {
 
         act(() => { vi.runAllTimers(); });
 
-        expect(mockApplyDerived.mock.calls.length).toBe(callCountAfterMount);
+        expect(mockBuildPersistPlan.mock.calls.length).toBe(callCountAfterMount);
     });
 
     it('logs error if updateArtifact rejects', async () => {
         const board = makeBoard(1);
-        mockApplyDerived.mockReturnValue({ members: board.team!.members, changed: true });
+        mockBuildPersistPlan.mockReturnValue({
+            changed: true,
+            nextBoard: board,
+            nextBody: JSON.stringify({ ...board, version: 2 }, null, 2),
+            shouldPersist: true,
+            reason: 'persist',
+        });
         mockUpdateArtifact.mockRejectedValueOnce(new Error('persist failed'));
 
         renderHook(() => useTeamLifecyclePersist(makeArtifact(), board, emptyMessages, emptySessions));
@@ -268,5 +319,53 @@ describe('useTeamLifecyclePersist', () => {
             'Failed to persist derived team lifecycle timestamps:',
             expect.any(Error),
         );
+    });
+
+    it('passes the pending body back into the next persist plan while the write is in flight', async () => {
+        const board = makeBoard(1);
+        const nextBody = JSON.stringify({ ...board, version: 2 }, null, 2);
+        let resolvePersist: (() => void) | null = null;
+        mockUpdateArtifact.mockImplementationOnce(() => new Promise<void>((resolve) => {
+            resolvePersist = resolve;
+        }));
+        mockBuildPersistPlan.mockReturnValue({
+            changed: true,
+            nextBoard: board,
+            nextBody,
+            shouldPersist: true,
+            reason: 'persist',
+        });
+        let messages = emptyMessages;
+
+        const { rerender } = renderHook(() =>
+            useTeamLifecyclePersist(makeArtifact(), board, messages, emptySessions)
+        );
+
+        act(() => { vi.advanceTimersByTime(250); });
+        expect(mockUpdateArtifact).toHaveBeenCalledTimes(1);
+
+        messages = [{
+            id: 'm1',
+            teamId: 'team-1',
+            fromSessionId: 'session-0',
+            content: 'ready',
+            type: 'chat',
+            timestamp: 100,
+        }];
+
+        rerender();
+
+        expect(mockBuildPersistPlan).toHaveBeenLastCalledWith({
+            board,
+            currentBody: '{}',
+            messages,
+            processStartedBySessionId: expect.any(Map),
+            lastScheduledBody: nextBody,
+        });
+
+        await act(async () => {
+            resolvePersist?.();
+            await Promise.resolve();
+        });
     });
 });

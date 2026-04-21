@@ -5,6 +5,11 @@ import { getServerUrl } from "@/sync/serverConfig";
 
 type AuthMode = 'create' | 'reconnect';
 
+export interface AuthGetTokenResult {
+    token: string;
+    invitationVerified: boolean | null;
+}
+
 export async function authGetToken(secret: Uint8Array, mode: AuthMode = 'reconnect') {
     const API_ENDPOINT = getServerUrl();
     const { challenge, signature, publicKey } = authChallenge(secret);
@@ -15,5 +20,8 @@ export async function authGetToken(secret: Uint8Array, mode: AuthMode = 'reconne
         publicKey: encodeBase64(publicKey)
     });
     const data = response.data;
-    return data.token;
+    return {
+        token: data.token,
+        invitationVerified: data.invitationVerified ?? null,
+    } satisfies AuthGetTokenResult;
 }

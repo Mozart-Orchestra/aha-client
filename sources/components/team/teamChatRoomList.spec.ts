@@ -6,6 +6,7 @@ import {
     dedupeAndSortTeamMessages,
     isNearBottom,
     mergeTeamMessages,
+    shouldLoadOlderMessages,
     shouldShowScrollToLatestButton,
 } from './teamChatRoomList';
 
@@ -63,6 +64,16 @@ describe('teamChatRoomList helpers', () => {
         ]);
     });
 
+    it('mergeTeamMessages can keep full history when limit is disabled', () => {
+        const previous = Array.from({ length: 500 }, (_, index) =>
+            makeMessage(`msg-${index}`, index)
+        );
+        const result = mergeTeamMessages(previous, [makeMessage('older', -1)], null);
+
+        expect(result).toHaveLength(501);
+        expect(result[0]).toEqual(makeMessage('older', -1));
+    });
+
     it('isNearBottom treats inverted FlatList offset near zero as "at bottom"', () => {
         expect(isNearBottom(0)).toBe(true);
         expect(isNearBottom(80)).toBe(true);
@@ -87,6 +98,36 @@ describe('teamChatRoomList helpers', () => {
         expect(shouldShowScrollToLatestButton({
             messageCount: 12,
             offsetY: 20,
+        })).toBe(false);
+    });
+
+    it('loads older messages when user scrolls near the history start', () => {
+        expect(shouldLoadOlderMessages({
+            hasMore: true,
+            isLoading: false,
+            offsetY: 820,
+            contentHeight: 1200,
+            viewportHeight: 300,
+        })).toBe(true);
+    });
+
+    it('loads older messages when the current page does not fill the viewport', () => {
+        expect(shouldLoadOlderMessages({
+            hasMore: true,
+            isLoading: false,
+            offsetY: 0,
+            contentHeight: 180,
+            viewportHeight: 300,
+        })).toBe(true);
+    });
+
+    it('does not load older messages while a request is already running', () => {
+        expect(shouldLoadOlderMessages({
+            hasMore: true,
+            isLoading: true,
+            offsetY: 820,
+            contentHeight: 1200,
+            viewportHeight: 300,
         })).toBe(false);
     });
 });

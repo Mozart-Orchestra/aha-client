@@ -5,6 +5,7 @@ export interface InvitationStatus {
     verified: boolean;
     verifiedAt: string | null;
     codeUsed: string | null;
+    gateEnabled?: boolean;
 }
 
 export type InvitationRedeemError =

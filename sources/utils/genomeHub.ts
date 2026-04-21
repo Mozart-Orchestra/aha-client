@@ -7,6 +7,8 @@
  */
 
 import { getHubToken, invalidateHubToken } from '@/utils/hubToken';
+import { getCurrentAuth } from '@/auth/AuthContext';
+import { getServerUrl } from '@/sync/serverConfig';
 
 function getBase(): string {
     const url = process.env.EXPO_PUBLIC_GENOME_HUB_URL?.trim();
@@ -20,6 +22,13 @@ export class HubUnauthorizedError extends Error {
     constructor(message = 'hub_unauthorized') {
         super(message);
         this.name = 'HubUnauthorizedError';
+    }
+}
+
+class HubRateLimitedError extends Error {
+    constructor() {
+        super('hub_rate_limited');
+        this.name = 'HubRateLimitedError';
     }
 }
 
@@ -46,9 +55,95 @@ export async function hubFetch(path: string, init?: RequestInit): Promise<Respon
     }
     return response;
 }
-const GENOME_BY_NAME_TTL_MS = 30_000;
-const GENOME_NOT_FOUND_TTL_MS = 5 * 60_000;
-const genomeByNameCache = new Map<string, { expiresAt: number; value: Promise<GenomeRecord | null> }>();
+
+const HUB_READ_SUCCESS_TTL_MS = 2 * 60_000;
+const HUB_READ_MISS_TTL_MS = 5 * 60_000;   // 5 min: avoid hammering missing genomes every 30s
+const HUB_RATE_LIMIT_COOLDOWN_MS = 60_000; // 1 min: prevent 429 retry storm
+
+type HubReadCacheEntry<T> = {
+    expiresAt: number;
+    promise: Promise<T>;
+    resolved?: T;
+};
+
+const genomeByNameCache = new Map<string, HubReadCacheEntry<GenomeRecord | null>>();
+const genomeByIdCache = new Map<string, HubReadCacheEntry<GenomeRecord | null>>();
+const genomeByLooseRefCache = new Map<string, HubReadCacheEntry<GenomeRecord | null>>();
+let hubReadCooldownUntil = 0;
+
+function activateHubReadCooldown(): void {
+    hubReadCooldownUntil = Math.max(hubReadCooldownUntil, Date.now() + HUB_RATE_LIMIT_COOLDOWN_MS);
+}
+
+function isHubReadCoolingDown(): boolean {
+    return hubReadCooldownUntil > Date.now();
+}
+
+async function readThroughHubCache<T>(
+    cache: Map<string, HubReadCacheEntry<T>>,
+    key: string,
+    fallbackValue: T,
+    loader: () => Promise<T>,
+    options?: {
+        successTtlMs?: number;
+        missTtlMs?: number;
+        isMiss?: (value: T) => boolean;
+    },
+): Promise<T> {
+    const cached = cache.get(key);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+        return cached.promise;
+    }
+
+    if (isHubReadCoolingDown()) {
+        if (cached?.resolved !== undefined) {
+            return cached.resolved;
+        }
+        return fallbackValue;
+    }
+
+    const staleValue = cached?.resolved;
+    const request = (async () => {
+        try {
+            return await loader();
+        } catch (error) {
+            if (error instanceof HubRateLimitedError) {
+                activateHubReadCooldown();
+                return staleValue !== undefined ? staleValue : fallbackValue;
+            }
+            if (staleValue !== undefined) {
+                return staleValue;
+            }
+            throw error;
+        }
+    })();
+
+    const entry: HubReadCacheEntry<T> = {
+        expiresAt: now + (options?.successTtlMs ?? HUB_READ_SUCCESS_TTL_MS),
+        promise: request,
+        resolved: staleValue,
+    };
+    cache.set(key, entry);
+
+    try {
+        const value = await request;
+        entry.resolved = value;
+        entry.promise = Promise.resolve(value);
+        entry.expiresAt = Date.now() + (
+            options?.isMiss?.(value)
+                ? (options?.missTtlMs ?? HUB_READ_MISS_TTL_MS)
+                : (options?.successTtlMs ?? HUB_READ_SUCCESS_TTL_MS)
+        );
+        return value;
+    } catch (error) {
+        if (cache.get(key) === entry) {
+            cache.delete(key);
+        }
+        throw error;
+    }
+}
+
 const OFFICIAL_GENOME_ALIASES: Record<string, string> = {
     architect: 'researcher',
     'solution-architect': 'researcher',
@@ -69,6 +164,179 @@ const OFFICIAL_GENOME_ALIASES: Record<string, string> = {
     'technical-writer': 'researcher',
     'spec-writer': 'researcher',
 };
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    for (const value of values) {
+        const trimmed = value?.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        result.push(trimmed);
+    }
+
+    return result;
+}
+
+interface ParsedGenomeRef {
+    namespace: string;
+    name: string;
+    version: number | null;
+}
+
+function normalizeGenomeLookupValue(value: string): string {
+    const trimmed = value.trim();
+    const withoutSpecPrefix = trimmed.startsWith('spec:') ? trimmed.slice(5).trim() : trimmed;
+
+    try {
+        return decodeURIComponent(withoutSpecPrefix);
+    } catch {
+        return withoutSpecPrefix;
+    }
+}
+
+function parseGenomeRef(value: string): ParsedGenomeRef | null {
+    const normalized = normalizeGenomeLookupValue(value);
+    const match = normalized.match(/^(@[^/\s]+)\/([^:\s/]+)(?::(\d+))?$/);
+    if (!match) {
+        return null;
+    }
+
+    return {
+        namespace: match[1],
+        name: match[2],
+        version: match[3] ? Number(match[3]) : null,
+    };
+}
+
+function looksLikeOpaqueGenomeId(value: string): boolean {
+    const normalized = normalizeGenomeLookupValue(value);
+    return (
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)
+        || /^[a-z][a-z0-9]{20,}$/i.test(normalized)
+    );
+}
+
+function looksLikeLooseGenomeName(value: string): boolean {
+    const normalized = normalizeGenomeLookupValue(value);
+    return /^[a-z0-9][a-z0-9-]{2,}$/i.test(normalized);
+}
+
+function getLocalAuthHeaders(): HeadersInit | null {
+    const token = getCurrentAuth()?.credentials?.token?.trim();
+    if (!token) {
+        return null;
+    }
+    return {
+        Authorization: `Bearer ${token}`,
+    };
+}
+
+async function localGenomeFetch(path: string): Promise<Response | null> {
+    const headers = getLocalAuthHeaders();
+    if (!headers) {
+        return null;
+    }
+
+    try {
+        return await fetch(`${getServerUrl()}${path}`, { headers });
+    } catch {
+        return null;
+    }
+}
+
+async function fetchLocalGenomeById(id: string): Promise<GenomeRecord | null | undefined> {
+    const normalized = encodeURIComponent(normalizeGenomeLookupValue(id));
+    const res = await localGenomeFetch(`/v1/genomes/${normalized}`);
+    if (!res) {
+        return undefined;
+    }
+    if (!res.ok) {
+        return null;
+    }
+    const data = await res.json() as { genome?: GenomeRecord };
+    return data.genome ?? null;
+}
+
+async function fetchHubGenomeByName(
+    namespace: string,
+    name: string,
+): Promise<GenomeRecord | null | undefined> {
+    try {
+        const encodedNs = encodeURIComponent(namespace);
+        const res = await hubFetch(`/genomes/${encodedNs}/${encodeURIComponent(name)}`);
+        if (res.status === 429) {
+            activateHubReadCooldown();
+            return undefined;
+        }
+        if (res.status === 404) {
+            return null;
+        }
+        if (!res.ok) {
+            return undefined;
+        }
+        const data = await res.json() as { genome?: GenomeRecord };
+        return data.genome ?? null;
+    } catch {
+        return undefined;
+    }
+}
+
+async function fetchHubGenomeById(id: string): Promise<GenomeRecord | null | undefined> {
+    try {
+        const res = await hubFetch(`/genomes/id/${encodeURIComponent(id)}`);
+        if (res.status === 429) {
+            activateHubReadCooldown();
+            return undefined;
+        }
+        if (res.status === 404) {
+            return null;
+        }
+        if (!res.ok) {
+            return undefined;
+        }
+        const data = await res.json() as { genome?: GenomeRecord };
+        return data.genome ?? null;
+    } catch {
+        return undefined;
+    }
+}
+
+async function fetchLocalGenomeByName(
+    namespace: string,
+    name: string,
+    version?: number | null,
+): Promise<GenomeRecord | null | undefined> {
+    const encodedNs = encodeURIComponent(namespace);
+    const encodedName = encodeURIComponent(resolveCanonicalGenomeName(namespace, name));
+    const path = version
+        ? `/v1/genomes/${encodedNs}/${encodedName}/${encodeURIComponent(String(version))}`
+        : `/v1/genomes/${encodedNs}/${encodedName}/latest`;
+    const res = await localGenomeFetch(path);
+    if (!res) {
+        return undefined;
+    }
+    if (!res.ok) {
+        return null;
+    }
+    const data = await res.json() as { genome?: GenomeRecord };
+    return data.genome ?? null;
+}
+
+async function searchVisibleLocalGenomeByExactName(name: string): Promise<GenomeRecord | null | undefined> {
+    const res = await localGenomeFetch('/v1/genomes?limit=200');
+    if (!res) {
+        return undefined;
+    }
+    if (!res.ok) {
+        return null;
+    }
+    const data = await res.json() as { genomes?: GenomeRecord[] };
+    const normalized = normalizeGenomeLookupValue(name).toLowerCase();
+    const candidates = data.genomes ?? [];
+    return candidates.find((genome) => genome.name.toLowerCase() === normalized) ?? null;
+}
 
 export function resolveCanonicalGenomeName(namespace: string, name: string): string {
     const trimmedName = name.trim();
@@ -206,6 +474,8 @@ export interface SearchParams {
     namespace?: string;
     category?: string;
     kind?: 'agent' | 'legion';
+    runtimeType?: AgentImage['runtimeType'];
+    sortBy?: 'updatedAt' | 'spawnCount' | 'score';
     limit?: number;
     offset?: number;
 }
@@ -220,11 +490,16 @@ export async function searchGenomes(params: SearchParams = {}): Promise<SearchRe
     if (params.namespace) query.set('namespace', params.namespace);
     if (params.category) query.set('category', params.category);
     if (params.kind) query.set('kind', params.kind);
+    if (params.runtimeType) query.set('runtimeType', params.runtimeType);
+    if (params.sortBy) query.set('sortBy', params.sortBy);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
 
     const qs = query.toString();
     const res = await hubFetch(`/genomes${qs ? `?${qs}` : ''}`);
+    if (res.status === 429) {
+        throw new HubRateLimitedError();
+    }
     if (!res.ok) throw new Error(`Genome Hub error: ${res.status}`);
     return res.json() as Promise<SearchResult>;
 }
@@ -262,43 +537,145 @@ export async function searchAllGenomes(params: SearchAllParams = {}): Promise<Se
 export async function fetchGenomeByName(namespace: string, name: string): Promise<GenomeRecord | null> {
     const resolvedName = resolveCanonicalGenomeName(namespace, name);
     const cacheKey = `${namespace}::${resolvedName}`;
-    const cached = genomeByNameCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-        return cached.value;
-    }
-
-    const request = (async () => {
-        try {
-            const encodedNs = encodeURIComponent(namespace);
-            const res = await hubFetch(`/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}`);
-            if (res.status === 429) {
-                return null;
-            }
-            if (!res.ok) return null;
-            const data = await res.json() as { genome?: GenomeRecord };
-            return data.genome ?? null;
-        } catch {
-            return null;
-        }
-    })();
-
-    genomeByNameCache.set(cacheKey, {
-        value: request,
-        expiresAt: Date.now() + GENOME_BY_NAME_TTL_MS,
-    });
-
     try {
-        const result = await request;
-        if (result === null) {
-            genomeByNameCache.set(cacheKey, {
-                value: request,
-                expiresAt: Date.now() + GENOME_NOT_FOUND_TTL_MS,
-            });
-        }
-        return result;
+        return await readThroughHubCache(
+            genomeByNameCache,
+            cacheKey,
+            null,
+            async () => {
+                const hubGenome = await fetchHubGenomeByName(namespace, resolvedName);
+                if (hubGenome) {
+                    return hubGenome;
+                }
+
+                const serverGenome = await fetchLocalGenomeByName(namespace, resolvedName);
+                if (serverGenome !== undefined) {
+                    return serverGenome;
+                }
+
+                return hubGenome ?? null;
+            },
+            {
+                isMiss: (value) => value === null,
+            },
+        );
     } catch {
         return null;
     }
+}
+
+export function getPreferredOfficialGenomeNames(
+    name: string,
+    runtimeType: NonNullable<AgentImage['runtimeType']>,
+): string[] {
+    const normalizedName = name.trim().toLowerCase().replace(/[\s_]+/g, '-');
+    const canonicalName = resolveCanonicalGenomeName('@official', normalizedName);
+    const builderVariants = canonicalName === 'agent-builder'
+        ? runtimeType === 'codex'
+            ? ['agent-builder-codex-r2', 'agent-builder-codex', 'agent-builder']
+            : ['agent-builder-r2', 'agent-builder', 'agent-builder-portable']
+        : [];
+
+    return uniqueStrings([
+        ...builderVariants,
+        normalizedName,
+        canonicalName,
+    ]);
+}
+
+function searchMatchesRole(genome: GenomeRecord, roleNames: string[]): boolean {
+    const normalizedName = genome.name.toLowerCase();
+    const tagSet = parseTags(genome.tags).map((tag) => tag.toLowerCase());
+
+    return roleNames.some((roleName) => {
+        const normalizedRole = roleName.toLowerCase();
+        return normalizedName === normalizedRole
+            || tagSet.includes(normalizedRole);
+    });
+}
+
+export async function fetchPreferredGenomeByName(
+    namespace: string,
+    name: string,
+    runtimeType?: NonNullable<AgentImage['runtimeType']>,
+): Promise<GenomeRecord | null> {
+    if (!runtimeType || namespace.trim().toLowerCase() !== '@official') {
+        return fetchGenomeByName(namespace, name);
+    }
+
+    for (const candidateName of getPreferredOfficialGenomeNames(name, runtimeType)) {
+        const genome = await fetchGenomeByName(namespace, candidateName);
+        if (!genome) {
+            continue;
+        }
+        if (genome.runtimeType === runtimeType) {
+            return genome;
+        }
+    }
+
+    return null;
+}
+
+export async function resolvePreferredGenomeForRole(
+    roleId: string,
+    runtimeType: NonNullable<AgentImage['runtimeType']>,
+): Promise<GenomeRecord | null> {
+    const officialGenome = await fetchPreferredGenomeByName('@official', roleId, runtimeType);
+    if (officialGenome) {
+        return officialGenome;
+    }
+
+    const roleNames = getPreferredOfficialGenomeNames(roleId, runtimeType);
+    const candidateMap = new Map<string, GenomeRecord>();
+
+    await Promise.all(roleNames.map(async (queryName) => {
+        try {
+            const result = await searchGenomes({
+                q: queryName,
+                runtimeType,
+                limit: 20,
+                sortBy: 'score',
+            });
+
+            for (const genome of result.genomes) {
+                if (genome.runtimeType !== runtimeType) {
+                    continue;
+                }
+                if (!searchMatchesRole(genome, roleNames)) {
+                    continue;
+                }
+                candidateMap.set(genome.id, genome);
+            }
+        } catch {
+            // Ignore marketplace lookup failures and keep trying other aliases.
+        }
+    }));
+
+    const candidates = Array.from(candidateMap.values());
+    if (candidates.length === 0) {
+        return null;
+    }
+
+    return candidates.sort((left, right) => {
+        const leftFeedback = parseAgentVerdict(left.feedbackData ?? null);
+        const rightFeedback = parseAgentVerdict(right.feedbackData ?? null);
+        const leftOfficial = Number((left.namespace ?? '').toLowerCase() === '@official');
+        const rightOfficial = Number((right.namespace ?? '').toLowerCase() === '@official');
+        const leftExact = Number(roleNames.some((roleName) => left.name.toLowerCase() === roleName.toLowerCase()));
+        const rightExact = Number(roleNames.some((roleName) => right.name.toLowerCase() === roleName.toLowerCase()));
+        const leftScore = leftFeedback?.avgScore ?? 0;
+        const rightScore = rightFeedback?.avgScore ?? 0;
+        const leftEvalCount = leftFeedback?.evaluationCount ?? 0;
+        const rightEvalCount = rightFeedback?.evaluationCount ?? 0;
+
+        return (
+            rightOfficial - leftOfficial
+            || rightScore - leftScore
+            || rightEvalCount - leftEvalCount
+            || (right.spawnCount ?? 0) - (left.spawnCount ?? 0)
+            || rightExact - leftExact
+        );
+    })[0] ?? null;
 }
 
 /** Fetch all published versions for a genome lineage from genome-hub. */
@@ -322,6 +699,11 @@ export async function fetchGenomeVersion(
     version: number,
 ): Promise<GenomeRecord | null> {
     try {
+        const serverGenome = await fetchLocalGenomeByName(namespace, name, version);
+        if (serverGenome !== undefined) {
+            return serverGenome;
+        }
+
         const encodedNs = encodeURIComponent(namespace);
         const resolvedName = resolveCanonicalGenomeName(namespace, name);
         const res = await hubFetch(`/genomes/${encodedNs}/${encodeURIComponent(resolvedName)}/${encodeURIComponent(String(version))}`);
@@ -751,10 +1133,63 @@ export async function removeGenomeFavorite(id: string, actorId: string): Promise
 /** Fetch a genome by its immutable UUID. Returns null if not found. */
 export async function fetchGenomeById(id: string): Promise<GenomeRecord | null> {
     try {
-        const res = await hubFetch(`/genomes/id/${encodeURIComponent(id)}`);
-        if (!res.ok) return null;
-        const data = await res.json() as { genome?: GenomeRecord };
-        return data.genome ?? null;
+        const normalizedId = normalizeGenomeLookupValue(id);
+        const parsedRef = parseGenomeRef(normalizedId);
+        if (parsedRef) {
+            return parsedRef.version
+                ? fetchGenomeVersion(parsedRef.namespace, parsedRef.name, parsedRef.version)
+                : fetchGenomeByName(parsedRef.namespace, parsedRef.name);
+        }
+
+        if (!looksLikeOpaqueGenomeId(normalizedId)) {
+            if (!looksLikeLooseGenomeName(normalizedId)) {
+                return null;
+            }
+
+            return await readThroughHubCache(
+                genomeByLooseRefCache,
+                normalizedId,
+                null,
+                async () => {
+                    const localGenome = await searchVisibleLocalGenomeByExactName(normalizedId);
+                    if (localGenome) {
+                        return localGenome;
+                    }
+
+                    const result = await searchGenomes({ q: normalizedId, limit: 20 });
+                    const exactHubMatch = result.genomes.find((genome) => genome.name.toLowerCase() === normalizedId.toLowerCase()) ?? null;
+                    if (exactHubMatch) {
+                        return exactHubMatch;
+                    }
+                    return null;
+                },
+                {
+                    isMiss: (value) => value === null,
+                },
+            );
+        }
+
+        return await readThroughHubCache(
+            genomeByIdCache,
+            normalizedId,
+            null,
+            async () => {
+                const hubGenome = await fetchHubGenomeById(normalizedId);
+                if (hubGenome) {
+                    return hubGenome;
+                }
+
+                const serverGenome = await fetchLocalGenomeById(normalizedId);
+                if (serverGenome !== undefined) {
+                    return serverGenome;
+                }
+
+                return hubGenome ?? null;
+            },
+            {
+                isMiss: (value) => value === null,
+            },
+        );
     } catch {
         return null;
     }

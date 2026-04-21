@@ -98,9 +98,9 @@ async function getLegacyLinkProofForSupabaseComplete(): Promise<{
             return null;
         }
 
-        const legacyAuthToken = await authGetToken(legacySecret, 'reconnect');
+        const legacyAuth = await authGetToken(legacySecret, 'reconnect');
         return {
-            legacyAuthToken,
+            legacyAuthToken: legacyAuth.token,
             legacyPublicKey: publicKeyHexFromSecret(legacySecret).toUpperCase(),
         };
     } catch {
@@ -131,8 +131,8 @@ async function tryMigrateLegacyWebSecret(
             return null;
         }
 
-        const bootstrapToken = await authGetToken(legacySecret, 'reconnect');
-        await bootstrapRecoveryMaterial(bootstrapToken, legacySecretBase64);
+        const bootstrapAuth = await authGetToken(legacySecret, 'reconnect');
+        await bootstrapRecoveryMaterial(bootstrapAuth.token, legacySecretBase64);
 
         const recovered = await recoverSupabaseSession(accessToken);
         clearLegacyStoredSecretForMigration();

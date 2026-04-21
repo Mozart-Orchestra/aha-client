@@ -82,6 +82,7 @@ interface MemberInfo {
     roleId: string;
     displayName: string | undefined;
     candidateId: string | undefined;
+    sourceImageId: string | undefined;
     specId: string | undefined;
     parentSessionId: string | undefined;
     runtimeType: string | undefined;
@@ -107,6 +108,7 @@ function useMemberInfo(sessionId: string): MemberInfo | null {
                 roleId: member.roleId,
                 displayName: member.displayName,
                 candidateId: member.candidateId,
+                sourceImageId: member.sourceImageId ?? member.genomeId,
                 specId: member.specId,
                 parentSessionId: member.parentSessionId,
                 runtimeType: member.runtimeType,
@@ -692,7 +694,7 @@ function useResolvedAgentInfo(sessionId: string, specIdProp?: string | null) {
     const session = useSession(sessionId);
     const memberInfo = useMemberInfo(sessionId);
 
-    const resolvedSpecId = specIdProp ?? memberInfo?.specId ?? null;
+    const resolvedSpecId = specIdProp ?? memberInfo?.sourceImageId ?? memberInfo?.specId ?? null;
     const { genome, spec, loading } = useGenomeData(resolvedSpecId);
     const roleId = memberInfo?.roleId ?? (session?.metadata as any)?.roleId;
     const candidateId = memberInfo?.candidateId ?? (session?.metadata as any)?.candidateId ?? undefined;
