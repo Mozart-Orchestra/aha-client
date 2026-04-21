@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    DEFAULT_SUPABASE_ANON_KEY,
-    DEFAULT_SUPABASE_URL,
     isLikelySupabaseAnonKey,
     resolveSupabaseAnonKey,
     resolveSupabaseEmailOtpEnabled,
     resolveSupabaseUrl,
+    SUPABASE_ANON_KEY_ENV_NAME,
+    SUPABASE_URL_ENV_NAME,
 } from '@/auth/supabaseConfig';
 
 describe('supabaseConfig', () => {
-    it('uses the default URL when the env URL is blank', () => {
-        expect(resolveSupabaseUrl()).toBe(DEFAULT_SUPABASE_URL);
-        expect(resolveSupabaseUrl('   ')).toBe(DEFAULT_SUPABASE_URL);
+    it('requires the env URL when it is missing or blank', () => {
+        expect(() => resolveSupabaseUrl()).toThrow(`Missing required ${SUPABASE_URL_ENV_NAME}`);
+        expect(() => resolveSupabaseUrl('   ')).toThrow(`Missing required ${SUPABASE_URL_ENV_NAME}`);
     });
 
     it('uses the env URL when it is provided', () => {
@@ -24,10 +24,14 @@ describe('supabaseConfig', () => {
         expect(isLikelySupabaseAnonKey('header.payload...REDACTED')).toBe(false);
     });
 
-    it('falls back to the default anon key when the env key is missing or redacted', () => {
-        expect(resolveSupabaseAnonKey()).toBe(DEFAULT_SUPABASE_ANON_KEY);
-        expect(resolveSupabaseAnonKey('   ')).toBe(DEFAULT_SUPABASE_ANON_KEY);
-        expect(resolveSupabaseAnonKey('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmR0Z...REDACTED')).toBe(DEFAULT_SUPABASE_ANON_KEY);
+    it('requires the env anon key when it is missing or blank', () => {
+        expect(() => resolveSupabaseAnonKey()).toThrow(`Missing required ${SUPABASE_ANON_KEY_ENV_NAME}`);
+        expect(() => resolveSupabaseAnonKey('   ')).toThrow(`Missing required ${SUPABASE_ANON_KEY_ENV_NAME}`);
+    });
+
+    it('rejects redacted or invalid anon keys', () => {
+        expect(() => resolveSupabaseAnonKey('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmR0Z...REDACTED'))
+            .toThrow(`Invalid ${SUPABASE_ANON_KEY_ENV_NAME}`);
     });
 
     it('uses the env anon key when it looks valid', () => {
@@ -35,11 +39,13 @@ describe('supabaseConfig', () => {
         expect(resolveSupabaseAnonKey(envKey)).toBe(envKey);
     });
 
-    it('disables email OTP login unless explicitly enabled', () => {
-        expect(resolveSupabaseEmailOtpEnabled()).toBe(false);
-        expect(resolveSupabaseEmailOtpEnabled('')).toBe(false);
-        expect(resolveSupabaseEmailOtpEnabled('false')).toBe(false);
+    it('enables email OTP login by default and only disables on explicit false values', () => {
+        expect(resolveSupabaseEmailOtpEnabled()).toBe(true);
+        expect(resolveSupabaseEmailOtpEnabled('')).toBe(true);
         expect(resolveSupabaseEmailOtpEnabled('true')).toBe(true);
         expect(resolveSupabaseEmailOtpEnabled('YES')).toBe(true);
+        expect(resolveSupabaseEmailOtpEnabled('false')).toBe(false);
+        expect(resolveSupabaseEmailOtpEnabled('0')).toBe(false);
+        expect(resolveSupabaseEmailOtpEnabled('OFF')).toBe(false);
     });
 });
