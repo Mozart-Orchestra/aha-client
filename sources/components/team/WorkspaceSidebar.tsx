@@ -63,6 +63,7 @@ export function WorkspaceSidebar({
     onAddAgent,
 }: WorkspaceSidebarProps) {
     const router = useRouter();
+    const teamName = artifact?.title || 'Team';
 
     return (
         <FloatingIslandSidebar
@@ -99,7 +100,7 @@ export function WorkspaceSidebar({
                         pushSessionRoute(router, {
                             id: entry.member.sessionId,
                             teamId,
-                            teamName: artifact?.title || desktopRoom?.name || 'Team',
+                            teamName: teamName,
                             roleName: entry.session?.metadata?.role || entry.role?.id || '',
                             returnTo: teamReturnTo,
                         });

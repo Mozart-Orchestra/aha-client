@@ -6,13 +6,14 @@ vi.mock('@/utils/hubToken', () => ({
 }));
 
 const getCurrentAuthMock = vi.fn().mockReturnValue(null);
+const getServerUrlMock = vi.fn(() => 'http://happy-server.test');
 
 vi.mock('@/auth/AuthContext', () => ({
     getCurrentAuth: getCurrentAuthMock,
 }));
 
 vi.mock('@/sync/serverConfig', () => ({
-    getServerUrl: vi.fn(() => 'http://happy-server.test'),
+    getServerUrl: getServerUrlMock,
 }));
 
 function makeGenome(
@@ -55,6 +56,7 @@ describe('genomeHub role alias lookup', () => {
     beforeEach(() => {
         process.env.EXPO_PUBLIC_GENOME_HUB_URL = 'http://genome-hub.test';
         getCurrentAuthMock.mockReturnValue(null);
+        getServerUrlMock.mockReturnValue('http://happy-server.test');
         vi.resetModules();
     });
 
@@ -105,14 +107,43 @@ describe('genomeHub role alias lookup', () => {
         expect(genome?.name).toBe('MyPrivateBuilder');
     });
 
-    it('fails fast when genome hub env is missing and a fetch function is called', async () => {
+    it('derives genome hub URL from the configured server URL when hub env is missing', async () => {
         delete process.env.EXPO_PUBLIC_GENOME_HUB_URL;
+        getServerUrlMock.mockReturnValue('https://tenant.example.com/api');
         vi.resetModules();
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ genomes: [], total: 0 }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
 
         const { searchGenomes } = await import('./genomeHub');
+        await searchGenomes({ limit: 1 });
 
-        await expect(searchGenomes()).rejects.toThrow(
-            'EXPO_PUBLIC_GENOME_HUB_URL is not configured',
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://tenant.example.com/genome/genomes?limit=1',
+            expect.any(Object),
+        );
+    });
+
+    it('derives direct local genome hub ports from direct local server ports', async () => {
+        delete process.env.EXPO_PUBLIC_GENOME_HUB_URL;
+        getServerUrlMock.mockReturnValue('http://localhost:3005');
+        vi.resetModules();
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ genomes: [], total: 0 }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { searchGenomes } = await import('./genomeHub');
+        await searchGenomes({ limit: 1 });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            'http://localhost:3006/genomes?limit=1',
+            expect.any(Object),
         );
     });
 

@@ -2525,7 +2525,7 @@ class Sync {
 
     private canReadSessionMessages(sessionId: string): boolean {
         if (!this.hasLoadedReadableSessionMessageIds) {
-            return true;
+            return false;
         }
         return this.readableSessionMessageIds.has(sessionId);
     }

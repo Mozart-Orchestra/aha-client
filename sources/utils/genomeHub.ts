@@ -1,6 +1,8 @@
 /**
  * Genome Hub API client — talks to the standalone marketplace server.
- * Base URL must be provided via EXPO_PUBLIC_GENOME_HUB_URL.
+ * Base URL can be provided via EXPO_PUBLIC_GENOME_HUB_URL; otherwise it is
+ * derived from the active Happy server URL so web deployments follow their
+ * configured origin instead of a build-time production default.
  * All requests are authenticated with a user-scoped token obtained via
  * `getHubToken()` from `@/utils/hubToken`. On 401 we retry once with a
  * freshly minted token.
@@ -10,12 +12,51 @@ import { getHubToken, invalidateHubToken } from '@/utils/hubToken';
 import { getCurrentAuth } from '@/auth/AuthContext';
 import { getServerUrl } from '@/sync/serverConfig';
 
-function getBase(): string {
-    const url = process.env.EXPO_PUBLIC_GENOME_HUB_URL?.trim();
-    if (!url) {
-        throw new Error('EXPO_PUBLIC_GENOME_HUB_URL is not configured — genome-hub URL is required');
+function isLoopbackOrPrivateHost(hostname: string): boolean {
+    return hostname === 'localhost'
+        || hostname === '127.0.0.1'
+        || hostname.startsWith('192.168.')
+        || hostname.startsWith('10.')
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+}
+
+function normalizeBaseUrl(url: string): string {
+    return url.replace(/\/+$/, '');
+}
+
+function deriveGenomeHubUrl(serverUrl: string): string {
+    try {
+        const parsed = new URL(serverUrl);
+        const port = parsed.port ? Number(parsed.port) : null;
+        const path = parsed.pathname.replace(/\/+$/, '');
+
+        parsed.search = '';
+        parsed.hash = '';
+
+        if (path === '/api') {
+            parsed.pathname = '/genome';
+            return normalizeBaseUrl(parsed.toString());
+        }
+
+        if (isLoopbackOrPrivateHost(parsed.hostname) && port !== null && Number.isFinite(port)) {
+            parsed.port = String(port + 1);
+            parsed.pathname = '';
+            return normalizeBaseUrl(parsed.toString());
+        }
+
+        parsed.pathname = '/genome';
+        return normalizeBaseUrl(parsed.toString());
+    } catch {
+        return normalizeBaseUrl(serverUrl);
     }
-    return url.replace(/\/$/, '');
+}
+
+function getBase(): string {
+    const explicitHubUrl = process.env.EXPO_PUBLIC_GENOME_HUB_URL?.trim();
+    if (explicitHubUrl) {
+        return normalizeBaseUrl(explicitHubUrl);
+    }
+    return deriveGenomeHubUrl(getServerUrl());
 }
 
 export class HubUnauthorizedError extends Error {

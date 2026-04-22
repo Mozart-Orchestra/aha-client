@@ -856,7 +856,7 @@ export default function TeamDashboardScreen() {
         );
     }, [handleDeleteSessionMember, handleRenameSessionMember, handleRemoveTeamMember]);
 
-    const teamDisplayName = artifact?.title || desktopRoom?.name || 'Team';
+    const teamDisplayName = artifact?.title || 'Team';
 
     const handleOpenAgentLibrary = React.useCallback(() => {
         setShowAgentLibrary(true);
@@ -1067,7 +1067,7 @@ export default function TeamDashboardScreen() {
     // 🆕 自动缓存任务快照 — 团队解散后可从缓存恢复未完成任务
     useTaskExportAutoCache({
         teamId,
-        teamName: artifact?.title || desktopRoom?.name || 'Team',
+        teamName: teamDisplayName,
         tasks: kanbanData.tasks,
         columns: kanbanData.columns,
     });
@@ -1391,16 +1391,16 @@ export default function TeamDashboardScreen() {
         if (rows.length === 0) {
             rows.push({
                 id: `team-${teamId}`,
-                name: artifact?.title || desktopRoom?.name || 'Team',
+                name: teamDisplayName,
                 lastMessage: 'Open the team room and start coordinating work.',
                 time: '',
                 avatarColor: SHELL_CONVERSATION_COLORS[0],
-                avatarLabel: (artifact?.title || desktopRoom?.name || 'T').slice(0, 1).toUpperCase(),
+                avatarLabel: teamDisplayName.slice(0, 1).toUpperCase(),
             });
         }
 
         return rows;
-    }, [artifact?.title, desktopRoom?.name, teamId, teamMessages]);
+    }, [teamDisplayName, teamId, teamMessages]);
 
     React.useEffect(() => {
         if (!selectedAgentId && roster.length > 0) {
@@ -1500,7 +1500,7 @@ export default function TeamDashboardScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 2 }}>
                 <ExportTaskButton
                     teamId={teamId}
-                    teamName={artifact?.title || desktopRoom?.name || 'Team'}
+                    teamName={teamDisplayName}
                     tasks={kanbanData.tasks}
                     columns={kanbanData.columns}
                 />
@@ -1529,8 +1529,7 @@ export default function TeamDashboardScreen() {
         </View>
     ), [
         teamId,
-        artifact?.title,
-        desktopRoom?.name,
+        teamDisplayName,
         styles,
         theme,
         kanbanData.tasks,
@@ -1625,7 +1624,7 @@ export default function TeamDashboardScreen() {
             <View style={{ flex: 1 }}>
                 <TeamChatRoom
                     teamId={teamId}
-                    teamName={artifact?.title || desktopRoom?.name || 'Team'}
+                    teamName={teamDisplayName}
                     mySessionId={mySessionId}
                     myRole="user"
                     myDisplayName={myDisplayName}
@@ -1972,7 +1971,7 @@ export default function TeamDashboardScreen() {
             <Stack.Screen
                 options={{
                     headerShown: !isDesktopShell,
-                    headerTitle: (desktopBridge ? desktopRoom?.name : artifact?.title) || 'Team Dashboard',
+                    headerTitle: teamDisplayName || 'Team Dashboard',
                     headerRight: () => (
                         <Pressable
                             onPress={() => {
@@ -2017,7 +2016,7 @@ export default function TeamDashboardScreen() {
                                 <Ionicons name="layers-outline" size={18} color={theme.colors.text} />
                                 <View style={styles.mobileWorkspaceCopy}>
                                     <Text style={styles.mobileWorkspaceTitle} numberOfLines={1}>
-                                        {artifact?.title || desktopRoom?.name || 'Workspace'}
+                                        {teamDisplayName || 'Workspace'}
                                     </Text>
                                     <Text style={styles.mobileWorkspaceSubtitle} numberOfLines={1}>
                                         {onlineCount} online · {roster.length} agents · {allTeams.length} teams
