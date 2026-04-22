@@ -32,6 +32,7 @@
     "@expo/ui": "~0.2.0-beta.3",
     "@expo/vector-icons": "^15.0.2",
     "@happy/shared-team-config": "file:./sources/team-config",
+    "@packages/auth-contract": "file:./packages/auth-contract",
     "@legendapp/list": "2.0.0-beta.3",
     "@livekit/react-native": "^2.9.0",
     "@livekit/react-native-expo-plugin": "^1.0.1",

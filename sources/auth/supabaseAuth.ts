@@ -12,30 +12,20 @@ import * as Linking from 'expo-linking';
 import { getServerUrl } from '@/sync/serverConfig';
 import axios from 'axios';
 import { getRandomBytesAsync } from 'expo-crypto';
+import {
+    type AuthSession,
+    type SupabaseCompleteResponse,
+} from '@packages/auth-contract';
 
+/** Recovery result with raw secret bytes (platform-specific, not in contract) */
 interface SupabaseRecoveryResult {
     token: string;
     userId: string;
     secret: Uint8Array;
 }
 
-interface SupabaseCompleteResponse {
-    state: 'existing_recovered' | 'new_account_created' | 'migration_required';
-    token: string | null;
-    userId: string | null;
-    encryptedContentSecretKey?: string | null;
-    canonicalPublicKey?: string | null;
-    reason?: string;
-    invitationVerified?: boolean;
-}
-
-type SupabaseCompleteSessionResult = {
-    token: string;
-    userId: string;
-    secretBase64: string;
-    recoveryReady: boolean;
-    invitationVerified?: boolean;
-};
+/** @deprecated Use AuthSession from @packages/auth-contract directly */
+type SupabaseCompleteSessionResult = AuthSession;
 
 export class SupabaseRestoreRequiredError extends Error {
     constructor(message = 'This account already exists. Use another signed-in device to finish linking this machine.') {
