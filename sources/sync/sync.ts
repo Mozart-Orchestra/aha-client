@@ -4115,7 +4115,17 @@ export async function syncCreate(credentials: AuthCredentials) {
         return;
     }
     isInitialized = true;
-    await syncInit(credentials, false);
+    try {
+        await syncInit(credentials, false);
+    } catch (error) {
+        isInitialized = false;
+        try {
+            apiSocket.disconnect();
+        } catch (disconnectError) {
+            console.warn('Failed to disconnect socket after sync init failure:', disconnectError);
+        }
+        throw error;
+    }
 }
 
 export async function syncRestore(credentials: AuthCredentials) {
@@ -4124,7 +4134,17 @@ export async function syncRestore(credentials: AuthCredentials) {
         return;
     }
     isInitialized = true;
-    await syncInit(credentials, true);
+    try {
+        await syncInit(credentials, true);
+    } catch (error) {
+        isInitialized = false;
+        try {
+            apiSocket.disconnect();
+        } catch (disconnectError) {
+            console.warn('Failed to disconnect socket after sync init failure:', disconnectError);
+        }
+        throw error;
+    }
 }
 
 /**
