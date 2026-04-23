@@ -33,7 +33,7 @@ export interface AuthError {
 export function normalizeAuthError(err: unknown): AuthError {
   if (isAxiosLikeError(err)) {
     const status = err.response?.status;
-    const code = err.response?.data?.code as string | undefined;
+    const code = getResponseErrorCode(err.response?.data);
 
     if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
       return { code: 'SERVER_UNREACHABLE', message: 'Server is unreachable. Check your network connection.' };
@@ -105,6 +105,15 @@ export function normalizeAuthError(err: unknown): AuthError {
 
 function isAxiosLikeError(err: unknown): err is { code?: string; response?: { status?: number; data?: unknown } } {
   return typeof err === 'object' && err !== null && ('response' in err || 'code' in err);
+}
+
+function getResponseErrorCode(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object' || !('code' in data)) {
+    return undefined;
+  }
+
+  const code = (data as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
 }
 
 function isSupabaseLikeError(err: unknown): err is { message?: string } {

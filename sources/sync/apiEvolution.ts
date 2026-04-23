@@ -33,6 +33,8 @@ const evolutionBackoff = createBackoff({
 });
 import { getServerUrl } from './serverConfig';
 
+const blockedTeamAccess = new Set<string>();
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -346,6 +348,27 @@ async function parseError(response: Response): Promise<string> {
     }
 }
 
+function teamAccessCircuitKey(scope: string, teamId: string, token: string): string {
+    return `${scope}:${teamId}:${token.slice(0, 24)}`;
+}
+
+async function isTerminalTeamAccessError(response: Response): Promise<boolean> {
+    if (response.status !== 403 && response.status !== 404) {
+        return false;
+    }
+
+    try {
+        const body = await response.clone().json();
+        return response.status === 404 || body?.code === 'TEAM_ACCOUNT_MISMATCH';
+    } catch {
+        return response.status === 404;
+    }
+}
+
+export function __resetEvolutionTeamAccessCircuitForTests() {
+    blockedTeamAccess.clear();
+}
+
 // ============================================================================
 // Bypass Agents
 // ============================================================================
@@ -359,6 +382,10 @@ export async function fetchBypassAgents(
     teamId: string
 ): Promise<BypassAgentsResponse> {
     const API_ENDPOINT = getServerUrl();
+    const circuitKey = teamAccessCircuitKey('bypass-agents', teamId, credentials.token);
+    if (blockedTeamAccess.has(circuitKey)) {
+        return { agents: [] };
+    }
 
     return await evolutionBackoff(async () => {
         const response = await fetch(
@@ -368,9 +395,14 @@ export async function fetchBypassAgents(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
+            if (await isTerminalTeamAccessError(response)) {
+                blockedTeamAccess.add(circuitKey);
+                return { agents: [] };
+            }
             throw new Error(await parseError(response));
         }
 
+        blockedTeamAccess.delete(circuitKey);
         return await response.json() as BypassAgentsResponse;
     });
 }
@@ -410,6 +442,10 @@ export async function fetchSupervisorState(
     teamId: string
 ): Promise<SupervisorStateResponse> {
     const API_ENDPOINT = getServerUrl();
+    const circuitKey = teamAccessCircuitKey('supervisor-state', teamId, credentials.token);
+    if (blockedTeamAccess.has(circuitKey)) {
+        return { state: null };
+    }
 
     return await evolutionBackoff(async () => {
         const response = await fetch(
@@ -419,9 +455,14 @@ export async function fetchSupervisorState(
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
+            if (await isTerminalTeamAccessError(response)) {
+                blockedTeamAccess.add(circuitKey);
+                return { state: null };
+            }
             throw new Error(await parseError(response));
         }
 
+        blockedTeamAccess.delete(circuitKey);
         return await response.json() as SupervisorStateResponse;
     });
 }
@@ -768,15 +809,24 @@ export async function fetchRepairSignals(
 
     const query = params.toString();
     const url = `${API_ENDPOINT}/v1/teams/${teamId}/repair-signals${query ? `?${query}` : ''}`;
+    const circuitKey = teamAccessCircuitKey('repair-signals', teamId, credentials.token);
+    if (blockedTeamAccess.has(circuitKey)) {
+        return { signals: [], total: 0 };
+    }
 
     return await evolutionBackoff(async () => {
         const response = await fetch(url, { headers: authHeaders(credentials.token) });
         checkAuth(response, credentials.token);
 
         if (!response.ok) {
+            if (await isTerminalTeamAccessError(response)) {
+                blockedTeamAccess.add(circuitKey);
+                return { signals: [], total: 0 };
+            }
             throw new Error(await parseError(response));
         }
 
+        blockedTeamAccess.delete(circuitKey);
         return await response.json() as RepairSignalsResponse;
     });
 }

@@ -3,6 +3,29 @@ import { sync } from '@/sync/sync';
 import { getServerUrl } from '@/sync/serverConfig';
 import type { TeamScorecard, TeamPublicReview } from '@/utils/teamUtils';
 
+const blockedTeamReviewAccess = new Set<string>();
+
+function circuitKey(teamId: string, token: string): string {
+    return `${teamId}:${token.slice(0, 24)}`;
+}
+
+async function isTerminalTeamAccessError(response: Response): Promise<boolean> {
+    if (response.status !== 403 && response.status !== 404) {
+        return false;
+    }
+
+    try {
+        const body = await response.clone().json();
+        return response.status === 404 || body?.code === 'TEAM_ACCOUNT_MISMATCH';
+    } catch {
+        return response.status === 404;
+    }
+}
+
+export function __resetTeamReviewAccessCircuitForTests() {
+    blockedTeamReviewAccess.clear();
+}
+
 export function useTeamReviews(
     teamId: string,
     isAuthenticated: boolean,
@@ -30,8 +53,16 @@ export function useTeamReviews(
             'Content-Type': 'application/json',
         };
         const encodedTeamId = encodeURIComponent(teamId);
+        const accessCircuitKey = circuitKey(teamId, credentials.token);
 
         async function loadTeamReviews() {
+            if (blockedTeamReviewAccess.has(accessCircuitKey)) {
+                setTeamScorecard(null);
+                setTeamPublicReviews([]);
+                setTeamReviewLoading(false);
+                return;
+            }
+
             setTeamReviewLoading(true);
             const [scoreResult, reviewsResult] = await Promise.allSettled([
                 fetch(`${getServerUrl()}/v1/teams/${encodedTeamId}/score`, { headers }),
@@ -40,6 +71,18 @@ export function useTeamReviews(
 
             if (cancelled) return;
 
+            const responses = [scoreResult, reviewsResult]
+                .filter((result): result is PromiseFulfilledResult<Response> => result.status === 'fulfilled')
+                .map((result) => result.value);
+            const terminalAccessErrors = await Promise.all(responses.map(isTerminalTeamAccessError));
+            if (terminalAccessErrors.some(Boolean)) {
+                blockedTeamReviewAccess.add(accessCircuitKey);
+                setTeamScorecard(null);
+                setTeamPublicReviews([]);
+                setTeamReviewLoading(false);
+                return;
+            }
+
             const nextScore = scoreResult.status === 'fulfilled' && scoreResult.value.ok
                 ? await scoreResult.value.json() as TeamScorecard
                 : null;
@@ -47,6 +90,9 @@ export function useTeamReviews(
                 ? ((await reviewsResult.value.json()) as { reviews?: TeamPublicReview[] }).reviews ?? []
                 : [];
 
+            if (nextScore || nextReviews.length > 0) {
+                blockedTeamReviewAccess.delete(accessCircuitKey);
+            }
             setTeamScorecard(nextScore);
             setTeamPublicReviews(nextReviews);
             setTeamReviewLoading(false);

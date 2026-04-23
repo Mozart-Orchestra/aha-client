@@ -273,6 +273,7 @@ class Sync {
     // Team messaging
     private teamMessagesCache = new Map<string, import('@/sync/teamMessageTypes').TeamMessage[]>();
     private teamMessageSubscriptions = new Map<string, Set<(message: import('@/sync/teamMessageTypes').TeamMessage) => void>>();
+    private blockedTeamMessageAccess = new Set<string>();
     private missingSessionMessageIds = new Set<string>();
     private missingArtifactIds = new Set<string>();
     private readableSessionMessageIds = new Set<string>();
@@ -3613,6 +3614,14 @@ class Sync {
         options?: { limit?: number; before?: string; useCache?: boolean }
     ): Promise<import('@/sync/teamMessageTypes').TeamMessageListResponse> {
         const canUseCache = options?.useCache !== false && !options?.before && options?.limit === undefined;
+        const accessCircuitKey = `${teamId}:${this.credentials?.token?.slice(0, 24) ?? 'anonymous'}`;
+
+        if (this.blockedTeamMessageAccess.has(accessCircuitKey)) {
+            return {
+                messages: [],
+                hasMore: false
+            };
+        }
 
         if (canUseCache) {
             // 先检查内存缓存
@@ -3655,10 +3664,26 @@ class Sync {
 
                 if (!response.ok) {
                     const text = await response.text();
+                    let parsed: any = null;
+                    try {
+                        parsed = JSON.parse(text);
+                    } catch {
+                        parsed = null;
+                    }
+                    const terminalTeamAccessError = response.status === 404
+                        || (response.status === 403 && parsed?.code === 'TEAM_ACCOUNT_MISMATCH');
+                    if (terminalTeamAccessError) {
+                        this.blockedTeamMessageAccess.add(accessCircuitKey);
+                        return {
+                            messages: [],
+                            hasMore: false
+                        };
+                    }
                     throw new Error(`Failed to fetch team messages: ${response.status} - ${text}`);
                 }
 
                 const data = await response.json();
+                this.blockedTeamMessageAccess.delete(accessCircuitKey);
                 return {
                     messages: Array.isArray(data.messages) ? data.messages : [],
                     hasMore: Boolean(data.hasMore),

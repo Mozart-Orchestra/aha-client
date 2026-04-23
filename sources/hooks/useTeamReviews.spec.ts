@@ -22,7 +22,7 @@ vi.mock('@/sync/serverConfig', () => ({
 // Replace global fetch
 vi.stubGlobal('fetch', mockFetch);
 
-import { useTeamReviews } from './useTeamReviews';
+import { __resetTeamReviewAccessCircuitForTests, useTeamReviews } from './useTeamReviews';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -59,6 +59,7 @@ describe('useTeamReviews', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        __resetTeamReviewAccessCircuitForTests();
         mockGetServerUrl.mockReturnValue('https://test-server.example');
         consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: any) => {
             if (typeof message === 'string' && message.includes('react-test-renderer is deprecated')) {
@@ -189,6 +190,34 @@ describe('useTeamReviews', () => {
         expect(result.current.teamScorecard).toBeNull();
         expect(result.current.teamPublicReviews).toEqual([{ id: 'r1' }]);
         expect(result.current.teamReviewLoading).toBe(false);
+    });
+
+    it('opens a circuit after terminal team access errors to prevent repeated polling', async () => {
+        mockSync.getCredentials.mockReturnValue({ token: 'tok' });
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 403,
+            clone: () => ({
+                json: () => Promise.resolve({
+                    code: 'TEAM_ACCOUNT_MISMATCH',
+                    error: 'Team account mismatch',
+                }),
+            }),
+        });
+
+        const first = renderHook(() => useTeamReviews('team-1', true));
+
+        await act(async () => { await Promise.resolve(); });
+        await act(async () => { await Promise.resolve(); });
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        first.unmount();
+
+        renderHook(() => useTeamReviews('team-1', true));
+
+        await act(async () => { await Promise.resolve(); });
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it('degrades to empty reviews when reviews fetch fails', async () => {
