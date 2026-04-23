@@ -1,7 +1,7 @@
 /**
  * Genome Hub API client — talks to the standalone marketplace server.
  * Base URL can be provided via EXPO_PUBLIC_GENOME_HUB_URL; otherwise it is
- * derived from the active Happy server URL so web deployments follow their
+ * derived from the active Aha server URL so web deployments follow their
  * configured origin instead of a build-time production default.
  * All requests are authenticated with a user-scoped token obtained via
  * `getHubToken()` from `@/utils/hubToken`. On 401 we retry once with a
@@ -185,60 +185,6 @@ async function readThroughHubCache<T>(
     }
 }
 
-const OFFICIAL_GENOME_ALIASES: Record<string, string> = {
-    architect: 'researcher',
-    'solution-architect': 'researcher',
-    framer: 'researcher',
-    builder: 'implementer',
-    member: 'implementer',
-    reviewer: 'qa-engineer',
-    qa: 'qa-engineer',
-    scout: 'researcher',
-    observer: 'researcher',
-    orchestrator: 'master',
-    'project-manager': 'master',
-    'product-owner': 'master',
-    'business-analyst': 'researcher',
-    'product-designer': 'researcher',
-    'ux-designer': 'researcher',
-    'ux-researcher': 'researcher',
-    scribe: 'researcher',
-    'technical-writer': 'researcher',
-    'spec-writer': 'researcher',
-    storyteller: 'researcher',
-    brand: 'gstack-product-strategist',
-    'researcher-angle-a': 'researcher',
-    'researcher-angle-b': 'researcher',
-    'methodology-designer': 'researcher',
-    'paper-writer': 'researcher',
-    'academic-editor': 'researcher',
-    'source-scout': 'researcher',
-    'stats-analyzer': 'researcher',
-    'case-analyst': 'researcher',
-    'citation-manager': 'researcher',
-    'quant-researcher': 'researcher',
-    'strategy-analyst': 'gstack-product-strategist',
-    'product-strategist': 'gstack-product-strategist',
-    'quant-strategy-analyst': 'gstack-product-strategist',
-    'engineering-reviewer': 'gstack-engineering-reviewer',
-    'data-engineer': 'gstack-fullstack-builder',
-    'quant-data-engineer': 'gstack-fullstack-builder',
-    'chart-designer': 'gstack-design-architect',
-    'image-prompt': 'gstack-design-architect',
-    'design-architect': 'gstack-design-architect',
-    'ui-designer': 'gstack-design-architect',
-    'ux-lead': 'gstack-design-architect',
-    'qa-commander': 'gstack-qa-commander',
-    'format-checker': 'gstack-qa-commander',
-    'plagiarism-checker': 'gstack-qa-commander',
-    'test-quant-agent': 'gstack-qa-commander',
-    'risk-engineer': 'gstack-security-officer',
-    'security-officer': 'gstack-security-officer',
-    'quant-risk-manager': 'gstack-security-officer',
-    'release-engineer': 'gstack-release-engineer',
-    'retro-analyst': 'gstack-retro-analyst',
-};
-
 function uniqueStrings(values: Array<string | null | undefined>): string[] {
     const seen = new Set<string>();
     const result: string[] = [];
@@ -418,7 +364,7 @@ export function resolveCanonicalGenomeName(namespace: string, name: string): str
     if (namespace.trim().toLowerCase() !== '@official') {
         return trimmedName;
     }
-    return OFFICIAL_GENOME_ALIASES[normalizedName] ?? normalizedName;
+    return normalizedName;
 }
 
 export interface AgentVerdict {
@@ -609,25 +555,32 @@ export async function searchAllGenomes(params: SearchAllParams = {}): Promise<Se
 
 /** Fetch a genome by namespace + name (latest version). Returns null if not found. */
 export async function fetchGenomeByName(namespace: string, name: string): Promise<GenomeRecord | null> {
-    const resolvedName = resolveCanonicalGenomeName(namespace, name);
-    const cacheKey = `${namespace}::${resolvedName}`;
+    const lookupName = resolveCanonicalGenomeName(namespace, name);
+    const cacheKey = `${namespace}::${lookupName}`;
     try {
         return await readThroughHubCache(
             genomeByNameCache,
             cacheKey,
             null,
             async () => {
-                const hubGenome = await fetchHubGenomeByName(namespace, resolvedName);
+                const hubGenome = await fetchHubGenomeByName(namespace, lookupName);
                 if (hubGenome) {
                     return hubGenome;
                 }
 
-                const serverGenome = await fetchLocalGenomeByName(namespace, resolvedName);
+                const hubSearchGenome = hubGenome === null
+                    ? await searchOfficialGenomeByLookupName(namespace, lookupName)
+                    : undefined;
+                if (hubSearchGenome) {
+                    return hubSearchGenome;
+                }
+
+                const serverGenome = await fetchLocalGenomeByName(namespace, lookupName);
                 if (serverGenome !== undefined) {
                     return serverGenome;
                 }
 
-                return hubGenome ?? null;
+                return hubSearchGenome ?? hubGenome ?? null;
             },
             {
                 isMiss: (value) => value === null,
@@ -658,14 +611,69 @@ export function getPreferredOfficialGenomeNames(
 }
 
 function searchMatchesRole(genome: GenomeRecord, roleNames: string[]): boolean {
-    const normalizedName = genome.name.toLowerCase();
-    const tagSet = parseTags(genome.tags).map((tag) => tag.toLowerCase());
+    const lookupNames = getGenomeLookupNames(genome);
 
     return roleNames.some((roleName) => {
         const normalizedRole = roleName.toLowerCase();
-        return normalizedName === normalizedRole
-            || tagSet.includes(normalizedRole);
+        return lookupNames.includes(normalizedRole);
     });
+}
+
+function parseGenomeSpec(specJson: string): Record<string, unknown> | null {
+    try {
+        const parsed = JSON.parse(specJson);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? parsed as Record<string, unknown>
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+function collectStringArray(value: unknown): string[] {
+    return Array.isArray(value)
+        ? value.map((entry) => String(entry).trim()).filter(Boolean)
+        : [];
+}
+
+function getGenomeLookupNames(genome: GenomeRecord): string[] {
+    const spec = parseGenomeSpec(genome.spec);
+    const meta = spec?.meta as Record<string, unknown> | undefined;
+    const agentImage = meta?.agentImage as Record<string, unknown> | undefined;
+
+    return uniqueStrings([
+        genome.name,
+        ...parseTags(genome.tags),
+        ...(spec?.baseRoleId ? [String(spec.baseRoleId)] : []),
+        ...(spec?.teamRole ? [String(spec.teamRole)] : []),
+        ...collectStringArray(spec?.aliases),
+        ...collectStringArray(agentImage?.retiredAliases),
+    ]).map((entry) => entry.toLowerCase());
+}
+
+async function searchOfficialGenomeByLookupName(
+    namespace: string,
+    name: string,
+): Promise<GenomeRecord | null | undefined> {
+    if (namespace.trim().toLowerCase() !== '@official') {
+        return null;
+    }
+
+    const normalizedName = resolveCanonicalGenomeName(namespace, name);
+    try {
+        const result = await searchGenomes({
+            q: normalizedName,
+            namespace: '@official',
+            sortBy: 'score',
+            limit: 20,
+        });
+        return result.genomes.find((genome) => searchMatchesRole(genome, [normalizedName])) ?? null;
+    } catch (error) {
+        if (error instanceof HubRateLimitedError) {
+            activateHubReadCooldown();
+        }
+        return undefined;
+    }
 }
 
 export async function fetchPreferredGenomeByName(
