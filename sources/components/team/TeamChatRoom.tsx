@@ -48,11 +48,19 @@ import { appendTeamMessage, dedupeAndSortTeamMessages, isNearBottom, mergeTeamMe
 type TeamChatRoomVariant = 'default' | 'edzlf';
 type TeamChatRoomIconName = keyof typeof Ionicons.glyphMap;
 const TEAM_CHAT_PAGE_SIZE = 50;
+const PAPER_BG = '#FFF9F0';
+const PAPER_PANEL = '#FFFDF8';
+const PAPER_PANEL_MUTED = '#F7EFE3';
+const PAPER_BORDER = '#E8DDCC';
+const PAPER_INK = '#302A22';
+const PAPER_MUTED = '#756A5D';
+const PAPER_ACCENT = '#3F4A3F';
+const PAPER_ACCENT_SOFT = '#EEE5D6';
 
 const stylesheet = StyleSheet.create((theme) => ({
     container: {
         flex: 1,
-        backgroundColor: theme.colors.groupped.background,
+        backgroundColor: PAPER_BG,
     },
     reconnectingBanner: {
         flexDirection: 'row',
@@ -76,7 +84,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         flex: 1,
     },
     messageListContent: {
-        padding: 16,
+        paddingHorizontal: 22,
+        paddingTop: 18,
         paddingBottom: 24,
     },
     historyLoadIndicator: {
@@ -95,17 +104,19 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingBottom: 8,
     },
     scrollToLatestButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.colors.button.primary.background,
-        shadowColor: theme.colors.shadow.color || '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: theme.colors.shadow.opacity || 0.18,
-        shadowRadius: 8,
-        elevation: 4,
+        backgroundColor: PAPER_ACCENT,
+        borderWidth: 1,
+        borderColor: '#556252',
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     scrollToLatestButtonPressed: {
         opacity: 0.85,
@@ -122,24 +133,24 @@ const stylesheet = StyleSheet.create((theme) => ({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: PAPER_PANEL,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
-        borderColor: theme.colors.divider,
+        borderColor: PAPER_BORDER,
         marginRight: 8,
         marginBottom: 4, // Align with bubble bottom
-        shadowColor: theme.colors.shadow.color || '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: theme.colors.shadow.opacity || 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     myAvatarContainer: {
         marginRight: 0,
         marginLeft: 8,
-        backgroundColor: theme.colors.button.primary.background,
-        borderColor: theme.colors.button.primary.background,
+        backgroundColor: PAPER_ACCENT,
+        borderColor: PAPER_ACCENT,
     },
     // 🆕 Online status indicator
     onlineIndicator: {
@@ -151,17 +162,17 @@ const stylesheet = StyleSheet.create((theme) => ({
         borderRadius: 6,
         backgroundColor: theme.colors.success || '#10B981',
         borderWidth: 2,
-        borderColor: theme.colors.surface,
-        shadowColor: theme.colors.shadow.color || '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 2,
+        borderColor: PAPER_PANEL,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     avatarText: {
         fontSize: 14,
         fontWeight: '600',
-        color: theme.colors.text,
+        color: PAPER_INK,
     },
     myAvatarText: {
         color: '#FFF',
@@ -171,25 +182,27 @@ const stylesheet = StyleSheet.create((theme) => ({
         maxWidth: '75%',
     },
     messageBubble: {
-        backgroundColor: theme.colors.surface,
-        borderRadius: 20,
+        backgroundColor: PAPER_PANEL,
+        borderRadius: 16,
         padding: 12,
-        borderBottomLeftRadius: 4,
-        shadowColor: theme.colors.shadow.color || '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: theme.colors.shadow.opacity || 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        borderWidth: 1,
+        borderColor: PAPER_BORDER,
+        borderBottomLeftRadius: 6,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     myMessageBubble: {
-        borderRadius: 20,
-        borderBottomRightRadius: 4,
-        borderBottomLeftRadius: 20,
+        borderRadius: 16,
+        borderBottomRightRadius: 6,
+        borderBottomLeftRadius: 16,
         overflow: 'hidden' as const,
     },
     senderName: {
         fontSize: 11,
-        color: theme.colors.textSecondary,
+        color: PAPER_MUTED,
         marginBottom: 4,
         marginLeft: 40, // Align with bubble (avatar 32 + gap 8)
     },
@@ -200,7 +213,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     messageContent: {
         fontSize: 13,
-        color: theme.colors.text,
+        color: PAPER_INK,
         lineHeight: 20,
         fontWeight: '500',
     },
@@ -222,7 +235,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontSize: 13,
         marginTop: 8,
         fontWeight: '600',
-        color: theme.colors.button.primary.background,
+        color: PAPER_ACCENT,
     },
     myExpandText: {
         color: '#FFFFFF',
@@ -326,16 +339,18 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontStyle: 'italic',
     },
     inputContainer: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: PAPER_BG,
         borderTopWidth: 1,
-        borderTopColor: theme.colors.divider,
+        borderTopColor: PAPER_BORDER,
         paddingHorizontal: Platform.select({ web: 12, default: 10 }),
         paddingTop: 8,
         paddingBottom: Platform.select({ web: 10, default: 8 }),
     },
     unifiedInputPanel: {
-        backgroundColor: theme.colors.input.background,
-        borderRadius: Platform.select({ web: 16, default: 20 }),
+        backgroundColor: PAPER_PANEL,
+        borderRadius: Platform.select({ web: 14, default: 18 }),
+        borderWidth: 1,
+        borderColor: PAPER_BORDER,
         overflow: 'hidden',
         paddingTop: 2,
         paddingBottom: 8,
@@ -353,7 +368,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         flex: 1,
         fontSize: Platform.select({ web: 14, default: 15 }),
         lineHeight: Platform.select({ web: 20, default: 22 }),
-        color: theme.colors.input.text,
+        color: PAPER_INK,
         minHeight: Platform.select({ web: 24, default: 26 }),
         maxHeight: Platform.select({ web: 112, default: 116 }),
         paddingTop: 0,
@@ -381,13 +396,15 @@ const stylesheet = StyleSheet.create((theme) => ({
         height: 28,
         paddingHorizontal: 10,
         borderRadius: 14,
-        backgroundColor: theme.colors.button.primary.background + '0D',
+        backgroundColor: PAPER_ACCENT_SOFT,
+        borderWidth: 1,
+        borderColor: PAPER_BORDER,
         gap: 4,
     },
     helpPillText: {
         fontSize: 12,
         fontWeight: '600',
-        color: theme.colors.button.primary.background,
+        color: PAPER_ACCENT,
     },
     actionSpacer: {
         flex: 1,
@@ -400,10 +417,10 @@ const stylesheet = StyleSheet.create((theme) => ({
         justifyContent: 'center',
     },
     sendButtonActive: {
-        backgroundColor: theme.colors.button.primary.background,
+        backgroundColor: PAPER_ACCENT,
     },
     sendButtonInactive: {
-        backgroundColor: theme.colors.button.primary.disabled,
+        backgroundColor: '#D8CAB7',
     },
     emptyState: {
         flex: 1,
@@ -414,15 +431,15 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     emptyStateText: {
         fontSize: 15,
-        color: theme.colors.textSecondary,
+        color: PAPER_MUTED,
         textAlign: 'center',
         marginTop: 12,
     },
     // 🆕 历史消息选择器样式
     historyContainer: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: PAPER_PANEL,
         borderTopWidth: 1,
-        borderTopColor: theme.colors.divider,
+        borderTopColor: PAPER_BORDER,
         maxHeight: 200,
     },
     historyHeader: {
@@ -432,12 +449,12 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.divider,
+        borderBottomColor: PAPER_BORDER,
     },
     historyTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: theme.colors.text,
+        color: PAPER_INK,
     },
     historyList: {
         maxHeight: 150,
@@ -446,14 +463,14 @@ const stylesheet = StyleSheet.create((theme) => ({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.divider,
+        borderBottomColor: PAPER_BORDER,
     },
     historyItemPressed: {
-        backgroundColor: theme.colors.groupped.background,
+        backgroundColor: PAPER_PANEL_MUTED,
     },
     historyItemText: {
         fontSize: 14,
-        color: theme.colors.text,
+        color: PAPER_INK,
         lineHeight: 20,
     },
     // 🆕 Image message styles
@@ -475,14 +492,14 @@ const stylesheet = StyleSheet.create((theme) => ({
         bottom: 0,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.colors.groupped.background,
+        backgroundColor: PAPER_PANEL_MUTED,
         borderRadius: 12,
     },
     // 🆕 Image preview container
     imagePreviewContainer: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: PAPER_PANEL,
         borderTopWidth: 1,
-        borderTopColor: theme.colors.divider,
+        borderTopColor: PAPER_BORDER,
         padding: 12,
         flexDirection: 'row',
         alignItems: 'center',
@@ -499,11 +516,11 @@ const stylesheet = StyleSheet.create((theme) => ({
     imagePreviewText: {
         fontSize: 14,
         fontWeight: '500',
-        color: theme.colors.text,
+        color: PAPER_INK,
     },
     imagePreviewSize: {
         fontSize: 12,
-        color: theme.colors.textSecondary,
+        color: PAPER_MUTED,
         marginTop: 2,
     },
     removeImageButton: {
@@ -511,21 +528,21 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     uploadProgress: {
         height: 3,
-        backgroundColor: theme.colors.divider,
+        backgroundColor: PAPER_BORDER,
         borderRadius: 2,
         marginTop: 6,
         overflow: 'hidden',
     },
     uploadProgressBar: {
         height: '100%',
-        backgroundColor: theme.colors.button.primary.background,
+        backgroundColor: PAPER_ACCENT,
         borderRadius: 2,
     },
     // 🆕 Clipboard paste prompt styles
     clipboardPrompt: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: PAPER_PANEL,
         borderTopWidth: 1,
-        borderTopColor: theme.colors.divider,
+        borderTopColor: PAPER_BORDER,
         paddingHorizontal: 16,
         paddingVertical: 10,
         flexDirection: 'row',
@@ -542,11 +559,11 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     clipboardPromptText: {
         fontSize: 14,
-        color: theme.colors.text,
+        color: PAPER_INK,
         flex: 1,
     },
     clipboardPasteButton: {
-        backgroundColor: theme.colors.button.primary.background,
+        backgroundColor: PAPER_ACCENT,
         paddingHorizontal: 14,
         paddingVertical: 8,
         borderRadius: 16,
@@ -630,113 +647,113 @@ const getRoleVisual = (roleId?: string, displayName?: string): RoleVisual => {
     if (normalizedRole === 'orchestrator') {
         return {
             avatarIcon: 'sparkles-outline',
-            avatarBackground: '#C8860A',  // warm gold — the crown role
+            avatarBackground: '#7A6138',
             badgeLabel: 'MASTER',
-            badgeBackground: '#C8860A20',
-            badgeTextColor: '#B27006',
-            dotColor: '#C8860A',
+            badgeBackground: '#EFE3CF',
+            badgeTextColor: '#6D532B',
+            dotColor: '#7A6138',
         };
     }
 
     if (normalizedRole === 'implementer') {
         return {
             avatarIcon: 'hammer-outline',
-            avatarBackground: '#E05C2A',  // vibrant orange-red — builder energy
+            avatarBackground: '#8E6044',
             badgeLabel: 'IMPLEMENTER',
-            badgeBackground: '#E05C2A20',
-            badgeTextColor: '#C04820',
-            dotColor: '#34C759',
+            badgeBackground: '#F0E1D5',
+            badgeTextColor: '#744B34',
+            dotColor: '#8E6044',
         };
     }
 
     if (normalizedRole === 'architect') {
         return {
             avatarIcon: 'git-branch-outline',
-            avatarBackground: '#4A6FD4',  // bright blue — system design
+            avatarBackground: '#53665F',
             badgeLabel: 'ARCHITECT',
-            badgeBackground: '#4A6FD420',
-            badgeTextColor: '#3A5BC0',
-            dotColor: '#4A6FD4',
+            badgeBackground: '#E3E9E3',
+            badgeTextColor: '#3F504A',
+            dotColor: '#53665F',
         };
     }
 
     if (normalizedRole === 'qa-engineer') {
         return {
             avatarIcon: 'flask-outline',
-            avatarBackground: '#9B3DCA',  // vibrant purple — scientific testing
+            avatarBackground: '#766957',
             badgeLabel: 'QA',
-            badgeBackground: '#9B3DCA20',
-            badgeTextColor: '#7B2DAA',
-            dotColor: '#9B3DCA',
+            badgeBackground: '#EAE1D3',
+            badgeTextColor: '#5E5141',
+            dotColor: '#766957',
         };
     }
 
     if (normalizedRole === 'observer' || normalizedRole === 'researcher') {
         return {
             avatarIcon: 'eye-outline',
-            avatarBackground: '#0EA5A0',  // bright teal — observation
+            avatarBackground: '#5E766C',
             badgeLabel: normalizedRole === 'researcher' ? 'RESEARCH' : 'REVIEW',
-            badgeBackground: '#0EA5A020',
-            badgeTextColor: '#0A8580',
-            dotColor: '#0EA5A0',
+            badgeBackground: '#E0E8E2',
+            badgeTextColor: '#445B51',
+            dotColor: '#5E766C',
         };
     }
 
     if (normalizedRole === 'agent-builder') {
         return {
-            avatarLabel: '🧬',
-            avatarBackground: '#2DA44E',  // GitHub green — genome creation
+            avatarLabel: 'G',
+            avatarBackground: '#617458',
             badgeLabel: 'BUILDER',
-            badgeBackground: '#2DA44E20',
-            badgeTextColor: '#1A8A38',
-            dotColor: '#2DA44E',
+            badgeBackground: '#E4EBD9',
+            badgeTextColor: '#4D6043',
+            dotColor: '#617458',
         };
     }
 
     if (normalizedRole === 'org-manager') {
         return {
-            avatarLabel: '🏛️',
-            avatarBackground: '#1D6FA4',  // institutional blue — governance
+            avatarLabel: 'O',
+            avatarBackground: '#596B70',
             badgeLabel: 'ORG',
-            badgeBackground: '#1D6FA420',
-            badgeTextColor: '#145A88',
-            dotColor: '#1D6FA4',
+            badgeBackground: '#E1E8E8',
+            badgeTextColor: '#43585D',
+            dotColor: '#596B70',
         };
     }
 
     if (normalizedRole === 'supervisor') {
         return {
-            avatarLabel: '🔭',
-            avatarBackground: '#6D5ACF',  // indigo — monitoring & oversight
+            avatarLabel: 'S',
+            avatarBackground: '#665D72',
             badgeLabel: 'SUPERVISOR',
-            badgeBackground: '#6D5ACF20',
-            badgeTextColor: '#5444B5',
-            dotColor: '#6D5ACF',
+            badgeBackground: '#E8E2EA',
+            badgeTextColor: '#51495E',
+            dotColor: '#665D72',
         };
     }
 
     if (normalizedRole === 'help-agent') {
         return {
-            avatarLabel: '🛟',
-            avatarBackground: '#D4821A',  // warm amber — rescue & repair
+            avatarLabel: 'H',
+            avatarBackground: '#8B6B3F',
             badgeLabel: 'HELP',
-            badgeBackground: '#D4821A20',
-            badgeTextColor: '#B06812',
-            dotColor: '#D4821A',
+            badgeBackground: '#EFE5D2',
+            badgeTextColor: '#6E542E',
+            dotColor: '#8B6B3F',
         };
     }
 
     if (normalizedRole === 'user') {
         return {
             avatarIcon: 'person-outline',
-            avatarBackground: '#4A7FAE',  // softer blue for user
-            dotColor: '#4A7FAE',
+            avatarBackground: PAPER_ACCENT,
+            dotColor: PAPER_ACCENT,
         };
     }
 
     return {
         avatarLabel: getAvatarContent(normalizedRole, displayName),
-        avatarBackground: '#5C7A8F',  // lighter default (was very dark #31485D)
+        avatarBackground: '#6A6258',
         dotColor: '#34C759',
     };
 };
@@ -792,14 +809,12 @@ const TaskCard = ({ task, onPress, styles }: TaskCardProps) => {
         <Pressable
             onPress={onPress}
             style={{
-                backgroundColor: styles.messageBubble.backgroundColor,
+                backgroundColor: PAPER_PANEL,
                 borderRadius: 12,
                 padding: 12,
                 marginTop: 8,
                 borderWidth: 1,
-                borderColor: statusColor,
-                borderLeftWidth: 4,
-                borderLeftColor: statusColor
+                borderColor: PAPER_BORDER,
             }}
         >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -807,7 +822,7 @@ const TaskCard = ({ task, onPress, styles }: TaskCardProps) => {
                     {task.title}
                 </Text>
                 <View style={{
-                    backgroundColor: statusColor + '20',
+                    backgroundColor: PAPER_ACCENT_SOFT,
                     paddingHorizontal: 8,
                     paddingVertical: 2,
                     borderRadius: 8
@@ -1083,15 +1098,15 @@ const MessageBubbleInner = ({
         if (isMyMessage) {
             return (
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginBottom: 4 }}>
-                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{timeLabel}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary }}>{senderLabel}</Text>
+                    <Text style={{ fontSize: 10, color: PAPER_MUTED }}>{timeLabel}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: PAPER_MUTED }}>{senderLabel}</Text>
                 </View>
             );
         }
 
         return (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: showCardBody ? 6 : 4 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: '#223548' }}>{senderLabel}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: PAPER_INK }}>{senderLabel}</Text>
                 {roleVisual.badgeLabel ? (
                     <View
                         style={{
@@ -1107,7 +1122,7 @@ const MessageBubbleInner = ({
                         </Text>
                     </View>
                 ) : null}
-                <Text style={{ fontSize: 11, color: '#9AA8B4' }}>{timeLabel}</Text>
+                <Text style={{ fontSize: 11, color: PAPER_MUTED }}>{timeLabel}</Text>
             </View>
         );
     };
@@ -1125,8 +1140,8 @@ const MessageBubbleInner = ({
                     styles.associationCard,
                     isMyMessage && styles.associationCardMyMessage,
                     isEdzlf && !isMyMessage && {
-                        backgroundColor: '#F7FAFC',
-                        borderColor: '#D9E4EA',
+                        backgroundColor: PAPER_PANEL_MUTED,
+                        borderColor: PAPER_BORDER,
                     },
                 ]}
             >
@@ -1199,9 +1214,9 @@ const MessageBubbleInner = ({
             return null;
         }
 
-        const chipBackground = isMyMessage ? 'rgba(255,255,255,0.16)' : theme.colors.surfaceHigh;
-        const chipBorder = isMyMessage ? 'rgba(255,255,255,0.18)' : '#D9E4EA';
-        const chipTextColor = isMyMessage ? '#FFFFFF' : theme.colors.textSecondary;
+        const chipBackground = isMyMessage ? 'rgba(255,253,248,0.16)' : PAPER_PANEL_MUTED;
+        const chipBorder = isMyMessage ? 'rgba(255,253,248,0.18)' : PAPER_BORDER;
+        const chipTextColor = isMyMessage ? '#FFFDF8' : PAPER_MUTED;
 
         return (
             <View
@@ -1245,7 +1260,7 @@ const MessageBubbleInner = ({
                         isMyMessage && styles.myAvatarContainer,
                         isEdzlf && {
                             backgroundColor: roleVisual.avatarBackground,
-                            borderColor: isMyMessage ? theme.colors.text : theme.colors.surface,
+                            borderColor: isMyMessage ? PAPER_ACCENT : PAPER_PANEL,
                             borderWidth: isMyMessage ? 0 : 1,
                             shadowOpacity: 0,
                             elevation: 0,
@@ -1259,7 +1274,7 @@ const MessageBubbleInner = ({
                     )}
                 </Pressable>
 
-                <View style={[styles.messageBubbleContainer, isEdzlf && { maxWidth: isMyMessage ? '52%' : '82%' }]}>
+                <View style={[styles.messageBubbleContainer, isEdzlf && { maxWidth: isMyMessage ? 640 : 760 }]}>
                     {renderDesktopHeader()}
                     {isEdzlf && !showCardBody && !isMyMessage ? (
                         <View>
@@ -1297,9 +1312,9 @@ const MessageBubbleInner = ({
                                 styles.messageBubble,
                                 isMyMessage && styles.myMessageBubble,
                                 isEdzlf && {
-                                    borderRadius: 20,
-                                    borderBottomLeftRadius: 20,
-                                    borderBottomRightRadius: 20,
+                                    borderRadius: 16,
+                                    borderBottomLeftRadius: 16,
+                                    borderBottomRightRadius: 16,
                                     overflow: 'hidden' as const,
                                 },
                                 isEdzlf && !isMyMessage && {
@@ -1308,8 +1323,8 @@ const MessageBubbleInner = ({
                                     shadowRadius: 0,
                                     elevation: 0,
                                     padding: 0,
-                                    borderBottomLeftRadius: 20,
-                                    borderBottomRightRadius: 20,
+                                    borderBottomLeftRadius: 16,
+                                    borderBottomRightRadius: 16,
                                 },
                             ]}
                             onPress={handleBubblePress}
@@ -1318,23 +1333,23 @@ const MessageBubbleInner = ({
                         >
                             {isMyMessage ? (
                                 <LinearGradient
-                                    colors={['#486884', '#2B4158']}
+                                    colors={[PAPER_ACCENT, PAPER_ACCENT]}
                                     start={{ x: 0.5, y: 0 }}
                                     end={{ x: 0.5, y: 1 }}
-                                    style={[StyleSheet.absoluteFillObject as object, { borderRadius: 20 }]}
+                                    style={[StyleSheet.absoluteFillObject as object, { borderRadius: 16 }]}
                                 />
                             ) : null}
                             {isEdzlf && !isMyMessage ? (
                                 <LinearGradient
-                                    colors={[theme.colors.surface, theme.colors.surfaceHigh]}
+                                    colors={[PAPER_PANEL, PAPER_PANEL]}
                                     start={{ x: 0.5, y: 0 }}
                                     end={{ x: 0.5, y: 1 }}
                                     style={[
                                         StyleSheet.absoluteFillObject as object,
                                         {
-                                            borderRadius: 20,
+                                            borderRadius: 16,
                                             borderWidth: 1,
-                                            borderColor: '#D9E4EA',
+                                            borderColor: PAPER_BORDER,
                                         },
                                     ]}
                                 />
@@ -1378,14 +1393,14 @@ const MessageBubbleInner = ({
                                                 size={14}
                                                 color={copied
                                                     ? (theme.colors.success || '#10B981')
-                                                    : isMyMessage ? '#E7EFF6' : theme.colors.textSecondary
+                                            : isMyMessage ? '#FFF9F0' : PAPER_MUTED
                                                 }
                                             />
                                         </Pressable>
                                     </View>
                                 )}
                                 {isEdzlf && copied ? (
-                                    <Text style={{ fontSize: 11, color: isMyMessage ? '#E7EFF6' : theme.colors.textSecondary, fontWeight: '600' }}>
+                                    <Text style={{ fontSize: 11, color: isMyMessage ? '#FFF9F0' : PAPER_MUTED, fontWeight: '600' }}>
                                         Copied
                                     </Text>
                                 ) : null}
@@ -1499,22 +1514,62 @@ export default function TeamChatRoom({
     const { theme } = useUnistyles();
     const styles = stylesheet;
     const messageListRef = React.useRef<FlatList<TeamMessage>>(null);
-    const isNearBottomRef = React.useRef(true);  // Track if user is near bottom for auto-scroll
+    const isNearBottomRef = React.useRef(true);
+    const shouldStickToLatestRef = React.useRef(true);
     const currentOffsetYRef = React.useRef(0);
     const contentHeightRef = React.useRef(0);
     const viewportHeightRef = React.useRef(0);
     const historyLoadInFlightRef = React.useRef(false);
     const pendingWebAnchorSnapshotRef = React.useRef<WebInvertedListAnchorSnapshot | null>(null);
+    const latestScrollFrameRef = React.useRef<number | null>(null);
+    const latestScrollTimeoutsRef = React.useRef<ReturnType<typeof setTimeout>[]>([]);
     const [showScrollToLatestButton, setShowScrollToLatestButton] = React.useState(false);
     const [historyCursor, setHistoryCursor] = React.useState<string | null>(null);
     const [hasMoreHistory, setHasMoreHistory] = React.useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
 
-    // Inverted FlatList: offset 0 is the bottom (latest message). Jumping to
-    // the latest message is a single scrollToOffset call — no retry loop.
+    // Inverted FlatList: offset 0 is the visual bottom/latest message.
     const scrollToBottom = React.useCallback((animated: boolean) => {
         messageListRef.current?.scrollToOffset({ offset: 0, animated });
+        currentOffsetYRef.current = 0;
+        isNearBottomRef.current = true;
     }, []);
+
+    const clearScheduledLatestScrolls = React.useCallback(() => {
+        if (latestScrollFrameRef.current !== null && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(latestScrollFrameRef.current);
+            latestScrollFrameRef.current = null;
+        }
+
+        latestScrollTimeoutsRef.current.forEach(clearTimeout);
+        latestScrollTimeoutsRef.current = [];
+    }, []);
+
+    const scheduleScrollToLatest = React.useCallback((animated: boolean) => {
+        shouldStickToLatestRef.current = true;
+        isNearBottomRef.current = true;
+        currentOffsetYRef.current = 0;
+        setShowScrollToLatestButton(false);
+        clearScheduledLatestScrolls();
+        scrollToBottom(animated);
+
+        if (typeof requestAnimationFrame === 'function') {
+            latestScrollFrameRef.current = requestAnimationFrame(() => {
+                latestScrollFrameRef.current = null;
+                if (shouldStickToLatestRef.current) {
+                    scrollToBottom(false);
+                }
+            });
+        }
+
+        latestScrollTimeoutsRef.current = [60, 160, 360].map((delay) => setTimeout(() => {
+            if (shouldStickToLatestRef.current) {
+                scrollToBottom(false);
+            }
+        }, delay));
+    }, [clearScheduledLatestScrolls, scrollToBottom]);
+
+    React.useEffect(() => clearScheduledLatestScrolls, [clearScheduledLatestScrolls]);
     const router = useRouter();
     const isEdzlf = variant === 'edzlf';
     const connectionStatus = useConnectionStatus();
@@ -2052,9 +2107,9 @@ export default function TeamChatRoom({
                             borderRadius: 14,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            backgroundColor: '#F8FBFD',
+                            backgroundColor: PAPER_PANEL,
                             borderWidth: 1,
-                            borderColor: '#D9E4EA',
+                            borderColor: PAPER_BORDER,
                         }}
                     >
                         <Ionicons name={showStatus ? "chevron-up" : "chevron-down"} size={15} color={theme.colors.textSecondary} />
@@ -2067,11 +2122,11 @@ export default function TeamChatRoom({
             <Pressable
                 onPress={() => setShowStatus(!showStatus)}
                 style={{
-                    backgroundColor: theme.colors.surface,
+                    backgroundColor: PAPER_PANEL,
                     paddingHorizontal: 16,
                     paddingVertical: 12,
                     borderBottomWidth: 1,
-                    borderBottomColor: theme.colors.divider,
+                    borderBottomColor: PAPER_BORDER,
                     flexDirection: 'row',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -2119,16 +2174,16 @@ export default function TeamChatRoom({
                             width: 320,
                             maxWidth: '78%',
                             maxHeight: 340,
-                            backgroundColor: '#F8FBFD',
+                            backgroundColor: PAPER_PANEL,
                             borderWidth: 1,
-                            borderColor: '#D9E4EA',
+                            borderColor: PAPER_BORDER,
                             borderRadius: 14,
                             overflow: 'hidden',
-                            shadowColor: '#000000',
-                            shadowOffset: { width: 0, height: 8 },
-                            shadowOpacity: 0.12,
-                            shadowRadius: 24,
-                            elevation: 8,
+                            shadowColor: 'transparent',
+                            shadowOffset: { width: 0, height: 0 },
+                            shadowOpacity: 0,
+                            shadowRadius: 0,
+                            elevation: 0,
                             zIndex: 50,
                         }}
                     >
@@ -2152,7 +2207,7 @@ export default function TeamChatRoom({
                                             paddingHorizontal: 12,
                                             paddingVertical: 10,
                                             borderBottomWidth: index === members.length - 1 ? 0 : 1,
-                                            borderBottomColor: '#E2EBF0',
+                                            borderBottomColor: PAPER_BORDER,
                                         }}
                                     >
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -2160,11 +2215,11 @@ export default function TeamChatRoom({
                                                 width: 28,
                                                 height: 28,
                                                 borderRadius: 14,
-                                                backgroundColor: theme.colors.surfaceHigh,
+                                                backgroundColor: PAPER_PANEL_MUTED,
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 borderWidth: 1,
-                                                borderColor: isOnline ? theme.colors.success : theme.colors.divider
+                                                borderColor: isOnline ? theme.colors.success : PAPER_BORDER
                                             }}>
                                                 <Text style={{ fontSize: 12 }}>
                                                     {getAvatarContent(m.member.roleId, m.member.displayName)}
@@ -2197,7 +2252,7 @@ export default function TeamChatRoom({
         }
 
         return (
-            <View style={{ backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.divider }}>
+            <View style={{ backgroundColor: PAPER_PANEL, borderBottomWidth: 1, borderBottomColor: PAPER_BORDER }}>
                 {members.map((m) => {
                     const isOnline = m.session?.active;
                     const lastResponse = lastResponseBySession[m.member.sessionId];
@@ -2265,19 +2320,24 @@ export default function TeamChatRoom({
     const invertedMessages = React.useMemo(() => {
         return uniqueMessages.slice().reverse();
     }, [uniqueMessages]);
+    const latestMessageId = uniqueMessages.length > 0 ? uniqueMessages[uniqueMessages.length - 1].id : null;
+    const latestMessageIdRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
         isNearBottomRef.current = true;
+        shouldStickToLatestRef.current = true;
         currentOffsetYRef.current = 0;
         contentHeightRef.current = 0;
         viewportHeightRef.current = 0;
         historyLoadInFlightRef.current = false;
         pendingWebAnchorSnapshotRef.current = null;
+        latestMessageIdRef.current = null;
+        clearScheduledLatestScrolls();
         setShowScrollToLatestButton(false);
         setHistoryCursor(null);
         setHasMoreHistory(false);
         setIsLoadingHistory(false);
-    }, [teamId]);
+    }, [clearScheduledLatestScrolls, teamId]);
 
     const queuePendingWebAnchor = React.useCallback((wasNearBottom: boolean) => {
         if (Platform.OS !== 'web') {
@@ -2309,16 +2369,19 @@ export default function TeamChatRoom({
 
         requestAnimationFrame(() => {
             if (adjustment.type === 'scroll_to_latest') {
-                scrollToBottom(false);
+                scheduleScrollToLatest(false);
                 return;
             }
 
+            shouldStickToLatestRef.current = false;
+            currentOffsetYRef.current = adjustment.offset;
+            isNearBottomRef.current = isNearBottom(adjustment.offset);
             messageListRef.current?.scrollToOffset({
                 offset: adjustment.offset,
                 animated: false,
             });
         });
-    }, [scrollToBottom]);
+    }, [scheduleScrollToLatest]);
 
     const loadOlderMessages = React.useCallback(async () => {
         if (!historyCursor || !hasMoreHistory || historyLoadInFlightRef.current) {
@@ -2345,6 +2408,7 @@ export default function TeamChatRoom({
                 useCache: false,
             });
 
+            queuePendingWebAnchor(isNearBottomRef.current);
             setMessages(prev => mergeTeamMessages(prev, result.messages, null));
 
             const nextCursor = typeof result.cursor === 'string' ? result.cursor : null;
@@ -2357,7 +2421,7 @@ export default function TeamChatRoom({
             historyLoadInFlightRef.current = false;
             setIsLoadingHistory(false);
         }
-    }, [hasMoreHistory, historyCursor, setMessages, teamId]);
+    }, [hasMoreHistory, historyCursor, queuePendingWebAnchor, setMessages, teamId]);
 
     const loadMessages = React.useCallback(async () => {
         try {
@@ -2379,7 +2443,9 @@ export default function TeamChatRoom({
             setHasMoreHistory(nextHasMore);
 
             // Inverted FlatList renders bottom-anchored by default after a data
-            // change; no explicit scroll is required on first load.
+            // change on native. On web we still keep explicit latest-stick state
+            // because long Markdown/image cells can report their height later.
+            shouldStickToLatestRef.current = true;
             isNearBottomRef.current = true;
             currentOffsetYRef.current = 0;
             setShowScrollToLatestButton(false);
@@ -2411,9 +2477,21 @@ export default function TeamChatRoom({
         );
     }, [hasMoreHistory, isLoadingHistory, styles.historyLoadIndicator, styles.historyLoadIndicatorText, theme.colors.textSecondary]);
 
-    // Inverted FlatList stays anchored at offset=0 automatically when new items
-    // are prepended to the head of the data array, so we no longer need an
-    // effect that scrolls on every message count change.
+    React.useEffect(() => {
+        const previousLatestMessageId = latestMessageIdRef.current;
+        latestMessageIdRef.current = latestMessageId;
+
+        if (!latestMessageId || previousLatestMessageId === latestMessageId) {
+            return;
+        }
+
+        if (previousLatestMessageId === null || shouldStickToLatestRef.current || isNearBottomRef.current) {
+            scheduleScrollToLatest(false);
+            return;
+        }
+
+        setShowScrollToLatestButton(true);
+    }, [latestMessageId, scheduleScrollToLatest]);
 
     // Subscribe to real-time messages
     React.useEffect(() => {
@@ -2423,7 +2501,7 @@ export default function TeamChatRoom({
         const subscribe = async () => {
             try {
                 const unsubscribe = await sync.subscribeToTeamMessages(teamId, (message) => {
-                    const shouldAutoScroll = isNearBottomRef.current;
+                    const shouldAutoScroll = shouldStickToLatestRef.current || isNearBottomRef.current;
                     if (messageIdsRef.current.has(message.id)) {
                         return;
                     }
@@ -2433,10 +2511,9 @@ export default function TeamChatRoom({
                         return appendTeamMessage(prev, message);
                     });
                     if (shouldAutoScroll) {
-                        setShowScrollToLatestButton(false);
-                        if (Platform.OS !== 'web') {
-                            scrollToBottom(true);
-                        }
+                        scheduleScrollToLatest(true);
+                    } else {
+                        setShowScrollToLatestButton(true);
                     }
                 });
 
@@ -2457,7 +2534,7 @@ export default function TeamChatRoom({
             isActive = false;
             cleanup?.();
         };
-    }, [teamId, setMessages]);
+    }, [queuePendingWebAnchor, scheduleScrollToLatest, setMessages, teamId]);
 
     const handleSend = async () => {
         const content = inputText.trim();
@@ -2511,9 +2588,7 @@ export default function TeamChatRoom({
                 clearInterval(progressInterval);
                 setUploadProgress(100);
 
-                isNearBottomRef.current = true;
-                setShowScrollToLatestButton(false);
-                scrollToBottom(true);
+                scheduleScrollToLatest(true);
 
                 // Clear states
                 setTimeout(() => {
@@ -2808,11 +2883,7 @@ export default function TeamChatRoom({
             messageIdsRef.current.add(messageId);
             queuePendingWebAnchor(true);
             setMessages(prev => appendTeamMessage(prev, optimisticMsg));
-            isNearBottomRef.current = true;
-            setShowScrollToLatestButton(false);
-            if (Platform.OS !== 'web') {
-                scrollToBottom(true);
-            }
+            scheduleScrollToLatest(true);
             setInputText('');
 
             await sync.sendTeamMessage(request);
@@ -3000,11 +3071,17 @@ export default function TeamChatRoom({
                 } : undefined}
                 onLayout={(event) => {
                     viewportHeightRef.current = event.nativeEvent.layout.height;
+                    if (shouldStickToLatestRef.current) {
+                        scheduleScrollToLatest(false);
+                    }
                     void loadOlderMessages();
                 }}
                 onContentSizeChange={(_, contentHeight) => {
                     contentHeightRef.current = contentHeight;
                     applyPendingWebAnchor(contentHeight);
+                    if (shouldStickToLatestRef.current) {
+                        scheduleScrollToLatest(false);
+                    }
                     void loadOlderMessages();
                 }}
                 // Inverted list: offset=0 means the user is at the latest message.
@@ -3013,7 +3090,12 @@ export default function TeamChatRoom({
                     currentOffsetYRef.current = offsetY;
                     contentHeightRef.current = event.nativeEvent.contentSize.height;
                     viewportHeightRef.current = event.nativeEvent.layoutMeasurement.height;
-                    isNearBottomRef.current = isNearBottom(offsetY);
+                    const nearBottom = isNearBottom(offsetY);
+                    isNearBottomRef.current = nearBottom;
+                    shouldStickToLatestRef.current = nearBottom;
+                    if (!nearBottom) {
+                        clearScheduledLatestScrolls();
+                    }
                     setShowScrollToLatestButton(shouldShowScrollToLatestButton({
                         messageCount: invertedMessages.length,
                         offsetY,
@@ -3033,12 +3115,10 @@ export default function TeamChatRoom({
                             pressed && styles.scrollToLatestButtonPressed,
                         ]}
                         onPress={() => {
-                            isNearBottomRef.current = true;
-                            setShowScrollToLatestButton(false);
-                            scrollToBottom(true);
+                            scheduleScrollToLatest(true);
                         }}
                     >
-                        <Ionicons name="arrow-down" size={20} color="#FFFFFF" />
+                        <Ionicons name="arrow-down" size={20} color="#FFF9F0" />
                     </Pressable>
                 </View>
             )}
@@ -3084,7 +3164,7 @@ export default function TeamChatRoom({
             {/* 🆕 Compressing indicator */}
             {isCompressing && (
                 <View style={[styles.imagePreviewContainer, { justifyContent: 'center' }]}>
-                    <ActivityIndicator size="small" color={theme.colors.button.primary.background} />
+                    <ActivityIndicator size="small" color={PAPER_ACCENT} />
                     <Text style={[styles.imagePreviewText, { marginLeft: 12 }]}>
                         Compressing image...
                     </Text>
@@ -3098,7 +3178,7 @@ export default function TeamChatRoom({
                         <Ionicons
                             name="clipboard-outline"
                             size={20}
-                            color={theme.colors.button.primary.background}
+                            color={PAPER_ACCENT}
                             style={styles.clipboardPromptIcon}
                         />
                         <Text style={styles.clipboardPromptText}>
@@ -3206,7 +3286,7 @@ export default function TeamChatRoom({
                             }}
                             hitSlop={4}
                         >
-                            <Ionicons name="medkit" size={13} color={theme.colors.button.primary.background} />
+                            <Ionicons name="medkit" size={13} color={PAPER_ACCENT} />
                             <Text style={styles.helpPillText}>Help</Text>
                         </Pressable>
 

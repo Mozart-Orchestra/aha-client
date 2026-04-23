@@ -1787,7 +1787,7 @@ export default function TeamDashboardScreen() {
             <View
                 style={[
                     styles.desktopPanelHeader,
-                    { backgroundColor: 'rgba(242,246,248,0.82)' },
+                    { backgroundColor: '#FAF5EC' },
                 ]}
             >
                 <View style={styles.desktopHeaderTopRow}>
@@ -1808,7 +1808,7 @@ export default function TeamDashboardScreen() {
                                 >
                                     {isActive ? (
                                         <LinearGradient
-                                            colors={['#FFFFFF', '#EDF3F7']}
+                                            colors={['#FFFDF8', '#FFFDF8']}
                                             start={{ x: 0, y: 0 }}
                                             end={{ x: 0, y: 1 }}
                                             style={{
@@ -1821,7 +1821,7 @@ export default function TeamDashboardScreen() {
                                         style={[
                                             styles.desktopTabText,
                                             {
-                                                color: isActive ? '#233648' : '#92A1AF',
+                                                color: isActive ? '#302A22' : '#8B806F',
                                                 fontWeight: isActive ? '600' : 'normal',
                                             },
                                         ]}
@@ -1841,7 +1841,7 @@ export default function TeamDashboardScreen() {
                                 setShowMenu((previous) => !previous);
                             }}
                         >
-                            <Ionicons name="ellipsis-horizontal" size={20} color="#98A8B5" />
+                            <Ionicons name="ellipsis-horizontal" size={20} color="#8B806F" />
                         </Pressable>
                     </View>
                 </View>
@@ -1857,7 +1857,7 @@ export default function TeamDashboardScreen() {
                         style={[
                             styles.desktopMenu,
                             {
-                                backgroundColor: '#F8FBFDEB',
+                                backgroundColor: '#FFFDF8',
                                 borderColor: shellTheme.panelBorder,
                             },
                         ]}
@@ -2042,7 +2042,7 @@ export default function TeamDashboardScreen() {
                                 </Pressable>
                             </View>
                         </View>
-                        <View style={{ flexDirection: 'row', backgroundColor: theme.colors.groupped.background, borderRadius: 12, padding: 4 }}>
+                        <View style={{ flexDirection: 'row', backgroundColor: '#F4EADC', borderRadius: 12, padding: 4, borderWidth: 1, borderColor: '#E4D6C3' }}>
                             {STANDARD_SHELL_TABS.map((tab) => (
                                 <Pressable
                                     key={tab.id}
@@ -2052,17 +2052,17 @@ export default function TeamDashboardScreen() {
                                         paddingVertical: 8,
                                         alignItems: 'center',
                                         borderRadius: 8,
-                                        backgroundColor: activeTab === tab.id ? theme.colors.surface : 'transparent',
-                                        shadowColor: activeTab === tab.id ? '#000' : 'transparent',
-                                        shadowOffset: { width: 0, height: 1 },
-                                        shadowOpacity: activeTab === tab.id ? 0.1 : 0,
-                                        shadowRadius: 2,
+                                        backgroundColor: activeTab === tab.id ? '#FFFDF8' : 'transparent',
+                                        shadowColor: 'transparent',
+                                        shadowOffset: { width: 0, height: 0 },
+                                        shadowOpacity: 0,
+                                        shadowRadius: 0,
                                     }}
                                 >
                                     <Text style={{
                                         fontSize: 14,
                                         fontWeight: '600',
-                                        color: activeTab === tab.id ? theme.colors.text : theme.colors.textSecondary,
+                                        color: activeTab === tab.id ? '#302A22' : '#756A5D',
                                     }}>
                                         {tab.label}
                                     </Text>
