@@ -4,6 +4,7 @@ ARG NODE_OPTIONS=--max-old-space-size=12288
 ENV NODE_OPTIONS=${NODE_OPTIONS}
 
 COPY package.json yarn.lock ./
+COPY packages/auth-contract ./packages/auth-contract
 COPY patches ./patches
 COPY sources/team-config ./sources/team-config
 RUN yarn config set registry https://registry.yarnpkg.com
