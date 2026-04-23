@@ -140,6 +140,13 @@ async function loadFonts() {
     });
 }
 
+type RootInitState = {
+    credentials: AuthCredentials | null;
+    initError?: string;
+    needsRestore?: boolean;
+    oauthCallbackError?: string;
+};
+
 export default function RootLayout() {
     const { theme } = useUnistyles();
     const navigationTheme = React.useMemo(() => {
@@ -164,13 +171,16 @@ export default function RootLayout() {
     //
     // Init sequence
     //
-    const [initState, setInitState] = React.useState<{
-        credentials: AuthCredentials | null;
-        initError?: string;
-        needsRestore?: boolean;
-        oauthCallbackError?: string;
-    } | null>(null);
+    const [initState, setInitState] = React.useState<RootInitState | null>(null);
+    const [initAttempt, setInitAttempt] = React.useState(0);
     React.useEffect(() => {
+        let didCancel = false;
+        const finishInit = (state: RootInitState) => {
+            if (!didCancel) {
+                setInitState(state);
+            }
+        };
+
         const callbackState = Platform.OS === 'web' && typeof window !== 'undefined'
             ? readSupabaseOAuthCallbackState(window.location.hash)
             : null;
@@ -192,7 +202,11 @@ export default function RootLayout() {
 
         (async () => {
             try {
-                await loadFonts();
+                // Fonts are visual polish. On slow networks, expo-font's web loader can
+                // reject with "6000ms timeout exceeded"; that must not brick app startup.
+                void loadFonts().catch((error) => {
+                    console.warn('Font loading failed; continuing app initialization with fallback fonts:', error);
+                });
                 await sodium.ready;
                 await initializeTextLanguage();
                 await initializeI18n();
@@ -213,13 +227,22 @@ export default function RootLayout() {
                 // (e.g. from OAuth callback redirect with #access_token=...)
                 if (!credentials) {
                     // Wait for Supabase to process URL hash if present
-                    const { data, error: sessionError } = await supabase.auth.getSession();
-                    const shouldClearSession = shouldClearSupabaseSessionError(sessionError);
-                    if (shouldClearSession) {
-                        await clearSupabaseSession();
+                    let session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] | null = null;
+                    try {
+                        const { data, error: sessionError } = await supabase.auth.getSession();
+                        const shouldClearSession = shouldClearSupabaseSessionError(sessionError);
+                        if (shouldClearSession) {
+                            try {
+                                await clearSupabaseSession();
+                            } catch (error) {
+                                console.warn('Failed to clear stale Supabase session; continuing app initialization:', error);
+                            }
+                        }
+                        session = shouldClearSession ? null : data.session;
+                    } catch (error) {
+                        console.warn('Supabase session bootstrap failed; continuing without session:', error);
                     }
 
-                    let session = shouldClearSession ? null : data.session;
                     if (!session && callbackState?.accessToken) {
                         // Hash present but session not ready — wait for auth state change
                         session = await new Promise((resolve) => {
@@ -248,21 +271,33 @@ export default function RootLayout() {
                             }
                             // Failed: continue unauthenticated
                         } finally {
-                            await clearSupabaseSession();
+                            try {
+                                await clearSupabaseSession();
+                            } catch (error) {
+                                console.warn('Failed to clear completed Supabase session; continuing app initialization:', error);
+                            }
                         }
                     }
                 }
 
                 if (credentials) {
-                    await syncRestore(credentials);
+                    try {
+                        await syncRestore(credentials);
+                    } catch (error) {
+                        console.warn('Initial sync restore failed; continuing with stored credentials:', error);
+                    }
                 }
 
-                setInitState({ credentials, oauthCallbackError });
+                finishInit({ credentials, oauthCallbackError });
             } catch (error) {
-                setInitState({ credentials: null, initError: String(error) });
+                finishInit({ credentials: null, initError: String(error) });
             }
         })();
-    }, []);
+
+        return () => {
+            didCancel = true;
+        };
+    }, [initAttempt]);
 
     React.useEffect(() => {
         if (!initState?.oauthCallbackError) {
@@ -301,7 +336,10 @@ export default function RootLayout() {
                 <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12 }}>Failed to initialize</Text>
                 <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 24 }}>{initState.initError}</Text>
                 <Pressable
-                    onPress={() => { setInitState(null); /* re-trigger init */ }}
+                    onPress={() => {
+                        setInitState(null);
+                        setInitAttempt((attempt) => attempt + 1);
+                    }}
                     style={{ paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#000', borderRadius: 8 }}
                 >
                     <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
