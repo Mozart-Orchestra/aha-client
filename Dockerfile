@@ -63,6 +63,7 @@ USER root
 RUN if [ -n "$BASE_PATH" ]; then \
       echo "server { \
         listen 8080; \
+        location = / { return 200 'ok'; } \
         location ${BASE_PATH}/ { \
           alias /usr/share/nginx/html/; \
           index index.html; \
