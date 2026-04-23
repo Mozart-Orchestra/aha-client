@@ -2,6 +2,7 @@ import { io, type Socket } from 'socket.io-client';
 import { TokenStorage } from '@/auth/tokenStorage';
 import { Encryption } from './encryption/encryption';
 import { getCurrentAuth } from '@/auth/AuthContext';
+import { getCurrentAhaTraceId, withAhaTraceHeaders } from '@/observability/traceContext';
 
 //
 // Types
@@ -122,7 +123,8 @@ export class ApiSocket {
             path: `${pathPrefix}/v1/updates`,
             auth: {
                 token: this.config.token,
-                clientType: 'user-scoped' as const
+                clientType: 'user-scoped' as const,
+                traceId: getCurrentAhaTraceId(),
             },
             transports: this.usePollingFallback ? ['polling'] : ['websocket', 'polling'],
             reconnection: true,
@@ -259,10 +261,8 @@ export class ApiSocket {
         }
 
         const url = `${this.config.endpoint}${path}`;
-        const headers = {
-            'Authorization': `Bearer ${credentials.token}`,
-            ...options?.headers
-        };
+        const headers = withAhaTraceHeaders(options?.headers);
+        headers.Authorization = `Bearer ${credentials.token}`;
 
         return fetch(url, {
             ...options,
