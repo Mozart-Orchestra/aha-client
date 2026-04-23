@@ -46,6 +46,13 @@
 npm i aha-agi && npx aha auth login --code <join-ticket>
 ```
 
+生产部署如果不在默认 `aha-agi.com`，Kanban 会在复制命令中自动追加服务器固定步骤，先写入 CLI 的 `~/.aha/config.json`，再执行登录命令。部署时通过 public env 指定目标：
+
+```bash
+EXPO_PUBLIC_AHA_CLI_SERVER_URL=https://ahaagi.com/api
+EXPO_PUBLIC_AHA_CLI_WEBAPP_URL=https://ahaagi.com/webappv3
+```
+
 4. 新机器用该 ticket 加入同一个账户
 5. 新机器出现在设备列表，加入同一套 team / agent 协作体系
 

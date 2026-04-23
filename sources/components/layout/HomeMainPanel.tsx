@@ -593,7 +593,7 @@ function NewUserPanel() {
                 active={true}
             >
                 <View style={styles.onboardingCommandBox}>
-                    <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{loginCommand.replace(' && ', '\n')}</Text>
+                    <Text style={styles.onboardingCommandText} numberOfLines={3} ellipsizeMode="middle">{loginCommand.replace(/ && /g, '\n')}</Text>
                     <Pressable style={styles.onboardingCopyButton} onPress={handleCopyCommand}>
                         <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                     </Pressable>
@@ -736,7 +736,7 @@ function ExperiencedUserPanel() {
                 </View>
                 <View style={styles.onboardingStepContent}>
                     <View style={styles.onboardingCommandBox}>
-                        <Text style={styles.onboardingCommandText} numberOfLines={2} ellipsizeMode="middle">{displayedJoinCommand.replace(' && ', '\n')}</Text>
+                        <Text style={styles.onboardingCommandText} numberOfLines={3} ellipsizeMode="middle">{displayedJoinCommand.replace(/ && /g, '\n')}</Text>
                         <Pressable style={styles.onboardingCopyButton} onPress={handleCopyDeviceCommand}>
                             <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                         </Pressable>

@@ -290,7 +290,7 @@ export default React.memo(() => {
                                 color: theme.colors.text,
                                 ...Typography.mono()
                             }}>
-                                {displayedJoinCommand}
+                                {displayedJoinCommand.replace(/ && /g, '\n')}
                             </Text>
                             {joinCommandStatus ? (
                                 <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
