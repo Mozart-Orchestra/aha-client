@@ -17,7 +17,7 @@
     "ota": "APP_ENV=preview NODE_ENV=preview tsx sources/scripts/parseChangelog.ts && yarn typecheck && eas update --branch preview",
     "ota:production": "npx eas-cli@latest workflow:run ota.yaml",
     "typecheck": "node --max-old-space-size=12288 node_modules/.bin/tsc --noEmit --skipLibCheck --pretty false",
-    "typecheck:vanilla": "tsc --noEmit",
+    "typecheck:vanilla": "node --max-old-space-size=4096 node_modules/.bin/tsc --noEmit --pretty false",
     "typecheck:full": "node --max-old-space-size=12288 node_modules/.bin/tsc --noEmit --skipLibCheck --pretty false",
     "typecheck:diag": "node --max-old-space-size=12288 node_modules/.bin/tsc --noEmit --skipLibCheck --extendedDiagnostics --pretty false",
     "postinstall": "patch-package",
