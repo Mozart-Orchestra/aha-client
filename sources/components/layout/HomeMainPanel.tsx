@@ -23,7 +23,7 @@ import { t } from '@/text';
 import { Typography } from '@/constants/Typography';
 import { getSessionName } from '@/utils/sessionUtils';
 import { isMachineOnline } from '@/utils/machineUtils';
-import { getCliInstallAndLoginCommand } from '@/auth/cliCommands';
+import { formatCliInstallCommandForDisplay } from '@/auth/cliCommands';
 import { formatJoinTicketTimeRemaining, useAccountJoinCommand } from '@/auth/useAccountJoinCommand';
 
 function useIsExperiencedUser(): boolean {
@@ -541,21 +541,53 @@ function NewUserPanel() {
     const styles = stylesheet;
     const { theme, rt } = useUnistyles();
     const topInset = Platform.OS !== 'web' ? rt.insets.top : 0;
+    const auth = useAuth();
     const sessions = useAllSessions();
     const machines = useAllMachines();
     const hasMachine = machines.length > 0;
-
-    const loginCommand = React.useMemo(() => getCliInstallAndLoginCommand(), []);
+    const {
+        ensureFreshJoinCommand,
+        hasRefreshError,
+        isExpired,
+        isRefreshing,
+        primaryCommand,
+        refreshJoinCommand,
+        secondsRemaining,
+    } = useAccountJoinCommand(auth.credentials?.token);
+    const displayedJoinCommand = primaryCommand || (isRefreshing ? t('common.loading') : hasRefreshError ? t('common.error') : t('common.loading'));
+    const joinCommandStatus = React.useMemo(() => {
+        if (isRefreshing) {
+            return t('common.loading');
+        }
+        if (!primaryCommand && hasRefreshError) {
+            return t('common.error');
+        }
+        if (secondsRemaining === null) {
+            return null;
+        }
+        if (isExpired) {
+            return t('home.joinCommandExpired');
+        }
+        return t('home.joinCommandExpiresIn', {
+            time: formatJoinTicketTimeRemaining(secondsRemaining),
+        });
+    }, [hasRefreshError, isExpired, isRefreshing, primaryCommand, secondsRemaining]);
 
     const handleCopyCommand = React.useCallback(async () => {
-        const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(loginCommand);
-        const { Modal } = await import('@/modal');
-        Modal.alert(
-            t('home.onboarding.commandCopiedTitle'),
-            t('home.onboarding.commandCopiedMessage'),
-        );
-    }, [loginCommand]);
+        try {
+            const Clipboard = await import('expo-clipboard');
+            const commandToCopy = await ensureFreshJoinCommand();
+            await Clipboard.setStringAsync(commandToCopy);
+            const { Modal } = await import('@/modal');
+            Modal.alert(
+                t('home.onboarding.commandCopiedTitle'),
+                t('home.onboarding.commandCopiedMessage'),
+            );
+        } catch {
+            const { Modal } = await import('@/modal');
+            Modal.alert(t('common.error'), t('home.addDeviceHint'));
+        }
+    }, [ensureFreshJoinCommand]);
 
     const handleCreateTeam = React.useCallback(() => {
         router.push('/teams/new' as never);
@@ -593,11 +625,23 @@ function NewUserPanel() {
                 active={true}
             >
                 <View style={styles.onboardingCommandBox}>
-                    <Text style={styles.onboardingCommandText} numberOfLines={3} ellipsizeMode="middle">{loginCommand.replace(/ && /g, '\n')}</Text>
+                    <Text style={styles.onboardingCommandText} numberOfLines={5} ellipsizeMode="middle">{formatCliInstallCommandForDisplay(displayedJoinCommand)}</Text>
                     <Pressable style={styles.onboardingCopyButton} onPress={handleCopyCommand}>
                         <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                     </Pressable>
                 </View>
+                {joinCommandStatus ? (
+                    <View style={styles.joinCommandStatusRow}>
+                        <Text style={styles.onboardingHint}>{joinCommandStatus}</Text>
+                        {isExpired || (!primaryCommand && hasRefreshError) ? (
+                            <Pressable onPress={() => { void refreshJoinCommand(); }}>
+                                <Text style={styles.joinCommandStatusAction}>
+                                    {isRefreshing ? t('common.loading') : t('common.retry')}
+                                </Text>
+                            </Pressable>
+                        ) : null}
+                    </View>
+                ) : null}
                 {machines.length > 0 ? (
                     <View style={{ marginTop: 12, gap: 8 }}>
                         {machines.map((machine) => (
@@ -736,7 +780,7 @@ function ExperiencedUserPanel() {
                 </View>
                 <View style={styles.onboardingStepContent}>
                     <View style={styles.onboardingCommandBox}>
-                        <Text style={styles.onboardingCommandText} numberOfLines={3} ellipsizeMode="middle">{displayedJoinCommand.replace(/ && /g, '\n')}</Text>
+                        <Text style={styles.onboardingCommandText} numberOfLines={5} ellipsizeMode="middle">{formatCliInstallCommandForDisplay(displayedJoinCommand)}</Text>
                         <Pressable style={styles.onboardingCopyButton} onPress={handleCopyDeviceCommand}>
                             <Ionicons name="copy-outline" size={16} color={theme.colors.text} />
                         </Pressable>

@@ -17,6 +17,7 @@ import { goBackOrReturn } from '@/utils/returnNavigation';
 import { t } from '@/text';
 import { layout } from '@/utils/layout';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
+import { formatCliInstallCommandForDisplay } from '@/auth/cliCommands';
 import { formatJoinTicketTimeRemaining, useAccountJoinCommand } from '@/auth/useAccountJoinCommand';
 
 export default memo(function Restore() {
@@ -116,7 +117,7 @@ export default memo(function Restore() {
                             />
                         </View>
                         <Text style={styles.secretKeyText}>
-                            {displayedJoinCommand}
+                            {formatCliInstallCommandForDisplay(displayedJoinCommand)}
                         </Text>
                         {joinCommandStatus ? (
                             <View style={styles.commandStatusRow}>

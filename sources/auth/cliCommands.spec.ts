@@ -45,16 +45,14 @@ describe('getCliInstallAndLoginCommand', () => {
         });
     }
 
-    it('persists the command API URL from a non-default web origin when the bundle default is stale', async () => {
+    it('pins the command API URL from a non-default web origin when the bundle default is stale', async () => {
         getServerUrlMock.mockReturnValue('https://aha-agi.com/api');
         setWindowLocation('ahaagi.com', 'https://ahaagi.com');
 
         const { getCliInstallAndLoginCommand } = await import('./cliCommands');
         const command = getCliInstallAndLoginCommand('7VARDB');
 
-        expect(command).toContain('"serverUrl":"https://ahaagi.com/api"');
-        expect(command).toContain('"webappUrl":"https://ahaagi.com/webappv3"');
-        expect(command).toContain('npm i aha-agi && npx aha auth login --code 7VARDB');
+        expect(command).toBe('npm i aha-agi && npx aha auth login --server-url https://ahaagi.com/api --webapp-url https://ahaagi.com/webappv3 --code 7VARDB');
     });
 
     it('uses deployment-provided CLI URLs before runtime browser inference', async () => {
@@ -66,9 +64,7 @@ describe('getCliInstallAndLoginCommand', () => {
         const { getCliInstallAndLoginCommand } = await import('./cliCommands');
         const command = getCliInstallAndLoginCommand('CFG123');
 
-        expect(command).toContain('"serverUrl":"https://ahaagi.com/api"');
-        expect(command).toContain('"webappUrl":"https://ahaagi.com/webappv3"');
-        expect(command).toContain('npm i aha-agi && npx aha auth login --code CFG123');
+        expect(command).toBe('npm i aha-agi && npx aha auth login --server-url https://ahaagi.com/api --webapp-url https://ahaagi.com/webappv3 --code CFG123');
     });
 
     it('pins an explicitly configured default deployment too', async () => {
@@ -79,9 +75,7 @@ describe('getCliInstallAndLoginCommand', () => {
         const { getCliInstallAndLoginCommand } = await import('./cliCommands');
         const command = getCliInstallAndLoginCommand('PINDEF');
 
-        expect(command).toContain('"serverUrl":"https://aha-agi.com/api"');
-        expect(command).toContain('"webappUrl":"https://aha-agi.com/webappv3"');
-        expect(command).toContain('npm i aha-agi && npx aha auth login --code PINDEF');
+        expect(command).toBe('npm i aha-agi && npx aha auth login --server-url https://aha-agi.com/api --webapp-url https://aha-agi.com/webappv3 --code PINDEF');
     });
 
     it('omits AHA_SERVER_URL for the default production API', async () => {
@@ -94,14 +88,24 @@ describe('getCliInstallAndLoginCommand', () => {
         );
     });
 
-    it('persists configured non-default API URLs for future CLI runs', async () => {
+    it('pins configured non-default API URLs for future CLI runs', async () => {
         getServerUrlMock.mockReturnValue('https://ahaagi.com/api');
 
         const { getCliInstallAndLoginCommand } = await import('./cliCommands');
         const command = getCliInstallAndLoginCommand('LEN2AF');
 
-        expect(command).toContain('"serverUrl":"https://ahaagi.com/api"');
-        expect(command).toContain('"webappUrl":"https://ahaagi.com/webappv3"');
-        expect(command).toContain('npm i aha-agi && npx aha auth login --code LEN2AF');
+        expect(command).toBe('npm i aha-agi && npx aha auth login --server-url https://ahaagi.com/api --webapp-url https://ahaagi.com/webappv3 --code LEN2AF');
+    });
+
+    it('formats the pinned command as readable copy steps', async () => {
+        const { formatCliInstallCommandForDisplay } = await import('./cliCommands');
+
+        expect(formatCliInstallCommandForDisplay('npm i aha-agi && npx aha auth login --server-url https://ahaagi.com/api --webapp-url https://ahaagi.com/webappv3 --code LEN2AF')).toBe([
+            'npm i aha-agi',
+            'npx aha auth login',
+            '  --server-url https://ahaagi.com/api',
+            '  --webapp-url https://ahaagi.com/webappv3',
+            '  --code LEN2AF',
+        ].join('\n'));
     });
 });

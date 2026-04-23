@@ -21,6 +21,7 @@ import { Image } from 'expo-image';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { disconnectGitHub } from '@/sync/apiGithub';
 import { disconnectService } from '@/sync/apiServices';
+import { formatCliInstallCommandForDisplay } from '@/auth/cliCommands';
 import { formatJoinTicketTimeRemaining, useAccountJoinCommand } from '@/auth/useAccountJoinCommand';
 
 export default React.memo(() => {
@@ -290,7 +291,7 @@ export default React.memo(() => {
                                 color: theme.colors.text,
                                 ...Typography.mono()
                             }}>
-                                {displayedJoinCommand.replace(/ && /g, '\n')}
+                                {formatCliInstallCommandForDisplay(displayedJoinCommand)}
                             </Text>
                             {joinCommandStatus ? (
                                 <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

@@ -72,23 +72,40 @@ function deriveWebappUrlFromServerUrl(serverUrl: string): string {
 }
 
 function quoteShellValue(value: string): string {
+    if (/^[A-Za-z0-9_./:@%+-]+$/.test(value)) {
+        return value;
+    }
+
     return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function getPersistServerConfigCommand(config: CliServerConfig): string {
-    const payload = JSON.stringify(config);
-    const script = [
-        "const fs=require('fs'),os=require('os'),path=require('path');",
-        "const dir=path.join(os.homedir(),'.aha');",
-        "const file=path.join(dir,'config.json');",
-        'fs.mkdirSync(dir,{recursive:true});',
-        'let config={};',
-        "try{config=JSON.parse(fs.readFileSync(file,'utf8'))}catch{}",
-        `Object.assign(config,${payload});`,
-        "fs.writeFileSync(file,JSON.stringify(config,null,2)+'\\n');",
-    ].join('');
+function getPinnedLoginCommand(config: CliServerConfig, code?: string): string {
+    const args = [
+        'npx aha auth login',
+        '--server-url',
+        quoteShellValue(config.serverUrl),
+        '--webapp-url',
+        quoteShellValue(config.webappUrl),
+    ];
+    if (code) {
+        args.push('--code', quoteShellValue(code));
+    }
 
-    return `node -e ${quoteShellValue(script)}`;
+    return args.join(' ');
+}
+
+export function formatCliInstallCommandForDisplay(command: string): string {
+    return command
+        .replace(/ && /g, '\n')
+        .replace(/ --server-url /g, '\n  --server-url ')
+        .replace(/ --webapp-url /g, '\n  --webapp-url ')
+        .replace(/ --code /g, '\n  --code ');
+}
+
+function getDefaultLoginCommand(code?: string): string {
+    return code
+        ? `npx aha auth login --code ${quoteShellValue(code)}`
+        : 'npx aha auth login';
 }
 
 export function getCliInstallAndLoginCommand(code?: string): string {
@@ -101,13 +118,10 @@ export function getCliInstallAndLoginCommand(code?: string): string {
     const webappUrl = deploymentConfig?.webappUrl ?? browserConfig?.webappUrl ?? deriveWebappUrlFromServerUrl(serverUrl);
     const isNonDefault = serverUrl !== DEFAULT_PRODUCTION_API
         && !serverUrl.startsWith(DEFAULT_PRODUCTION_API);
-    const shouldPersistServerConfig = !!deploymentConfig || isNonDefault;
-    const loginCmd = code
-        ? `npx aha auth login --code ${code}`
-        : 'npx aha auth login';
-    const installAndLoginCmd = `npm i aha-agi && ${loginCmd}`;
+    const shouldPinServerConfig = !!deploymentConfig || isNonDefault;
+    const loginCmd = shouldPinServerConfig
+        ? getPinnedLoginCommand({ serverUrl, webappUrl }, code)
+        : getDefaultLoginCommand(code);
 
-    return shouldPersistServerConfig
-        ? `${getPersistServerConfigCommand({ serverUrl, webappUrl })} && ${installAndLoginCmd}`
-        : installAndLoginCmd;
+    return `npm i aha-agi && ${loginCmd}`;
 }
