@@ -88,6 +88,50 @@ describe('genomeHub role alias lookup', () => {
         expect(genome?.name).toBe('implementer');
     });
 
+    it('maps retired long-tail official roles to seeded canonical genomes', async () => {
+        const { resolveCanonicalGenomeName } = await import('./genomeHub');
+        const mappings: Array<[string, string]> = [
+            ['storyteller', 'researcher'],
+            ['brand', 'gstack-product-strategist'],
+            ['researcher-angle-a', 'researcher'],
+            ['researcher-angle-b', 'researcher'],
+            ['methodology-designer', 'researcher'],
+            ['paper-writer', 'researcher'],
+            ['academic-editor', 'researcher'],
+            ['source-scout', 'researcher'],
+            ['stats-analyzer', 'researcher'],
+            ['chart-designer', 'gstack-design-architect'],
+            ['citation-manager', 'researcher'],
+            ['plagiarism-checker', 'gstack-qa-commander'],
+            ['image-prompt', 'gstack-design-architect'],
+            ['case-analyst', 'researcher'],
+            ['risk-engineer', 'gstack-security-officer'],
+            ['member', 'implementer'],
+            ['design-architect', 'gstack-design-architect'],
+            ['retro-analyst', 'gstack-retro-analyst'],
+            ['qa-commander', 'gstack-qa-commander'],
+            ['product-strategist', 'gstack-product-strategist'],
+            ['ui-designer', 'gstack-design-architect'],
+            ['format-checker', 'gstack-qa-commander'],
+            ['engineering-reviewer', 'gstack-engineering-reviewer'],
+            ['security-officer', 'gstack-security-officer'],
+            ['release-engineer', 'gstack-release-engineer'],
+            ['strategy-analyst', 'gstack-product-strategist'],
+            ['test-quant-agent', 'gstack-qa-commander'],
+            ['quant-risk-manager', 'gstack-security-officer'],
+            ['quant-strategy-analyst', 'gstack-product-strategist'],
+            ['quant-data-engineer', 'gstack-fullstack-builder'],
+            ['ux-lead', 'gstack-design-architect'],
+            ['quant-researcher', 'researcher'],
+            ['data-engineer', 'gstack-fullstack-builder'],
+        ];
+
+        for (const [legacyName, canonicalName] of mappings) {
+            expect(resolveCanonicalGenomeName('@official', legacyName)).toBe(canonicalName);
+        }
+        expect(resolveCanonicalGenomeName('@private', 'StoryTeller')).toBe('StoryTeller');
+    });
+
     it('preserves non-official names instead of lowercasing them', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
