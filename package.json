@@ -10,6 +10,8 @@
     "ios:connected-device": "yarn ios -d $(xcrun devicectl list devices | grep -E \"available \\(paired\\)\" | head -1 | awk '{print $1}')",
     "submit": "eas submit --platform ios",
     "web": "expo start --web",
+    "export:web": "NODE_OPTIONS='--max-old-space-size=4096' expo export --platform web --output-dir dist --clear",
+    "export:webappv3": "BASE_PATH=/webappv3 NODE_OPTIONS='--max-old-space-size=4096' expo export --platform web --output-dir dist --clear && BASE_PATH=/webappv3 node scripts/rewrite-web-base-path.mjs dist",
     "test": "node node_modules/vitest/vitest.mjs",
     "prebuild": "rm -rf android ios && expo prebuild",
     "ota": "APP_ENV=preview NODE_ENV=preview tsx sources/scripts/parseChangelog.ts && yarn typecheck && eas update --branch preview",

@@ -36,7 +36,8 @@ ENV NODE_ENV=production \
     EXPO_PUBLIC_SUPABASE_URL=${EXPO_PUBLIC_SUPABASE_URL} \
     EXPO_PUBLIC_SUPABASE_ANON_KEY=${EXPO_PUBLIC_SUPABASE_ANON_KEY} \
     EXPO_PUBLIC_SUPABASE_EMAIL_OTP_ENABLED=${EXPO_PUBLIC_SUPABASE_EMAIL_OTP_ENABLED} \
-    EXPO_PUBLIC_INVITATION_GATE_ENABLED=${EXPO_PUBLIC_INVITATION_GATE_ENABLED}
+    EXPO_PUBLIC_INVITATION_GATE_ENABLED=${EXPO_PUBLIC_INVITATION_GATE_ENABLED} \
+    BASE_PATH=${BASE_PATH}
 
 COPY . .
 RUN yarn expo export --platform web --output-dir dist --clear
@@ -44,15 +45,7 @@ RUN yarn expo export --platform web --output-dir dist --clear
 # Rewrite asset paths for sub-path deployment (e.g. /webappv3)
 RUN if [ -n "$BASE_PATH" ]; then \
       echo "Rewriting asset paths with base path: $BASE_PATH" && \
-      find dist -name '*.html' -exec sed -i \
-        -e "s|href=\"/_expo/|href=\"${BASE_PATH}/_expo/|g" \
-        -e "s|href=\"/assets/|href=\"${BASE_PATH}/assets/|g" \
-        -e "s|href=\"/favicon|href=\"${BASE_PATH}/favicon|g" \
-        -e "s|src=\"/_expo/|src=\"${BASE_PATH}/_expo/|g" \
-        -e "s|src=\"/assets/|src=\"${BASE_PATH}/assets/|g" {} + && \
-      find dist -name '*.js' -exec sed -i \
-        -e "s|\"/_expo/|\"${BASE_PATH}/_expo/|g" \
-        -e "s|\"/assets/|\"${BASE_PATH}/assets/|g" {} + ; \
+      node scripts/rewrite-web-base-path.mjs dist "$BASE_PATH"; \
     fi
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runner
