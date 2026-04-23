@@ -6,6 +6,7 @@ const serverConfigStorage = new MMKV({ id: 'server-config' });
 const SERVER_KEY = 'custom-server-url';
 const DEFAULT_SERVER_URL = 'https://aha-agi.com/api';
 const DEFAULT_PUBLIC_API_PATH = '/api';
+const OFFICIAL_PUBLIC_HOSTS = new Set(['aha-agi.com', 'ahaagi.com']);
 
 function isLocalHost(hostname: string): boolean {
     return hostname === 'localhost' || hostname === '127.0.0.1';
@@ -67,7 +68,7 @@ function isPrivateIp(hostname: string): boolean {
 
 export function getServerUrl(): string {
     const storedServerUrl = serverConfigStorage.getString(SERVER_KEY)?.trim();
-    if (storedServerUrl && storedServerUrl !== DEFAULT_SERVER_URL) {
+    if (storedServerUrl && storedServerUrl !== DEFAULT_SERVER_URL && !isStaleOfficialServerUrl(storedServerUrl)) {
         return rewriteLocalhostUrl(storedServerUrl);
     }
 
@@ -101,6 +102,25 @@ function rewriteLocalhostUrl(url: string): string {
     }
 
     return url;
+}
+
+function isStaleOfficialServerUrl(url: string): boolean {
+    const currentOrigin = getWindowOrigin();
+    if (!currentOrigin) {
+        return false;
+    }
+
+    try {
+        const current = new URL(currentOrigin);
+        const stored = new URL(url);
+        if (!OFFICIAL_PUBLIC_HOSTS.has(current.hostname) || !OFFICIAL_PUBLIC_HOSTS.has(stored.hostname)) {
+            return false;
+        }
+
+        return current.hostname !== stored.hostname;
+    } catch {
+        return false;
+    }
 }
 
 export function setServerUrl(url: string | null): void {

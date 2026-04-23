@@ -97,4 +97,13 @@ describe('serverConfig', () => {
         expect(getServerUrl()).toBe('https://custom.example.com');
         expect(isUsingCustomServer()).toBe(true);
     });
+
+    it('ignores stale official server URLs from a different hosted deployment', async () => {
+        setWindowLocation('ahaagi.com', 'https://ahaagi.com');
+        const { getServerUrl, setServerUrl } = await loadServerConfig();
+
+        setServerUrl('https://aha-agi.com/api/');
+
+        expect(getServerUrl()).toBe('https://ahaagi.com/api');
+    });
 });
