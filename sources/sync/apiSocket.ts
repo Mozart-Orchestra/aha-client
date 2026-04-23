@@ -30,6 +30,8 @@ const AUTH_FAILURE_PATTERNS = [
 ];
 
 const RPC_ERROR_FLAG = '__ahaRpcError';
+const POLLING_FALLBACK_STORAGE_KEY = 'aha:sync-socket:polling-fallback-until';
+const POLLING_FALLBACK_TTL_MS = 10 * 60 * 1000;
 
 function getErrorText(error: unknown): string {
     if (typeof error === 'string') {
@@ -63,6 +65,41 @@ function isWebSocketTransportFailure(error: unknown): boolean {
         || message.includes('xhr poll error');
 }
 
+function isPollingFallbackPreferred(): boolean {
+    try {
+        if (typeof sessionStorage === 'undefined') {
+            return false;
+        }
+
+        const rawUntil = sessionStorage.getItem(POLLING_FALLBACK_STORAGE_KEY);
+        if (!rawUntil) {
+            return false;
+        }
+
+        const until = Number(rawUntil);
+        if (!Number.isFinite(until) || until <= Date.now()) {
+            sessionStorage.removeItem(POLLING_FALLBACK_STORAGE_KEY);
+            return false;
+        }
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function rememberPollingFallbackPreference() {
+    try {
+        if (typeof sessionStorage === 'undefined') {
+            return;
+        }
+
+        sessionStorage.setItem(POLLING_FALLBACK_STORAGE_KEY, String(Date.now() + POLLING_FALLBACK_TTL_MS));
+    } catch {
+        // Best effort only; reconnect still downgrades for this socket instance.
+    }
+}
+
 function getRpcErrorMessage(payload: unknown): string | null {
     if (!payload || typeof payload !== 'object') {
         return null;
@@ -92,7 +129,7 @@ export class ApiSocket {
     private reconnectedListeners: Set<() => void> = new Set();
     private statusListeners: Set<(status: 'disconnected' | 'connecting' | 'connected' | 'error') => void> = new Set();
     private currentStatus: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected';
-    private usePollingFallback = false;
+    private usePollingFallback = isPollingFallbackPreferred();
 
     //
     // Initialization
@@ -391,6 +428,7 @@ export class ApiSocket {
     private reconnectWithPollingFallback(socket: Socket, error: unknown) {
         console.warn('🔌 SyncSocket: WebSocket transport failed, retrying with polling fallback', error);
         this.usePollingFallback = true;
+        rememberPollingFallbackPreference();
         socket.disconnect();
         if (this.socket === socket) {
             this.socket = null;

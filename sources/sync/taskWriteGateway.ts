@@ -197,12 +197,20 @@ export async function createTaskServerFirstWithFallback(
 
     try {
         const createdTask = await deps.createTaskOnServer(request);
+        const localPatchApplied = mergeTaskIntoLocalBoard(deps.teamId, createdTask);
+
+        if (localPatchApplied) {
+            return {
+                task: createdTask,
+                writePath: 'server',
+                localPatchApplied,
+            };
+        }
 
         try {
             await deps.refreshTeamArtifact();
             const refreshedTask = findCreatedTaskAfterRefresh(deps.teamId, beforeTaskIds, request);
             if (!refreshedTask) {
-                const localPatchApplied = mergeTaskIntoLocalBoard(deps.teamId, createdTask);
                 return {
                     task: createdTask,
                     writePath: 'server',
@@ -214,7 +222,6 @@ export async function createTaskServerFirstWithFallback(
                 writePath: 'server',
             };
         } catch {
-            const localPatchApplied = mergeTaskIntoLocalBoard(deps.teamId, createdTask);
             return {
                 task: createdTask,
                 writePath: 'server',

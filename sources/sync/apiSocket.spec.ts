@@ -151,6 +151,39 @@ describe('ApiSocket reconnect', () => {
         expect(mockState.io.mock.calls[1][1].transports).toEqual(['polling']);
     });
 
+    it('should remember polling fallback for the next socket instance', () => {
+        const previousDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+        const backingStore = new Map<string, string>();
+
+        Object.defineProperty(globalThis, 'sessionStorage', {
+            value: {
+                getItem: (key: string) => backingStore.get(key) ?? null,
+                setItem: (key: string, value: string) => { backingStore.set(key, value); },
+                removeItem: (key: string) => { backingStore.delete(key); },
+            },
+            configurable: true,
+        });
+
+        try {
+            const { socket } = createSocket();
+
+            socket.trigger('connect_error', new Error('websocket error'));
+
+            const apiSocket = new ApiSocket();
+            apiSocket.initialize({ endpoint: 'https://example.com/api', token: 'token-123' }, {});
+
+            expect(mockState.io.mock.calls[0][1].transports).toEqual(['websocket', 'polling']);
+            expect(mockState.io.mock.calls[1][1].transports).toEqual(['polling']);
+            expect(mockState.io.mock.calls[2][1].transports).toEqual(['polling']);
+        } finally {
+            if (previousDescriptor) {
+                Object.defineProperty(globalThis, 'sessionStorage', previousDescriptor);
+            } else {
+                delete (globalThis as any).sessionStorage;
+            }
+        }
+    });
+
     it('should reconnect with a new token when updateToken changes credentials', () => {
         const { apiSocket, socket } = createSocket();
 

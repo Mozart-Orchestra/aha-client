@@ -41,7 +41,7 @@ import { FeedItem } from './feedTypes';
 import { UserProfile } from './friendTypes';
 import { initializeTodoSync } from '../-zen/model/ops';
 import { DEFAULT_KANBAN_BOARD } from '@/sync/kanbanTypes';
-import type { KanbanBoard, KanbanTeamMember } from '@/sync/kanbanTypes';
+import type { KanbanBoard, KanbanTask, KanbanTeamMember } from '@/sync/kanbanTypes';
 import { canonicalizeTeamMentions, type TeamMentionCandidate } from './teamMessageTypes';
 import { getNextPersistedMessageCount } from './persistedMessageCount';
 import { logCommerceEvent } from '@/observability/commerceEvents';
@@ -292,6 +292,7 @@ class Sync {
     private _isFetchingArtifactsList = false;
     // Reentrancy guard for duplicate artifact writes with the same payload
     private inFlightArtifactUpdates = new Map<string, Promise<void>>();
+    private artifactBodyRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     constructor() {
         this.sessionsSync = new InvalidateSync(this.fetchSessions);
@@ -336,6 +337,75 @@ class Sync {
                 log.log(`📱 App state changed to: ${nextAppState}`);
             }
         });
+    }
+
+    private applyTaskEventToLocalArtifact(
+        teamId: string,
+        eventType: 'task-created' | 'task-updated' | 'task-deleted',
+        taskId: string,
+        task?: Partial<KanbanTask>,
+    ): boolean {
+        const currentArtifact = storage.getState().artifacts[teamId];
+        if (!currentArtifact?.body) {
+            return false;
+        }
+
+        try {
+            const board = JSON.parse(currentArtifact.body) as KanbanBoard;
+            if (!board || typeof board !== 'object' || !Array.isArray(board.tasks)) {
+                return false;
+            }
+
+            const taskIndex = board.tasks.findIndex((entry) => entry.id === taskId);
+            let nextTasks: KanbanTask[];
+
+            if (eventType === 'task-deleted') {
+                if (taskIndex < 0) {
+                    return true;
+                }
+                nextTasks = board.tasks.filter((entry) => entry.id !== taskId);
+            } else {
+                if (!task?.id) {
+                    return false;
+                }
+
+                const nextTask = task as KanbanTask;
+                if (taskIndex >= 0) {
+                    nextTasks = board.tasks.map((entry) => entry.id === nextTask.id ? nextTask : entry);
+                } else {
+                    nextTasks = [...board.tasks, nextTask];
+                }
+            }
+
+            storage.getState().updateArtifact({
+                ...currentArtifact,
+                body: JSON.stringify({
+                    ...board,
+                    tasks: nextTasks,
+                    updatedAt: Date.now(),
+                }, null, 2),
+                updatedAt: Date.now(),
+            });
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private scheduleArtifactBodyRefresh(teamId: string, reason: string, delayMs = 750) {
+        const existingTimer = this.artifactBodyRefreshTimers.get(teamId);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+        }
+
+        const timer = setTimeout(() => {
+            this.artifactBodyRefreshTimers.delete(teamId);
+            this.fetchArtifactWithBody(teamId).catch(err => {
+                console.error(`Failed to fetch artifact body for team ${teamId} after ${reason}:`, err);
+            });
+        }, delayMs);
+
+        this.artifactBodyRefreshTimers.set(teamId, timer);
     }
 
     async create(credentials: AuthCredentials, encryption: Encryption) {
@@ -3003,12 +3073,21 @@ class Sync {
             const { teamId, taskId, task } = updateData.body as { teamId: string; taskId: string; task?: any };
             console.log(`🔄 Sync: Received ${updateData.body.t} for team ${teamId}, task ${taskId}`);
 
-            // CRITICAL FIX: Fetch full artifact with body to update the Board UI
-            // artifactsSync.invalidate() only refreshes headers, not body content
-            // Board component needs artifact.body to display tasks
-            this.fetchArtifactWithBody(teamId).catch(err => {
-                console.error(`Failed to fetch artifact body for team ${teamId}:`, err);
-            });
+            const patchedLocalBoard = this.applyTaskEventToLocalArtifact(
+                teamId,
+                updateData.body.t as 'task-created' | 'task-updated' | 'task-deleted',
+                taskId,
+                task,
+            );
+
+            // Creates include the canonical task payload, so a local patch is enough for
+            // instant UI feedback. Updates/deletes can affect related tasks via
+            // propagation/cascade rules, so reconcile once after the event burst settles.
+            if (!patchedLocalBoard) {
+                this.scheduleArtifactBodyRefresh(teamId, updateData.body.t, 0);
+            } else if (updateData.body.t !== 'task-created') {
+                this.scheduleArtifactBodyRefresh(teamId, updateData.body.t);
+            }
 
             // Also invalidate the list (for header updates like title changes)
             this.artifactsSync.invalidate();
