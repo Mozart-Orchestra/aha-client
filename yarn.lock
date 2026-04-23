@@ -1846,6 +1846,9 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
+"@packages/auth-contract@file:./packages/auth-contract":
+  version "0.1.0"
+
 "@peoplesgrocers/seti-ui-file-icons@1.11.3":
   version "1.11.3"
   resolved "https://registry.npmmirror.com/@peoplesgrocers/seti-ui-file-icons/-/seti-ui-file-icons-1.11.3.tgz#45e5233119e7787d2fa44c4d3d16fc908d985592"
