@@ -22,3 +22,10 @@ export function selectBootCredentials(
 export function shouldDropStoredCredentialsAfterRestoreFailure(error: unknown): boolean {
     return error instanceof NonRetryableError && /unauthorized/i.test(error.message);
 }
+
+export function selectSupabaseCompletionAccessToken(
+    sessionAccessToken: string | null | undefined,
+    callbackState: SupabaseOAuthCallbackState | null | undefined,
+): string | null {
+    return sessionAccessToken ?? callbackState?.accessToken ?? null;
+}

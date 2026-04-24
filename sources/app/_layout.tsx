@@ -8,6 +8,7 @@ import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import {
     selectBootCredentials,
+    selectSupabaseCompletionAccessToken,
     shouldDropStoredCredentialsAfterRestoreFailure,
     shouldPreferSupabaseCallback,
 } from '@/auth/rootBootstrap';
@@ -266,13 +267,18 @@ export default function RootLayout() {
                             });
                         });
                     }
-                    if (!session && callbackState?.accessToken && !oauthCallbackError) {
+                    const completionAccessToken = selectSupabaseCompletionAccessToken(
+                        session?.access_token,
+                        callbackState,
+                    );
+
+                    if (!completionAccessToken && callbackState?.accessToken && !oauthCallbackError) {
                         oauthCallbackError = 'Google callback completed, but the web session was not established.';
                     }
-                    if (session?.access_token) {
+                    if (completionAccessToken) {
                         let shouldClearCompletedSession = true;
                         try {
-                            const result = await completeSupabaseSession(session.access_token);
+                            const result = await completeSupabaseSession(completionAccessToken);
                             credentials = {
                                 token: result.token,
                                 secret: result.secretBase64,

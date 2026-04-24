@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AuthCredentials } from '@/auth/tokenStorage';
 import {
     selectBootCredentials,
+    selectSupabaseCompletionAccessToken,
     shouldDropStoredCredentialsAfterRestoreFailure,
     shouldPreferSupabaseCallback,
 } from '@/auth/rootBootstrap';
@@ -54,5 +55,19 @@ describe('rootBootstrap', () => {
     it('keeps stored credentials for non-auth restore failures', () => {
         expect(shouldDropStoredCredentialsAfterRestoreFailure(new Error('network timeout'))).toBe(false);
         expect(shouldDropStoredCredentialsAfterRestoreFailure(new NonRetryableError('Server unavailable'))).toBe(false);
+    });
+
+    it('falls back to the callback access token when the web session is not yet hydrated', () => {
+        const callbackState = {
+            accessToken: 'access-token-1',
+            refreshToken: 'refresh-token-1',
+            error: null,
+            errorCode: null,
+            errorDescription: null,
+        };
+
+        expect(selectSupabaseCompletionAccessToken(null, callbackState)).toBe('access-token-1');
+        expect(selectSupabaseCompletionAccessToken('session-token-1', callbackState)).toBe('session-token-1');
+        expect(selectSupabaseCompletionAccessToken(null, null)).toBeNull();
     });
 });
