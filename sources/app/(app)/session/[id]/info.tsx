@@ -428,12 +428,13 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
 
     // Check if CLI version is outdated
     const isCliOutdated = session.metadata?.version && !isVersionSupported(session.metadata.version, MINIMUM_CLI_VERSION);
+    const sessionHomeDir = session.metadata?.ahaHomeDir ?? session.metadata?.happyHomeDir;
 
     const handleCopySessionId = useCallback(async () => {
         if (!session) return;
         try {
             await Clipboard.setStringAsync(session.id);
-            Modal.alert(t('common.success'), t('sessionInfo.happySessionIdCopied'));
+            Modal.alert(t('common.success'), t('sessionInfo.sessionIdCopied'));
         } catch (error) {
             Modal.alert(t('common.error'), t('sessionInfo.failedToCopySessionId'));
         }
@@ -593,7 +594,7 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                 {/* Session Details */}
                 <ItemGroup>
                     <Item
-                        title={t('sessionInfo.happySessionId')}
+                        title={t('sessionInfo.sessionId')}
                         subtitle={`${session.id.substring(0, 8)}...${session.id.substring(session.id.length - 8)}`}
                         icon={<Ionicons name="finger-print-outline" size={29} color="#007AFF" />}
                         onPress={handleCopySessionId}
@@ -773,10 +774,10 @@ function SessionInfoContent({ session, returnTo }: { session: Session; returnTo?
                                 showChevron={false}
                             />
                         )}
-                        {session.metadata.happyHomeDir && (
+                        {sessionHomeDir && (
                             <Item
-                                title={t('sessionInfo.happyHome')}
-                                subtitle={formatPathRelativeToHome(session.metadata.happyHomeDir, session.metadata.homeDir)}
+                                title={t('sessionInfo.homeDirectory')}
+                                subtitle={formatPathRelativeToHome(sessionHomeDir, session.metadata.homeDir)}
                                 icon={<Ionicons name="home-outline" size={29} color="#5856D6" />}
                                 showChevron={false}
                             />

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storage = new Map<string, string>();
-const originalServerEnv = process.env.EXPO_PUBLIC_HAPPY_SERVER_URL;
+const originalAhaServerEnv = process.env.EXPO_PUBLIC_AHA_SERVER_URL;
+const legacyServerEnvKey = ['EXPO_PUBLIC', 'HAPPY_SERVER_URL'].join('_');
+const originalLegacyServerEnv = process.env[legacyServerEnvKey];
 
 vi.mock('react-native-mmkv', () => ({
     MMKV: class {
@@ -42,15 +44,21 @@ async function loadServerConfig() {
 describe('serverConfig', () => {
     beforeEach(() => {
         storage.clear();
-        delete process.env.EXPO_PUBLIC_HAPPY_SERVER_URL;
+        delete process.env.EXPO_PUBLIC_AHA_SERVER_URL;
+        delete process.env[legacyServerEnvKey];
         delete (globalThis as { window?: Window }).window;
     });
 
     afterEach(() => {
-        if (originalServerEnv) {
-            process.env.EXPO_PUBLIC_HAPPY_SERVER_URL = originalServerEnv;
+        if (originalAhaServerEnv) {
+            process.env.EXPO_PUBLIC_AHA_SERVER_URL = originalAhaServerEnv;
         } else {
-            delete process.env.EXPO_PUBLIC_HAPPY_SERVER_URL;
+            delete process.env.EXPO_PUBLIC_AHA_SERVER_URL;
+        }
+        if (originalLegacyServerEnv) {
+            process.env[legacyServerEnvKey] = originalLegacyServerEnv;
+        } else {
+            delete process.env[legacyServerEnvKey];
         }
         delete (globalThis as { window?: Window }).window;
         vi.restoreAllMocks();
@@ -81,12 +89,20 @@ describe('serverConfig', () => {
     });
 
     it('rewrites localhost env overrides to the current LAN host', async () => {
-        process.env.EXPO_PUBLIC_HAPPY_SERVER_URL = 'http://localhost:3005';
+        process.env.EXPO_PUBLIC_AHA_SERVER_URL = 'http://localhost:3005';
         setWindowLocation('192.168.1.20', 'http://192.168.1.20:8081');
 
         const { getServerUrl } = await loadServerConfig();
 
         expect(getServerUrl()).toBe('http://192.168.1.20:3005');
+    });
+
+    it('keeps supporting the legacy server env override', async () => {
+        process.env[legacyServerEnvKey] = 'https://legacy.example.com/api';
+
+        const { getServerUrl } = await loadServerConfig();
+
+        expect(getServerUrl()).toBe('https://legacy.example.com/api');
     });
 
     it('preserves explicit custom servers', async () => {

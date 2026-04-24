@@ -50,6 +50,7 @@ import { stopMissingSessionMessageSync } from './sessionMessageSync';
 import type { AgentLifecycle, SpawnSessionOutcome } from '@/utils/spawnState';
 import { resolveMachineArchivedAt } from '@/utils/machineUtils';
 import { validateSpawnedSessionRuntime } from '@/utils/spawnRuntimeGuard';
+import { appendTeamMessage, reconcileTeamMessage } from './teamMessageList';
 
 const inferArtifactTypeFromBody = (body: string | null | undefined): 'team' | undefined => {
     if (!body) {
@@ -3045,27 +3046,21 @@ class Sync {
 
             // Update cache
             const currentMessages = this.teamMessagesCache.get(teamId) || [];
-            // Check for duplicates
-            const isDuplicate = currentMessages.find(m => m.id === message.id);
+            const reconciled = reconcileTeamMessage(currentMessages, message as any);
+            const updated = reconciled.messages;
 
-            if (!isDuplicate) {
-                // Cap in-memory cache at 500 (same bound as sessionStorage)
-                const updated = [...currentMessages, message as any].slice(-500);
-                this.teamMessagesCache.set(teamId, updated);
-                // Persist to sessionStorage so messages survive reconnects (not localStorage — too large)
-                try {
-                    if (typeof sessionStorage !== 'undefined') {
-                        sessionStorage.setItem(`team_msgs_${teamId}`, JSON.stringify(updated));
-                    }
-                } catch { /* storage full — skip */ }
+            this.teamMessagesCache.set(teamId, updated);
+            try {
+                if (typeof sessionStorage !== 'undefined') {
+                    sessionStorage.setItem(`team_msgs_${teamId}`, JSON.stringify(updated));
+                }
+            } catch { /* storage full — skip */ }
 
-                // Only notify subscribers for new messages
+            if (reconciled.changed) {
                 const subscribers = this.teamMessageSubscriptions.get(teamId);
                 if (subscribers) {
                     subscribers.forEach(callback => callback(message as any));
                 }
-            } else {
-                console.log(`🔄 Sync: Duplicate message ${message.id}, skipping notification`);
             }
 
             // === Task Events (Server-Driven Task Orchestration) ===
@@ -3850,7 +3845,13 @@ class Sync {
 
             // 立即更新本地缓存（cap at 500）
             const cached = this.teamMessagesCache.get(request.teamId) || [];
-            this.teamMessagesCache.set(request.teamId, [...cached, message].slice(-500));
+            const updated = appendTeamMessage(cached, message as any);
+            this.teamMessagesCache.set(request.teamId, updated);
+            try {
+                if (typeof sessionStorage !== 'undefined') {
+                    sessionStorage.setItem(`team_msgs_${request.teamId}`, JSON.stringify(updated));
+                }
+            } catch { /* storage full — skip */ }
 
             // 触发本地订阅者
             const subscribers = this.teamMessageSubscriptions.get(request.teamId);

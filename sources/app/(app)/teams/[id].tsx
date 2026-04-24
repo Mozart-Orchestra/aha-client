@@ -36,6 +36,7 @@ import {
 import { useDesktopBridge } from '@/desktop/useDesktopBridge';
 import { getDisplayName } from '@/sync/profile';
 import TeamChatRoom from '@/components/team/TeamChatRoom';
+import { appendTeamMessage } from '@/components/team/teamChatRoomList';
 import { TaskDetailModal } from '@/components/team/TaskDetailModal';
 import { TaskApprovalModal } from '@/components/team/TaskApprovalModal';
 import { NewTaskModal } from '@/components/team/NewTaskModal';
@@ -928,10 +929,7 @@ export default function TeamDashboardScreen() {
         });
 
         setTeamMessages((previous) => {
-            if (previous.some((entry) => entry.id === message.id)) {
-                return previous;
-            }
-            return [...previous, message];
+            return appendTeamMessage(previous, message);
         });
     }, [teamId]);
 
@@ -1145,7 +1143,7 @@ export default function TeamDashboardScreen() {
         };
 
         await sync.sendTeamMessage(message);
-        setTeamMessages((previous) => [...previous, message]);
+        setTeamMessages((previous) => appendTeamMessage(previous, message));
         handleTaskDetailClose();
     }, [artifact, desktopBridge, handleTaskDetailClose, kanbanData, myDisplayName, teamId]);
 

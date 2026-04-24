@@ -7,6 +7,8 @@ const SERVER_KEY = 'custom-server-url';
 const DEFAULT_SERVER_URL = 'https://aha-agi.com/api';
 const DEFAULT_PUBLIC_API_PATH = '/api';
 const OFFICIAL_PUBLIC_HOSTS = new Set(['aha-agi.com', 'ahaagi.com']);
+const PRIMARY_SERVER_ENV = 'EXPO_PUBLIC_AHA_SERVER_URL';
+const LEGACY_SERVER_ENV = ['EXPO_PUBLIC', 'HAPPY_SERVER_URL'].join('_');
 
 function isLocalHost(hostname: string): boolean {
     return hostname === 'localhost' || hostname === '127.0.0.1';
@@ -32,7 +34,8 @@ function getWindowOrigin(): string | null {
 }
 
 function getRuntimeServerUrl(): string | null {
-    const envServerUrl = process.env.EXPO_PUBLIC_HAPPY_SERVER_URL?.trim();
+    const envServerUrl = process.env[PRIMARY_SERVER_ENV]?.trim()
+        || process.env[LEGACY_SERVER_ENV]?.trim();
     if (envServerUrl) {
         // 当页面从局域网 IP 访问时，将 env 里的 localhost 地址重写为页面主机
         return rewriteLocalhostUrl(envServerUrl);

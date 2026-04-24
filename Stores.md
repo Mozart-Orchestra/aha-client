@@ -1,7 +1,7 @@
 # App Store & Google Play Store Information
 
 ## App Name
-Happy Coder
+Aha
 
 ## Subtitle / Short Description
 Claude Code on the go
@@ -16,9 +16,9 @@ claude, code, ai, programming, developer, tools, encrypted, secure, coding, assi
 
 ## App Description / Full Description
 
-Happy Coder is the secure mobile companion for Claude Code that lets you continue your AI coding sessions anywhere (not affiliated with Anthropic). Built by developers who needed to check on Claude's progress during coffee breaks, this app brings the full Claude Code experience to your phone with military-grade encryption.
+Aha is the secure mobile and web companion for Claude Code and Codex that lets you continue your AI coding sessions anywhere (not affiliated with Anthropic or OpenAI). Built by developers who needed to check on AI agents while away from the keyboard, this app brings encrypted remote control to your phone and browser.
 
-**Important**: This app requires Claude Code to be installed on your computer. Happy Coder is a companion app that connects to your existing Claude Code setup.
+**Important**: This app requires Claude Code or Codex to be installed on your computer. Aha is a companion app that connects to your existing local setup.
 
 **Key Features:**
 
@@ -30,9 +30,9 @@ Happy Coder is the secure mobile companion for Claude Code that lets you continu
 • Zero-knowledge architecture - we can't read your data
 
 **How It Works:**
-1. Install the happy-coder CLI on your computer
+1. Install the aha-agi CLI on your computer
 2. Scan a QR code to securely pair your devices
-3. Use 'happy' instead of 'claude' to start encrypted sessions
+3. Use 'aha' instead of 'claude' to start encrypted sessions
 4. Switch between desktop and mobile instantly
 
 Perfect for developers who:
@@ -41,11 +41,11 @@ Perfect for developers who:
 - Value privacy and open-source transparency
 - Work from coffee shops, trains, or anywhere
 
-Happy Coder uses the same encryption as Signal (TweetNaCl) and is completely open source. Your encryption keys never leave your device, and all data is encrypted before transmission.
+Aha uses TweetNaCl-based public-key encryption and is open source. Your encryption keys never leave your device, and all data is encrypted before transmission.
 
-Built by Bay Area engineers who believe the best tools come from scratching your own itch. We needed a way to securely check on our AI coding assistant while away from our desks - so we built it and shared it with the community.
+Built by the Aha community for developers who want user-owned, inspectable, and respectful AI agent tooling.
 
-Your code. Your privacy. Your Claude Code companion.
+Your code. Your privacy. Your AI coding companion.
 
 ## Promotional Text
 **App Store (170 chars)**: Securely continue your Claude Code sessions on mobile. End-to-end encrypted, open source, with push notifications for completed tasks. Your AI coding assistant, anywhere.
@@ -62,13 +62,13 @@ Your code. Your privacy. Your Claude Code companion.
 ## URLs
 
 ### Privacy Policy
-https://github.com/slopus/happy-coder/blob/main/PRIVACY.md
+https://github.com/Shiyao-Huang/happy/blob/main/PRIVACY.md
 
 ### Support / Contact
-https://github.com/slopus/happy-coder/issues
+https://github.com/Shiyao-Huang/happy/issues/new/choose
 
 ### Website / Marketing
-https://github.com/slopus/happy-coder
+https://github.com/Shiyao-Huang/happy
 
 ## Additional Google Play Requirements
 

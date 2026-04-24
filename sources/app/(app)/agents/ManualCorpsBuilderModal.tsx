@@ -809,14 +809,10 @@ export const ManualCorpsBuilderModal = React.memo(function ManualCorpsBuilderMod
             sync.applySettings({ recentMachinePaths: nextRecentPaths });
             await sync.fetchArtifactWithBody(result.team.id);
 
-            if (successCount === 0) {
-                throw new Error(failures[0] ?? 'Failed to run corps.');
-            }
-
             if (failures.length > 0) {
                 await AppModal.alert(
                     t('agents.buildCorpsStart'),
-                    `${teamName} 已运行 ${successCount}/${result.plannedMembers.length} 位成员。\n\n${failures.join('\n')}`,
+                    `${teamName} team 已创建，agent 启动结果：${successCount}/${result.plannedMembers.length}。\n\n${failures.join('\n')}`,
                 );
             }
 

@@ -19,7 +19,8 @@ export const MetadataSchema = z.object({
     tools: z.array(z.string()).optional(),
     slashCommands: z.array(z.string()).optional(),
     homeDir: z.string().optional(), // User's home directory on the machine
-    happyHomeDir: z.string().optional(), // Happy configuration directory 
+    happyHomeDir: z.string().optional(), // Legacy configuration directory field
+    ahaHomeDir: z.string().optional(), // Current configuration directory field
     processStartedAt: z.number().optional(), // Authoritative timestamp when the agent process actually started running
     hostPid: z.number().optional(), // Process ID of the session
     resolvedModel: z.string().optional(),

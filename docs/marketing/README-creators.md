@@ -1,8 +1,8 @@
-# Happy Coder Content Creator Brief
+# Aha Content Creator Brief
 
 ## Key Features
 
-Happy Coder is an open-source mobile app that lets developers control AI coding agents (Claude Code, Codex, Gemini-CLI) from their phone.
+Aha is an open-source mobile and web app that lets developers control AI coding agents (Claude Code, Codex, Gemini-CLI) from their phone.
 
 - Control Claude Code from iOS, Android, or web browser
 - Runs on YOUR hardware (laptop, desktop, server, Raspberry Pi)
@@ -15,18 +15,18 @@ Happy Coder is an open-source mobile app that lets developers control AI coding 
 
 ## Key Value Props
 
-- On Happy Coder, I can manage Claude Code from my phone without paying $600/year
-- On Happy Coder, I never miss when Claude gets stuck on a permission prompt
-- Happy Coder runs on my own computer, not expensive cloud servers
-- On Happy Coder, I can check on long-running tasks without returning to my desk
-- Happy Coder is open source - I can audit, modify, or self-host everything
-- On Happy Coder, I can run multiple agents in parallel and switch between them instantly
-- Happy Coder keeps my code on my machines with end-to-end encryption
-- On Happy Coder, I can keep coding while commuting, eating, or away from my desk
+- With Aha, I can manage Claude Code from my phone without paying $600/year
+- With Aha, I never miss when Claude gets stuck on a permission prompt
+- Aha runs on my own computer, not expensive cloud servers
+- With Aha, I can check on long-running tasks without returning to my desk
+- Aha is open source - I can audit, modify, or self-host everything
+- With Aha, I can run multiple agents in parallel and switch between them instantly
+- Aha keeps my code on my machines with end-to-end encryption
+- With Aha, I can keep coding while commuting, eating, or away from my desk
 
 ## Example Hooks
 
-- "I saved $600/year by switching from [competitor] to the open-source Happy Coder"
+- "I saved $600/year by switching from [competitor] to the open-source Aha"
 - "Claude asked for sudo permission... and I was at the gym"
 - "That moment when your 2-hour refactor gets stuck 5 minutes after you leave"
 - "Running 3 Claude Code agents in parallel from my phone while getting coffee"
@@ -39,9 +39,9 @@ Happy Coder is an open-source mobile app that lets developers control AI coding 
 
 ## Requirements for Content
 
-- Clearly say "Happy Coder" in the video or caption
+- Clearly say "Aha" in the video or caption
 - Mention it's free and open source
-- Include link to github.com/slopus/happy
+- Include link to github.com/Shiyao-Huang/happy
 - Show actual usage (QR code connection, mobile control, push notifications)
 - Emphasize running on YOUR hardware, not cloud servers
 - Compare to paid alternatives ($50/month or $600/year competitors)
@@ -66,8 +66,8 @@ Happy Coder is an open-source mobile app that lets developers control AI coding 
 
 ## Resources
 
-- GitHub: https://github.com/slopus/happy
-- Website: https://happy.engineering
+- GitHub: https://github.com/Shiyao-Huang/happy
+- Website: https://aha-agi.com
 - iOS App: https://apps.apple.com/us/app/happy-claude-code-client/id6748571505
-- Android App: https://play.google.com/store/apps/details?id=com.ex3ndr.happy
-- Web App: https://app.happy.engineering/
+- Android App: pending Aha-owned store listing
+- Web App: https://aha-agi.com/webappv3

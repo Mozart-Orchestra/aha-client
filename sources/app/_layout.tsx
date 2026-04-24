@@ -3,7 +3,6 @@ import '../theme.css';
 import * as React from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Fonts from 'expo-font';
-import { FontAwesome } from '@expo/vector-icons';
 import { AuthCredentials, clearStoredCredentialsForSupabaseCallback, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import {
@@ -114,8 +113,6 @@ async function loadFonts() {
 
                     // Bricolage Grotesque
                     'BricolageGrotesque-Bold': require('@/assets/fonts/BricolageGrotesque-Bold.ttf'),
-
-                    ...FontAwesome.font,
                 });
             } catch (e) {
                 console.warn('Font loading failed; continuing app initialization with fallback fonts:', e);
@@ -141,8 +138,6 @@ async function loadFonts() {
 
                         // Bricolage Grotesque  
                         'BricolageGrotesque-Bold': require('@/assets/fonts/BricolageGrotesque-Bold.ttf'),
-
-                        ...FontAwesome.font,
                     });
                 } catch (e) {
                     // Ignore

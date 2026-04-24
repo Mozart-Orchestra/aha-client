@@ -1883,7 +1883,7 @@ export default function NewTeamScreen() {
                                     ]}
                                     value={agentBinary}
                                     onChangeText={setAgentBinary}
-                                    placeholder="e.g. happy, codex, claudecode"
+                                    placeholder="e.g. aha, codex, claude-code"
                                     placeholderTextColor={theme.colors.input.placeholder}
                                     editable={!isSaving}
                                 />

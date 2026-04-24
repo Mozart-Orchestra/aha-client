@@ -43,14 +43,14 @@
 3. 用户复制命令并在新机器执行：
 
 ```bash
-npm i aha-agi && npx aha auth login --server-url https://ahaagi.com/api --webapp-url https://ahaagi.com/webappv3 --code <join-ticket>
+npm i aha-agi && npx aha auth login --server-url https://aha-agi.com/api --webapp-url https://aha-agi.com/webappv3 --code <join-ticket>
 ```
 
 生产部署会把目标服务器 URL 直接写进复制命令；CLI 登录成功后会保存到 `~/.aha/config.json`，后续命令继续走同一台服务器。部署时通过 public env 指定目标：
 
 ```bash
-EXPO_PUBLIC_AHA_CLI_SERVER_URL=https://ahaagi.com/api
-EXPO_PUBLIC_AHA_CLI_WEBAPP_URL=https://ahaagi.com/webappv3
+EXPO_PUBLIC_AHA_CLI_SERVER_URL=https://aha-agi.com/api
+EXPO_PUBLIC_AHA_CLI_WEBAPP_URL=https://aha-agi.com/webappv3
 ```
 
 4. 新机器用该 ticket 加入同一个账户

@@ -2,6 +2,13 @@
   "name": "kanban",
   "main": "index.ts",
   "version": "1.0.0",
+  "author": "Aha Community <hsy863551305@gmail.com>",
+  "homepage": "https://github.com/Shiyao-Huang/happy",
+  "bugs": "https://github.com/Shiyao-Huang/happy/issues/new/choose",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shiyao-Huang/happy.git"
+  },
   "scripts": {
     "start": "expo start",
     "start:local-server": "PUBLIC_EXPO_DANGEROUSLY_LOG_TO_SERVER_FOR_AI_AUTO_DEBUGGING=1 EXPO_PUBLIC_DEBUG=1 EXPO_PUBLIC_HAPPY_SERVER_URL=http://localhost:3005  expo start -c",

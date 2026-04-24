@@ -22,7 +22,7 @@ function plural({ count, one, few, many }: { count: number; one: string; few: st
 }
 
 /**
- * Russian translations for the Happy app
+ * Russian translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const ru: TranslationStructure = {
@@ -318,7 +318,7 @@ export const ru: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Настройка сервера',
         enterServerUrl: 'Пожалуйста, введите URL сервера',
-        notValidHappyServer: 'Это не валидный сервер Kanban',
+        notValidServer: 'Это невалидный сервер Aha',
         changeServer: 'Изменить сервер',
         continueWithServer: 'Продолжить с этим сервером?',
         resetToDefault: 'Сбросить по умолчанию',
@@ -347,9 +347,9 @@ export const ru: TranslationStructure = {
         archiveSessionConfirm: 'Вы уверены, что хотите архивировать эту сессию?',
         restoreSession: 'Restore Session',
         restoreSessionConfirm: 'Restore this archived session back into your workspace?',
-        happySessionIdCopied: 'ID сессии Kanban скопирован в буфер обмена',
-        failedToCopySessionId: 'Не удалось скопировать ID сессии Kanban',
-        happySessionId: 'ID сессии Kanban',
+        sessionIdCopied: 'ID сессии Aha скопирован в буфер обмена',
+        failedToCopySessionId: 'Не удалось скопировать ID сессии Aha',
+        sessionId: 'ID сессии Aha',
         claudeCodeSessionId: 'ID сессии Claude Code',
         claudeCodeSessionIdCopied: 'ID сессии Claude Code скопирован в буфер обмена',
         aiProvider: 'Поставщик ИИ',
@@ -374,7 +374,7 @@ export const ru: TranslationStructure = {
         path: 'Путь',
         operatingSystem: 'Операционная система',
         processId: 'ID процесса',
-        happyHome: 'Домашний каталог Kanban',
+        homeDirectory: 'Домашний каталог Aha',
         copyMetadata: 'Копировать метаданные',
         agentState: 'Состояние агента',
         controlledByUser: 'Управляется пользователем',

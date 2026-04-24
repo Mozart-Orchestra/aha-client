@@ -1,7 +1,8 @@
 import type { AuthCredentials } from '@/auth/tokenStorage';
 import type { KanbanTask, TaskComment } from '@/sync/kanbanTypes';
 import { checkAuth } from '@/utils/handleResponse';
-import { backoff, NonRetryableError } from '@/utils/time';
+import { createBackoff, NonRetryableError } from '@/utils/time';
+import { fetchWithTimeout } from './httpTimeout';
 import { getServerUrl } from './serverConfig';
 
 export interface TeamTaskCreateRequest {
@@ -34,6 +35,11 @@ export interface TeamTaskCommentRequest {
     mentions?: string[];
 }
 
+const taskMutationRequest = createBackoff({
+    onError: (e) => { console.warn(e); },
+    maxRetries: 1,
+});
+
 async function throwTaskHttpError(response: Response, fallbackMessage: string): Promise<never> {
     let serverMessage: string | null = null;
 
@@ -65,8 +71,8 @@ export async function createTeamTask(
 ): Promise<KanbanTask> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
-        const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/tasks`, {
+    return await taskMutationRequest(async () => {
+        const response = await fetchWithTimeout(`${API_ENDPOINT}/v1/teams/${teamId}/tasks`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${credentials.token}`,
@@ -94,8 +100,8 @@ export async function updateTeamTask(
 ): Promise<KanbanTask> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
-        const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/tasks/${taskId}`, {
+    return await taskMutationRequest(async () => {
+        const response = await fetchWithTimeout(`${API_ENDPOINT}/v1/teams/${teamId}/tasks/${taskId}`, {
             method: 'PUT',
             headers: {
                 Authorization: `Bearer ${credentials.token}`,
@@ -123,8 +129,8 @@ export async function addTeamTaskComment(
 ): Promise<KanbanTask> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
-        const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/tasks/${taskId}/comments`, {
+    return await taskMutationRequest(async () => {
+        const response = await fetchWithTimeout(`${API_ENDPOINT}/v1/teams/${teamId}/tasks/${taskId}/comments`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${credentials.token}`,

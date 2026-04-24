@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import * as React from 'react';
 import { Platform, Text, View, Pressable } from 'react-native';
 import { useUnistyles } from 'react-native-unistyles';
@@ -166,7 +166,7 @@ export const TodoView = React.memo<TodoViewProps>((props) => {
                         justifyContent: 'center'
                     }}
                 >
-                    <MaterialCommunityIcons name="drag" size={24} color={theme.colors.text} />
+                    <Ionicons name="reorder-three-outline" size={24} color={theme.colors.text} />
                 </View>
             )}
         </Pressable>

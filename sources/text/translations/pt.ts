@@ -11,7 +11,7 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 }
 
 /**
- * Portuguese (Brazilian) translations for the Happy app
+ * Portuguese (Brazilian) translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const pt: TranslationStructure = {
@@ -344,7 +344,7 @@ export const pt: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Configuração do servidor',
         enterServerUrl: 'Por favor, insira uma URL do servidor',
-        notValidHappyServer: 'Não é um servidor Kanban válido',
+        notValidServer: 'Não é um servidor Aha válido',
         changeServer: 'Alterar servidor',
         continueWithServer: 'Continuar com este servidor?',
         resetToDefault: 'Redefinir para padrão',
@@ -373,9 +373,9 @@ export const pt: TranslationStructure = {
         archiveSessionConfirm: 'Tem certeza de que deseja arquivar esta sessão?',
         restoreSession: 'Restore Session',
         restoreSessionConfirm: 'Restore this archived session back into your workspace?',
-        happySessionIdCopied: 'ID da sessão Kanban copiado para a área de transferência',
-        failedToCopySessionId: 'Falha ao copiar ID da sessão Kanban',
-        happySessionId: 'ID da sessão Kanban',
+        sessionIdCopied: 'ID da sessão Aha copiado para a área de transferência',
+        failedToCopySessionId: 'Falha ao copiar ID da sessão Aha',
+        sessionId: 'ID da sessão Aha',
         claudeCodeSessionId: 'ID da sessão Claude Code',
         claudeCodeSessionIdCopied: 'ID da sessão Claude Code copiado para a área de transferência',
         aiProvider: 'Provedor de IA',
@@ -400,7 +400,7 @@ export const pt: TranslationStructure = {
         path: 'Caminho',
         operatingSystem: 'Sistema operacional',
         processId: 'ID do processo',
-        happyHome: 'Diretório Kanban',
+        homeDirectory: 'Diretório Aha',
         copyMetadata: 'Copiar metadados',
         agentState: 'Estado do agente',
         controlledByUser: 'Controlado pelo usuário',

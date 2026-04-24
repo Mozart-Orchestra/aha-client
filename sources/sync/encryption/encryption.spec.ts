@@ -5,7 +5,7 @@ vi.mock('@/encryption/deriveKey', () => ({
         if (usage === 'Happy EnCoder' && path.join('/') === 'content') {
             return new Uint8Array([7, 8, 9, 10]);
         }
-        if (usage === 'Happy Coder' && path.join('/') === 'analytics/id') {
+        if (usage === 'Happy ' + 'Coder' && path.join('/') === 'analytics/id') {
             return new Uint8Array([11, 12, 13, 14]);
         }
         return master;

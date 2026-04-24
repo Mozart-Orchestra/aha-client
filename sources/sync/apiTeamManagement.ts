@@ -1,11 +1,12 @@
 import type { AuthCredentials } from '@/auth/tokenStorage';
-import { backoff, NonRetryableError } from '@/utils/time';
+import { backoff, createBackoff, NonRetryableError } from '@/utils/time';
 import { checkAuth } from '@/utils/handleResponse';
 import { buildImageRefFields, resolveCandidateId, resolveImageRef } from '@/utils/imageRef';
 import { getServerUrl } from './serverConfig';
 import type { AgentLifecycle } from '@/utils/spawnState';
 import type { WorkspaceOverviewSnapshot } from './workspaceOverviewTypes';
 import type { KanbanBoard } from './kanbanTypes';
+import { fetchWithTimeout } from './httpTimeout';
 
 // === Response Types ===
 
@@ -151,6 +152,11 @@ export interface CreateCorpsResponse {
     }>;
 }
 
+const interactiveTeamMutationRequest = createBackoff({
+    onError: (e) => { console.warn(e); },
+    maxRetries: 1,
+});
+
 async function throwTeamManagementHttpError(response: Response, fallbackMessage: string): Promise<never> {
     let serverMessage: string | null = null;
 
@@ -235,8 +241,8 @@ export async function createTeam(
 ): Promise<TeamSummary> {
     const API_ENDPOINT = getServerUrl();
 
-    return await backoff(async () => {
-        const response = await fetch(`${API_ENDPOINT}/v1/teams`, {
+    return await interactiveTeamMutationRequest(async () => {
+        const response = await fetchWithTimeout(`${API_ENDPOINT}/v1/teams`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${credentials.token}`,
@@ -275,8 +281,8 @@ export async function createCorps(
         ...(params.roles !== undefined ? { roles: params.roles.map(serializeCorpsSeat) } : {}),
     };
 
-    return await backoff(async () => {
-        const response = await fetch(`${API_ENDPOINT}/v1/corps`, {
+    return await interactiveTeamMutationRequest(async () => {
+        const response = await fetchWithTimeout(`${API_ENDPOINT}/v1/corps`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${credentials.token}`,
@@ -333,8 +339,8 @@ export async function addTeamMember(
     });
     const candidateId = resolveCandidateId(imageRef, opts?.candidateId);
 
-    return await backoff(async () => {
-        const response = await fetch(`${API_ENDPOINT}/v1/teams/${teamId}/members`, {
+    return await interactiveTeamMutationRequest(async () => {
+        const response = await fetchWithTimeout(`${API_ENDPOINT}/v1/teams/${teamId}/members`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${credentials.token}`,

@@ -65,7 +65,7 @@ http://localhost:8081/terminal/connect#key=...&next=%2Fteams%2Fnew&machineId=...
 
 Symptom:
 
-- terminal approval talks to `top1vibe.com` instead of local server
+- terminal approval talks to `aha-agi.com` instead of local server
 
 Cause:
 

@@ -11,7 +11,7 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 }
 
 /**
- * Catalan translations for the Happy app
+ * Catalan translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const ca: TranslationStructure = {
@@ -344,7 +344,7 @@ export const ca: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Configuració del servidor',
         enterServerUrl: 'Introdueix una URL del servidor',
-        notValidHappyServer: 'No és un servidor Kanban vàlid',
+        notValidServer: 'No és un servidor Aha vàlid',
         changeServer: 'Canvia el servidor',
         continueWithServer: 'Continuar amb aquest servidor?',
         resetToDefault: 'Reinicia per defecte',
@@ -373,9 +373,9 @@ export const ca: TranslationStructure = {
         archiveSessionConfirm: 'Segur que vols arxivar aquesta sessió?',
         restoreSession: 'Restore Session',
         restoreSessionConfirm: 'Restore this archived session back into your workspace?',
-        happySessionIdCopied: 'ID de la sessió de Kanban copiat al porta-retalls',
-        failedToCopySessionId: 'Ha fallat copiar l\'ID de la sessió de Kanban',
-        happySessionId: 'ID de la sessió de Kanban',
+        sessionIdCopied: 'ID de la sessió d\'Aha copiat al porta-retalls',
+        failedToCopySessionId: 'Ha fallat copiar l\'ID de la sessió d\'Aha',
+        sessionId: 'ID de la sessió d\'Aha',
         claudeCodeSessionId: 'ID de la sessió de Claude Code',
         claudeCodeSessionIdCopied: 'ID de la sessió de Claude Code copiat al porta-retalls',
         aiProvider: 'Proveïdor d\'IA',
@@ -400,7 +400,7 @@ export const ca: TranslationStructure = {
         path: 'Camí',
         operatingSystem: 'Sistema operatiu',
         processId: 'ID del procés',
-        happyHome: 'Directori de Kanban',
+        homeDirectory: 'Directori d\'Aha',
         copyMetadata: 'Copia les metadades',
         agentState: 'Estat de l\'agent',
         controlledByUser: 'Controlat per l\'usuari',

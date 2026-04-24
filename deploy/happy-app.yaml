@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: happy-app
-        image: docker.korshakov.com/happy-app:{version}
+        image: ghcr.io/shiyao-huang/happy:{version}
         ports:
         - containerPort: 80
         livenessProbe:

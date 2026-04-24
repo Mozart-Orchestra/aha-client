@@ -65,7 +65,7 @@ export interface DesktopCollaborationSnapshot {
     sessions?: DesktopAgentSession[];
 }
 
-export interface HappyDesktopBridge {
+export interface AhaDesktopBridge {
     getEnvironment(): Promise<{
         isDev: boolean;
         serverUrl: string;
@@ -98,19 +98,20 @@ export interface HappyDesktopBridge {
 
 declare global {
     interface Window {
-        happyDesktopBridge?: HappyDesktopBridge;
+        ahaDesktopBridge?: AhaDesktopBridge;
+        happyDesktopBridge?: AhaDesktopBridge;
     }
 }
 
-export function getDesktopBridge(): HappyDesktopBridge | null {
+export function getDesktopBridge(): AhaDesktopBridge | null {
     if (typeof window === 'undefined') {
         return null;
     }
-    return window.happyDesktopBridge ?? null;
+    return window.ahaDesktopBridge ?? window.happyDesktopBridge ?? null;
 }
 
 export function useDesktopBridge() {
-    const [bridge] = React.useState<HappyDesktopBridge | null>(() => getDesktopBridge());
+    const [bridge] = React.useState<AhaDesktopBridge | null>(() => getDesktopBridge());
     const [collaborationState, setCollaborationState] = React.useState<DesktopCollaborationSnapshot | null>(null);
 
     React.useEffect(() => {

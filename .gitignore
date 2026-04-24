@@ -49,3 +49,5 @@ yarn-error.*
 CLAUDE.local.md
 
 .dev/worktree/*coverage/
+dist-wow/
+.aha/

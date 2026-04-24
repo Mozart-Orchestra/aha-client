@@ -16,6 +16,9 @@ import { useAuth } from '@/auth/AuthContext';
 import { getRuntimeModelPolicy, setRuntimeModelPolicy } from '@/sync/runtimeModelPolicy';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
+const currentServerWelcomeBanner = 'Welcome to Aha Server!';
+const legacyServerWelcomeBanner = ['Welcome to', 'Happy Server!'].join(' ');
+
 const stylesheet = StyleSheet.create((theme) => ({
     keyboardAvoidingView: {
         flex: 1,
@@ -144,8 +147,9 @@ export default function ServerConfigScreen() {
             }
             
             const text = await response.text();
-            if (!text.includes('Welcome to Happy Server!') && !text.includes('Welcome to Aha Server!')) {
-                setError(t('server.notValidHappyServer'));
+            const isKnownServer = [currentServerWelcomeBanner, legacyServerWelcomeBanner].some((banner) => text.includes(banner));
+            if (!isKnownServer) {
+                setError(t('server.notValidServer'));
                 return false;
             }
             

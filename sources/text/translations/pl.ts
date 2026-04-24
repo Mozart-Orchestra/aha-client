@@ -22,7 +22,7 @@ function plural({ count, one, few, many }: { count: number; one: string; few: st
 }
 
 /**
- * Polish translations for the Happy app
+ * Polish translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const pl: TranslationStructure = {
@@ -355,7 +355,7 @@ export const pl: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Konfiguracja serwera',
         enterServerUrl: 'Proszę wprowadzić URL serwera',
-        notValidHappyServer: 'To nie jest prawidłowy serwer Kanban',
+        notValidServer: 'To nie jest prawidłowy serwer Aha',
         changeServer: 'Zmień serwer',
         continueWithServer: 'Kontynuować z tym serwerem?',
         resetToDefault: 'Resetuj do domyślnego',
@@ -384,9 +384,9 @@ export const pl: TranslationStructure = {
         archiveSessionConfirm: 'Czy na pewno chcesz zarchiwizować tę sesję?',
         restoreSession: 'Restore Session',
         restoreSessionConfirm: 'Restore this archived session back into your workspace?',
-        happySessionIdCopied: 'ID sesji Kanban skopiowane do schowka',
-        failedToCopySessionId: 'Nie udało się skopiować ID sesji Kanban',
-        happySessionId: 'ID sesji Kanban',
+        sessionIdCopied: 'ID sesji Aha skopiowane do schowka',
+        failedToCopySessionId: 'Nie udało się skopiować ID sesji Aha',
+        sessionId: 'ID sesji Aha',
         claudeCodeSessionId: 'ID sesji Claude Code',
         claudeCodeSessionIdCopied: 'ID sesji Claude Code skopiowane do schowka',
         aiProvider: 'Dostawca AI',
@@ -411,7 +411,7 @@ export const pl: TranslationStructure = {
         path: 'Ścieżka',
         operatingSystem: 'System operacyjny',
         processId: 'ID procesu',
-        happyHome: 'Katalog domowy Kanban',
+        homeDirectory: 'Katalog domowy Aha',
         copyMetadata: 'Kopiuj metadane',
         agentState: 'Stan agenta',
         controlledByUser: 'Kontrolowany przez użytkownika',

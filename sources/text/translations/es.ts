@@ -11,7 +11,7 @@ function plural({ count, singular, plural }: { count: number; singular: string; 
 }
 
 /**
- * Spanish translations for the Happy app
+ * Spanish translations for the Aha app
  * Must match the exact structure of the English translations
  */
 export const es: TranslationStructure = {
@@ -344,7 +344,7 @@ export const es: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: 'Configuración del servidor',
         enterServerUrl: 'Ingresa una URL de servidor',
-        notValidHappyServer: 'No es un servidor Kanban válido',
+        notValidServer: 'No es un servidor Aha válido',
         changeServer: 'Cambiar servidor',
         continueWithServer: '¿Continuar con este servidor?',
         resetToDefault: 'Restablecer por defecto',
@@ -373,9 +373,9 @@ export const es: TranslationStructure = {
         archiveSessionConfirm: '¿Seguro que quieres archivar esta sesión?',
         restoreSession: 'Restore Session',
         restoreSessionConfirm: 'Restore this archived session back into your workspace?',
-        happySessionIdCopied: 'ID de sesión de Kanban copiado al portapapeles',
-        failedToCopySessionId: 'Falló al copiar ID de sesión de Kanban',
-        happySessionId: 'ID de sesión de Kanban',
+        sessionIdCopied: 'ID de sesión de Aha copiado al portapapeles',
+        failedToCopySessionId: 'Falló al copiar ID de sesión de Aha',
+        sessionId: 'ID de sesión de Aha',
         claudeCodeSessionId: 'ID de sesión de Claude Code',
         claudeCodeSessionIdCopied: 'ID de sesión de Claude Code copiado al portapapeles',
         aiProvider: 'Proveedor de IA',
@@ -400,7 +400,7 @@ export const es: TranslationStructure = {
         path: 'Ruta',
         operatingSystem: 'Sistema operativo',
         processId: 'ID del proceso',
-        happyHome: 'Directorio de Kanban',
+        homeDirectory: 'Directorio de Aha',
         copyMetadata: 'Copiar metadatos',
         agentState: 'Estado del agente',
         controlledByUser: 'Controlado por el usuario',

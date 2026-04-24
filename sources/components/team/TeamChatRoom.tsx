@@ -2502,9 +2502,6 @@ export default function TeamChatRoom({
             try {
                 const unsubscribe = await sync.subscribeToTeamMessages(teamId, (message) => {
                     const shouldAutoScroll = shouldStickToLatestRef.current || isNearBottomRef.current;
-                    if (messageIdsRef.current.has(message.id)) {
-                        return;
-                    }
                     queuePendingWebAnchor(shouldAutoScroll);
                     setMessages(prev => {
                         messageIdsRef.current.add(message.id);

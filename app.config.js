@@ -5,9 +5,9 @@ const name = {
     production: "Kanban"
 }[variant];
 const bundleId = {
-    development: "com.slopus.kanban.dev",
-    preview: "com.slopus.kanban.preview",
-    production: "com.slopus.kanban"
+    development: "com.ahaagi.kanban.dev",
+    preview: "com.ahaagi.kanban.preview",
+    production: "com.ahaagi.kanban"
 }[variant];
 
 export default {
@@ -37,7 +37,7 @@ export default {
                 NSLocalNetworkUsageDescription: "Allow $(PRODUCT_NAME) to find and connect to local devices on your network.",
                 NSBonjourServices: ["_http._tcp", "_https._tcp"]
             },
-            associatedDomains: variant === 'production' ? ["applinks:app.happy.engineering"] : []
+            associatedDomains: variant === 'production' ? ["applinks:aha-agi.com"] : []
         },
         android: {
             adaptiveIcon: {
@@ -63,7 +63,7 @@ export default {
                     "data": [
                         {
                             "scheme": "https",
-                            "host": "app.happy.engineering",
+                            "host": "aha-agi.com",
                             "pathPrefix": "/"
                         }
                     ],

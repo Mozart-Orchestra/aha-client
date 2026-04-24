@@ -1,5 +1,5 @@
 /**
- * Chinese (Simplified) translations for the Happy app
+ * Chinese (Simplified) translations for the Aha app
  * Values can be:
  * - String constants for static text
  * - Functions with typed object parameters for dynamic text
@@ -361,7 +361,7 @@ export const zhHans: TranslationStructure = {
         // Used by Server Configuration screen (app/(app)/server.tsx)
         serverConfiguration: '服务器配置',
         enterServerUrl: '请输入服务器 URL',
-        notValidHappyServer: '不是有效的 Kanban 服务器',
+        notValidServer: '不是有效的 Aha 服务器',
         changeServer: '更改服务器',
         continueWithServer: '继续使用此服务器？',
         resetToDefault: '重置为默认',
@@ -390,9 +390,9 @@ export const zhHans: TranslationStructure = {
         archiveSessionConfirm: '您确定要归档此会话吗？',
         restoreSession: '恢复会话',
         restoreSessionConfirm: '要将这个已归档会话恢复回当前工作区吗？',
-        happySessionIdCopied: 'Kanban 会话 ID 已复制到剪贴板',
-        failedToCopySessionId: '复制 Kanban 会话 ID 失败',
-        happySessionId: 'Kanban 会话 ID',
+        sessionIdCopied: 'Aha 会话 ID 已复制到剪贴板',
+        failedToCopySessionId: '复制 Aha 会话 ID 失败',
+        sessionId: 'Aha 会话 ID',
         claudeCodeSessionId: 'Claude Code 会话 ID',
         claudeCodeSessionIdCopied: 'Claude Code 会话 ID 已复制到剪贴板',
         aiProvider: 'AI 提供商',
@@ -417,7 +417,7 @@ export const zhHans: TranslationStructure = {
         path: '路径',
         operatingSystem: '操作系统',
         processId: '进程 ID',
-        happyHome: 'Kanban 主目录',
+        homeDirectory: 'Aha 主目录',
         copyMetadata: '复制元数据',
         agentState: 'Agent 状态',
         controlledByUser: '用户控制',
