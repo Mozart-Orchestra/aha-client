@@ -4,7 +4,7 @@ import * as React from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Fonts from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
-import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
+import { AuthCredentials, clearStoredCredentialsForSupabaseCallback, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import {
     selectCanonicalBootCredentials,
@@ -196,6 +196,7 @@ export default function RootLayout() {
         const callbackState = Platform.OS === 'web' && typeof window !== 'undefined'
             ? readSupabaseOAuthCallbackState(window.location.hash)
             : null;
+        const hasFreshSupabaseCallback = shouldPreferSupabaseCallback(callbackState);
 
         // Preserve terminal connect hash before OAuth redirect can lose it
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -233,13 +234,19 @@ export default function RootLayout() {
                 }
 
                 // A fresh OAuth callback must take precedence over any stale local token.
+                // Clear only the active auth session so concurrent remounts cannot revive
+                // stale credentials while legacy recovery secret remains available.
+                if (hasFreshSupabaseCallback && !clearStoredCredentialsForSupabaseCallback()) {
+                    throw new Error('Failed to clear stale credentials before completing Google login');
+                }
+
                 const storedCredentials = await TokenStorage.getCredentials();
                 let credentials = selectBootCredentials(storedCredentials, callbackState);
 
                 // If no stored credentials, check if we have a Supabase session
                 // (e.g. from OAuth callback redirect with #access_token=...)
                 if (!credentials) {
-                    const shouldClearCallbackHashAfterBootstrap = shouldPreferSupabaseCallback(callbackState);
+                    const shouldClearCallbackHashAfterBootstrap = hasFreshSupabaseCallback;
                     // Wait for Supabase to process URL hash if present
                     let session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] | null = null;
                     try {
@@ -322,7 +329,7 @@ export default function RootLayout() {
                         // OAuth callback handling may complete concurrently during
                         // repeated mounts/reloads. Persisted credentials are the
                         // canonical winner once the callback flow has written them.
-                        preferPersistedOnMismatch: shouldPreferSupabaseCallback(callbackState),
+                        preferPersistedOnMismatch: hasFreshSupabaseCallback,
                     },
                 );
 
@@ -333,6 +340,8 @@ export default function RootLayout() {
                         if (shouldDropStoredCredentialsAfterRestoreFailure(error)) {
                             await TokenStorage.removeCredentials();
                             credentials = null;
+                        } else if (hasFreshSupabaseCallback) {
+                            throw error;
                         } else {
                             console.warn('Initial sync restore failed; continuing with stored credentials:', error);
                         }

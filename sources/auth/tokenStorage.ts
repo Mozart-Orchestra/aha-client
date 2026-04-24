@@ -127,6 +127,25 @@ export function clearExternalWebCredentials(): void {
     }
 }
 
+export function clearStoredCredentialsForSupabaseCallback(): boolean {
+    if (Platform.OS !== 'web') {
+        credentialsCache = null;
+        return true;
+    }
+
+    try {
+        clearExternalWebCredentials();
+        broadcastWebAuthSyncEvent({
+            type: 'logout',
+            timestamp: Date.now(),
+        });
+        return true;
+    } catch (error) {
+        console.warn('Failed to clear stored web credentials for Supabase callback:', error);
+        return false;
+    }
+}
+
 export function getLegacyStoredSecretForMigration(): string | null {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof localStorage === 'undefined') {
         return null;

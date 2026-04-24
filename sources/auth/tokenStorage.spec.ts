@@ -17,6 +17,7 @@ vi.mock('expo-secure-store', () => ({
 
 import type { AuthCredentials, WebAuthSyncEvent } from '@/auth/tokenStorage';
 import {
+    clearStoredCredentialsForSupabaseCallback,
     getLegacyStoredSecretForMigration,
     shouldReloadForWebAuthSyncEvent,
     TokenStorage,
@@ -135,6 +136,20 @@ describe('TokenStorage', () => {
         await expect(TokenStorage.setCredentials(credentials)).resolves.toBe(true);
         await expect(TokenStorage.removeCredentials()).resolves.toBe(true);
         expect(getLegacyStoredSecretForMigration()).toBeNull();
+        expect(mockStorage.get('auth_credentials')).toBeUndefined();
+    });
+
+    it('clears only active credentials during a Supabase callback and preserves the legacy reauth secret', async () => {
+        const credentials: AuthCredentials = {
+            token: 'token-1',
+            secret: 'same-secret',
+        };
+
+        await expect(TokenStorage.setCredentials(credentials)).resolves.toBe(true);
+        expect(clearStoredCredentialsForSupabaseCallback()).toBe(true);
+
+        await expect(TokenStorage.getCredentials()).resolves.toBeNull();
+        expect(getLegacyStoredSecretForMigration()).toBe('same-secret');
         expect(mockStorage.get('auth_credentials')).toBeUndefined();
     });
 });

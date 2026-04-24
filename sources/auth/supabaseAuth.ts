@@ -1,6 +1,6 @@
 import { supabase } from '@/auth/supabase';
 import { authGetToken } from '@/auth/authGetToken';
-import { getWebSupabaseOAuthOrigin, getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
+import { getWebSupabaseOAuthRedirectUrl, getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { decryptBox } from '@/encryption/libsodium';
 import { generateAuthKeyPair } from '@/auth/authQRStart';
@@ -26,6 +26,10 @@ interface SupabaseRecoveryResult {
 
 /** @deprecated Use AuthSession from @packages/auth-contract directly */
 type SupabaseCompleteSessionResult = AuthSession;
+
+let inFlightSupabaseCompletion:
+    | { accessToken: string; promise: Promise<SupabaseCompleteSessionResult> }
+    | null = null;
 
 export class SupabaseRestoreRequiredError extends Error {
     constructor(message = 'This account already exists. Use another signed-in device to finish linking this machine.') {
@@ -145,10 +149,10 @@ async function tryMigrateLegacyWebSecret(
  */
 export async function signInWithGoogle(): Promise<void> {
     if (Platform.OS === 'web') {
-        // Use origin only — Supabase redirect URL allowlist is configured per-origin.
-        // Using the full pathname (e.g. /webappv3/) causes Supabase to reject the
-        // redirect and fall back to its default (localhost), breaking production login.
-        const redirectTo = getWebSupabaseOAuthOrigin() ?? getWebSupabaseRedirectUrl();
+        // Use the full, canonical callback URL so OAuth returns directly into
+        // `/webappv3/` instead of depending on the apex-domain redirect to
+        // preserve the hash fragment across navigation.
+        const redirectTo = getWebSupabaseOAuthRedirectUrl() ?? getWebSupabaseRedirectUrl();
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
@@ -307,7 +311,7 @@ export async function recoverSupabaseSession(accessToken: string): Promise<Supab
     }
 }
 
-export async function completeSupabaseSession(accessToken: string): Promise<SupabaseCompleteSessionResult> {
+async function completeSupabaseSessionInternal(accessToken: string): Promise<SupabaseCompleteSessionResult> {
     const serverUrl = getServerUrl();
     const keypair = generateAuthKeyPair();
     const newSecret = await getRandomBytesAsync(32);
@@ -389,6 +393,25 @@ export async function completeSupabaseSession(accessToken: string): Promise<Supa
         }
         throw error;
     }
+}
+
+export async function completeSupabaseSession(accessToken: string): Promise<SupabaseCompleteSessionResult> {
+    if (inFlightSupabaseCompletion?.accessToken === accessToken) {
+        return inFlightSupabaseCompletion.promise;
+    }
+
+    const promise = completeSupabaseSessionInternal(accessToken).finally(() => {
+        if (inFlightSupabaseCompletion?.accessToken === accessToken) {
+            inFlightSupabaseCompletion = null;
+        }
+    });
+
+    inFlightSupabaseCompletion = {
+        accessToken,
+        promise,
+    };
+
+    return promise;
 }
 
 export async function bootstrapRecoveryMaterial(token: string, secretBase64: string): Promise<void> {
