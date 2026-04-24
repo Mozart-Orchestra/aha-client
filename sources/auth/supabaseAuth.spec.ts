@@ -34,6 +34,14 @@ vi.mock('@/auth/authGetToken', () => ({
     authGetToken: vi.fn(),
 }));
 
+vi.mock('@/auth/authChallenge', () => ({
+    authChallenge: () => ({
+        challenge: new Uint8Array(32).fill(7),
+        signature: new Uint8Array(64).fill(8),
+        publicKey: new Uint8Array(32).fill(9),
+    }),
+}));
+
 vi.mock('@/auth/supabaseCallback', () => ({
     getWebSupabaseRedirectUrl: vi.fn(() => 'https://aha-agi.com/webappv3/'),
 }));
@@ -134,17 +142,45 @@ describe('completeSupabaseSession', () => {
         expect(clearLegacyStoredSecretForMigration).toHaveBeenCalledTimes(1);
     });
 
-    it('uses the canonical web callback URL for Google OAuth sign-in', async () => {
+    it('uses the canonical web origin for Google OAuth sign-in', async () => {
         await signInWithGoogle();
 
         expect(signInWithOAuth).toHaveBeenCalledWith({
             provider: 'google',
             options: {
-                redirectTo: 'https://aha-agi.com/webappv3/',
+                redirectTo: 'https://aha-agi.com',
                 queryParams: {
                     prompt: 'select_account',
                 },
             },
         });
+    });
+
+    it('falls back to the legacy Supabase exchange flow when /complete is not deployed yet', async () => {
+        axiosPost
+            .mockRejectedValueOnce({
+                isAxiosError: true,
+                response: { status: 404 },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    token: 'legacy-token',
+                    userId: 'legacy-user',
+                    recoveryReady: false,
+                    invitationVerified: false,
+                },
+            });
+
+        await expect(completeSupabaseSession('supabase-access-token')).resolves.toEqual({
+            token: 'legacy-token',
+            userId: 'legacy-user',
+            secretBase64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+            recoveryReady: false,
+            invitationVerified: false,
+        });
+
+        expect(axiosPost).toHaveBeenCalledTimes(2);
+        expect(axiosPost.mock.calls[0]?.[0]).toBe('https://aha-agi.com/api/v1/auth/supabase/complete');
+        expect(axiosPost.mock.calls[1]?.[0]).toBe('https://aha-agi.com/api/v1/auth/supabase/exchange');
     });
 });

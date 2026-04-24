@@ -1,4 +1,5 @@
 import { supabase } from '@/auth/supabase';
+import { authChallenge } from '@/auth/authChallenge';
 import { authGetToken } from '@/auth/authGetToken';
 import { getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
@@ -93,8 +94,31 @@ function getCanonicalWebSupabaseRedirectUrl(): string | null {
         }
     }
 
+    url.pathname = '';
+    url.search = '';
     url.hash = '';
-    return url.toString();
+    return url.toString().replace(/\/$/, '');
+}
+
+function readLegacyStoredSecretForSupabaseFallback(): Uint8Array | null {
+    if (Platform.OS !== 'web') {
+        return null;
+    }
+
+    const legacySecretBase64 = getLegacyStoredSecretForMigration();
+    if (!legacySecretBase64) {
+        return null;
+    }
+
+    try {
+        const legacySecret = decodeBase64(legacySecretBase64, 'base64url');
+        if (legacySecret.length !== 32) {
+            return null;
+        }
+        return legacySecret;
+    } catch {
+        return null;
+    }
 }
 
 async function getLegacyLinkProofForSupabaseComplete(): Promise<{
@@ -173,9 +197,8 @@ async function tryMigrateLegacyWebSecret(
  */
 export async function signInWithGoogle(): Promise<void> {
     if (Platform.OS === 'web') {
-        // Use the full, canonical callback URL so OAuth returns directly into
-        // `/webappv3/` instead of depending on the apex-domain redirect to
-        // preserve the hash fragment across navigation.
+        // Supabase's production allowlist is origin-based. Sending the full
+        // `/webappv3/` path causes some deployments to fall back to localhost.
         const redirectTo = getCanonicalWebSupabaseRedirectUrl() ?? getWebSupabaseRedirectUrl();
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
@@ -301,6 +324,22 @@ async function buildSupabaseCompleteSecretPayload(accessToken: string, contentSe
     };
 }
 
+async function buildSupabaseLegacyExchangeSecretPayload(accessToken: string, contentSecretKey: Uint8Array): Promise<Record<string, string>> {
+    const payload = await buildSupabaseCompleteSecretPayload(accessToken, contentSecretKey);
+
+    if ('newContentSecretKey' in payload) {
+        return {
+            contentSecretKey: payload.newContentSecretKey,
+        };
+    }
+
+    return {
+        encryptedContentSecretKey: payload.newEncryptedContentSecretKey,
+        nonce: payload.newNonce,
+        ephemeralPublicKey: payload.newEphemeralPublicKey,
+    };
+}
+
 export async function recoverSupabaseSession(accessToken: string): Promise<SupabaseRecoveryResult> {
     const serverUrl = getServerUrl();
     const keypair = generateAuthKeyPair();
@@ -333,6 +372,66 @@ export async function recoverSupabaseSession(accessToken: string): Promise<Supab
         }
         throw error;
     }
+}
+
+async function completeSupabaseSessionLegacy(accessToken: string, fallbackSecret: Uint8Array): Promise<SupabaseCompleteSessionResult> {
+    const serverUrl = getServerUrl();
+    const secret = readLegacyStoredSecretForSupabaseFallback() ?? fallbackSecret;
+    const { challenge, signature, publicKey } = authChallenge(secret);
+    const secretPayload = await buildSupabaseLegacyExchangeSecretPayload(accessToken, secret);
+    const requestBody = {
+        accessToken,
+        publicKey: encodeBase64(publicKey),
+        challenge: encodeBase64(challenge),
+        signature: encodeBase64(signature),
+        ...secretPayload,
+    };
+    let lastNotFoundError: unknown = null;
+
+    for (const endpoint of ['/v1/auth/supabase/exchange', '/v1/auth/supabase'] as const) {
+        try {
+            const response = await axios.post<{
+                token: string;
+                userId: string;
+                recoveryReady?: boolean;
+                invitationVerified?: boolean;
+            }>(`${serverUrl}${endpoint}`, requestBody);
+
+            clearLegacyStoredSecretForMigration();
+
+            return {
+                token: response.data.token,
+                userId: response.data.userId,
+                secretBase64: encodeBase64(secret, 'base64url'),
+                recoveryReady: response.data.recoveryReady ?? true,
+                invitationVerified: response.data.invitationVerified,
+            };
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                if (error.response?.status === 404) {
+                    lastNotFoundError = error;
+                    continue;
+                }
+
+                if (error.response?.status === 409) {
+                    const code = error.response.data?.code;
+                    if (code === 'ACCOUNT_LINK_CONFLICT') {
+                        throw new SupabaseAccountLinkConflictError();
+                    }
+                    if (code === 'RESTORE_REQUIRED') {
+                        throw new SupabaseRestoreRequiredError();
+                    }
+                    if (code === 'secret-proof-mismatch' || code === 'secret-proof-required') {
+                        throw new SupabaseRecoveryNotReadyError();
+                    }
+                }
+            }
+
+            throw error;
+        }
+    }
+
+    throw lastNotFoundError ?? new Error('This server deployment does not support Supabase login');
 }
 
 async function completeSupabaseSessionInternal(accessToken: string): Promise<SupabaseCompleteSessionResult> {
@@ -406,6 +505,10 @@ async function completeSupabaseSessionInternal(accessToken: string): Promise<Sup
             invitationVerified: response.data.invitationVerified,
         };
     } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+            return completeSupabaseSessionLegacy(accessToken, newSecret);
+        }
+
         if (axios.isAxiosError(error) && error.response?.status === 409) {
             const code = error.response.data?.code;
             if (code === 'ACCOUNT_LINK_CONFLICT') {
