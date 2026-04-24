@@ -62,6 +62,40 @@ export function getWebSupabaseRedirectUrl(locationLike?: RedirectLocationLike | 
     return `${source.origin}${source.pathname}${source.search ?? ''}`;
 }
 
+export function getWebSupabaseOAuthOrigin(locationLike?: RedirectLocationLike | null): string | null {
+    const source = locationLike ?? (typeof window !== 'undefined' ? window.location : null);
+    if (!source) {
+        return null;
+    }
+
+    const href = source.href
+        ?? (source.origin && source.pathname
+            ? `${source.origin}${source.pathname}${source.search ?? ''}`
+            : null);
+    if (!href) {
+        return null;
+    }
+
+    const url = new URL(href);
+    const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+
+    if (!isLocalHost && url.hostname.startsWith('www.')) {
+        url.hostname = url.hostname.slice(4);
+    }
+
+    if (!isLocalHost && url.protocol === 'http:') {
+        url.protocol = 'https:';
+        if (url.port === '80') {
+            url.port = '';
+        }
+    }
+
+    url.pathname = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+}
+
 export function readSupabaseOAuthCallbackState(hash: string | null | undefined): SupabaseOAuthCallbackState | null {
     if (!hash || !hash.startsWith('#')) {
         return null;

@@ -1,6 +1,6 @@
 import { supabase } from '@/auth/supabase';
 import { authGetToken } from '@/auth/authGetToken';
-import { getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
+import { getWebSupabaseOAuthOrigin, getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { decryptBox } from '@/encryption/libsodium';
 import { generateAuthKeyPair } from '@/auth/authQRStart';
@@ -148,7 +148,7 @@ export async function signInWithGoogle(): Promise<void> {
         // Use origin only — Supabase redirect URL allowlist is configured per-origin.
         // Using the full pathname (e.g. /webappv3/) causes Supabase to reject the
         // redirect and fall back to its default (localhost), breaking production login.
-        const redirectTo = typeof window !== 'undefined' ? window.location.origin : getWebSupabaseRedirectUrl();
+        const redirectTo = getWebSupabaseOAuthOrigin() ?? getWebSupabaseRedirectUrl();
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {

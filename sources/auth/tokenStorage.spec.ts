@@ -101,6 +101,21 @@ describe('TokenStorage', () => {
         await expect(TokenStorage.removeCredentials()).resolves.toBe(true);
     });
 
+    it('rehydrates persisted web credentials after a full reload', async () => {
+        const credentials: AuthCredentials = {
+            token: 'token-1',
+            secret: 'same-secret',
+            invitationVerified: false,
+        };
+
+        await expect(TokenStorage.setCredentials(credentials)).resolves.toBe(true);
+
+        vi.resetModules();
+        const reloadedModule = await import('@/auth/tokenStorage');
+
+        await expect(reloadedModule.TokenStorage.getCredentials()).resolves.toEqual(credentials);
+    });
+
     it('stores the current web secret for future reauth migration', async () => {
         const credentials: AuthCredentials = {
             token: 'token-1',
@@ -120,5 +135,6 @@ describe('TokenStorage', () => {
         await expect(TokenStorage.setCredentials(credentials)).resolves.toBe(true);
         await expect(TokenStorage.removeCredentials()).resolves.toBe(true);
         expect(getLegacyStoredSecretForMigration()).toBeNull();
+        expect(mockStorage.get('auth_credentials')).toBeUndefined();
     });
 });

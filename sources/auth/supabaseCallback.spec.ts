@@ -9,6 +9,7 @@ vi.mock('react-native', () => ({
 
 import {
     clearSupabaseOAuthCallbackHash,
+    getWebSupabaseOAuthOrigin,
     getWebSupabaseRedirectUrl,
     readSupabaseOAuthCallbackState,
 } from '@/auth/supabaseCallback';
@@ -18,6 +19,20 @@ describe('getWebSupabaseRedirectUrl', () => {
         expect(getWebSupabaseRedirectUrl({
             href: 'https://aha-agi.com/webappv3/?next=%2Fteams#access_token=abc',
         })).toBe('https://aha-agi.com/webappv3/?next=%2Fteams');
+    });
+});
+
+describe('getWebSupabaseOAuthOrigin', () => {
+    it('canonicalizes the production host to apex https before OAuth redirect', () => {
+        expect(getWebSupabaseOAuthOrigin({
+            href: 'http://www.aha-agi.com/webappv3/?next=%2Fteams',
+        })).toBe('https://aha-agi.com');
+    });
+
+    it('preserves localhost origins for local development', () => {
+        expect(getWebSupabaseOAuthOrigin({
+            href: 'http://localhost:8081/webappv3/?next=%2Fteams',
+        })).toBe('http://localhost:8081');
     });
 });
 

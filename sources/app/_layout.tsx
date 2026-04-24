@@ -6,9 +6,19 @@ import * as Fonts from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
 import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
+import {
+    selectBootCredentials,
+    shouldDropStoredCredentialsAfterRestoreFailure,
+    shouldPreferSupabaseCallback,
+} from '@/auth/rootBootstrap';
 import { clearSupabaseOAuthCallbackHash, readSupabaseOAuthCallbackState } from '@/auth/supabaseCallback';
 import { supabase } from '@/auth/supabase';
-import { completeSupabaseSession, SupabaseRecoveryNotReadyError, SupabaseRestoreRequiredError } from '@/auth/supabaseAuth';
+import {
+    completeSupabaseSession,
+    SupabaseAccountLinkConflictError,
+    SupabaseRecoveryNotReadyError,
+    SupabaseRestoreRequiredError,
+} from '@/auth/supabaseAuth';
 import { clearSupabaseSession, shouldClearSupabaseSessionError } from '@/auth/supabaseSession';
 import { persistPendingTerminalConnectRequestStorage, readPendingTerminalConnectRequestStorage } from '@/auth/pendingTerminalConnect';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
@@ -220,12 +230,14 @@ export default function RootLayout() {
                     clearSupabaseOAuthCallbackHash();
                 }
 
-                // Check existing stored credentials first
-                let credentials = await TokenStorage.getCredentials();
+                // A fresh OAuth callback must take precedence over any stale local token.
+                const storedCredentials = await TokenStorage.getCredentials();
+                let credentials = selectBootCredentials(storedCredentials, callbackState);
 
                 // If no stored credentials, check if we have a Supabase session
                 // (e.g. from OAuth callback redirect with #access_token=...)
                 if (!credentials) {
+                    const shouldClearCallbackHashAfterBootstrap = shouldPreferSupabaseCallback(callbackState);
                     // Wait for Supabase to process URL hash if present
                     let session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] | null = null;
                     try {
@@ -254,7 +266,11 @@ export default function RootLayout() {
                             });
                         });
                     }
+                    if (!session && callbackState?.accessToken && !oauthCallbackError) {
+                        oauthCallbackError = 'Google callback completed, but the web session was not established.';
+                    }
                     if (session?.access_token) {
+                        let shouldClearCompletedSession = true;
                         try {
                             const result = await completeSupabaseSession(session.access_token);
                             credentials = {
@@ -268,15 +284,27 @@ export default function RootLayout() {
                                 setNeedsRestore('restore_required');
                             } else if (error instanceof SupabaseRecoveryNotReadyError) {
                                 setNeedsRestore('recovery_not_ready');
+                            } else if (error instanceof SupabaseAccountLinkConflictError) {
+                                oauthCallbackError = error.message;
+                            } else {
+                                shouldClearCompletedSession = false;
+                                oauthCallbackError = error instanceof Error ? error.message : String(error);
                             }
-                            // Failed: continue unauthenticated
+                            // Preserve the Supabase session for transient failures so
+                            // the callback can be retried on reload instead of hard-dropping.
                         } finally {
-                            try {
-                                await clearSupabaseSession();
-                            } catch (error) {
-                                console.warn('Failed to clear completed Supabase session; continuing app initialization:', error);
+                            if (shouldClearCompletedSession) {
+                                try {
+                                    await clearSupabaseSession();
+                                } catch (error) {
+                                    console.warn('Failed to clear completed Supabase session; continuing app initialization:', error);
+                                }
                             }
                         }
+                    }
+
+                    if (shouldClearCallbackHashAfterBootstrap) {
+                        clearSupabaseOAuthCallbackHash();
                     }
                 }
 
@@ -284,7 +312,12 @@ export default function RootLayout() {
                     try {
                         await syncRestore(credentials);
                     } catch (error) {
-                        console.warn('Initial sync restore failed; continuing with stored credentials:', error);
+                        if (shouldDropStoredCredentialsAfterRestoreFailure(error)) {
+                            await TokenStorage.removeCredentials();
+                            credentials = null;
+                        } else {
+                            console.warn('Initial sync restore failed; continuing with stored credentials:', error);
+                        }
                     }
                 }
 

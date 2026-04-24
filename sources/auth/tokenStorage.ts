@@ -95,7 +95,18 @@ export function applyExternalWebCredentials(credentials: AuthCredentials): void 
         return;
     }
 
-    credentialsCache = JSON.stringify(credentials);
+    const serialized = JSON.stringify(credentials);
+    credentialsCache = serialized;
+
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+    }
+
+    try {
+        localStorage.setItem(AUTH_KEY, serialized);
+    } catch (error) {
+        console.warn('Failed to persist web credentials:', error);
+    }
 }
 
 export function clearExternalWebCredentials(): void {
@@ -104,6 +115,16 @@ export function clearExternalWebCredentials(): void {
     }
 
     credentialsCache = null;
+
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
+    }
+
+    try {
+        localStorage.removeItem(AUTH_KEY);
+    } catch (error) {
+        console.warn('Failed to clear persisted web credentials:', error);
+    }
 }
 
 export function getLegacyStoredSecretForMigration(): string | null {
@@ -133,13 +154,17 @@ function setLegacyStoredSecretForMigration(secret: string): void {
 export const TokenStorage = {
     async getCredentials(): Promise<AuthCredentials | null> {
         if (Platform.OS === 'web') {
-            const stored = credentialsCache;
+            const stored = credentialsCache
+                ?? (typeof window !== 'undefined' && typeof localStorage !== 'undefined'
+                    ? localStorage.getItem(AUTH_KEY)
+                    : null);
             if (!stored) return null;
             try {
+                credentialsCache = stored;
                 return JSON.parse(stored) as AuthCredentials;
             } catch (error) {
                 console.error('Error parsing web credentials:', error);
-                credentialsCache = null;
+                clearExternalWebCredentials();
                 return null;
             }
         }
