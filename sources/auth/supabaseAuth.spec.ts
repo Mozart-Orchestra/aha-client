@@ -4,10 +4,16 @@ const {
     axiosGet,
     axiosPost,
     clearLegacyStoredSecretForMigration,
+    signInWithOAuth,
+    signInWithOtp,
+    verifyOtp,
 } = vi.hoisted(() => ({
     axiosGet: vi.fn(),
     axiosPost: vi.fn(),
     clearLegacyStoredSecretForMigration: vi.fn(),
+    signInWithOAuth: vi.fn(),
+    signInWithOtp: vi.fn(),
+    verifyOtp: vi.fn(),
 }));
 
 vi.mock('react-native', () => ({
@@ -17,9 +23,9 @@ vi.mock('react-native', () => ({
 vi.mock('@/auth/supabase', () => ({
     supabase: {
         auth: {
-            signInWithOAuth: vi.fn(),
-            signInWithOtp: vi.fn(),
-            verifyOtp: vi.fn(),
+            signInWithOAuth,
+            signInWithOtp,
+            verifyOtp,
         },
     },
 }));
@@ -29,7 +35,6 @@ vi.mock('@/auth/authGetToken', () => ({
 }));
 
 vi.mock('@/auth/supabaseCallback', () => ({
-    getWebSupabaseOAuthRedirectUrl: vi.fn(() => 'https://aha-agi.com/webappv3/'),
     getWebSupabaseRedirectUrl: vi.fn(() => 'https://aha-agi.com/webappv3/'),
 }));
 
@@ -91,7 +96,7 @@ vi.mock('expo-crypto', () => ({
     getRandomBytesAsync: vi.fn(async (length: number) => new Uint8Array(length).fill(1)),
 }));
 
-import { completeSupabaseSession } from '@/auth/supabaseAuth';
+import { completeSupabaseSession, signInWithGoogle } from '@/auth/supabaseAuth';
 
 describe('completeSupabaseSession', () => {
     beforeEach(() => {
@@ -101,6 +106,12 @@ describe('completeSupabaseSession', () => {
                 wrappingPublicKey: Buffer.from(new Uint8Array(32).fill(9)).toString('base64'),
             },
         });
+        signInWithOAuth.mockResolvedValue({
+            data: {},
+            error: null,
+        });
+        signInWithOtp.mockResolvedValue({ error: null });
+        verifyOtp.mockResolvedValue({ error: null });
         axiosPost.mockResolvedValue({
             data: {
                 state: 'new_account_created',
@@ -121,5 +132,19 @@ describe('completeSupabaseSession', () => {
         expect(axiosGet).toHaveBeenCalledTimes(1);
         expect(axiosPost).toHaveBeenCalledTimes(1);
         expect(clearLegacyStoredSecretForMigration).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses the canonical web callback URL for Google OAuth sign-in', async () => {
+        await signInWithGoogle();
+
+        expect(signInWithOAuth).toHaveBeenCalledWith({
+            provider: 'google',
+            options: {
+                redirectTo: 'https://aha-agi.com/webappv3/',
+                queryParams: {
+                    prompt: 'select_account',
+                },
+            },
+        });
     });
 });

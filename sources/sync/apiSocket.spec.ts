@@ -9,10 +9,6 @@ vi.mock('socket.io-client', () => ({
     io: mockState.io,
 }));
 
-vi.mock('@/auth/AuthContext', () => ({
-    getCurrentAuth: () => ({ logout: mockState.logout }),
-}));
-
 vi.mock('@/auth/tokenStorage', () => ({
     TokenStorage: {
         getCredentials: vi.fn(),
@@ -129,14 +125,36 @@ describe('ApiSocket reconnect', () => {
         expect(statuses.at(-1)).toBe('disconnected');
     });
 
-    it('should stop reconnecting on auth failure (401)', () => {
-        const { socket } = createSocket();
+    it('should stop realtime and preserve login state on socket auth failure (401)', () => {
+        const { apiSocket, socket } = createSocket();
+        const statuses: string[] = [];
+
+        apiSocket.onStatusChange((status) => {
+            statuses.push(status);
+        });
 
         socket.trigger('connect_error', new Error('401 Unauthorized'));
 
         expect(socket.disconnect).toHaveBeenCalledTimes(1);
-        expect(mockState.logout).toHaveBeenCalledTimes(1);
+        expect(mockState.logout).not.toHaveBeenCalled();
         expect(mockState.io).toHaveBeenCalledTimes(1);
+        expect(statuses.at(-1)).toBe('error');
+    });
+
+    it('should preserve login state on auth failure from the generic error event', () => {
+        const { apiSocket, socket } = createSocket();
+        const statuses: string[] = [];
+
+        apiSocket.onStatusChange((status) => {
+            statuses.push(status);
+        });
+
+        socket.trigger('error', new Error('401 Unauthorized'));
+
+        expect(socket.disconnect).toHaveBeenCalledTimes(1);
+        expect(mockState.logout).not.toHaveBeenCalled();
+        expect(mockState.io).toHaveBeenCalledTimes(1);
+        expect(statuses.at(-1)).toBe('error');
     });
 
     it('should downgrade to polling when websocket fails', () => {

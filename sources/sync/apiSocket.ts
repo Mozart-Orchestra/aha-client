@@ -1,7 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { TokenStorage } from '@/auth/tokenStorage';
 import { Encryption } from './encryption/encryption';
-import { getCurrentAuth } from '@/auth/AuthContext';
 import { getCurrentAhaTraceId, withAhaTraceHeaders } from '@/observability/traceContext';
 
 //
@@ -367,14 +366,15 @@ export class ApiSocket {
             }
 
             console.error('🔌 SyncSocket: Connection error', error);
-            // Auth rejection from server — stop reconnecting and logout
+            // WebSocket handshake auth failures are not sufficient proof that the
+            // HTTP session is invalid. On webappv3 we sometimes see a transient
+            // 401 during the realtime upgrade while the freshly issued HTTP token
+            // is already valid. Preserve the login session, stop the realtime
+            // socket, and surface the error instead of hard-logging the user out.
             if (isAuthFailure(error)) {
-                console.error('🔌 SyncSocket: Auth rejected, logging out');
+                console.error('🔌 SyncSocket: Auth rejected during handshake, preserving HTTP session');
                 this.disconnect();
-                const auth = getCurrentAuth();
-                if (auth) {
-                    auth.logout();
-                }
+                this.updateStatus('error');
                 return;
             }
 
@@ -393,12 +393,9 @@ export class ApiSocket {
 
             console.error('🔌 SyncSocket: Error', error);
             if (isAuthFailure(error)) {
-                console.error('🔌 SyncSocket: Auth rejected via error event, logging out');
+                console.error('🔌 SyncSocket: Auth rejected via error event, preserving HTTP session');
                 this.disconnect();
-                const auth = getCurrentAuth();
-                if (auth) {
-                    auth.logout();
-                }
+                this.updateStatus('error');
                 return;
             }
 

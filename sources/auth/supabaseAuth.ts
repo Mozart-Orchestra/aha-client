@@ -1,6 +1,6 @@
 import { supabase } from '@/auth/supabase';
 import { authGetToken } from '@/auth/authGetToken';
-import { getWebSupabaseOAuthRedirectUrl, getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
+import { getWebSupabaseRedirectUrl } from '@/auth/supabaseCallback';
 import { decodeBase64, encodeBase64 } from '@/encryption/base64';
 import { decryptBox } from '@/encryption/libsodium';
 import { generateAuthKeyPair } from '@/auth/authQRStart';
@@ -71,6 +71,30 @@ function encodeHex(bytes: Uint8Array): string {
 
 function publicKeyHexFromSecret(secret: Uint8Array): string {
     return encodeHex(sodium.crypto_sign_seed_keypair(secret).publicKey);
+}
+
+function getCanonicalWebSupabaseRedirectUrl(): string | null {
+    const redirectUrl = getWebSupabaseRedirectUrl();
+    if (!redirectUrl) {
+        return null;
+    }
+
+    const url = new URL(redirectUrl);
+    const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+
+    if (!isLocalHost && url.hostname.startsWith('www.')) {
+        url.hostname = url.hostname.slice(4);
+    }
+
+    if (!isLocalHost && url.protocol === 'http:') {
+        url.protocol = 'https:';
+        if (url.port === '80') {
+            url.port = '';
+        }
+    }
+
+    url.hash = '';
+    return url.toString();
 }
 
 async function getLegacyLinkProofForSupabaseComplete(): Promise<{
@@ -152,7 +176,7 @@ export async function signInWithGoogle(): Promise<void> {
         // Use the full, canonical callback URL so OAuth returns directly into
         // `/webappv3/` instead of depending on the apex-domain redirect to
         // preserve the hash fragment across navigation.
-        const redirectTo = getWebSupabaseOAuthRedirectUrl() ?? getWebSupabaseRedirectUrl();
+        const redirectTo = getCanonicalWebSupabaseRedirectUrl() ?? getWebSupabaseRedirectUrl();
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {

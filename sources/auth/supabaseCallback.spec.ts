@@ -9,6 +9,7 @@ vi.mock('react-native', () => ({
 
 import {
     clearSupabaseOAuthCallbackHash,
+    getWebSupabaseOAuthRedirectUrl,
     getWebSupabaseOAuthOrigin,
     getWebSupabaseRedirectUrl,
     readSupabaseOAuthCallbackState,
@@ -33,6 +34,20 @@ describe('getWebSupabaseOAuthOrigin', () => {
         expect(getWebSupabaseOAuthOrigin({
             href: 'http://localhost:8081/webappv3/?next=%2Fteams',
         })).toBe('http://localhost:8081');
+    });
+});
+
+describe('getWebSupabaseOAuthRedirectUrl', () => {
+    it('canonicalizes the production host while preserving the app path and query string', () => {
+        expect(getWebSupabaseOAuthRedirectUrl({
+            href: 'http://www.aha-agi.com/webappv3/?next=%2Fteams',
+        })).toBe('https://aha-agi.com/webappv3/?next=%2Fteams');
+    });
+
+    it('preserves localhost callback paths for local development', () => {
+        expect(getWebSupabaseOAuthRedirectUrl({
+            href: 'http://localhost:8081/webappv3/?next=%2Fteams',
+        })).toBe('http://localhost:8081/webappv3/?next=%2Fteams');
     });
 });
 

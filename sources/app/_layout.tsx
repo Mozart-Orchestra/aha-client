@@ -325,12 +325,6 @@ export default function RootLayout() {
                 credentials = selectCanonicalBootCredentials(
                     credentials,
                     await TokenStorage.getCredentials(),
-                    {
-                        // OAuth callback handling may complete concurrently during
-                        // repeated mounts/reloads. Persisted credentials are the
-                        // canonical winner once the callback flow has written them.
-                        preferPersistedOnMismatch: hasFreshSupabaseCallback,
-                    },
                 );
 
                 if (credentials) {

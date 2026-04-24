@@ -22,6 +22,24 @@ type LocationLike = {
     search: string;
 };
 
+function normalizeWebSupabaseUrl(urlString: string): string {
+    const url = new URL(urlString);
+    const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+
+    if (!isLocalHost && url.hostname.startsWith('www.')) {
+        url.hostname = url.hostname.slice(4);
+    }
+
+    if (!isLocalHost && url.protocol === 'http:') {
+        url.protocol = 'https:';
+        if (url.port === '80') {
+            url.port = '';
+        }
+    }
+
+    return url.toString();
+}
+
 function decodeHashValue(value: string | null): string | null {
     if (!value) {
         return null;
@@ -62,34 +80,22 @@ export function getWebSupabaseRedirectUrl(locationLike?: RedirectLocationLike | 
     return `${source.origin}${source.pathname}${source.search ?? ''}`;
 }
 
+export function getWebSupabaseOAuthRedirectUrl(locationLike?: RedirectLocationLike | null): string | null {
+    const redirectUrl = getWebSupabaseRedirectUrl(locationLike);
+    if (!redirectUrl) {
+        return null;
+    }
+
+    return normalizeWebSupabaseUrl(redirectUrl);
+}
+
 export function getWebSupabaseOAuthOrigin(locationLike?: RedirectLocationLike | null): string | null {
-    const source = locationLike ?? (typeof window !== 'undefined' ? window.location : null);
-    if (!source) {
+    const redirectUrl = getWebSupabaseOAuthRedirectUrl(locationLike);
+    if (!redirectUrl) {
         return null;
     }
 
-    const href = source.href
-        ?? (source.origin && source.pathname
-            ? `${source.origin}${source.pathname}${source.search ?? ''}`
-            : null);
-    if (!href) {
-        return null;
-    }
-
-    const url = new URL(href);
-    const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-
-    if (!isLocalHost && url.hostname.startsWith('www.')) {
-        url.hostname = url.hostname.slice(4);
-    }
-
-    if (!isLocalHost && url.protocol === 'http:') {
-        url.protocol = 'https:';
-        if (url.port === '80') {
-            url.port = '';
-        }
-    }
-
+    const url = new URL(redirectUrl);
     url.pathname = '';
     url.search = '';
     url.hash = '';
