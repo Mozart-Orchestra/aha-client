@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AuthCredentials } from '@/auth/tokenStorage';
 import {
+    selectCanonicalBootCredentials,
     selectBootCredentials,
     selectSupabaseCompletionAccessToken,
     shouldDropStoredCredentialsAfterRestoreFailure,
@@ -69,5 +70,35 @@ describe('rootBootstrap', () => {
         expect(selectSupabaseCompletionAccessToken(null, callbackState)).toBe('access-token-1');
         expect(selectSupabaseCompletionAccessToken('session-token-1', callbackState)).toBe('session-token-1');
         expect(selectSupabaseCompletionAccessToken(null, null)).toBeNull();
+    });
+
+    it('prefers persisted credentials during callback reconciliation when they differ from an in-memory candidate', () => {
+        const completedCredentials: AuthCredentials = {
+            token: 'token-2',
+            secret: 'secret-2',
+            invitationVerified: false,
+        };
+
+        expect(selectCanonicalBootCredentials(completedCredentials, storedCredentials, {
+            preferPersistedOnMismatch: true,
+        })).toEqual(storedCredentials);
+    });
+
+    it('keeps the in-memory boot credentials when mismatch reconciliation is disabled', () => {
+        const completedCredentials: AuthCredentials = {
+            token: 'token-2',
+            secret: 'secret-2',
+            invitationVerified: false,
+        };
+
+        expect(selectCanonicalBootCredentials(completedCredentials, storedCredentials, {
+            preferPersistedOnMismatch: false,
+        })).toEqual(completedCredentials);
+    });
+
+    it('uses persisted credentials when the boot flow has not resolved any credentials yet', () => {
+        expect(selectCanonicalBootCredentials(null, storedCredentials, {
+            preferPersistedOnMismatch: true,
+        })).toEqual(storedCredentials);
     });
 });

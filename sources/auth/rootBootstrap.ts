@@ -29,3 +29,40 @@ export function selectSupabaseCompletionAccessToken(
 ): string | null {
     return sessionAccessToken ?? callbackState?.accessToken ?? null;
 }
+
+function credentialsMatch(
+    left: AuthCredentials | null,
+    right: AuthCredentials | null,
+): boolean {
+    if (!left || !right) {
+        return left === right;
+    }
+
+    return left.token === right.token
+        && left.secret === right.secret
+        && (left.invitationVerified ?? null) === (right.invitationVerified ?? null);
+}
+
+export function selectCanonicalBootCredentials(
+    bootCredentials: AuthCredentials | null,
+    persistedCredentials: AuthCredentials | null,
+    options?: {
+        preferPersistedOnMismatch?: boolean;
+    },
+): AuthCredentials | null {
+    if (!persistedCredentials) {
+        return bootCredentials;
+    }
+
+    if (!bootCredentials) {
+        return persistedCredentials;
+    }
+
+    if (credentialsMatch(bootCredentials, persistedCredentials)) {
+        return bootCredentials;
+    }
+
+    return options?.preferPersistedOnMismatch === true
+        ? persistedCredentials
+        : bootCredentials;
+}

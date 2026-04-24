@@ -7,6 +7,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { AuthCredentials, TokenStorage } from '@/auth/tokenStorage';
 import { AuthProvider, setNeedsRestore } from '@/auth/AuthContext';
 import {
+    selectCanonicalBootCredentials,
     selectBootCredentials,
     selectSupabaseCompletionAccessToken,
     shouldDropStoredCredentialsAfterRestoreFailure,
@@ -313,6 +314,17 @@ export default function RootLayout() {
                         clearSupabaseOAuthCallbackHash();
                     }
                 }
+
+                credentials = selectCanonicalBootCredentials(
+                    credentials,
+                    await TokenStorage.getCredentials(),
+                    {
+                        // OAuth callback handling may complete concurrently during
+                        // repeated mounts/reloads. Persisted credentials are the
+                        // canonical winner once the callback flow has written them.
+                        preferPersistedOnMismatch: shouldPreferSupabaseCallback(callbackState),
+                    },
+                );
 
                 if (credentials) {
                     try {
