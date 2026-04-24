@@ -3,15 +3,15 @@ import { Pressable, View, useWindowDimensions } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AhaLogo } from '@/components/ui/AhaLogo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import { SidebarMainPanel } from './SidebarMainPanel';
 import {
     ThreeColumnShell,
     ThreeColumnShellVariant,
+    getThreeColumnShellTokens,
 } from './ThreeColumnShell';
 import {
     type NavTabKey,
@@ -30,10 +30,15 @@ interface SidebarViewProps {
 export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarViewProps) => {
     const desktopShell = React.useContext(DesktopShellContext);
     const variant: ThreeColumnShellVariant = 'default';
+    const { theme } = useUnistyles();
     const safeArea = useSafeAreaInsets();
     const router = useRouter();
     const pathname = usePathname();
     const { height: windowHeight } = useWindowDimensions();
+    const shellTokens = React.useMemo(
+        () => getThreeColumnShellTokens(variant, theme),
+        [theme, variant],
+    );
 
     const activeTab = React.useMemo<NavTabKey>(
         () => getActiveTabFromPathname(pathname),
@@ -48,37 +53,44 @@ export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarVie
     ) => (
         <Pressable
             key={key}
-            style={[styles.railButton, active ? styles.railButtonActive : styles.railButtonInactive]}
+            style={[
+                styles.railButton,
+                active ? styles.railButtonActive : styles.railButtonInactive,
+                {
+                    backgroundColor: active ? shellTokens.railActiveBackground : 'rgba(255, 249, 240, 0.06)',
+                    borderColor: active ? shellTokens.railActiveBorder : 'rgba(255, 249, 240, 0.1)',
+                },
+            ]}
             onPress={onPress}
         >
-            <LinearGradient
-                colors={['#30465D', '#1D2A3A'] as [string, string]}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
-                style={[styles.railButtonGradient, { opacity: active ? 1 : 0 }]}
-                pointerEvents="none"
-            />
             <Ionicons
                 name={icon}
                 size={20}
-                color={active ? '#F7FBFD' : '#C1CCD5'}
+                color={active ? shellTokens.railIconActive : shellTokens.railIconInactive}
             />
         </Pressable>
-    ), []);
+    ), [shellTokens]);
 
     const railContent = React.useMemo(() => (
         <>
-            <Pressable onPress={() => router.push('/' as never)}>
-                <LinearGradient
-                    colors={['#FFFFFF', '#ECF2F6'] as [string, string]}
-                    start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 1 }}
-                    style={styles.railLogo}
-                >
-                    <AhaLogo size={20} color="#0D1117" />
-                </LinearGradient>
+            <Pressable
+                onPress={() => router.push('/' as never)}
+                style={[
+                    styles.railLogo,
+                    {
+                        backgroundColor: shellTokens.mainPanelColors[0],
+                        borderColor: shellTokens.panelBorder,
+                    },
+                ]}
+            >
+                <AhaLogo size={20} color={shellTokens.panelTitle} />
             </Pressable>
-            <View style={styles.railDivider} />
+            <View
+                style={[
+                    styles.railDivider,
+                    { backgroundColor: 'rgba(255, 249, 240, 0.12)' },
+                ]}
+            />
             <View style={styles.railIcons}>
                 {NAV_TABS.filter(t => t.showInRail).map(tab =>
                     renderRailButton(tab.key, tab.railIcon, activeTab === tab.key, () => router.push(tab.route as never))
@@ -86,7 +98,7 @@ export const SidebarView = React.memo(({ mainPanel, secondaryPanel }: SidebarVie
             </View>
             <View style={styles.railSpacer} />
         </>
-    ), [activeTab, renderRailButton, router]);
+    ), [activeTab, renderRailButton, router, shellTokens]);
 
     const dockContent = React.useMemo(() => (
         <>
@@ -153,25 +165,14 @@ const styles = StyleSheet.create(() => ({
     },
     railButtonActive: {
         borderWidth: 1,
-        borderColor: '#425A72',
-        shadowColor: '#0F1A22',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 3,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     railButtonInactive: {
-        backgroundColor: '#FFFFFF06',
         borderWidth: 1,
-        borderColor: '#FFFFFF0D',
-    },
-    railButtonGradient: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        borderRadius: 16,
     },
     railLogo: {
         width: 40,
@@ -180,21 +181,14 @@ const styles = StyleSheet.create(() => ({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#D7E1E8',
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        elevation: 2,
     },
     railIcons: {
         alignItems: 'center',
         gap: 14,
     },
     railDivider: {
-        width: 22,
+        width: 24,
         height: 1,
-        backgroundColor: '#FFFFFF14',
         marginTop: 2,
         marginBottom: 2,
     },

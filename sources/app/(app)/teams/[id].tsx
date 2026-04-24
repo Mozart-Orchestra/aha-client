@@ -1688,14 +1688,14 @@ export default function TeamDashboardScreen() {
             style={[
                 styles.agentsButton,
                 {
-                    backgroundColor: theme.colors.groupped.background,
-                    borderColor: theme.colors.divider,
+                    backgroundColor: '#FFFDF8',
+                    borderColor: shellTheme.panelBorder,
                 },
             ]}
         >
-            <Ionicons name="sparkles-outline" size={compact ? 16 : 15} color={theme.colors.text} />
-            <Text style={[styles.agentsButtonText, { color: theme.colors.text }]}>Agents</Text>
-            <Text style={[styles.agentsButtonText, { color: theme.colors.textSecondary }]}>
+            <Ionicons name="sparkles-outline" size={compact ? 16 : 15} color={shellTheme.panelTitle} />
+            <Text style={[styles.agentsButtonText, { color: shellTheme.panelTitle }]}>Agents</Text>
+            <Text style={[styles.agentsButtonText, { color: shellTheme.panelTextSecondary }]}>
                 {roster.length}
             </Text>
         </Pressable>
