@@ -13,13 +13,8 @@ import { layout } from '@/utils/layout';
 import { t } from '@/text';
 import {
     addGenomeFavorite,
-    fetchAgentPlugs,
     fetchGenomeById,
     fetchGenomeFavoriteStatus,
-    fetchGenomeLedger,
-    fetchGenomeSeed,
-    fetchGenomeVersion,
-    fetchGenomeVersions,
     getLegionMemberDisplayName,
     getLegionMemberReference,
     removeGenomeFavorite,
@@ -27,24 +22,15 @@ import {
     parseAgentVerdict,
     parseTags,
     parseLegionImage,
-    type AgentPlug,
-    type DiffLedgerEntry,
     type GenomeRecord,
     type AgentImage,
     type AgentVerdict,
 } from '@/utils/genomeHub';
 import {
-    describeGenomeLedgerEntry,
-    describeGenomeDiffChange,
     getGenomeEnvDeclaration,
-    getGenomeDiffChangeKindLabel,
-    getAgentPlugChanges,
-    getGenomeClosureState,
     getGenomeHookDisplay,
     getGenomeInlineFileEntries,
-    getGenomeLedgerEntryKindLabel,
     getGenomeMcpServerList,
-    getGenomeReplayAlignment,
     getGenomeSkillEntries,
     getGenomeVersionIdentity,
     getGenomeWorkspaceConfig,
@@ -54,7 +40,6 @@ import {
     getGenomeImageKind,
     getGenomeImageLabel,
     getGenomeImageMirrorTitle,
-    getGenomeImageSeedTitle,
     getGenomeImageSurfaceTitle,
     getLegionLayerFacts,
 } from '@/utils/genomeImageSemantics';
@@ -76,9 +61,7 @@ import {
     fetchEntityTrials,
     fetchTrialVerdicts,
     forkGenome,
-    rollbackGenome,
     submitUserVerdict,
-    triggerEvolve,
     type EntityTrialRecord,
     type EntityVerdictRecord,
     type ManualEvolutionAction,
@@ -155,36 +138,6 @@ function splitPromptLines(text: string): string[] {
         .filter(Boolean);
 }
 
-function formatDiffMeta(iso: string, authorRole?: string | null): string {
-    const dateLabel = formatDate(iso);
-    return authorRole ? `${dateLabel} · ${authorRole}` : dateLabel;
-}
-
-function formatStatusLabel(value: string): string {
-    return value
-        .split('-')
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ');
-}
-
-function getStatusTone(status: string): { text: string; bg: string } {
-    if (status === 'established' || status === 'verified' || status === 'removed' || status === 'proven') {
-        return { text: '#22c55e', bg: '#22c55e18' };
-    }
-    if (
-        status === 'partial'
-        || status === 'pending'
-        || status === 'spawned'
-        || status === 'tasks-migrated'
-        || status === 'old-session-archived'
-        || status === 'not-proven'
-        || status === 'drift'
-    ) {
-        return { text: '#f59e0b', bg: '#f59e0b18' };
-    }
-    return { text: '#8A7F74', bg: '#8A7F7418' };
-}
-
 function parseVerdictDimensions(dimensions: string | null): Record<string, number> | null {
     if (!dimensions) {
         return null;
@@ -241,27 +194,17 @@ export default React.memo(function AgentDetailScreen() {
     const [favoriteLoading, setFavoriteLoading] = React.useState(false);
     const [showRunStandalone, setShowRunStandalone] = React.useState(false);
     const [showJoinTeam, setShowJoinTeam] = React.useState(false);
-    const [diffs, setDiffs] = React.useState<AgentPlug[]>([]);
-    const [ledgerEntries, setLedgerEntries] = React.useState<DiffLedgerEntry[]>([]);
-    const [seedSpec, setSeedSpec] = React.useState<string | null>(null);
-    const [replayedSpec, setReplayedSpec] = React.useState<string | null>(null);
-    const [historyLoading, setHistoryLoading] = React.useState(false);
     const [refreshNonce, setRefreshNonce] = React.useState(0);
     const [trials, setTrials] = React.useState<EntityTrialRecord[]>([]);
     const [verdictsByTrial, setVerdictsByTrial] = React.useState<Record<string, EntityVerdictRecord[]>>({});
     const [evidenceLoading, setEvidenceLoading] = React.useState(false);
-    const [versionHistory, setVersionHistory] = React.useState<GenomeRecord[]>([]);
-    const [versionsLoading, setVersionsLoading] = React.useState(false);
     const [verdictScore, setVerdictScore] = React.useState(4);
     const [verdictAction, setVerdictAction] = React.useState<ManualEvolutionAction>('keep');
     const [verdictText, setVerdictText] = React.useState('');
     const [verdictSubmitting, setVerdictSubmitting] = React.useState(false);
-    const [evolveNote, setEvolveNote] = React.useState('');
-    const [evolveSubmitting, setEvolveSubmitting] = React.useState(false);
     const [forkNamespace, setForkNamespace] = React.useState('');
     const [forkName, setForkName] = React.useState('');
     const [forkSubmitting, setForkSubmitting] = React.useState(false);
-    const [rollbackVersion, setRollbackVersion] = React.useState<number | null>(null);
 
     React.useEffect(() => {
         if (!id) {
@@ -490,31 +433,6 @@ export default React.memo(function AgentDetailScreen() {
     }, [authToken, templateGenome?.id, templateGenome?.name, templateGenome?.namespace, refreshNonce]);
 
     React.useEffect(() => {
-        if (!templateGenome?.namespace || !templateGenome?.name) {
-            setVersionHistory([]);
-            setVersionsLoading(false);
-            return;
-        }
-
-        let cancelled = false;
-        setVersionsLoading(true);
-        fetchGenomeVersions(templateGenome.namespace, templateGenome.name).then((versions) => {
-            if (cancelled) return;
-            const sortedVersions = [...versions].sort((left, right) => right.version - left.version);
-            setVersionHistory(sortedVersions);
-            setVersionsLoading(false);
-        }).catch(() => {
-            if (cancelled) return;
-            setVersionHistory([]);
-            setVersionsLoading(false);
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [templateGenome?.name, templateGenome?.namespace, refreshNonce]);
-
-    React.useEffect(() => {
         if (!templateGenome) {
             setForkNamespace('');
             setForkName('');
@@ -528,64 +446,6 @@ export default React.memo(function AgentDetailScreen() {
         setForkName(`${templateGenome.name}-fork`);
     }, [templateGenome?.id]);
 
-    React.useEffect(() => {
-        const namespace = templateGenome?.namespace;
-        const name = templateGenome?.name;
-        if (!namespace || !name) {
-            setDiffs([]);
-            setLedgerEntries([]);
-            setSeedSpec(null);
-            setReplayedSpec(null);
-            setHistoryLoading(false);
-            return;
-        }
-
-        let cancelled = false;
-        setHistoryLoading(true);
-        Promise.all([
-            fetchAgentPlugs(namespace, name),
-            fetchGenomeSeed(namespace, name),
-            fetchGenomeLedger(namespace, name),
-        ]).then(([nextDiffs, nextSeed, nextLedger]) => {
-            if (cancelled) return;
-            setDiffs(nextDiffs);
-            setLedgerEntries(nextLedger.ledger);
-            setSeedSpec(nextSeed);
-            setReplayedSpec(nextLedger.replayedSpec);
-            setHistoryLoading(false);
-        }).catch(() => {
-            if (cancelled) return;
-            setDiffs([]);
-            setLedgerEntries([]);
-            setSeedSpec(null);
-            setReplayedSpec(null);
-            setHistoryLoading(false);
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [templateGenome?.name, templateGenome?.namespace]);
-    const replayAlignment = React.useMemo(
-        () => getGenomeReplayAlignment(templateGenome?.spec, replayedSpec),
-        [replayedSpec, templateGenome?.spec],
-    );
-    const closureState = React.useMemo(
-        () => getGenomeClosureState({
-            versionIdentity,
-            diffs,
-            ledger: ledgerEntries,
-            replayAlignment,
-            agentStatus: agentDetail?.status ?? null,
-            sessionActive: standaloneSession?.active ?? null,
-        }),
-        [agentDetail?.status, diffs, ledgerEntries, replayAlignment, standaloneSession?.active, versionIdentity],
-    );
-    const hasEvolutionEvidence = historyLoading
-        || Boolean(seedSpec)
-        || Boolean(replayedSpec)
-        || diffs.length > 0
-        || ledgerEntries.length > 0;
     const hasProfessionalDetails = Boolean(
         agentDetail
         || spec?.protocol?.length
@@ -595,7 +455,6 @@ export default React.memo(function AgentDetailScreen() {
         || spec?.memory?.learnings?.length
         || spec?.memory?.iterationGuide
         || spec?.memory?.knowledgeBase?.length
-        || hasEvolutionEvidence
         || formattedSpecJson
         || spec?.allowedTools?.length
         || spec?.disallowedTools?.length
@@ -685,9 +544,6 @@ export default React.memo(function AgentDetailScreen() {
                 },
                 materializeFeedback: true,
             });
-            if (verdictAction === 'mutate' && !evolveNote.trim()) {
-                setEvolveNote(verdictText.trim());
-            }
             setVerdictText('');
             refreshDetail();
             await Modal.alert(t('common.success'), t('agents.userVerdictSaved'));
@@ -702,7 +558,6 @@ export default React.memo(function AgentDetailScreen() {
     }, [
         actorId,
         agentDetail?.sessionId,
-        evolveNote,
         refreshDetail,
         templateGenome,
         verdictAction,
@@ -710,59 +565,6 @@ export default React.memo(function AgentDetailScreen() {
         verdictSubmitting,
         verdictText,
     ]);
-
-    const handleTriggerEvolve = React.useCallback(async () => {
-        const activeCredentials = sync.getCredentials();
-        if (!activeCredentials) {
-            await Modal.alert(t('common.error'), t('agents.signInToEvolve'));
-            return;
-        }
-        if (!templateGenome?.namespace || !templateGenome.name) {
-            await Modal.alert(t('common.error'), t('agents.noEvolutionTarget'));
-            return;
-        }
-        if (!evolveNote.trim()) {
-            await Modal.alert(t('common.error'), t('agents.evolveNoteRequired'));
-            return;
-        }
-        if (evolveSubmitting) {
-            return;
-        }
-
-        setEvolveSubmitting(true);
-        try {
-            await triggerEvolve(activeCredentials, {
-                namespace: templateGenome.namespace,
-                name: templateGenome.name,
-                description: `Manual evolve from kanban: ${evolveNote.trim().slice(0, 120)}`,
-                verdictRefs: latestVerdictId ? [latestVerdictId] : undefined,
-                strategy: 'moderate',
-                authorRole: actorId ? `user:${actorId}` : 'user',
-                changes: [
-                    {
-                        type: 'string',
-                        path: 'memory.learnings',
-                        op: 'append',
-                        content: evolveNote.trim(),
-                    },
-                    {
-                        type: 'narrative',
-                        content: evolveNote.trim(),
-                    },
-                ],
-            });
-            setEvolveNote('');
-            refreshDetail();
-            await Modal.alert(t('common.success'), t('agents.manualEvolveSuccess'));
-        } catch (error) {
-            await Modal.alert(
-                t('common.error'),
-                error instanceof Error ? error.message : t('agents.manualEvolveFailed'),
-            );
-        } finally {
-            setEvolveSubmitting(false);
-        }
-    }, [actorId, evolveNote, evolveSubmitting, latestVerdictId, refreshDetail, templateGenome?.name, templateGenome?.namespace]);
 
     const handleForkGenome = React.useCallback(async () => {
         const activeCredentials = sync.getCredentials();
@@ -804,48 +606,6 @@ export default React.memo(function AgentDetailScreen() {
             setForkSubmitting(false);
         }
     }, [actorId, forkName, forkNamespace, forkSubmitting, router, templateGenome]);
-
-    const handleRollbackVersion = React.useCallback(async (targetVersion: number) => {
-        const activeCredentials = sync.getCredentials();
-        if (!activeCredentials) {
-            await Modal.alert(t('common.error'), t('agents.signInToEvolve'));
-            return;
-        }
-        if (!templateGenome?.namespace || !templateGenome.name) {
-            await Modal.alert(t('common.error'), t('agents.noEvolutionTarget'));
-            return;
-        }
-        if (rollbackVersion != null) {
-            return;
-        }
-
-        setRollbackVersion(targetVersion);
-        try {
-            const targetGenome = await fetchGenomeVersion(templateGenome.namespace, templateGenome.name, targetVersion);
-            if (!targetGenome) {
-                throw new Error(t('agents.rollbackSourceMissing'));
-            }
-            await rollbackGenome(activeCredentials, {
-                namespace: templateGenome.namespace,
-                name: templateGenome.name,
-                targetVersion,
-                currentSpec: templateGenome.spec,
-                targetSpec: targetGenome.spec,
-                verdictRefs: latestVerdictId ? [latestVerdictId] : undefined,
-                authorRole: actorId ? `user:${actorId}` : 'user',
-                authorSession: agentDetail?.sessionId ?? undefined,
-            });
-            refreshDetail();
-            await Modal.alert(t('common.success'), t('agents.rollbackSuccess', { version: targetVersion }));
-        } catch (error) {
-            await Modal.alert(
-                t('common.error'),
-                error instanceof Error ? error.message : t('agents.rollbackFailed'),
-            );
-        } finally {
-            setRollbackVersion(null);
-        }
-    }, [actorId, agentDetail?.sessionId, latestVerdictId, refreshDetail, rollbackVersion, templateGenome]);
 
     if (loading) {
         const loadingView = (
@@ -1190,45 +950,6 @@ export default React.memo(function AgentDetailScreen() {
 
                                     <View style={[styles.formCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
                                         <Text style={[styles.formCardTitle, { color: theme.colors.text }]}>
-                                            {t('agents.manualEvolveTitle')}
-                                        </Text>
-                                        <Text style={[styles.formCardHint, { color: theme.colors.textSecondary }]}>
-                                            {t('agents.manualEvolveHint')}
-                                        </Text>
-                                        <TextInput
-                                            style={[
-                                                styles.multilineInput,
-                                                {
-                                                    color: theme.colors.text,
-                                                    backgroundColor: theme.colors.surface,
-                                                    borderColor: theme.colors.divider,
-                                                },
-                                                Platform.OS === 'web' && { outlineStyle: 'none' } as any,
-                                            ]}
-                                            value={evolveNote}
-                                            onChangeText={setEvolveNote}
-                                            multiline
-                                            placeholder={t('agents.manualEvolvePlaceholder')}
-                                            placeholderTextColor={theme.colors.input.placeholder}
-                                            textAlignVertical="top"
-                                        />
-                                        <Pressable
-                                            style={[styles.submitButton, { backgroundColor: theme.colors.button.primary.background }]}
-                                            onPress={handleTriggerEvolve}
-                                            disabled={evolveSubmitting}
-                                        >
-                                            {evolveSubmitting ? (
-                                                <ActivityIndicator size="small" color={theme.colors.button.primary.tint} />
-                                            ) : (
-                                                <Text style={[styles.submitButtonText, { color: theme.colors.button.primary.tint }]}>
-                                                    {t('agents.createEvolvedVersion')}
-                                                </Text>
-                                            )}
-                                        </Pressable>
-                                    </View>
-
-                                    <View style={[styles.formCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
-                                        <Text style={[styles.formCardTitle, { color: theme.colors.text }]}>
                                             {t('agents.forkTitle')}
                                         </Text>
                                         <View style={styles.formFieldStack}>
@@ -1284,62 +1005,6 @@ export default React.memo(function AgentDetailScreen() {
                                                 </Text>
                                             )}
                                         </Pressable>
-                                    </View>
-
-                                    <View style={[styles.formCard, { backgroundColor: theme.colors.surfaceHigh, borderColor: theme.colors.divider }]}>
-                                        <Text style={[styles.formCardTitle, { color: theme.colors.text }]}>
-                                            {t('agents.versionHistoryTitle')}
-                                        </Text>
-                                        {versionsLoading ? (
-                                            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-                                        ) : versionHistory.length === 0 ? (
-                                            <Text style={[styles.formCardHint, { color: theme.colors.textSecondary }]}>
-                                                {t('agents.noVersionHistory')}
-                                            </Text>
-                                        ) : (
-                                            <View style={styles.versionList}>
-                                                {versionHistory.slice(0, 6).map((version) => {
-                                                    const current = version.version === templateGenome?.version;
-                                                    const busy = rollbackVersion === version.version;
-                                                    return (
-                                                        <View
-                                                            key={`${version.id}-${version.version}`}
-                                                            style={[
-                                                                styles.versionCard,
-                                                                {
-                                                                    backgroundColor: theme.colors.surface,
-                                                                    borderColor: theme.colors.divider,
-                                                                },
-                                                            ]}
-                                                        >
-                                                            <View style={{ flex: 1 }}>
-                                                                <Text style={[styles.versionCardTitle, { color: theme.colors.text }]}>
-                                                                    v{version.version} {current ? `· ${t('agents.currentVersion')}` : ''}
-                                                                </Text>
-                                                                <Text style={[styles.versionCardMeta, { color: theme.colors.textSecondary }]}>
-                                                                    {formatDate(version.createdAt)}
-                                                                </Text>
-                                                            </View>
-                                                            {!current ? (
-                                                                <Pressable
-                                                                    style={[styles.rollbackButton, { borderColor: theme.colors.divider }]}
-                                                                    onPress={() => handleRollbackVersion(version.version)}
-                                                                    disabled={busy}
-                                                                >
-                                                                    {busy ? (
-                                                                        <ActivityIndicator size="small" color={theme.colors.text} />
-                                                                    ) : (
-                                                                        <Text style={[styles.rollbackButtonText, { color: theme.colors.text }]}>
-                                                                            {t('agents.rollbackAction')}
-                                                                        </Text>
-                                                                    )}
-                                                                </Pressable>
-                                                            ) : null}
-                                                        </View>
-                                                    );
-                                                })}
-                                            </View>
-                                        )}
                                     </View>
                                 </>
                             )}
@@ -1464,233 +1129,6 @@ export default React.memo(function AgentDetailScreen() {
                             {spec?.memory?.knowledgeBase?.length ? (
                                 <Item title="Knowledge Base" subtitle={spec.memory.knowledgeBase.join('\n')} subtitleLines={0} />
                             ) : null}
-                        </ItemGroup>
-                    ) : null}
-
-                    {professionalMode ? (
-                        <ItemGroup title="Closure State">
-                            <Item
-                                title="Control-plane closure"
-                                subtitle={`Diff chain ${diffs.length} · canonical ledger ${ledgerEntries.length} row${ledgerEntries.length === 1 ? '' : 's'}`}
-                                subtitleLines={0}
-                                detail={formatStatusLabel(closureState.controlPlaneClosure)}
-                                detailStyle={{ color: getStatusTone(closureState.controlPlaneClosure).text, fontWeight: '700' }}
-                                icon={<Ionicons name="git-branch-outline" size={18} color={getStatusTone(closureState.controlPlaneClosure).text} />}
-                            />
-                            <Item
-                                title="Downstream closure"
-                                subtitle={`Version identity ${versionIdentity.status} · canonical replay ${replayAlignment.status}`}
-                                subtitleLines={0}
-                                detail={formatStatusLabel(closureState.downstreamClosure)}
-                                detailStyle={{ color: getStatusTone(closureState.downstreamClosure).text, fontWeight: '700' }}
-                                icon={<Ionicons name="analytics-outline" size={18} color={getStatusTone(closureState.downstreamClosure).text} />}
-                            />
-                            <Item
-                                title="Replace status"
-                                subtitle={agentDetail
-                                    ? `Agent ${agentDetail.status}${standaloneSession?.active != null ? ` · session ${standaloneSession.active ? 'active' : 'inactive'}` : ''}`
-                                    : 'No live runtime is attached on this screen.'}
-                                subtitleLines={0}
-                                detail={formatStatusLabel(closureState.replaceStatus)}
-                                detailStyle={{ color: getStatusTone(closureState.replaceStatus).text, fontWeight: '700' }}
-                                icon={<Ionicons name="swap-horizontal-outline" size={18} color={getStatusTone(closureState.replaceStatus).text} />}
-                            />
-                            <Item
-                                title="Roster exit"
-                                subtitle="Requires replace/archive evidence from the team roster layer."
-                                subtitleLines={0}
-                                detail={formatStatusLabel(closureState.rosterExitStatus)}
-                                detailStyle={{ color: getStatusTone(closureState.rosterExitStatus).text, fontWeight: '700' }}
-                                icon={<Ionicons name="people-outline" size={18} color={getStatusTone(closureState.rosterExitStatus).text} />}
-                            />
-                            <Item
-                                title="Behavior delta"
-                                subtitle={evidenceLoading
-                                    ? t('agents.evidenceLoading')
-                                    : `${trials.length} trial${trials.length === 1 ? '' : 's'} · ${Object.values(verdictsByTrial).reduce((total, verdicts) => total + verdicts.length, 0)} verdict${Object.values(verdictsByTrial).reduce((total, verdicts) => total + verdicts.length, 0) === 1 ? '' : 's'}`
-                                }
-                                subtitleLines={0}
-                                detail={formatStatusLabel(closureState.behaviorDeltaStatus)}
-                                detailStyle={{ color: getStatusTone(closureState.behaviorDeltaStatus).text, fontWeight: '700' }}
-                                icon={<Ionicons name="pulse-outline" size={18} color={getStatusTone(closureState.behaviorDeltaStatus).text} />}
-                            />
-                        </ItemGroup>
-                    ) : null}
-
-                    {professionalMode && hasEvolutionEvidence ? (
-                        <ItemGroup title="Evolution Evidence">
-                            {historyLoading ? (
-                                <Item
-                                    title="Loading evolution history…"
-                                    icon={<ActivityIndicator size="small" color={theme.colors.textSecondary} />}
-                                    showChevron={false}
-                                />
-                            ) : null}
-                            {seedSpec ? (
-                                <View style={styles.ledgerSection}>
-                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
-                                        {getGenomeImageSeedTitle(imageKind)}
-                                    </Text>
-                                    <CodeView code={stringifyGenomeSpec(seedSpec)} />
-                                </View>
-                            ) : null}
-                            {ledgerEntries.length > 0 ? (
-                                <>
-                                    <View style={styles.ledgerSection}>
-                                        <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
-                                            Canonical Ledger
-                                        </Text>
-                                        <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
-                                            Ordered atomic mutations replayed on top of the v1 seed.
-                                        </Text>
-                                    </View>
-                                    {ledgerEntries.map((entry) => {
-                                        const badgeTone = entry.diffType === 'narrative'
-                                            ? { text: '#FF9500', bg: '#FF950018' }
-                                            : entry.diffType === 'string'
-                                                ? { text: '#34C759', bg: '#34C75918' }
-                                                : { text: '#007AFF', bg: '#007AFF18' };
-                                        return (
-                                            <View
-                                                key={entry.id}
-                                                style={[
-                                                    styles.ledgerCard,
-                                                    {
-                                                        backgroundColor: theme.colors.surfaceHigh,
-                                                        borderColor: theme.colors.divider,
-                                                    },
-                                                ]}
-                                            >
-                                                <View style={styles.ledgerHeader}>
-                                                    <Text style={[styles.ledgerVersion, { color: theme.colors.text }]}>
-                                                        v{entry.version} · #{entry.seqNo}
-                                                    </Text>
-                                                    <View style={[styles.ledgerBadge, { backgroundColor: badgeTone.bg }]}>
-                                                        <Text style={[styles.ledgerBadgeText, { color: badgeTone.text }]}>
-                                                            {getGenomeLedgerEntryKindLabel(entry)}
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
-                                                    {formatDate(entry.timestamp)}
-                                                </Text>
-                                                <Text style={[styles.ledgerChangeText, { color: theme.colors.textSecondary }]}>
-                                                    {describeGenomeLedgerEntry(entry)}
-                                                </Text>
-                                            </View>
-                                        );
-                                    })}
-                                </>
-                            ) : null}
-                            {replayedSpec ? (
-                                <View style={styles.ledgerSection}>
-                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
-                                        Replayed Spec
-                                    </Text>
-                                    <View style={[styles.badge, { backgroundColor: getStatusTone(replayAlignment.status).bg }]}>
-                                        <Text style={[styles.badgeText, { color: getStatusTone(replayAlignment.status).text }]}>
-                                            {formatStatusLabel(replayAlignment.status)}
-                                        </Text>
-                                    </View>
-                                    <CodeView code={stringifyGenomeSpec(replayedSpec)} />
-                                </View>
-                            ) : null}
-                            {diffs.length > 0 ? (
-                                <View style={styles.ledgerSection}>
-                                    <Text style={[styles.ledgerSectionTitle, { color: theme.colors.textSecondary }]}>
-                                        Diff Chain Browser
-                                    </Text>
-                                    <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
-                                        High-level change batches submitted to genome-hub.
-                                    </Text>
-                                </View>
-                            ) : null}
-                            {diffs.map((diff) => {
-                                let changes: ReturnType<typeof getAgentPlugChanges> = [];
-                                let diffError: string | null = null;
-                                try {
-                                    changes = getAgentPlugChanges(diff);
-                                } catch (error) {
-                                    diffError = error instanceof Error ? error.message : 'Failed to parse diff payload.';
-                                }
-                                return (
-                                    <View
-                                        key={diff.id}
-                                        style={[
-                                            styles.ledgerCard,
-                                            {
-                                                backgroundColor: theme.colors.surfaceHigh,
-                                                borderColor: theme.colors.divider,
-                                            },
-                                        ]}
-                                    >
-                                        <View style={styles.ledgerHeader}>
-                                            <Text style={[styles.ledgerVersion, { color: theme.colors.text }]}>
-                                                v{diff.version}
-                                            </Text>
-                                            {diff.strategy ? (
-                                                <View style={[styles.ledgerBadge, { backgroundColor: `${theme.colors.textLink}18` }]}>
-                                                    <Text style={[styles.ledgerBadgeText, { color: theme.colors.textLink }]}>
-                                                        {diff.strategy}
-                                                    </Text>
-                                                </View>
-                                            ) : null}
-                                        </View>
-                                        <Text style={[styles.ledgerTitle, { color: theme.colors.text }]}>
-                                            {diff.description}
-                                        </Text>
-                                        <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary }]}>
-                                            {formatDiffMeta(diff.createdAt, diff.authorRole)}
-                                        </Text>
-                                        {diffError ? (
-                                            <Text style={[styles.ledgerError, { color: theme.colors.textDestructive }]}>
-                                                Invalid diff payload: {diffError}
-                                            </Text>
-                                        ) : changes.length > 0 ? (
-                                            <View style={styles.ledgerChanges}>
-                                                {changes.map((change, index) => (
-                                                    <View key={`${diff.id}-${index}`} style={styles.ledgerChangeRow}>
-                                                        <View
-                                                            style={[
-                                                                styles.ledgerBadge,
-                                                                {
-                                                                    backgroundColor: change.type === 'narrative'
-                                                                        ? '#FF950018'
-                                                                        : change.type === 'string'
-                                                                            ? '#34C75918'
-                                                                            : '#007AFF18',
-                                                                },
-                                                            ]}
-                                                        >
-                                                            <Text
-                                                                style={[
-                                                                    styles.ledgerBadgeText,
-                                                                    {
-                                                                        color: change.type === 'narrative'
-                                                                            ? '#FF9500'
-                                                                            : change.type === 'string'
-                                                                                ? '#34C759'
-                                                                                : '#007AFF',
-                                                                    },
-                                                                ]}
-                                                            >
-                                                                {getGenomeDiffChangeKindLabel(change)}
-                                                            </Text>
-                                                        </View>
-                                                        <Text style={[styles.ledgerChangeText, { color: theme.colors.textSecondary }]}>
-                                                            {describeGenomeDiffChange(change)}
-                                                        </Text>
-                                                    </View>
-                                                ))}
-                                            </View>
-                                        ) : (
-                                            <Text style={[styles.ledgerMeta, { color: theme.colors.textSecondary, marginTop: 8 }]}>
-                                                No structured diff payload was recorded for this version.
-                                            </Text>
-                                        )}
-                                    </View>
-                                );
-                            })}
                         </ItemGroup>
                     ) : null}
 
@@ -2331,37 +1769,6 @@ const styles = StyleSheet.create((theme) => ({
     },
     secondaryButtonText: {
         fontSize: 13,
-        fontWeight: '600',
-    },
-    versionList: {
-        gap: 8,
-    },
-    versionCard: {
-        borderRadius: 10,
-        borderWidth: StyleSheet.hairlineWidth,
-        padding: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    versionCardTitle: {
-        fontSize: 13,
-        fontWeight: '700',
-    },
-    versionCardMeta: {
-        fontSize: 12,
-        marginTop: 2,
-    },
-    rollbackButton: {
-        minHeight: 34,
-        borderRadius: 999,
-        borderWidth: StyleSheet.hairlineWidth,
-        paddingHorizontal: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    rollbackButtonText: {
-        fontSize: 12,
         fontWeight: '600',
     },
     statsRow: {
