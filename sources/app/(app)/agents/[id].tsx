@@ -625,9 +625,9 @@ export default React.memo(function AgentDetailScreen() {
     if (!genome && !agentDetail) {
         const emptyView = (
             <View style={[styles.center, { backgroundColor: theme.colors.groupped.background }]}>
-                <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
-                <Text style={{ color: theme.colors.textSecondary, marginTop: 12, fontSize: 15 }}>
-                    {t('agents.noResults')}
+                <Ionicons name="document-text-outline" size={48} color={theme.colors.textSecondary} />
+                <Text style={{ color: theme.colors.textSecondary, marginTop: 12, fontSize: 15, textAlign: 'center', paddingHorizontal: 24 }}>
+                    {t('agents.specUnavailable')}
                 </Text>
             </View>
         );

@@ -1269,6 +1269,7 @@ export const ca: TranslationStructure = {
         verified: 'Verificat',
         archived: 'Arxivat',
         noResults: 'No s\'han trobat agents',
+        specUnavailable: 'Especificació del genome no disponible. No s\'ha pogut carregar la configuració d\'aquest agent.',
         noResultsHint: 'Prova una cerca o categoria diferent',
         spawnCount: ({ count }: { count: number }) => `${count} execucions`,
         versionLabel: ({ version }: { version: number }) => `v${version}`,
@@ -1612,6 +1613,7 @@ export const ca: TranslationStructure = {
         searchPlaceholder: 'Search agents...',
         sortedByRank: 'Sorted by Score (Rank)',
         noResults: 'No agents found. Try a different search.',
+        specUnavailable: 'Especificació del genome no disponible. No s\'ha pogut carregar la configuració d\'aquest agent.',
         spawn: 'Add to Team',
     },
 

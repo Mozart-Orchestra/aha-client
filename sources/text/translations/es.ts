@@ -1172,6 +1172,7 @@ export const es: TranslationStructure = {
         verified: 'Verificado',
         archived: 'Archivado',
         noResults: 'No se encontraron agentes',
+        specUnavailable: 'Especificación del genome no disponible. No se pudo cargar la configuración de este agente.',
         noResultsHint: 'Prueba otra búsqueda o categoría',
         spawnCount: ({ count }: { count: number }) => `${count} ejecuciones`,
         versionLabel: ({ version }: { version: number }) => `v${version}`,
@@ -1515,6 +1516,7 @@ export const es: TranslationStructure = {
         searchPlaceholder: 'Search agents...',
         sortedByRank: 'Sorted by Score (Rank)',
         noResults: 'No agents found. Try a different search.',
+        specUnavailable: 'Especificación del genome no disponible. No se pudo cargar la configuración de este agente.',
         spawn: 'Add to Team',
     },
 

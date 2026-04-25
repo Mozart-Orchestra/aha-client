@@ -225,6 +225,7 @@ export const zhHans: TranslationStructure = {
         searchPlaceholder: '搜索 Agent...',
         sortedByRank: '按评分排名',
         noResults: '未找到 Agent，请尝试其他搜索。',
+        specUnavailable: 'Genome 规格不可用，无法加载该智能体的配置信息。',
         spawn: '添加到团队',
     },
 
@@ -1545,6 +1546,7 @@ export const zhHans: TranslationStructure = {
         verified: '已验证',
         archived: '已归档',
         noResults: '未找到智能体',
+        specUnavailable: 'Genome 规格不可用，无法加载该智能体的配置信息。',
         noResultsHint: '尝试不同的搜索词或分类',
         spawnCount: ({ count }: { count: number }) => `${count} 次部署`,
         versionLabel: ({ version }: { version: number }) => `v${version}`,

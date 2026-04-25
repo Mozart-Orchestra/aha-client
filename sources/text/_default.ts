@@ -223,6 +223,7 @@ export const en = {
         searchPlaceholder: 'Search agents...',
         sortedByRank: 'Sorted by Score (Rank)',
         noResults: 'No agents found. Try a different search.',
+        specUnavailable: 'Genome spec unavailable. This agent\'s specification could not be loaded.',
         spawn: 'Add to Team',
     },
 
@@ -1582,6 +1583,7 @@ export const en = {
         verified: 'Verified',
         archived: 'Archived',
         noResults: 'No agents found',
+        specUnavailable: 'Genome spec unavailable. This agent\'s specification could not be loaded.',
         noResultsHint: 'Try a different search or category',
         spawnCount: ({ count }: { count: number }) => `${count} spawns`,
         versionLabel: ({ version }: { version: number }) => `v${version}`,

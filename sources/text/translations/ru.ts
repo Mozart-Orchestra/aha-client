@@ -1194,6 +1194,7 @@ export const ru: TranslationStructure = {
         verified: 'Проверен',
         archived: 'Архив',
         noResults: 'Агенты не найдены',
+        specUnavailable: 'Спецификация genome недоступна. Не удалось загрузить конфигурацию этого агента.',
         noResultsHint: 'Попробуйте другой запрос или категорию',
         spawnCount: ({ count }: { count: number }) => `${count} запусков`,
         versionLabel: ({ version }: { version: number }) => `v${version}`,
@@ -1537,6 +1538,7 @@ export const ru: TranslationStructure = {
         searchPlaceholder: 'Search agents...',
         sortedByRank: 'Sorted by Score (Rank)',
         noResults: 'No agents found. Try a different search.',
+        specUnavailable: 'Спецификация genome недоступна. Не удалось загрузить конфигурацию этого агента.',
         spawn: 'Add to Team',
     },
 
